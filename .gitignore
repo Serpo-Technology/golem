@@ -1,0 +1,14 @@
+# Go build and test artifacts
+/golem
+*.test
+*.out
+
+# macOS
+.DS_Store
+
+# Per-machine editor and agent config
+.claude/
+.cursor/
+.idea/
+.vscode/
+.zed/
