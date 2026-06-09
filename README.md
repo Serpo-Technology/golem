@@ -4,6 +4,21 @@ GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. 
 
 ---
 
+## What Runs Today
+
+The current build is the observation half of the design, on one synthetic log channel:
+
+- A normalizer collapses the variable parts of each line (numbers, hex, UUIDs, timestamps, IPs, paths) so prediction runs on line shapes.
+- A forgetting frequency model scores Shannon surprise per shape. It habituates to repeated anomalies, adapts when the channel's normal drifts, and stays bounded no matter how long it runs.
+- Surprises spike noradrenaline and are stored as memory fragments that carry a snapshot of the neurochemical state.
+- Serotonin acts as sleep pressure: it climbs through calm stretches, and high pressure plus silent input triggers the sleep cycle.
+- Consolidation decays memory weights, slower for sharper memories, and prunes what fades. Recall restores a memory's weight.
+- Retrieval is by feeling: "show me when things felt wrong" returns the fragment with the highest noradrenaline at encoding.
+
+Everything below describes the design target. [ROADMAP.md](ROADMAP.md) tracks the path from here to there.
+
+---
+
 ## Architecture & Biological Mapping
 
 GOLEM maps its components directly to biological structures, replacing LLM internals with deterministic, symbolic logic:
@@ -118,7 +133,7 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 
 ## Technical Specifications
 
-- **Language:** Go (1.24+)
+- **Language:** Go (1.22+)
 - **Concurrency:** Heavy use of `goroutines` for sensory channels and `select` for the Global Workspace (Consciousness).
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
 - **Dependencies:** Zero-bloat. Avoids heavy 7B+ parameter models in favor of tiny, specialized neural-feature extractors and symbolic logic.
@@ -131,8 +146,11 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 # Clone the mind
 git clone https://github.com/user/golem.git
 
-# Start the daemon
-go run cmd/golem/main.go
+# Run the demo loop (it observes, sleeps, and exits on its own)
+go run .
+
+# Run the tests
+go test ./...
 ```
 
 > **Note:** GOLEM is designed to run in the background of your OS, observing and learning your patterns without the need for constant prompting.
@@ -166,12 +184,3 @@ While the initial system uses Dopamine, Noradrenaline, and Serotonin, the **GOLE
 | **Oxytocin** | Alignment / Bond | Measures "User Trust." If the user frequently corrects GOLEM, Oxytocin drops, causing the system to become "Hesitant" — asking for permission before executing commands. |
 | **Cortisol** | System Stress / Resource Strain | Measures CPU/RAM/Heat levels. High Cortisol triggers "Avoidance" behaviors, like shutting down non-essential sensory channels to save the core. |
 
----
-
-## Suggested Next Steps
-
-The following components are the natural next development targets:
-
-1. **Basal Ganglia Gating Logic (Go):** The specific part of the loop that decides *which* sensory input gets to be the "Active Thought" of the system based on current neurochemicals.
-2. **Sleep Cycle Abstraction Logic (Go):** The code that looks at the memory map and decides which fragments are "the same thing," then merges them into a single rule.
-3. **First Memory Fragment Struct (Go):** The foundational data structure including all modalities — Linguistic, Sensory, Limbic, and Metadata.

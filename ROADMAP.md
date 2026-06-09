@@ -21,20 +21,20 @@ itself.
 
 Goal: the loop stays honest on real-shaped data.
 
-- [ ] Decaying-count predictor: exponential forgetting with a bounded
+- [x] Decaying-count predictor: exponential forgetting with a bounded
       vocabulary and eviction. Habituation timescale becomes a tunable
       constant.
-- [ ] Normalizer in front of the predictor: collapse digits, hex, UUIDs,
+- [x] Normalizer in front of the predictor: collapse digits, hex, UUIDs,
       timestamps, and paths into placeholder tokens; predict over the
       resulting templates. Fragments keep the raw content.
-- [ ] Sleep dynamics: replace the additive weight bonus with
+- [x] Sleep dynamics: replace the additive weight bonus with
       surprise-slowed decay so pruning can actually fire. Recall refreshes
       a fragment's weight.
-- [ ] Sleep trigger from quiescence and serotonin level instead of a fixed
+- [x] Sleep trigger from quiescence and serotonin level instead of a fixed
       timer.
-- [ ] Tests: habituation curve, pruning regression (the immortal-fragment
+- [x] Tests: habituation curve, pruning regression (the immortal-fragment
       case), normalizer corpus.
-- [ ] README: fix the run command (`go run .`), align the Go version with
+- [x] README: fix the run command (`go run .`), align the Go version with
       go.mod, and separate current behavior from design target.
 
 Done when: a multi-hour synthetic soak with mixed templates keeps predictor
