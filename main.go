@@ -5,21 +5,27 @@ import (
 	"time"
 )
 
-// surpriseThreshold is the bar (in bits) an observation must clear to reach
-// consciousness. Below it, the Thalamus silently drops the data — this is the
-// ~0% CPU path that the whole design is built around.
-const surpriseThreshold = 2.0
+const (
+	// surpriseThreshold is the bar (in bits) a template must clear to reach
+	// consciousness. Below it, the Thalamus silently drops the data — this is
+	// the ~0% CPU path that the whole design is built around.
+	surpriseThreshold = 2.0
+
+	// predictorWindow is the habituation timescale: roughly how many recent
+	// observations the channel model remembers.
+	predictorWindow = 256
+)
 
 func main() {
 	fmt.Println("GOLEM waking up. Observing channel 'syslog'.")
-	fmt.Println("Expected input is predicted away silently; only surprises reach consciousness.")
-	fmt.Println("Running a short observation window, then sleeping.")
+	fmt.Println("Raw lines are normalized to templates, so a Ping with a fresh seq")
+	fmt.Println("number is still the same Ping. Only new SHAPES reach consciousness.")
 	fmt.Println("--------------------------------------------------------------------")
 
 	obs := make(chan Observation, 16)
 	stop := make(chan struct{})
 
-	predictor := NewPredictor()
+	predictor := NewPredictor(predictorWindow)
 	chem := NewNeurochemistry()
 	hippo := NewHippocampus()
 
@@ -41,25 +47,27 @@ func main() {
 			chem.Decay() // neurochemistry drifts back toward baseline each tick
 
 		case o := <-obs:
-			s := predictor.Surprise(o.Content)
-			predictor.Learn(o.Content) // model updates toward reality
+			tpl := Normalize(o.Content)
+			s := predictor.Surprise(tpl)
+			predictor.Learn(tpl) // model updates toward reality
 
 			if s < surpriseThreshold {
 				continue // Thalamus drops it. Nothing wakes up.
 			}
 
 			// Surprise! Spike alertness and lay down a memory of the moment.
-			chem.SpikeNoradrenaline(s * 0.2)
+			chem.SpikeNoradrenaline(s * 0.12)
 			frag := &Fragment{
 				Channel:  o.Channel,
 				Content:  o.Content,
+				Template: tpl,
 				Surprise: s,
 				Limbic:   chem.Snapshot(),
 				Time:     o.At,
 			}
 			id := hippo.Encode(frag)
-			fmt.Printf("[!] surprise on %-7s %-20q  %.2f bits  NA=%.2f  -> fragment #%d\n",
-				o.Channel, o.Content, s, frag.Limbic.Noradrenaline, id)
+			fmt.Printf("[!] %.2f bits  %-44q -> %q  NA=%.2f  #%d\n",
+				s, o.Content, tpl, frag.Limbic.Noradrenaline, id)
 		}
 	}
 }

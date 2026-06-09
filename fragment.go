@@ -22,6 +22,7 @@ type Fragment struct {
 	ID       uint64      // assigned by the hippocampus on encode
 	Channel  string      // the "labeled line" it arrived on (which sense)
 	Content  string      // the raw observation — a pointer to the experience
+	Template string      // normalized shape of Content; what prediction runs on
 	Surprise float64     // information-theoretic surprise (bits) that birthed it
 	Limbic   LimbicState // neurochemical snapshot at the instant of encoding
 	Time     time.Time
