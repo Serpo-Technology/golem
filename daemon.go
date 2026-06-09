@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -161,6 +162,7 @@ func (d *Daemon) Run() error {
 	held, _ := d.store.Count()
 	fmt.Fprintf(d.out, "golem awake. home=%s, %d fragment(s) held, %d channel model(s) loaded.\n",
 		d.home, held, len(d.predictors))
+	d.startSensors()
 
 	homeostasis := time.NewTicker(200 * time.Millisecond)
 	defer homeostasis.Stop()
@@ -193,6 +195,36 @@ func (d *Daemon) Run() error {
 			return nil
 		}
 	}
+}
+
+// startSensors launches the built-in senses the config asks for. Every
+// sensor is a goroutine that emits into the shared workspace queue and
+// stops when d.stop closes. Drop counters are created here, before the
+// goroutines exist, so the map is never written concurrently.
+func (d *Daemon) startSensors() {
+	var active []string
+	ch := d.cfg.Channels
+	if ch.Synthetic {
+		go LogSensor("synthetic", d.obs, d.stop, d.dropCounter("synthetic"))
+		active = append(active, "synthetic")
+	}
+	if len(ch.WatchDirs) > 0 {
+		go FileSensor(ch.WatchDirs, d.obs, d.stop, d.dropCounter("files"))
+		active = append(active, fmt.Sprintf("files(%d dirs)", len(ch.WatchDirs)))
+	}
+	if ch.Vitals {
+		go VitalsSensor(d.obs, d.stop, d.dropCounter("vitals"))
+		active = append(active, "vitals")
+	}
+	if ch.Syslog {
+		go SyslogSensor(d.obs, d.stop, d.dropCounter("syslog"))
+		active = append(active, "syslog")
+	}
+	if len(active) == 0 {
+		fmt.Fprintln(d.out, "senses: none built in; feed channels with golem observe or the shell hook.")
+		return
+	}
+	fmt.Fprintf(d.out, "senses: %s\n", strings.Join(active, ", "))
 }
 
 // claimSocket removes a stale socket file, but refuses to evict a live

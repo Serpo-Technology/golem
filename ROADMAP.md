@@ -62,17 +62,17 @@ and `golem recall` answers from a freshly started process.
 
 Goal: several channels share one workspace without starving or flooding it.
 
-- [ ] Shell sensor: zsh preexec/precmd hook reports each command and its
-      exit status to the daemon socket.
-- [ ] File sensor: fsnotify on configured directories.
-- [ ] Vitals sensor: CPU, memory pressure, disk, sampled slowly. Later the
+- [x] Shell sensor: zsh preexec/precmd hook reports each command and its
+      exit status to the daemon socket (`golem shellhook` prints the
+      snippet; appending it to ~/.zshrc is a manual step).
+- [x] File sensor: fsnotify on configured directories.
+- [x] Vitals sensor: CPU, memory pressure, disk, sampled slowly. Later the
       Cortisol input.
-- [ ] System log sensor: filtered `log stream` (errors and faults only).
-      Added last; it leans hardest on the normalizer.
-- [ ] Per-channel calibration: running mean and spread of surprise per
+- [x] System log sensor: filtered `log stream` (errors and faults only).
+- [x] Per-channel calibration: running mean and spread of surprise per
       channel, gate on channel-relative unusualness, keep raw bits in the
       fragment.
-- [ ] Backpressure: bounded queues, drop-oldest with a counter. The drop
+- [x] Backpressure: bounded queues, drop-oldest with a counter. The drop
       counter is itself a stress signal.
 
 Done when: shell, files, and vitals run side by side for a day with

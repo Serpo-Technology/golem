@@ -16,6 +16,8 @@ The current build is the observation half of the design, on one synthetic log ch
 - Retrieval is by feeling: "show me when things felt wrong" returns the fragment with the highest noradrenaline at encoding.
 - The daemon form (`golem run`) accepts observations on any number of named channels and keeps its memory in sqlite under `~/.golem`, so fragments survive restarts and hard kills. Channel models persist too, flushed at each sleep and at shutdown.
 - A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `recall`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
+- Built-in senses, selected in config: file events in watched directories (bucketed to operation, extension, and parent directory), system vitals banded into words (cpu load, memory pressure, disk space), and the macOS unified log filtered to errors and faults. `golem shellhook` prints a zsh hook that feeds the shell channel with commands and their failures.
+- Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
 
 Everything below describes the design target. [ROADMAP.md](ROADMAP.md) tracks the path from here to there.
 
@@ -135,10 +137,10 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 
 ## Technical Specifications
 
-- **Language:** Go (1.22+)
+- **Language:** Go (1.25+)
 - **Concurrency:** Heavy use of `goroutines` for sensory channels and `select` for the Global Workspace (Consciousness).
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
-- **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org); no model weights, no frameworks, no cgo.
+- **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org, fsnotify); no model weights, no frameworks, no cgo.
 
 ---
 
@@ -163,6 +165,9 @@ go build -o golem .
 ./golem status
 ./golem recall disk
 ./golem stop
+
+# Optional: feed your shell into GOLEM (open a new shell afterward)
+./golem shellhook >> ~/.zshrc
 ```
 
 > **Note:** GOLEM is designed to run in the background of your OS, observing and learning your patterns without the need for constant prompting.

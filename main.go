@@ -20,6 +20,7 @@ Usage:
                                   most stressful moment
   golem dump                      list every fragment held in memory
   golem stop                      ask the daemon to sleep once and shut down
+  golem shellhook                 print the zsh hook that feeds the shell channel
   golem launchd                   print a launchd plist for start-at-login
 
 The daemon keeps its memory, config, and socket in ~/.golem (override with
@@ -96,6 +97,9 @@ func main() {
 		call(home, Request{Cmd: "stop"})
 		fmt.Println("golem is sleeping once and shutting down.")
 
+	case "shellhook":
+		fmt.Print(shellHook)
+
 	case "launchd":
 		printLaunchd(home)
 
@@ -109,6 +113,23 @@ func fail(err error) {
 	fmt.Fprintln(os.Stderr, "golem:", err)
 	os.Exit(1)
 }
+
+// shellHook is the zsh snippet that turns the user's shell into a sensory
+// channel. Commands and their failures arrive like any other observation;
+// nothing is recorded when the daemon is not running.
+const shellHook = `# golem shell sense: report each command and its failures to the daemon.
+# Install: golem shellhook >> ~/.zshrc   (then open a new shell)
+if command -v golem >/dev/null 2>&1; then
+  _golem_preexec() { (golem observe shell "run: $1" >/dev/null 2>&1 &) }
+  _golem_precmd()  {
+    local _s=$?
+    (( _s != 0 )) && (golem observe shell "command failed with exit status $_s" >/dev/null 2>&1 &)
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _golem_preexec
+  add-zsh-hook precmd  _golem_precmd
+fi
+`
 
 // call performs one IPC round trip and exits with a friendly message when
 // the daemon is not running.

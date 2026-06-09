@@ -49,6 +49,23 @@ type Config struct {
 	// relative gate applies.
 	ZGate             float64 `json:"z_gate"`
 	CalibrationWarmup int     `json:"calibration_warmup"`
+	// Channels selects which built-in sensors the daemon runs. External
+	// senses (the shell hook, scripts) need no entry here; anything can
+	// feed any channel through golem observe.
+	Channels ChannelsConfig `json:"channels"`
+}
+
+type ChannelsConfig struct {
+	// Synthetic runs the demo's burst-and-quiet log generator, useful for
+	// soak tests against a live daemon.
+	Synthetic bool `json:"synthetic"`
+	// Vitals samples cpu load, memory pressure, and disk space into bands
+	// and reports band changes.
+	Vitals bool `json:"vitals"`
+	// Syslog follows the macOS unified log at error level.
+	Syslog bool `json:"syslog"`
+	// WatchDirs lists directories (not recursive) for file events.
+	WatchDirs []string `json:"watch_dirs"`
 }
 
 func DefaultConfig() Config {
@@ -63,6 +80,11 @@ func DefaultConfig() Config {
 		PruneFloor:         defaultPruneFloor,
 		ZGate:              defaultZGate,
 		CalibrationWarmup:  defaultCalibWarmup,
+		Channels: ChannelsConfig{
+			Vitals:    true,
+			Syslog:    true,
+			WatchDirs: []string{},
+		},
 	}
 }
 

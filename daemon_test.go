@@ -14,7 +14,8 @@ func startTestDaemon(t *testing.T) (home string, done chan error) {
 	t.Helper()
 	home = t.TempDir()
 	cfg := DefaultConfig()
-	cfg.SleepIntervalSec = 3600 // keep autonomous sleep out of the test's way
+	cfg.SleepIntervalSec = 3600     // keep autonomous sleep out of the test's way
+	cfg.Channels = ChannelsConfig{} // no built-in sensors; tests feed channels themselves
 
 	d, err := NewDaemon(home, cfg, io.Discard)
 	if err != nil {
@@ -122,6 +123,7 @@ func TestDaemonMemoryAcrossRestart(t *testing.T) {
 	// must still be unsurprising even though this process never saw one.
 	cfg := DefaultConfig()
 	cfg.SleepIntervalSec = 3600
+	cfg.Channels = ChannelsConfig{}
 	d, err := NewDaemon(home, cfg, io.Discard)
 	if err != nil {
 		t.Fatal(err)
