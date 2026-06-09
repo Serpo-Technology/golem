@@ -55,6 +55,26 @@ func (p *Predictor) Learn(tpl string) {
 	}
 }
 
+// Export returns a copy of the model's counts, for persistence.
+func (p *Predictor) Export() map[string]float64 {
+	out := make(map[string]float64, len(p.counts))
+	for tpl, c := range p.counts {
+		out[tpl] = c
+	}
+	return out
+}
+
+// Seed restores a persisted model. Total mass is recomputed from the
+// counts, which the model keeps as an invariant anyway.
+func (p *Predictor) Seed(counts map[string]float64) {
+	p.counts = make(map[string]float64, len(counts))
+	p.total = 0
+	for tpl, c := range counts {
+		p.counts[tpl] = c
+		p.total += c
+	}
+}
+
 // compact halves every count so that recent observations dominate the model,
 // then evicts whatever has faded below notice. A template unseen for a few
 // windows' worth of input decays to nothing and is forgotten, which is what

@@ -14,7 +14,7 @@ func TestHabituation(t *testing.T) {
 	}
 
 	first := p.Surprise("Disk full on <path>")
-	if first < surpriseThreshold {
+	if first < defaultSurpriseThreshold {
 		t.Fatalf("fresh anomaly should clear the gate, got %.2f bits", first)
 	}
 
@@ -22,8 +22,8 @@ func TestHabituation(t *testing.T) {
 		p.Learn("Disk full on <path>")
 	}
 	after := p.Surprise("Disk full on <path>")
-	if after >= surpriseThreshold {
-		t.Fatalf("repeated anomaly should habituate below %.1f bits, got %.2f", surpriseThreshold, after)
+	if after >= defaultSurpriseThreshold {
+		t.Fatalf("repeated anomaly should habituate below %.1f bits, got %.2f", defaultSurpriseThreshold, after)
 	}
 	if after >= first {
 		t.Fatalf("surprise should fall with repetition: first %.2f, after %.2f", first, after)
@@ -44,7 +44,7 @@ func TestForgettingDrift(t *testing.T) {
 	for i := 0; i < 400; i++ {
 		p.Learn("new normal")
 	}
-	if s := p.Surprise("old normal"); s < surpriseThreshold {
+	if s := p.Surprise("old normal"); s < defaultSurpriseThreshold {
 		t.Fatalf("a forgotten regime should be surprising again, got %.2f bits", s)
 	}
 }

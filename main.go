@@ -2,141 +2,179 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"time"
 )
 
-const (
-	// surpriseThreshold is the bar (in bits) a template must clear to reach
-	// consciousness. Below it, the Thalamus silently drops the data — this is
-	// the ~0% CPU path that the whole design is built around.
-	surpriseThreshold = 2.0
+const usageText = `GOLEM is a daemon that watches event channels, remembers surprises, and
+forgets what stops mattering.
 
-	// predictorWindow is the habituation timescale: roughly how many recent
-	// observations the channel model remembers.
-	predictorWindow = 256
+Usage:
+  golem run                       start the daemon (foreground)
+  golem demo                      run the synthetic one-channel demo and exit
+  golem status                    show daemon status
+  golem chem                      show current neurochemistry
+  golem observe <channel> <text>  feed one observation to the daemon
+  golem recall [query]            recall memory; without a query, returns the
+                                  most stressful moment
+  golem dump                      list every fragment held in memory
+  golem stop                      ask the daemon to sleep once and shut down
+  golem launchd                   print a launchd plist for start-at-login
 
-	// sleepPressureGate is the serotonin level at which GOLEM is ready to
-	// sleep, provided input has also paused for at least inputSilence.
-	sleepPressureGate = 0.8
-	inputSilence      = time.Second
-
-	// calmBeforeSleep is how long after the last surprise sleep pressure
-	// starts building. Routine, well-predicted input does not block it.
-	calmBeforeSleep = 1500 * time.Millisecond
-
-	// nightlyDecay and pruneFloor govern consolidation; fastForwardNights
-	// compresses months of nightly cycles into the demo printout.
-	nightlyDecay      = 0.10
-	pruneFloor        = 0.10
-	fastForwardNights = 90
-)
+The daemon keeps its memory, config, and socket in ~/.golem (override with
+GOLEM_HOME). Edit ~/.golem/config.json to tune thresholds and sleep timing.`
 
 func main() {
-	fmt.Println("GOLEM waking up. Observing channel 'syslog'.")
-	fmt.Println("Raw lines are normalized to templates, so a Ping with a fresh seq")
-	fmt.Println("number is still the same Ping. Only new SHAPES reach consciousness.")
-	fmt.Println("The log bursts for a few seconds, then goes quiet. Quiet builds")
-	fmt.Println("serotonin, and high serotonin plus silent input triggers SLEEP.")
-	fmt.Println("--------------------------------------------------------------------")
-
-	obs := make(chan Observation, 16)
-	stop := make(chan struct{})
-
-	predictor := NewPredictor(predictorWindow)
-	chem := NewNeurochemistry()
-	hippo := NewHippocampus()
-
-	go LogSensor(obs, stop)
-
-	homeostasis := time.NewTicker(200 * time.Millisecond)
-	defer homeostasis.Stop()
-	failsafe := time.NewTimer(30 * time.Second)
-	defer failsafe.Stop()
-
-	lastObs := time.Now()
-	lastSurprise := time.Now()
-
-	// The Global Workspace: a single select loop that is GOLEM's "consciousness."
-	for {
-		select {
-		case o := <-obs:
-			lastObs = time.Now()
-			tpl := Normalize(o.Content)
-			s := predictor.Surprise(tpl)
-			predictor.Learn(tpl) // model updates toward reality
-
-			if s < surpriseThreshold {
-				continue // Thalamus drops it. Nothing wakes up.
-			}
-
-			// Surprise! Spike alertness, push sleep away, and lay down a
-			// memory of the moment.
-			lastSurprise = time.Now()
-			chem.SpikeNoradrenaline(s * 0.12)
-			chem.SuppressSleep(0.15)
-			frag := &Fragment{
-				Channel:  o.Channel,
-				Content:  o.Content,
-				Template: tpl,
-				Surprise: s,
-				Limbic:   chem.Snapshot(),
-				Time:     o.At,
-			}
-			id := hippo.Encode(frag)
-			fmt.Printf("[!] %.2f bits  %-44q -> %q  NA=%.2f  #%d\n",
-				s, o.Content, tpl, frag.Limbic.Noradrenaline, id)
-
-		case <-homeostasis.C:
-			chem.Decay() // noradrenaline and dopamine drift toward baseline
-			if time.Since(lastSurprise) > calmBeforeSleep {
-				chem.BuildSleepPressure()
-			}
-			if chem.Serotonin() >= sleepPressureGate && time.Since(lastObs) >= inputSilence {
-				close(stop)
-				sleepAndRecall(hippo, chem, time.Since(lastObs))
-				return
-			}
-
-		case <-failsafe.C:
-			close(stop)
-			fmt.Println("Failsafe timer elapsed; forcing the sleep cycle.")
-			sleepAndRecall(hippo, chem, time.Since(lastObs))
-			return
-		}
-	}
-}
-
-// sleepAndRecall runs consolidation (one night, then a fast-forward across
-// many more) and finishes with a retrieval test that queries memory by
-// feeling rather than by content.
-func sleepAndRecall(hippo *Hippocampus, chem *Neurochemistry, quietFor time.Duration) {
-	fmt.Println("--------------------------------------------------------------------")
-	fmt.Printf("Input quiet for %.1fs, serotonin %.2f -> entering SLEEP. %d fragment(s) held.\n",
-		quietFor.Seconds(), chem.Serotonin(), hippo.Count())
-
-	if hippo.Count() == 0 {
-		fmt.Println("  (nothing surprising happened this window; memory is empty)")
+	args := os.Args[1:]
+	if len(args) == 0 {
+		fmt.Println(usageText)
 		return
 	}
 
-	pruned := hippo.Sleep(nightlyDecay, pruneFloor)
-	fmt.Printf("Night 1: weights decayed, surprising memories resisting; %d pruned.\n", pruned)
-
-	for night := 0; night < fastForwardNights; night++ {
-		pruned += hippo.Sleep(nightlyDecay, pruneFloor)
-	}
-	fmt.Printf("Fast-forward %d more nights: %d pruned in total, %d remain.\n",
-		fastForwardNights, pruned, hippo.Count())
-
-	for _, f := range hippo.Dump() {
-		fmt.Printf("  #%-2d %.2f bits  weight %.2f  %q\n", f.ID, f.Surprise, f.Weight, f.Content)
+	home, err := GolemHome()
+	if err != nil {
+		fail(err)
 	}
 
-	fmt.Println("\nRetrieval query \"show me when things felt wrong\":")
-	if f := hippo.RecallByStress(); f != nil {
-		fmt.Printf("  -> #%d %q (NA=%.2f at encoding); recall refreshed its weight to %.2f.\n",
-			f.ID, f.Content, f.Limbic.Noradrenaline, f.Weight)
+	switch args[0] {
+	case "demo":
+		runDemo()
+
+	case "run":
+		cfg, err := LoadConfig(home)
+		if err != nil {
+			fail(err)
+		}
+		d, err := NewDaemon(home, cfg, os.Stdout)
+		if err != nil {
+			fail(err)
+		}
+		if err := d.Run(); err != nil {
+			fail(err)
+		}
+
+	case "status":
+		resp := call(home, Request{Cmd: "status"})
+		printStatus(resp.Status)
+
+	case "chem":
+		resp := call(home, Request{Cmd: "chem"})
+		c := resp.Chem
+		fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f\n",
+			c.Dopamine, c.Noradrenaline, c.Serotonin)
+
+	case "observe":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: golem observe <channel> <text>"))
+		}
+		resp := call(home, Request{Cmd: "observe", Channel: args[1], Content: strings.Join(args[2:], " ")})
+		o := resp.Observe
+		if o.Conscious {
+			fmt.Printf("%.2f bits, conscious -> fragment #%d\n", o.Bits, o.FragmentID)
+		} else {
+			fmt.Printf("%.2f bits, predicted away\n", o.Bits)
+		}
+
+	case "recall":
+		resp := call(home, Request{Cmd: "recall", Query: strings.Join(args[1:], " ")})
+		if len(resp.Fragments) == 0 {
+			fmt.Println("nothing comes to mind.")
+			return
+		}
+		printFragments(resp.Fragments)
+
+	case "dump":
+		resp := call(home, Request{Cmd: "dump"})
+		if len(resp.Fragments) == 0 {
+			fmt.Println("memory is empty.")
+			return
+		}
+		printFragments(resp.Fragments)
+
+	case "stop":
+		call(home, Request{Cmd: "stop"})
+		fmt.Println("golem is sleeping once and shutting down.")
+
+	case "launchd":
+		printLaunchd(home)
+
+	default:
+		fmt.Println(usageText)
+		os.Exit(2)
+	}
+}
+
+func fail(err error) {
+	fmt.Fprintln(os.Stderr, "golem:", err)
+	os.Exit(1)
+}
+
+// call performs one IPC round trip and exits with a friendly message when
+// the daemon is not running.
+func call(home string, req Request) Response {
+	resp, err := ipcCall(home, req)
+	if err != nil {
+		if _, statErr := os.Stat(socketPath(home)); os.IsNotExist(statErr) {
+			fail(fmt.Errorf("the daemon is not running; start it with: golem run"))
+		}
+		fail(err)
+	}
+	return resp
+}
+
+func printStatus(st *StatusInfo) {
+	fmt.Printf("golem daemon, pid %d, up %s\n", st.PID, time.Duration(st.UptimeSec*float64(time.Second)).Round(time.Second))
+	fmt.Printf("  fragments held: %d\n", st.Fragments)
+	if len(st.Channels) == 0 {
+		fmt.Println("  channels: none observed yet")
+	}
+	for name, ch := range st.Channels {
+		fmt.Printf("  channel %-10s observed %d, conscious %d, dropped %d\n",
+			name, ch.Observed, ch.Conscious, ch.Dropped)
+	}
+	if st.Sleeps > 0 {
+		fmt.Printf("  nights slept: %d (last %s)\n", st.Sleeps, time.Unix(st.LastSleepUnix, 0).Format("15:04:05"))
 	} else {
-		fmt.Println("  Nothing left in memory; every moment faded.")
+		fmt.Println("  nights slept: 0")
 	}
+	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f\n",
+		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin)
+}
+
+func printFragments(frags []*FragmentInfo) {
+	for _, f := range frags {
+		fmt.Printf("#%-3d %s  %-8s %.2f bits  NA=%.2f  weight %.2f\n     %q\n",
+			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), f.Channel,
+			f.Surprise, f.Limbic.Noradrenaline, f.Weight, f.Content)
+	}
+}
+
+func printLaunchd(home string) {
+	bin, err := os.Executable()
+	if err != nil {
+		fail(err)
+	}
+	fmt.Printf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key><string>com.golem.daemon</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>%s</string>
+		<string>run</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>GOLEM_HOME</key><string>%s</string>
+	</dict>
+	<key>RunAtLoad</key><true/>
+	<key>KeepAlive</key><true/>
+	<key>StandardOutPath</key><string>%s/golem.log</string>
+	<key>StandardErrorPath</key><string>%s/golem.err.log</string>
+</dict>
+</plist>
+`, bin, home, home, home)
+	fmt.Fprintf(os.Stderr, "\nSave as ~/Library/LaunchAgents/com.golem.daemon.plist, then:\n  launchctl load ~/Library/LaunchAgents/com.golem.daemon.plist\n")
 }

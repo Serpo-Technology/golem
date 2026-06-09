@@ -1,5 +1,12 @@
 package main
 
+// How strongly one surprising bit moves the chemistry. Shared by the demo
+// loop and the daemon so the two brains feel events the same way.
+const (
+	naSpikePerBit           = 0.12
+	sleepSuppressOnSurprise = 0.15
+)
+
 // Neurochemistry is GOLEM's limbic system. Two dynamics matter in this
 // slice: noradrenaline spikes in proportion to surprise and decays back
 // toward baseline, which makes memories distinguishable by how "stressed"
@@ -54,4 +61,10 @@ func (n *Neurochemistry) SuppressSleep(amount float64) {
 	if n.state.Serotonin < 0.05 {
 		n.state.Serotonin = 0.05
 	}
+}
+
+// WakeRested resets sleep pressure to baseline after a consolidation
+// night, so the next night has to be earned by another calm stretch.
+func (n *Neurochemistry) WakeRested() {
+	n.state.Serotonin = 0.5
 }

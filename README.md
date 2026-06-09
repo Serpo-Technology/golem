@@ -14,6 +14,8 @@ The current build is the observation half of the design, on one synthetic log ch
 - Serotonin acts as sleep pressure: it climbs through calm stretches, and high pressure plus silent input triggers the sleep cycle.
 - Consolidation decays memory weights, slower for sharper memories, and prunes what fades. Recall restores a memory's weight.
 - Retrieval is by feeling: "show me when things felt wrong" returns the fragment with the highest noradrenaline at encoding.
+- The daemon form (`golem run`) accepts observations on any number of named channels and keeps its memory in sqlite under `~/.golem`, so fragments survive restarts and hard kills. Channel models persist too, flushed at each sleep and at shutdown.
+- A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `recall`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
 
 Everything below describes the design target. [ROADMAP.md](ROADMAP.md) tracks the path from here to there.
 
@@ -136,7 +138,7 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 - **Language:** Go (1.22+)
 - **Concurrency:** Heavy use of `goroutines` for sensory channels and `select` for the Global Workspace (Consciousness).
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
-- **Dependencies:** Zero-bloat. Avoids heavy 7B+ parameter models in favor of tiny, specialized neural-feature extractors and symbolic logic.
+- **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org); no model weights, no frameworks, no cgo.
 
 ---
 
@@ -146,11 +148,21 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 # Clone the mind
 git clone https://github.com/user/golem.git
 
-# Run the demo loop (it observes, sleeps, and exits on its own)
-go run .
+# Run the synthetic demo (it observes, sleeps, and exits on its own)
+go run . demo
 
 # Run the tests
 go test ./...
+
+# Build and start the daemon
+go build -o golem .
+./golem run
+
+# Talk to it from another terminal
+./golem observe shell "run: make test"
+./golem status
+./golem recall disk
+./golem stop
 ```
 
 > **Note:** GOLEM is designed to run in the background of your OS, observing and learning your patterns without the need for constant prompting.

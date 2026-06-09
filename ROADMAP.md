@@ -44,15 +44,16 @@ size and fragment count bounded while CPU stays near idle.
 
 Goal: GOLEM survives restarts and can be questioned.
 
-- [ ] Lifecycle: long-running main loop; SIGINT/SIGTERM runs a final sleep
+- [x] Lifecycle: long-running main loop; SIGINT/SIGTERM runs a final sleep
       cycle and a clean flush.
-- [ ] Storage: sqlite (modernc.org/sqlite) for fragments and links. Append
+- [x] Storage: sqlite (modernc.org/sqlite) for fragments and links. Append
       on encode, prune and compact during sleep.
-- [ ] Config file: watched channels and paths, thresholds, autonomy
+- [x] Config file: watched channels and paths, thresholds, autonomy
       settings.
-- [ ] `golem` CLI over a unix socket: `status`, `chem`, `recall <query>`,
+- [x] `golem` CLI over a unix socket: `status`, `chem`, `recall <query>`,
       `dump`.
-- [ ] launchd agent for start-at-login once the daemon is stable.
+- [x] launchd agent for start-at-login once the daemon is stable
+      (`golem launchd` prints the plist; loading it is a manual step).
 
 Done when: kill -9 mid-run loses at most the last few seconds of memory,
 and `golem recall` answers from a freshly started process.
