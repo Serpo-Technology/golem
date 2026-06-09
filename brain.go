@@ -1,9 +1,11 @@
 package main
 
-// Neurochemistry is GOLEM's limbic system. In this slice it does one real
-// thing: noradrenaline spikes in proportion to surprise and then decays back
-// toward a baseline. That single dynamic is enough to make memories
-// distinguishable by how "stressed" the system was when it formed them.
+// Neurochemistry is GOLEM's limbic system. Two dynamics matter in this
+// slice: noradrenaline spikes in proportion to surprise and decays back
+// toward baseline, which makes memories distinguishable by how "stressed"
+// the system was when they formed; and serotonin acts as sleep pressure,
+// climbing through quiet stretches, dropping when something alarming
+// happens, and gating the consolidation cycle.
 type Neurochemistry struct {
 	state LimbicState
 }
@@ -19,12 +21,15 @@ func NewNeurochemistry() *Neurochemistry {
 // Snapshot returns the current state by value (so a Fragment keeps its own copy).
 func (n *Neurochemistry) Snapshot() LimbicState { return n.state }
 
-// Decay is homeostasis: every tick, each chemical drifts a little back toward
-// its baseline. This is why a noradrenaline spike fades if nothing else happens.
+// Serotonin reports the current sleep pressure, for the sleep gate.
+func (n *Neurochemistry) Serotonin() float64 { return n.state.Serotonin }
+
+// Decay is homeostasis: noradrenaline and dopamine drift a little back
+// toward baseline every tick. Serotonin is deliberately excluded; it tracks
+// sleep pressure and moves only through BuildSleepPressure and SuppressSleep.
 func (n *Neurochemistry) Decay() {
 	n.state.Noradrenaline += (0.1 - n.state.Noradrenaline) * 0.10
 	n.state.Dopamine += (0.2 - n.state.Dopamine) * 0.10
-	n.state.Serotonin += (0.5 - n.state.Serotonin) * 0.05
 }
 
 // SpikeNoradrenaline raises alertness, clamped at 1.0.
@@ -32,5 +37,21 @@ func (n *Neurochemistry) SpikeNoradrenaline(amount float64) {
 	n.state.Noradrenaline += amount
 	if n.state.Noradrenaline > 1 {
 		n.state.Noradrenaline = 1
+	}
+}
+
+// BuildSleepPressure climbs serotonin toward 1.0. The main loop calls this
+// on ticks when nothing surprising has happened recently, so sustained calm
+// is what carries GOLEM toward sleep.
+func (n *Neurochemistry) BuildSleepPressure() {
+	n.state.Serotonin += (1.0 - n.state.Serotonin) * 0.12
+}
+
+// SuppressSleep pushes sleep pressure down, floored at 0.05. Surprise is
+// alerting: an alarmed system should not drift into consolidation.
+func (n *Neurochemistry) SuppressSleep(amount float64) {
+	n.state.Serotonin -= amount
+	if n.state.Serotonin < 0.05 {
+		n.state.Serotonin = 0.05
 	}
 }

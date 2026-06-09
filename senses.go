@@ -20,7 +20,12 @@ type Observation struct {
 // "surprising"; with it, only a new SHAPE wakes the system. It runs as its
 // own goroutine and pushes onto a channel. Add more sensors exactly like
 // this one.
+//
+// The simulated log emits a burst and then goes quiet, because quiet is
+// what lets sleep pressure build in the main loop.
 func LogSensor(out chan<- Observation, stop <-chan struct{}) {
+	burst := time.NewTimer(4500 * time.Millisecond)
+	defer burst.Stop()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	seq := 4731
@@ -28,6 +33,8 @@ func LogSensor(out chan<- Observation, stop <-chan struct{}) {
 		select {
 		case <-stop:
 			return
+		case <-burst.C:
+			return // the log goes quiet
 		case <-ticker.C:
 			seq++
 			content := fmt.Sprintf("Ping seq=%d latency=%dms", seq, 9+rand.Intn(8))

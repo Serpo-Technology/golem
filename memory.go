@@ -33,6 +33,9 @@ func (h *Hippocampus) Encode(f *Fragment) uint64 {
 // RecallByStress returns the fragment with the highest noradrenaline at
 // encoding — i.e. "show me the moment when things felt wrong." This is the
 // point: GOLEM retrieves by how it FELT, not by string match.
+//
+// Recall is also retrieval practice: the returned fragment gets its weight
+// restored to full, so memories that get used survive consolidation.
 func (h *Hippocampus) RecallByStress() *Fragment {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -42,18 +45,23 @@ func (h *Hippocampus) RecallByStress() *Fragment {
 			best = f
 		}
 	}
+	if best != nil {
+		best.Weight = 1.0
+	}
 	return best
 }
 
 // Sleep runs one consolidation pass: decay every weight, then prune whatever
-// has faded below the floor. High-surprise memories resist decay (a small
-// limbic-tagging bonus), so the dull stuff fades and the sharp stuff persists.
+// has faded below the floor. The decay rate shrinks with the surprise that
+// birthed the fragment, so dull memories die in weeks of nights while sharp
+// ones hold on for months. Everything fades eventually, which means pruning
+// always has work to do; only recall (which restores weight) can keep a
+// memory alive indefinitely.
 func (h *Hippocampus) Sleep(decay, floor float64) (pruned int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for id, f := range h.fragments {
-		f.Weight *= (1 - decay)
-		f.Weight += f.Surprise * 0.01 // limbic tagging: surprising = sticky
+		f.Weight *= 1 - decay/(1+f.Surprise)
 		if f.Weight <= floor {
 			delete(h.fragments, id)
 			pruned++
