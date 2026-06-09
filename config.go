@@ -18,6 +18,8 @@ const (
 	defaultSleepIntervalSec  = 600
 	defaultNightlyDecay      = 0.10
 	defaultPruneFloor        = 0.10
+	defaultZGate             = 2.5
+	defaultCalibWarmup       = 30
 )
 
 // Config is everything a running GOLEM can be tuned with. It lives at
@@ -41,6 +43,12 @@ type Config struct {
 	// NightlyDecay and PruneFloor govern consolidation.
 	NightlyDecay float64 `json:"nightly_decay"`
 	PruneFloor   float64 `json:"prune_floor"`
+	// ZGate is how many deviations above its own channel's running mean a
+	// surprise must sit to reach consciousness once the channel is warmed
+	// up. CalibrationWarmup is the number of observations before the
+	// relative gate applies.
+	ZGate             float64 `json:"z_gate"`
+	CalibrationWarmup int     `json:"calibration_warmup"`
 }
 
 func DefaultConfig() Config {
@@ -53,6 +61,8 @@ func DefaultConfig() Config {
 		SleepIntervalSec:   defaultSleepIntervalSec,
 		NightlyDecay:       defaultNightlyDecay,
 		PruneFloor:         defaultPruneFloor,
+		ZGate:              defaultZGate,
+		CalibrationWarmup:  defaultCalibWarmup,
 	}
 }
 

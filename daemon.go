@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -24,10 +25,12 @@ type Daemon struct {
 	cfg  Config
 	out  io.Writer
 
-	store      *Store
-	chem       *Neurochemistry
-	predictors map[string]*Predictor
-	stats      map[string]*ChannelStat
+	store       *Store
+	chem        *Neurochemistry
+	predictors  map[string]*Predictor
+	calibrators map[string]*Calibrator
+	stats       map[string]*ChannelStat
+	drops       map[string]*atomic.Int64
 
 	obs  chan Observation
 	reqs chan ipcReq
@@ -54,16 +57,18 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		return nil, err
 	}
 	d := &Daemon{
-		home:       home,
-		cfg:        cfg,
-		out:        out,
-		store:      store,
-		chem:       NewNeurochemistry(),
-		predictors: make(map[string]*Predictor),
-		stats:      make(map[string]*ChannelStat),
-		obs:        make(chan Observation, 256),
-		reqs:       make(chan ipcReq),
-		stop:       make(chan struct{}),
+		home:        home,
+		cfg:         cfg,
+		out:         out,
+		store:       store,
+		chem:        NewNeurochemistry(),
+		predictors:  make(map[string]*Predictor),
+		calibrators: make(map[string]*Calibrator),
+		stats:       make(map[string]*ChannelStat),
+		drops:       make(map[string]*atomic.Int64),
+		obs:         make(chan Observation, 256),
+		reqs:        make(chan ipcReq),
+		stop:        make(chan struct{}),
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -100,6 +105,15 @@ func (d *Daemon) predictor(channel string) *Predictor {
 	return p
 }
 
+func (d *Daemon) calibrator(channel string) *Calibrator {
+	c, ok := d.calibrators[channel]
+	if !ok {
+		c = &Calibrator{}
+		d.calibrators[channel] = c
+	}
+	return c
+}
+
 func (d *Daemon) stat(channel string) *ChannelStat {
 	st, ok := d.stats[channel]
 	if !ok {
@@ -107,6 +121,19 @@ func (d *Daemon) stat(channel string) *ChannelStat {
 		d.stats[channel] = st
 	}
 	return st
+}
+
+// dropCounter returns the shared drop counter for a channel's sensor. All
+// counters are created before sensor goroutines start, so the map is never
+// written concurrently; the values are atomics precisely because sensors
+// increment them outside the brain loop.
+func (d *Daemon) dropCounter(channel string) *atomic.Int64 {
+	c, ok := d.drops[channel]
+	if !ok {
+		c = new(atomic.Int64)
+		d.drops[channel] = c
+	}
+	return c
 }
 
 // Run blocks until the daemon is stopped by a signal or a stop command.
@@ -229,7 +256,9 @@ func (d *Daemon) process(o Observation) ObserveResult {
 	bits := p.Surprise(tpl)
 	p.Learn(tpl)
 
-	if bits < d.cfg.SurpriseThreshold {
+	// The gate is channel-relative: the same bit count that is routine on
+	// a diverse channel is an alarm on a monotonous one.
+	if !d.calibrator(o.Channel).Gate(bits, d.cfg.SurpriseThreshold, d.cfg.ZGate, d.cfg.CalibrationWarmup) {
 		return ObserveResult{Bits: bits}
 	}
 
@@ -308,6 +337,9 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 	switch req.Cmd {
 	case "status":
 		held, _ := d.store.Count()
+		for name, ctr := range d.drops {
+			d.stat(name).Dropped = ctr.Load()
+		}
 		return Response{OK: true, Status: &StatusInfo{
 			PID:           os.Getpid(),
 			UptimeSec:     time.Since(d.started).Seconds(),

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,7 +31,7 @@ func runDemo() {
 	chem := NewNeurochemistry()
 	hippo := NewHippocampus()
 
-	go LogSensor(obs, stop)
+	go LogSensor("syslog", obs, stop, new(atomic.Int64))
 
 	homeostasis := time.NewTicker(200 * time.Millisecond)
 	defer homeostasis.Stop()

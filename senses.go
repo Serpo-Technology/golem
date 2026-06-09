@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"time"
 )
 
@@ -11,6 +12,28 @@ type Observation struct {
 	Channel string
 	Content string
 	At      time.Time
+}
+
+// emit delivers an observation without ever blocking a sensor. When the
+// workspace queue is full, the oldest queued observation is dropped and
+// counted: fresh reality beats stale backlog, and the drop counter is
+// itself a stress signal the system can read later.
+func emit(out chan Observation, dropped *atomic.Int64, o Observation) {
+	select {
+	case out <- o:
+		return
+	default:
+	}
+	select {
+	case <-out:
+		dropped.Add(1)
+	default:
+	}
+	select {
+	case out <- o:
+	default:
+		dropped.Add(1)
+	}
 }
 
 // LogSensor simulates GOLEM's "eye" on one channel: a syslog whose lines
@@ -23,7 +46,7 @@ type Observation struct {
 //
 // The simulated log emits a burst and then goes quiet, because quiet is
 // what lets sleep pressure build in the main loop.
-func LogSensor(out chan<- Observation, stop <-chan struct{}) {
+func LogSensor(channel string, out chan Observation, stop <-chan struct{}, dropped *atomic.Int64) {
 	burst := time.NewTimer(4500 * time.Millisecond)
 	defer burst.Stop()
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -48,7 +71,7 @@ func LogSensor(out chan<- Observation, stop <-chan struct{}) {
 					content = fmt.Sprintf("Segfault at 0x%x in worker %d", 0x7f0000000000+rand.Int63n(1<<32), rand.Intn(8))
 				}
 			}
-			out <- Observation{Channel: "syslog", Content: content, At: time.Now()}
+			emit(out, dropped, Observation{Channel: channel, Content: content, At: time.Now()})
 		}
 	}
 }
