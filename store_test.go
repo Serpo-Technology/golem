@@ -164,6 +164,104 @@ func TestRecallByQuery(t *testing.T) {
 	}
 }
 
+// Links bind, never weaken by rebinding, strengthen with practice, fade
+// each night, and die with their endpoints.
+func TestLinksLifecycle(t *testing.T) {
+	s, _ := tempStore(t)
+	a, _ := s.Encode(&Fragment{Content: "a", Surprise: 6, Time: time.Now()})
+	b, _ := s.Encode(&Fragment{Content: "b", Surprise: 6, Time: time.Now()})
+
+	if err := s.Link(a, b, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	s.Link(b, a, 0.5)
+	s.Link(a, b, 0.3) // a weaker rebind must not downgrade the edge
+
+	edges, err := s.LinksFrom([]uint64{a})
+	if err != nil || len(edges) != 1 {
+		t.Fatalf("expected one edge from a: %v %v", edges, err)
+	}
+	if edges[0].Weight != 0.5 {
+		t.Fatalf("rebind downgraded the edge: %.2f", edges[0].Weight)
+	}
+
+	if err := s.StrengthenLinks(edges, 0.6); err != nil {
+		t.Fatal(err)
+	}
+	edges, _ = s.LinksFrom([]uint64{a})
+	if edges[0].Weight != 1.0 {
+		t.Fatalf("practice should cap at 1.0, got %.2f", edges[0].Weight)
+	}
+	back, _ := s.LinksFrom([]uint64{b})
+	if len(back) != 1 || back[0].Weight != 1.0 {
+		t.Fatalf("practice should strengthen both directions, got %+v", back)
+	}
+
+	s.Sleep(0.0, 0.0) // one night: links fade by the nightly factor
+	edges, _ = s.LinksFrom([]uint64{a})
+	if edges[0].Weight >= 1.0 {
+		t.Fatalf("links should fade nightly, got %.2f", edges[0].Weight)
+	}
+
+	s.Sleep(0.10, 2.0) // a floor above every weight prunes both fragments
+	edges, _ = s.LinksFrom([]uint64{a})
+	if len(edges) != 0 {
+		t.Fatalf("links should die with their endpoints: %v", edges)
+	}
+}
+
+// An edge that fades below the link floor dies even while both of its
+// endpoints live on.
+func TestLinkFloorPrunesFadedEdges(t *testing.T) {
+	s, _ := tempStore(t)
+	a, _ := s.Encode(&Fragment{Content: "a", Surprise: 6, Time: time.Now()})
+	b, _ := s.Encode(&Fragment{Content: "b", Surprise: 6, Time: time.Now()})
+	s.Link(a, b, 0.051)
+
+	if _, err := s.Sleep(0.0, 0.0); err != nil {
+		t.Fatal(err)
+	}
+	edges, _ := s.LinksFrom([]uint64{a})
+	if len(edges) != 0 {
+		t.Fatalf("a faded edge should be pruned by the link floor: %+v", edges)
+	}
+	if n, _ := s.Count(); n != 2 {
+		t.Fatalf("the fragments themselves should survive, got %d", n)
+	}
+}
+
+// Calibration state roundtrips and upserts per channel.
+func TestCalibRoundtrip(t *testing.T) {
+	s, _ := tempStore(t)
+	if err := s.SaveCalib("syslog", 412, 5.2, 1.7); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveCalib("syslog", 500, 5.5, 1.9); err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.LoadCalibs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs, ok := m["syslog"]
+	if !ok || len(m) != 1 || cs.N != 500 || cs.Mean != 5.5 || cs.Vari != 1.9 {
+		t.Fatalf("calibration did not roundtrip: %+v", m)
+	}
+}
+
+// Association counts are order-insensitive and cumulative.
+func TestBumpAssoc(t *testing.T) {
+	s, _ := tempStore(t)
+	c1, err := s.BumpAssoc("run: make test", "Disk full on <path>")
+	if err != nil || c1 != 1 {
+		t.Fatalf("first bump: %d %v", c1, err)
+	}
+	c2, err := s.BumpAssoc("Disk full on <path>", "run: make test")
+	if err != nil || c2 != 2 {
+		t.Fatalf("reversed bump should hit the same pair: %d %v", c2, err)
+	}
+}
+
 func TestModelRoundtrip(t *testing.T) {
 	s, _ := tempStore(t)
 	in := map[string]float64{"Ping seq=<n>": 41.5, "Disk full on <path>": 3.25}

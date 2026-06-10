@@ -52,6 +52,18 @@ CREATE TABLE IF NOT EXISTS model_counts (
 	template TEXT NOT NULL,
 	count    REAL NOT NULL,
 	PRIMARY KEY (channel, template)
+);
+CREATE TABLE IF NOT EXISTS assoc (
+	tpl_a TEXT    NOT NULL,
+	tpl_b TEXT    NOT NULL,
+	count INTEGER NOT NULL,
+	PRIMARY KEY (tpl_a, tpl_b)
+);
+CREATE TABLE IF NOT EXISTS calib (
+	channel TEXT PRIMARY KEY,
+	n       INTEGER NOT NULL,
+	mean    REAL    NOT NULL,
+	vari    REAL    NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -82,6 +94,16 @@ func (s *Store) Encode(f *Fragment) (uint64, error) {
 	return f.ID, nil
 }
 
+// Nightly fading of the association graph: edges lose a little weight each
+// sleep and die below the floor, so only paths that recall keeps walking
+// stay strong. The assoc table is capped by evicting never-confirmed pairs
+// once it grows past assocCap.
+const (
+	linkNightlyKeep = 0.98
+	linkFloor       = 0.05
+	assocCap        = 5000
+)
+
 // Sleep mirrors Hippocampus.Sleep in SQL: decay every weight (slower for
 // sharper memories), prune what has faded, and drop links whose endpoints
 // are gone. The decay law here and the one in memory.go must stay
@@ -99,10 +121,18 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := s.db.Exec(`DELETE FROM links
-		WHERE from_id NOT IN (SELECT id FROM fragments)
-		   OR to_id   NOT IN (SELECT id FROM fragments)`); err != nil {
+	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?`, linkNightlyKeep); err != nil {
 		return int(pruned), err
+	}
+	if _, err := s.db.Exec(`DELETE FROM links
+		WHERE weight <= ?
+		   OR from_id NOT IN (SELECT id FROM fragments)
+		   OR to_id   NOT IN (SELECT id FROM fragments)`, linkFloor); err != nil {
+		return int(pruned), err
+	}
+	var assocRows int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM assoc`).Scan(&assocRows); err == nil && assocRows > assocCap {
+		s.db.Exec(`DELETE FROM assoc WHERE count <= 1`)
 	}
 	return int(pruned), nil
 }
@@ -235,6 +265,148 @@ func (s *Store) LoadModel(channel string) (map[string]float64, error) {
 		counts[tpl] = c
 	}
 	return counts, rows.Err()
+}
+
+// LinkEdge is one directed association edge between fragments.
+type LinkEdge struct {
+	From   uint64
+	To     uint64
+	Weight float64
+}
+
+// Link records an association edge. A repeated link keeps the strongest
+// weight it has ever been given.
+func (s *Store) Link(from, to uint64, weight float64) error {
+	_, err := s.db.Exec(`INSERT INTO links (from_id, to_id, weight) VALUES (?,?,?)
+		ON CONFLICT(from_id, to_id) DO UPDATE SET weight = max(weight, excluded.weight)`,
+		from, to, weight)
+	return err
+}
+
+// LinksFrom returns every edge leaving the given fragments.
+func (s *Store) LinksFrom(ids []uint64) ([]LinkEdge, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	marks := make([]string, len(ids))
+	for i, id := range ids {
+		args[i] = id
+		marks[i] = "?"
+	}
+	rows, err := s.db.Query(`SELECT from_id, to_id, weight FROM links
+		WHERE from_id IN (`+strings.Join(marks, ",")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LinkEdge
+	for rows.Next() {
+		var e LinkEdge
+		if err := rows.Scan(&e.From, &e.To, &e.Weight); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// StrengthenLinks is retrieval practice for edges: every traversed link,
+// in both directions, gains a little weight, capped at 1.0. This is the
+// counterpart of the nightly link decay.
+func (s *Store) StrengthenLinks(edges []LinkEdge, delta float64) error {
+	for _, e := range edges {
+		if _, err := s.db.Exec(`UPDATE links SET weight = min(1.0, weight + ?)
+			WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)`,
+			delta, e.From, e.To, e.To, e.From); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// BumpAssoc counts one more co-occurrence of a template pair, order
+// insensitive, and returns the running count. The count is how the system
+// notices that an association is being confirmed by repetition.
+func (s *Store) BumpAssoc(a, b string) (int, error) {
+	if a > b {
+		a, b = b, a
+	}
+	var count int
+	err := s.db.QueryRow(`INSERT INTO assoc (tpl_a, tpl_b, count) VALUES (?,?,1)
+		ON CONFLICT(tpl_a, tpl_b) DO UPDATE SET count = count + 1
+		RETURNING count`, a, b).Scan(&count)
+	return count, err
+}
+
+// FragmentsByIDs fetches specific fragments; the order of the result is
+// not significant.
+func (s *Store) FragmentsByIDs(ids []uint64) ([]*Fragment, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	marks := make([]string, len(ids))
+	for i, id := range ids {
+		args[i] = id
+		marks[i] = "?"
+	}
+	return s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE id IN (`+strings.Join(marks, ",")+`)`, args...)
+}
+
+// LinkCounts returns each fragment's out-degree, for display.
+func (s *Store) LinkCounts() (map[uint64]int, error) {
+	rows, err := s.db.Query(`SELECT from_id, COUNT(*) FROM links GROUP BY from_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[uint64]int)
+	for rows.Next() {
+		var id uint64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
+// CalibState is one channel's persisted saliency calibration.
+type CalibState struct {
+	N    int
+	Mean float64
+	Vari float64
+}
+
+// SaveCalib persists one channel's saliency calibration. It is flushed on
+// the same schedule as the predictor models.
+func (s *Store) SaveCalib(channel string, n int, mean, vari float64) error {
+	_, err := s.db.Exec(`INSERT INTO calib (channel, n, mean, vari) VALUES (?,?,?,?)
+		ON CONFLICT(channel) DO UPDATE SET n=excluded.n, mean=excluded.mean, vari=excluded.vari`,
+		channel, n, mean, vari)
+	return err
+}
+
+// LoadCalibs returns every persisted channel calibration.
+func (s *Store) LoadCalibs() (map[string]CalibState, error) {
+	rows, err := s.db.Query(`SELECT channel, n, mean, vari FROM calib`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]CalibState)
+	for rows.Next() {
+		var ch string
+		var cs CalibState
+		if err := rows.Scan(&ch, &cs.N, &cs.Mean, &cs.Vari); err != nil {
+			return nil, err
+		}
+		out[ch] = cs
+	}
+	return out, rows.Err()
 }
 
 // ModelChannels lists the channels with persisted predictor state.

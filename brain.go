@@ -47,6 +47,17 @@ func (n *Neurochemistry) SpikeNoradrenaline(amount float64) {
 	}
 }
 
+// SpikeDopamine is reward: an association confirmed by repetition, or a
+// recall that served its keeper. Dopamine is the link learning rate, so a
+// memory that keeps proving useful makes the system bind new moments more
+// eagerly. Clamped at 1.0; Decay drifts it back toward baseline.
+func (n *Neurochemistry) SpikeDopamine(amount float64) {
+	n.state.Dopamine += amount
+	if n.state.Dopamine > 1 {
+		n.state.Dopamine = 1
+	}
+}
+
 // BuildSleepPressure climbs serotonin toward 1.0. The main loop calls this
 // on ticks when nothing surprising has happened recently, so sustained calm
 // is what carries GOLEM toward sleep.
