@@ -21,6 +21,9 @@ Usage:
                                   bound to the moments around them, and the
                                   reply is what they bring to mind
   golem tell                      the same, as an interactive session
+  golem tell --about <query> <words>
+                                  bind the words to remembered moments that
+                                  match the query instead of to the present
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
@@ -84,9 +87,15 @@ func main() {
 		}
 
 	case "tell":
-		if len(args) >= 2 {
-			tellOnce(home, strings.Join(args[1:], " "))
-		} else {
+		rest := args[1:]
+		switch {
+		case len(rest) >= 3 && rest[0] == "--about":
+			tellAboutOnce(home, rest[1], strings.Join(rest[2:], " "))
+		case len(rest) >= 1 && rest[0] == "--about":
+			fail(fmt.Errorf("usage: golem tell --about <query> <words>"))
+		case len(rest) >= 1:
+			tellOnce(home, strings.Join(rest, " "))
+		default:
 			tellSession(home)
 		}
 
@@ -179,6 +188,15 @@ func printStatus(st *StatusInfo) {
 func tellOnce(home, words string) {
 	resp := call(home, Request{Cmd: "tell", Content: words})
 	fmt.Printf("remembered as #%d (%.2f bits)\n", resp.Observe.FragmentID, resp.Observe.Bits)
+	if len(resp.Fragments) > 0 {
+		fmt.Println("it brings to mind:")
+		printFragments(resp.Fragments)
+	}
+}
+
+func tellAboutOnce(home, query, words string) {
+	resp := call(home, Request{Cmd: "tell", Query: query, Content: words})
+	fmt.Printf("remembered as #%d, bound to moments matching %q\n", resp.Observe.FragmentID, query)
 	if len(resp.Fragments) > 0 {
 		fmt.Println("it brings to mind:")
 		printFragments(resp.Fragments)

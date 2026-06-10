@@ -93,6 +93,9 @@ Goal: the Links field comes alive and words become pointers.
       fragment weights and the traversed links gain from practice.
 - [x] Dopamine becomes real: rises when an association is confirmed by
       repetition or recall, and scales the link learning rate.
+- [x] Retroactive annotation: `golem tell --about <query> <words>` binds
+      words to remembered moments found by query, so labels can arrive
+      after the binding window has closed.
 
 Done when: "show me when things felt wrong" and "what usually happens
 after make test" both answer by walking links.

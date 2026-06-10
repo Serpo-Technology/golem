@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -105,7 +106,16 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return &Daemon{store: s, chem: NewNeurochemistry(), out: io.Discard, cfg: DefaultConfig()}, s
+	return &Daemon{
+		store:       s,
+		chem:        NewNeurochemistry(),
+		out:         io.Discard,
+		cfg:         DefaultConfig(),
+		predictors:  make(map[string]*Predictor),
+		calibrators: make(map[string]*Calibrator),
+		stats:       make(map[string]*ChannelStat),
+		drops:       make(map[string]*atomic.Int64),
+	}, s
 }
 
 func edgeWeight(t *testing.T, s *Store, from, to uint64) float64 {
@@ -311,6 +321,50 @@ func TestLinkMomentWindowAndFanout(t *testing.T) {
 		if id <= 24 {
 			t.Fatalf("the cap should keep the most recent moments, bound #%d", id)
 		}
+	}
+}
+
+// Retroactive annotation binds words to queried moments long after the
+// binding window has closed, refuses words that match nothing, and stays
+// out of the present's window itself.
+func TestTellAboutBindsRetroactively(t *testing.T) {
+	d, s := testDaemon(t)
+
+	res := d.process(Observation{Channel: "testlog",
+		Content: "Disk full on /dev/disk1s9", At: time.Now()}, true, true)
+	anomalyID := res.FragmentID
+	d.recent = nil // the moment has left the binding window
+
+	resp, _ := d.handle(Request{Cmd: "tell", Query: "disk1s9",
+		Content: "that was the broken external drive"})
+	if !resp.OK {
+		t.Fatalf("annotation should succeed: %+v", resp)
+	}
+	tellID := resp.Observe.FragmentID
+	if edgeWeight(t, s, tellID, anomalyID) == 0 || edgeWeight(t, s, anomalyID, tellID) == 0 {
+		t.Fatal("annotation should bind both directions to the queried moment")
+	}
+	var found bool
+	for _, f := range resp.Fragments {
+		if f.ID == anomalyID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the reply should bring the annotated moment to mind: %+v", resp.Fragments)
+	}
+	if len(d.recent) != 0 {
+		t.Fatal("a retroactive annotation must not enter the present's binding window")
+	}
+
+	before, _ := s.Count()
+	resp, _ = d.handle(Request{Cmd: "tell", Query: "matches nothing at all",
+		Content: "orphan words"})
+	if resp.OK || resp.Error == "" {
+		t.Fatalf("annotating nothing should refuse: %+v", resp)
+	}
+	if after, _ := s.Count(); after != before {
+		t.Fatal("refused words must not be stored")
 	}
 }
 

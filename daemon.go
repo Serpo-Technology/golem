@@ -208,7 +208,7 @@ func (d *Daemon) Run() error {
 	for {
 		select {
 		case o := <-d.obs:
-			d.process(o, false)
+			d.process(o, false, true)
 
 		case r := <-d.reqs:
 			resp, quit := d.handle(r.req)
@@ -317,8 +317,9 @@ func (d *Daemon) serveConn(conn net.Conn) {
 // process runs one observation through the full loop: normalize, score,
 // learn, and encode if it clears the gate. Forced observations (the
 // linguistic channel) skip the gate; what the user says is significant by
-// definition.
-func (d *Daemon) process(o Observation, forced bool) ObserveResult {
+// definition. When bind is false the fragment neither links to the recent
+// past nor enters it, which is what retroactive annotation needs.
+func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 	d.lastObs = time.Now()
 	st := d.stat(o.Channel)
 	st.Observed++
@@ -356,33 +357,46 @@ func (d *Daemon) process(o Observation, forced bool) ObserveResult {
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
 		bits, o.Channel, o.Content, tpl, frag.Limbic.Noradrenaline, id)
 
-	if linked := d.linkMoment(frag); len(linked) > 0 {
-		fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
-	}
-	d.recent = append(d.recent, recentMoment{id: frag.ID, template: frag.Template, at: frag.Time})
-	if len(d.recent) > 32 {
-		d.recent = d.recent[len(d.recent)-32:]
+	if bind {
+		if linked := d.linkMoment(frag); len(linked) > 0 {
+			fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
+		}
+		d.recent = append(d.recent, recentMoment{id: frag.ID, template: frag.Template, at: frag.Time})
+		if len(d.recent) > 32 {
+			d.recent = d.recent[len(d.recent)-32:]
+		}
 	}
 	return ObserveResult{Bits: bits, Conscious: true, FragmentID: id}
 }
 
 // linkMoment binds a new fragment to the recent past: every fragment
-// encoded within linkWindow gets a bidirectional edge. Edge strength rides
-// on dopamine, and a template pair that keeps co-occurring earns a growing
-// bonus. Confirmation pays one reward spike per moment no matter how many
-// pairs confirmed, so a busy stretch cannot pump dopamine through sheer
-// fanout. A pair of identical templates still binds as episode adjacency
-// but never counts as confirmation, because an event repeating itself says
-// nothing about two different things belonging together.
+// encoded within linkWindow gets a bidirectional edge, capped at the most
+// recent maxLinkFanout moments.
 func (d *Daemon) linkMoment(f *Fragment) []uint64 {
-	var linked []uint64
-	confirmed := false
-	da := d.chem.Snapshot().Dopamine
-	for i := len(d.recent) - 1; i >= 0 && len(linked) < maxLinkFanout; i-- {
+	var targets []recentMoment
+	for i := len(d.recent) - 1; i >= 0 && len(targets) < maxLinkFanout; i-- {
 		r := d.recent[i]
 		if f.Time.Sub(r.at) > linkWindow {
 			break
 		}
+		targets = append(targets, r)
+	}
+	return d.bindTo(f, targets)
+}
+
+// bindTo writes the bidirectional edges between a fragment and its
+// targets. Edge strength rides on dopamine, and a template pair that keeps
+// co-occurring earns a growing bonus. Confirmation pays one reward spike
+// per moment no matter how many pairs confirmed, so a busy stretch cannot
+// pump dopamine through sheer fanout. A pair of identical templates still
+// binds as episode adjacency but never counts as confirmation, because an
+// event repeating itself says nothing about two different things belonging
+// together.
+func (d *Daemon) bindTo(f *Fragment, targets []recentMoment) []uint64 {
+	var linked []uint64
+	confirmed := false
+	da := d.chem.Snapshot().Dopamine
+	for _, r := range targets {
 		w := linkBaseWeight + linkDopamineGain*da
 		if r.template != f.Template {
 			count, err := d.store.BumpAssoc(f.Template, r.template)
@@ -586,6 +600,41 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	fmt.Fprintln(d.out, "golem asleep.")
 }
 
+// tellAbout binds words to remembered moments found by query instead of to
+// the present, which lets anyone annotate events after the fact. The
+// annotation is stored only when something matches; words about nothing
+// teach nothing.
+func (d *Daemon) tellAbout(req Request) Response {
+	anchors, err := d.store.Recall(req.Query, 3)
+	if err != nil {
+		return Response{Error: err.Error()}
+	}
+	if len(anchors) == 0 {
+		return Response{Error: fmt.Sprintf("no remembered moment matches %q; the words were not stored", req.Query)}
+	}
+
+	res := d.process(Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, false)
+	if res.FragmentID == 0 {
+		return Response{Error: "the words could not be stored; check the daemon log"}
+	}
+	f := &Fragment{ID: res.FragmentID, Template: Normalize(req.Content), Time: time.Now()}
+	targets := make([]recentMoment, 0, len(anchors))
+	for _, a := range anchors {
+		targets = append(targets, recentMoment{id: a.ID, template: a.Template, at: a.Time})
+	}
+	if linked := d.bindTo(f, targets); len(linked) > 0 {
+		fmt.Fprintf(d.out, "      ~ #%d annotates %s\n", f.ID, fmtIDs(linked))
+	}
+
+	resp := Response{OK: true, Observe: &res}
+	if seeds, err := d.store.FragmentsByIDs([]uint64{f.ID}); err == nil && len(seeds) == 1 {
+		if cloud, err := d.spread(seeds); err == nil {
+			resp.Fragments = cloud
+		}
+	}
+	return resp
+}
+
 // handle services one CLI request inside the brain loop. The second return
 // value reports whether the daemon should shut down.
 func (d *Daemon) handle(req Request) (Response, bool) {
@@ -613,14 +662,17 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		if req.Channel == "" || req.Content == "" {
 			return Response{Error: "observe needs a channel and content"}, false
 		}
-		res := d.process(Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false)
+		res := d.process(Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false, true)
 		return Response{OK: true, Observe: &res}, false
 
 	case "tell":
 		if req.Content == "" {
 			return Response{Error: "tell needs words"}, false
 		}
-		res := d.process(Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true)
+		if req.Query != "" {
+			return d.tellAbout(req), false
+		}
+		res := d.process(Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
 			return Response{Error: "the words could not be stored; check the daemon log"}, false
 		}
