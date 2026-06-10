@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -42,7 +43,35 @@ type Daemon struct {
 	lastSurprise time.Time
 	lastSleep    time.Time
 	sleeps       int
+
+	// recent holds the just-encoded moments that new fragments bind to.
+	// It serves as the hippocampal present.
+	recent []recentMoment
 }
+
+type recentMoment struct {
+	id       uint64
+	template string
+	at       time.Time
+}
+
+// Association tuning. Link strength rides on dopamine, repetition of a
+// template pair earns a bonus and a reward spike, and recall both rewards
+// the chemistry and strengthens the paths it walked.
+const (
+	linkWindow        = 30 * time.Second
+	maxLinkFanout     = 8
+	linkBaseWeight    = 0.2
+	linkDopamineGain  = 0.4
+	assocRepeatBonus  = 0.1
+	confirmReward     = 0.08
+	recallReward      = 0.05
+	linkPracticeDelta = 0.05
+	spreadHops        = 2
+	spreadDamping     = 0.7
+	spreadFloor       = 0.05
+	spreadBudget      = 10
+)
 
 type ipcReq struct {
 	req   Request
@@ -78,8 +107,8 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 	return d, nil
 }
 
-// loadModels restores every channel predictor persisted by earlier runs,
-// so a restart does not reset what counts as "normal."
+// loadModels restores every channel predictor and calibrator persisted by
+// earlier runs, so a restart does not reset what counts as "normal."
 func (d *Daemon) loadModels() error {
 	channels, err := d.store.ModelChannels()
 	if err != nil {
@@ -93,6 +122,15 @@ func (d *Daemon) loadModels() error {
 		p := NewPredictor(d.cfg.PredictorWindow)
 		p.Seed(counts)
 		d.predictors[ch] = p
+	}
+	calibs, err := d.store.LoadCalibs()
+	if err != nil {
+		return err
+	}
+	for ch, cs := range calibs {
+		c := &Calibrator{}
+		c.Seed(cs.N, cs.Mean, cs.Vari)
+		d.calibrators[ch] = c
 	}
 	return nil
 }
@@ -170,7 +208,7 @@ func (d *Daemon) Run() error {
 	for {
 		select {
 		case o := <-d.obs:
-			d.process(o)
+			d.process(o, false)
 
 		case r := <-d.reqs:
 			resp, quit := d.handle(r.req)
@@ -277,8 +315,10 @@ func (d *Daemon) serveConn(conn net.Conn) {
 }
 
 // process runs one observation through the full loop: normalize, score,
-// learn, and encode if it clears the gate.
-func (d *Daemon) process(o Observation) ObserveResult {
+// learn, and encode if it clears the gate. Forced observations (the
+// linguistic channel) skip the gate; what the user says is significant by
+// definition.
+func (d *Daemon) process(o Observation, forced bool) ObserveResult {
 	d.lastObs = time.Now()
 	st := d.stat(o.Channel)
 	st.Observed++
@@ -290,7 +330,8 @@ func (d *Daemon) process(o Observation) ObserveResult {
 
 	// The gate is channel-relative: the same bit count that is routine on
 	// a diverse channel is an alarm on a monotonous one.
-	if !d.calibrator(o.Channel).Gate(bits, d.cfg.SurpriseThreshold, d.cfg.ZGate, d.cfg.CalibrationWarmup) {
+	if !forced &&
+		!d.calibrator(o.Channel).Gate(bits, d.cfg.SurpriseThreshold, d.cfg.ZGate, d.cfg.CalibrationWarmup) {
 		return ObserveResult{Bits: bits}
 	}
 
@@ -314,7 +355,183 @@ func (d *Daemon) process(o Observation) ObserveResult {
 	st.Conscious++
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
 		bits, o.Channel, o.Content, tpl, frag.Limbic.Noradrenaline, id)
+
+	if linked := d.linkMoment(frag); len(linked) > 0 {
+		fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
+	}
+	d.recent = append(d.recent, recentMoment{id: frag.ID, template: frag.Template, at: frag.Time})
+	if len(d.recent) > 32 {
+		d.recent = d.recent[len(d.recent)-32:]
+	}
 	return ObserveResult{Bits: bits, Conscious: true, FragmentID: id}
+}
+
+// linkMoment binds a new fragment to the recent past: every fragment
+// encoded within linkWindow gets a bidirectional edge. Edge strength rides
+// on dopamine, and a template pair that keeps co-occurring earns a growing
+// bonus. Confirmation pays one reward spike per moment no matter how many
+// pairs confirmed, so a busy stretch cannot pump dopamine through sheer
+// fanout. A pair of identical templates still binds as episode adjacency
+// but never counts as confirmation, because an event repeating itself says
+// nothing about two different things belonging together.
+func (d *Daemon) linkMoment(f *Fragment) []uint64 {
+	var linked []uint64
+	confirmed := false
+	da := d.chem.Snapshot().Dopamine
+	for i := len(d.recent) - 1; i >= 0 && len(linked) < maxLinkFanout; i-- {
+		r := d.recent[i]
+		if f.Time.Sub(r.at) > linkWindow {
+			break
+		}
+		w := linkBaseWeight + linkDopamineGain*da
+		if r.template != f.Template {
+			count, err := d.store.BumpAssoc(f.Template, r.template)
+			if err != nil {
+				fmt.Fprintf(d.out, "assoc error: %v\n", err)
+				continue
+			}
+			if count > 1 {
+				confirmed = true
+				bonus := float64(count-1) * assocRepeatBonus
+				if bonus > 0.5 {
+					bonus = 0.5
+				}
+				w += bonus
+			}
+		}
+		if w > 0.95 {
+			w = 0.95
+		}
+		if err := d.store.Link(f.ID, r.id, w); err != nil {
+			fmt.Fprintf(d.out, "link error: %v\n", err)
+			continue
+		}
+		d.store.Link(r.id, f.ID, w)
+		linked = append(linked, r.id)
+	}
+	if confirmed {
+		d.chem.SpikeDopamine(confirmReward)
+	}
+	return linked
+}
+
+func fmtIDs(ids []uint64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("#%d", id)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// spread walks the link graph outward from seed fragments, decaying
+// activation by edge weight and per-hop damping, and returns the context
+// cloud. The cloud holds associated moments ranked by how much activation
+// reached them, with the budget shared across channels so one loud channel
+// cannot monopolize the reply. Edges that carried activation are
+// strengthened a little, because recall is practice.
+func (d *Daemon) spread(seeds []*Fragment) ([]*FragmentInfo, error) {
+	act := map[uint64]float64{}
+	seedSet := map[uint64]bool{}
+	frontier := make([]uint64, 0, len(seeds))
+	for _, s := range seeds {
+		act[s.ID] = 1.0
+		seedSet[s.ID] = true
+		frontier = append(frontier, s.ID)
+	}
+
+	var traversed []LinkEdge
+	for hop := 0; hop < spreadHops && len(frontier) > 0; hop++ {
+		edges, err := d.store.LinksFrom(frontier)
+		if err != nil {
+			return nil, err
+		}
+		// Relax against the activations as they stood when the hop began,
+		// so the outcome cannot depend on the order edges come back from
+		// the store.
+		base := make(map[uint64]float64, len(act))
+		for id, a := range act {
+			base[id] = a
+		}
+		var next []uint64
+		for _, e := range edges {
+			a := base[e.From] * e.Weight * spreadDamping
+			if a < spreadFloor || a <= act[e.To] {
+				continue
+			}
+			if _, seen := act[e.To]; !seen {
+				next = append(next, e.To)
+			}
+			act[e.To] = a
+			traversed = append(traversed, e)
+		}
+		frontier = next
+	}
+	if len(traversed) > 0 {
+		d.store.StrengthenLinks(traversed, linkPracticeDelta)
+	}
+
+	ids := make([]uint64, 0, len(act))
+	for id := range act {
+		if !seedSet[id] {
+			ids = append(ids, id)
+		}
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	byActivation := func(i, j int) bool {
+		if act[frags[i].ID] != act[frags[j].ID] {
+			return act[frags[i].ID] > act[frags[j].ID]
+		}
+		return frags[i].ID > frags[j].ID
+	}
+	sort.Slice(frags, byActivation)
+	if len(frags) > spreadBudget {
+		frags = fairTruncate(frags, spreadBudget)
+		sort.Slice(frags, byActivation)
+	}
+	out := make([]*FragmentInfo, 0, len(frags))
+	for _, f := range frags {
+		info := fragmentInfo(f)
+		info.Activation = act[f.ID]
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// fairTruncate keeps the budget's strongest moments while sharing slots
+// round-robin across channels. A burst on one channel therefore cannot
+// crowd a quieter channel's contribution out of the reply. The input must
+// already be sorted strongest first.
+func fairTruncate(frags []*Fragment, budget int) []*Fragment {
+	queues := map[string][]*Fragment{}
+	var order []string
+	for _, f := range frags {
+		if _, ok := queues[f.Channel]; !ok {
+			order = append(order, f.Channel)
+		}
+		queues[f.Channel] = append(queues[f.Channel], f)
+	}
+	picked := make([]*Fragment, 0, budget)
+	for len(picked) < budget {
+		took := false
+		for _, ch := range order {
+			if len(queues[ch]) == 0 {
+				continue
+			}
+			picked = append(picked, queues[ch][0])
+			queues[ch] = queues[ch][1:]
+			took = true
+			if len(picked) == budget {
+				break
+			}
+		}
+		if !took {
+			break
+		}
+	}
+	return picked
 }
 
 func (d *Daemon) readyToSleep() bool {
@@ -344,6 +561,12 @@ func (d *Daemon) flushModels() {
 	for ch, p := range d.predictors {
 		if err := d.store.SaveModel(ch, p.Export()); err != nil {
 			fmt.Fprintf(d.out, "model flush error on %s: %v\n", ch, err)
+		}
+	}
+	for ch, c := range d.calibrators {
+		n, mean, vari := c.Export()
+		if err := d.store.SaveCalib(ch, n, mean, vari); err != nil {
+			fmt.Fprintf(d.out, "calibration flush error on %s: %v\n", ch, err)
 		}
 	}
 }
@@ -390,27 +613,56 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		if req.Channel == "" || req.Content == "" {
 			return Response{Error: "observe needs a channel and content"}, false
 		}
-		res := d.process(Observation{Channel: req.Channel, Content: req.Content, At: time.Now()})
+		res := d.process(Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false)
 		return Response{OK: true, Observe: &res}, false
 
+	case "tell":
+		if req.Content == "" {
+			return Response{Error: "tell needs words"}, false
+		}
+		res := d.process(Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true)
+		if res.FragmentID == 0 {
+			return Response{Error: "the words could not be stored; check the daemon log"}, false
+		}
+		resp := Response{OK: true, Observe: &res}
+		// What do these words point at? The new fragment just bound to the
+		// recent past, so a spread from it is GOLEM's side of the exchange.
+		if res.FragmentID != 0 {
+			if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {
+				if cloud, err := d.spread(seeds); err == nil {
+					resp.Fragments = cloud
+				}
+			}
+		}
+		return resp, false
+
 	case "recall":
-		var frags []*Fragment
+		var seeds []*Fragment
 		var err error
 		if req.Query == "" {
 			var f *Fragment
 			f, err = d.store.RecallByStress()
 			if f != nil {
-				frags = []*Fragment{f}
+				seeds = []*Fragment{f}
 			}
 		} else {
-			frags, err = d.store.Recall(req.Query, 5)
+			seeds, err = d.store.Recall(req.Query, 3)
 		}
 		if err != nil {
 			return Response{Error: err.Error()}, false
 		}
-		infos := make([]*FragmentInfo, 0, len(frags))
-		for _, f := range frags {
-			infos = append(infos, fragmentInfo(f))
+		infos := make([]*FragmentInfo, 0, len(seeds))
+		for _, f := range seeds {
+			info := fragmentInfo(f)
+			info.Activation = 1.0
+			infos = append(infos, info)
+		}
+		if len(seeds) > 0 {
+			// Memory served its keeper; that is what reward means here.
+			d.chem.SpikeDopamine(recallReward)
+			if cloud, err := d.spread(seeds); err == nil {
+				infos = append(infos, cloud...)
+			}
 		}
 		return Response{OK: true, Fragments: infos}, false
 
@@ -419,9 +671,12 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		if err != nil {
 			return Response{Error: err.Error()}, false
 		}
+		degrees, _ := d.store.LinkCounts()
 		infos := make([]*FragmentInfo, 0, len(frags))
 		for _, f := range frags {
-			infos = append(infos, fragmentInfo(f))
+			info := fragmentInfo(f)
+			info.LinkCount = degrees[f.ID]
+			infos = append(infos, info)
 		}
 		return Response{OK: true, Fragments: infos}, false
 

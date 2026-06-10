@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -16,8 +17,13 @@ Usage:
   golem status                    show daemon status
   golem chem                      show current neurochemistry
   golem observe <channel> <text>  feed one observation to the daemon
-  golem recall [query]            recall memory; without a query, returns the
-                                  most stressful moment
+  golem tell <words>              speak to GOLEM; the words become a memory
+                                  bound to the moments around them, and the
+                                  reply is what they bring to mind
+  golem tell                      the same, as an interactive session
+  golem recall [query]            recall memory plus its linked context;
+                                  without a query, returns the most
+                                  stressful moment
   golem dump                      list every fragment held in memory
   golem stop                      ask the daemon to sleep once and shut down
   golem shellhook                 print the zsh hook that feeds the shell channel
@@ -75,6 +81,13 @@ func main() {
 			fmt.Printf("%.2f bits, conscious -> fragment #%d\n", o.Bits, o.FragmentID)
 		} else {
 			fmt.Printf("%.2f bits, predicted away\n", o.Bits)
+		}
+
+	case "tell":
+		if len(args) >= 2 {
+			tellOnce(home, strings.Join(args[1:], " "))
+		} else {
+			tellSession(home)
 		}
 
 	case "recall":
@@ -163,11 +176,52 @@ func printStatus(st *StatusInfo) {
 		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin)
 }
 
+func tellOnce(home, words string) {
+	resp := call(home, Request{Cmd: "tell", Content: words})
+	fmt.Printf("remembered as #%d (%.2f bits)\n", resp.Observe.FragmentID, resp.Observe.Bits)
+	if len(resp.Fragments) > 0 {
+		fmt.Println("it brings to mind:")
+		printFragments(resp.Fragments)
+	}
+}
+
+func tellSession(home string) {
+	fmt.Println("speak to golem; an empty line ends the session.")
+	sc := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("you> ")
+		if !sc.Scan() {
+			fmt.Println()
+			return
+		}
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			return
+		}
+		resp := call(home, Request{Cmd: "tell", Content: line})
+		if len(resp.Fragments) == 0 {
+			fmt.Printf("golem> remembered #%d; nothing comes to mind yet.\n", resp.Observe.FragmentID)
+			continue
+		}
+		fmt.Printf("golem> remembered #%d; it brings to mind:\n", resp.Observe.FragmentID)
+		for _, f := range resp.Fragments {
+			fmt.Printf("golem>   ~%.2f #%d %s %q\n", f.Activation, f.ID, f.Channel, f.Content)
+		}
+	}
+}
+
 func printFragments(frags []*FragmentInfo) {
 	for _, f := range frags {
-		fmt.Printf("#%-3d %s  %-8s %.2f bits  NA=%.2f  weight %.2f\n     %q\n",
+		extra := ""
+		if f.Activation > 0 && f.Activation < 1 {
+			extra = fmt.Sprintf("  assoc %.2f", f.Activation)
+		}
+		if f.LinkCount > 0 {
+			extra += fmt.Sprintf("  links %d", f.LinkCount)
+		}
+		fmt.Printf("#%-3d %s  %-8s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
 			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), f.Channel,
-			f.Surprise, f.Limbic.Noradrenaline, f.Weight, f.Content)
+			f.Surprise, f.Limbic.Noradrenaline, f.Weight, extra, f.Content)
 	}
 }
 

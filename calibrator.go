@@ -31,6 +31,17 @@ func (c *Calibrator) observe(bits float64) {
 	c.n++
 }
 
+// Export returns the calibration statistics for persistence.
+func (c *Calibrator) Export() (n int, mean, vari float64) {
+	return c.n, c.mean, c.vari
+}
+
+// Seed restores persisted calibration statistics, so a restarted daemon
+// does not relive the warmup flood on channels it already knows.
+func (c *Calibrator) Seed(n int, mean, vari float64) {
+	c.n, c.mean, c.vari = n, mean, vari
+}
+
 // Gate decides whether a surprise reaches consciousness on this channel,
 // judging it against the statistics as they stood before this observation,
 // then folding the observation in. During warmup only the absolute floor

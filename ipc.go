@@ -45,16 +45,20 @@ type ChannelStat struct {
 	Dropped   int64 `json:"dropped"`
 }
 
-// FragmentInfo is the wire form of a Fragment.
+// FragmentInfo is the wire form of a Fragment. Activation is set on recall
+// results: 1.0 marks a direct match, lower values mark moments reached
+// through the link graph. LinkCount is the fragment's degree, set on dump.
 type FragmentInfo struct {
-	ID       uint64      `json:"id"`
-	Channel  string      `json:"channel"`
-	Content  string      `json:"content"`
-	Template string      `json:"template"`
-	Surprise float64     `json:"surprise"`
-	Limbic   LimbicState `json:"limbic"`
-	AtUnix   int64       `json:"at_unix"`
-	Weight   float64     `json:"weight"`
+	ID         uint64      `json:"id"`
+	Channel    string      `json:"channel"`
+	Content    string      `json:"content"`
+	Template   string      `json:"template"`
+	Surprise   float64     `json:"surprise"`
+	Limbic     LimbicState `json:"limbic"`
+	AtUnix     int64       `json:"at_unix"`
+	Weight     float64     `json:"weight"`
+	Activation float64     `json:"activation,omitempty"`
+	LinkCount  int         `json:"links,omitempty"`
 }
 
 func fragmentInfo(f *Fragment) *FragmentInfo {

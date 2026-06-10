@@ -82,15 +82,16 @@ sensible relative alert rates.
 
 Goal: the Links field comes alive and words become pointers.
 
-- [ ] Co-occurrence linking: fragments encoded within a short window get
+- [x] Co-occurrence linking: fragments encoded within a short window get
       bidirectional weighted links.
-- [ ] Linguistic channel: `golem tell "..."` and a small REPL. Words are
+- [x] Linguistic channel: `golem tell "..."` and a small REPL. Words are
       fragments like everything else.
-- [ ] Spreading-activation recall: seed by content or limbic key, walk
+- [x] Spreading-activation recall: seed by content or limbic key, walk
       links by weight. `golem recall disk` returns the moment plus its
       context cloud.
-- [ ] Retrieval strengthens weights, the counterpart to sleep decay.
-- [ ] Dopamine becomes real: rises when an association is confirmed by
+- [x] Retrieval strengthens weights, the counterpart to sleep decay. Both
+      fragment weights and the traversed links gain from practice.
+- [x] Dopamine becomes real: rises when an association is confirmed by
       repetition or recall, and scales the link learning rate.
 
 Done when: "show me when things felt wrong" and "what usually happens
@@ -142,6 +143,11 @@ Goal: see the graph before building the GUI that edits it.
       survived a few weeks without changing.
 
 ## Open questions
+
+- A routine command is predicted away and leaves no fragment, so a tell
+  can only bind to surprising moments. Whether language should focus
+  attention (force-encode what follows speech on user-driven channels)
+  belongs with the decision-loop work.
 
 - Template churn: how to merge templates when the normalizer learns a
   better split for lines it already knows.

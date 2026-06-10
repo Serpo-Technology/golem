@@ -15,7 +15,10 @@ The current build is the observation half of the design, on one synthetic log ch
 - Consolidation decays memory weights, slower for sharper memories, and prunes what fades. Recall restores a memory's weight.
 - Retrieval is by feeling: "show me when things felt wrong" returns the fragment with the highest noradrenaline at encoding.
 - The daemon form (`golem run`) accepts observations on any number of named channels and keeps its memory in sqlite under `~/.golem`, so fragments survive restarts and hard kills. Channel models persist too, flushed at each sleep and at shutdown.
-- A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `recall`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
+- Moments that occur near each other in time become linked. When the same pairing keeps recurring, the bond strengthens and dopamine rises, which raises the binding rate in turn.
+- `golem tell` is the linguistic channel: your words always encode, bind to the moments around them, and the reply is what they bring to mind. Words are pointers to experience.
+- `golem recall` returns direct matches plus the context cloud reached through the link graph, ranked by activation. Recall strengthens every path it walks; sleep decays the paths nothing walks.
+- A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `tell`, `recall`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
 - Built-in senses, selected in config: file events in watched directories (bucketed to operation, extension, and parent directory), system vitals banded into words (cpu load, memory pressure, disk space), and the macOS unified log filtered to errors and faults. `golem shellhook` prints a zsh hook that feeds the shell channel with commands and their failures.
 - Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
 
