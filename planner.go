@@ -57,12 +57,28 @@ func (d *Daemon) resolveConcept(phrase string) *Fragment {
 	return nil
 }
 
-// anchorEpisodes resolves a term to the moments it stands for: a
-// grounded concept's episodes, or the moments matching the raw phrase
-// when no concept exists yet. Utterances never anchor a temporal
-// question, or asking "what follows make test" would anchor on the
-// asking.
-func (d *Daemon) anchorEpisodes(t Term) []uint64 {
+// anchorEpisodes resolves a term to the moments it stands for and to the
+// face the answer should speak for them. An exact shape match outranks
+// the concept the term's words voted for: greedy naming can point a
+// word at a bystander concept, and an answer must anchor on the event
+// the question named, never on what its words happen to be bonded to.
+// Utterances never anchor at all, or asking "what follows make test"
+// would anchor on the asking.
+func (d *Daemon) anchorEpisodes(t Term) ([]uint64, Term) {
+	if t.Phrase != "" {
+		exact, err := d.store.EpisodesByExactShape(t.Phrase, 8)
+		if err == nil {
+			var ids []uint64
+			for _, f := range exact {
+				if f.Channel != "tell" {
+					ids = append(ids, f.ID)
+				}
+			}
+			if len(ids) > 0 {
+				return ids, Term{Phrase: t.Phrase}
+			}
+		}
+	}
 	if t.Concept != nil {
 		grounds, err := d.store.LinksFromRel([]uint64{t.Concept.ID}, RelGrounds)
 		if err == nil && len(grounds) > 0 {
@@ -70,15 +86,15 @@ func (d *Daemon) anchorEpisodes(t Term) []uint64 {
 			for _, e := range grounds {
 				ids = append(ids, e.To)
 			}
-			return ids
+			return ids, t
 		}
 	}
 	if t.Phrase == "" {
-		return nil
+		return nil, t
 	}
 	frags, err := d.store.Recall(t.Phrase, 8)
 	if err != nil {
-		return nil
+		return nil, t
 	}
 	var ids []uint64
 	for _, f := range frags {
@@ -87,7 +103,12 @@ func (d *Daemon) anchorEpisodes(t Term) []uint64 {
 		}
 		ids = append(ids, f.ID)
 	}
-	return ids
+	if len(ids) > 0 {
+		if anchored, err := d.store.FragmentsByIDs(ids[:1]); err == nil && len(anchored) == 1 {
+			return ids, Term{Phrase: d.speakFor(anchored[0])}
+		}
+	}
+	return ids, t
 }
 
 // successorRank is one aggregated answer to "what follows": a shape, its
@@ -311,14 +332,7 @@ func (d *Daemon) planQuestion(frame Frame) string {
 
 	// "What happens after X" and "what comes before X."
 	if frame.Rel != "" && !frame.Anchor.empty() {
-		anchors := d.anchorEpisodes(frame.Anchor)
-		anchorTerm := frame.Anchor
-		if anchorTerm.Concept == nil && len(anchors) > 0 {
-			// Speak the anchor the way memory knows it, even unnamed.
-			if frags, err := d.store.FragmentsByIDs(anchors[:1]); err == nil && len(frags) == 1 {
-				anchorTerm = Term{Phrase: d.speakFor(frags[0])}
-			}
-		}
+		anchors, anchorTerm := d.anchorEpisodes(frame.Anchor)
 		if len(anchors) > 0 {
 			ranked := d.successorsOf(anchors, frame.Rel)
 			if len(ranked) > 0 && ranked[0].weight >= successorFloor {

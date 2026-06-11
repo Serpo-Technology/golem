@@ -63,6 +63,19 @@ func (s *Store) ConceptByTemplate(tpl string) (*Fragment, error) {
 	return frags[0], nil
 }
 
+// EpisodesByExactShape returns the moments whose template or content is
+// exactly the phrase, newest first. An exact shape is the strongest
+// possible anchor a phrase can have.
+func (s *Store) EpisodesByExactShape(phrase string, limit int) ([]*Fragment, error) {
+	q := strings.ToLower(phrase)
+	if q == "" {
+		return nil, nil
+	}
+	return s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE kind = ? AND (lower(template) = ? OR lower(content) = ?)
+		ORDER BY id DESC LIMIT ?`, KindEpisodic, q, q, limit)
+}
+
 // ConceptsByGloss returns concepts whose gloss or source template contains
 // the phrase. This is how a spoken phrase reaches a concept no word names
 // yet: by content, the way episodic recall already works.

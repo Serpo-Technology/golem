@@ -126,6 +126,45 @@ func TestAdmitsIgnorance(t *testing.T) {
 	}
 }
 
+// Greedy naming can bond a question's words to a bystander concept; the
+// answer must still anchor on the event the question named when that
+// shape exists in memory, never on what the words happen to point at.
+func TestAnchorPrefersExactShapeOverWordVotes(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+
+	// "disk space low" is always followed by a cleanup; "memory pressure
+	// warning" keeps it company so both shapes earn concepts.
+	for i := 0; i < 4; i++ {
+		at := base.Add(time.Duration(i) * 30 * time.Minute)
+		d.recent = nil
+		d.process(Observation{Channel: "vitals", Content: "memory pressure warning", At: at}, true, true)
+		d.process(Observation{Channel: "vitals", Content: "disk space low", At: at.Add(2 * time.Second)}, true, true)
+		d.process(Observation{Channel: "shell", Content: "run: df cleanup", At: at.Add(5 * time.Second)}, true, true)
+	}
+	d.recent = nil
+	// The words of the phrase bond to the bystander concept only.
+	memEpisodes, _ := s.EpisodesByExactShape("memory pressure warning", 8)
+	var anchors []recentMoment
+	for _, f := range memEpisodes {
+		anchors = append(anchors, recentMoment{id: f.ID, template: f.Template, at: f.Time})
+	}
+	d.mintWords("disk space low", "en", 0, anchors)
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+
+	resp := say(t, d, "what usually happens after disk space low")
+	if !strings.HasPrefix(resp.Say, "After disk space low,") {
+		t.Fatalf("the answer must anchor on the asked shape: %q", resp.Say)
+	}
+	if !strings.Contains(resp.Say, "df cleanup") {
+		t.Fatalf("the successor should be the asked shape's, got %q", resp.Say)
+	}
+}
+
 // One co-occurrence is an anecdote: a pair seen a single time is not
 // spoken as a habit, and repetition is what lifts it past the floor.
 func TestSingleOccurrenceIsNotAHabit(t *testing.T) {
