@@ -446,6 +446,25 @@ func (s *Store) SaveHabit(h Habit) error {
 	return err
 }
 
+// GraduatedCues lists the cue templates of every graduated habit, the
+// trigger set for automatic cueing.
+func (s *Store) GraduatedCues() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT cue FROM habits WHERE status = ?`, HabitGraduated)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var cue string
+		if err := rows.Scan(&cue); err != nil {
+			return nil, err
+		}
+		out = append(out, cue)
+	}
+	return out, rows.Err()
+}
+
 // AllHabits returns every grounded pair, graduated first.
 func (s *Store) AllHabits() ([]Habit, error) {
 	rows, err := s.db.Query(`SELECT cue, action, approvals, denials, status FROM habits

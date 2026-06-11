@@ -66,6 +66,17 @@ func runExecutionDemo() {
 	_, outcome, _ = d.approve(dec, base.Add(80*time.Hour))
 	fmt.Printf("   approve -> %s\n   the denylist overrides the allowlist; nothing ran.\n", outcome)
 
+	// The graduated pair fires from an observation, no human in the loop.
+	fmt.Println("\n4. AUTOMATIC CUEING. The graduated pair from act 1 again, but this")
+	fmt.Println("   time nobody types the cue: an observation contains it.")
+	fmt.Println("   syslog says: \"maintenance window: greet the world before backup\"")
+	d.process(Observation{Channel: "syslog",
+		Content: "maintenance window: greet the world before backup", At: time.Now()}, false, true)
+	if entries, _ := d.store.AuditTail(1); len(entries) == 1 {
+		fmt.Printf("   observed -> %s\n", entries[0].Outcome)
+	}
+	fmt.Println("   the cue came from the senses; no proposal, no approval, full audit.")
+
 	fmt.Println("\n" + line)
 	fmt.Println("Decision trail:")
 	entries, _ := d.store.AuditTail(8)

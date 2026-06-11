@@ -57,6 +57,12 @@ type Daemon struct {
 	// pending holds the last proposal awaiting the operator's approve or
 	// deny.
 	pending *Decision
+
+	// gradCues caches the graduated cue templates that automatic cueing
+	// matches observations against; lastAutoCue is the per-cue cooldown.
+	gradCues       []string
+	gradCuesLoaded bool
+	lastAutoCue    map[string]time.Time
 }
 
 // tokenBucket is the refractory on encoding: a burst allowance that
@@ -418,6 +424,15 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 	p := d.predictor(o.Channel)
 	bits := p.Surprise(tpl)
 	p.Learn(tpl)
+
+	// The reflex arc runs before the gate: a graduated habit must fire on
+	// its cue even when the cue has become too routine to reach
+	// consciousness. Speech is excluded (the operator has golem propose),
+	// and so are action echoes: the feedback channel and shell lines that
+	// are themselves commands, or an outcome could re-cue its own habit.
+	if !forced && o.Channel != "action" && !strings.HasPrefix(o.Content, actionPrefix) {
+		d.autoCue(o, tpl)
+	}
 
 	// The gate is channel-relative: the same bit count that is routine on
 	// a diverse channel is an alarm on a monotonous one.
@@ -887,7 +902,7 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		// now, with no separate approval, and there is nothing left pending.
 		if dec.Proposed != nil && !dec.Conflict && dec.Status == HabitGraduated {
 			if allowed, _ := d.mayExecute(dec.Proposed.Command); allowed {
-				outcome, demoted := d.autorun(dec, time.Now())
+				outcome, demoted := d.autorun(dec, "", time.Now())
 				di.Autonomous = true
 				di.Outcome = outcome
 				di.Demoted = demoted

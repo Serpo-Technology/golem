@@ -23,6 +23,7 @@ const (
 	defaultGraduation        = 3
 	defaultConflictMargin    = 0.15
 	defaultExecuteTimeoutSec = 30
+	defaultAutoCueCooldown   = 60
 )
 
 // actionDenylist is the set of command substrings GOLEM will always
@@ -96,6 +97,10 @@ type Config struct {
 	ExecuteAllowlist []string `json:"execute_allowlist"`
 	// ExecuteTimeoutSec bounds how long a single command may run.
 	ExecuteTimeoutSec float64 `json:"execute_timeout_sec"`
+	// AutoCueCooldownSec is the minimum gap between automatic firings of
+	// the same graduated cue, so a storm of matching observations cannot
+	// run one habit over and over.
+	AutoCueCooldownSec float64 `json:"auto_cue_cooldown_sec"`
 }
 
 type ChannelsConfig struct {
@@ -131,6 +136,7 @@ func DefaultConfig() Config {
 		ExecuteEnabled:      false,
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
+		AutoCueCooldownSec:  defaultAutoCueCooldown,
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,
@@ -147,6 +153,12 @@ func (c Config) CalmBeforeSleep() time.Duration {
 }
 func (c Config) SleepInterval() time.Duration {
 	return time.Duration(c.SleepIntervalSec * float64(time.Second))
+}
+func (c Config) AutoCueCooldown() time.Duration {
+	if c.AutoCueCooldownSec <= 0 {
+		return defaultAutoCueCooldown * time.Second
+	}
+	return time.Duration(c.AutoCueCooldownSec * float64(time.Second))
 }
 
 // GolemHome resolves the state directory: $GOLEM_HOME if set, otherwise

@@ -132,10 +132,11 @@ Goal: from memory to proposals, with a human gate.
       by an allowlist and an explicit opt-in. Three gates, all required:
       the master switch, the denylist, the allowlist. A failed run demotes;
       outcomes feed back as memory.
-- [ ] Automatic cueing: an observation that matches a graduated cue
-      triggers a proposal on its own, so a graduated pair runs with no
-      human supplying the cue. Today the cue still comes from golem
-      propose.
+- [x] Automatic cueing: an observation whose template contains a
+      graduated cue (whole-word match) triggers the decision loop on its
+      own, behind the same conflict veto and execution gates, with a
+      per-cue cooldown against storms. Action echoes and speech never
+      cue; the operator keeps golem propose.
 - [ ] Oxytocin as trust: frequent corrections lower it globally, which
       raises the promotion bar N everywhere.
 
@@ -144,10 +145,9 @@ graduated and runs unattended with a full audit trail.
 
 Status: the loop is built and demonstrated end to end (golem demo decide
 and golem demo execute): grounding, graduation, the ACC conflict veto, the
-denylist, real execution under three gates, failed-run demotion, and
-outcome feedback. Execution ships off by default. The remaining gap to
-"unattended" is automatic cueing: a graduated pair still needs a human to
-type the cue via golem propose.
+denylist, real execution under three gates, failed-run demotion, outcome
+feedback, and automatic cueing from observations. Execution ships off by
+default. Oxytocin-scaled promotion is the open item.
 
 ## Step 6: Consolidation
 

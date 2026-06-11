@@ -220,6 +220,7 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 	if err := d.store.SaveHabit(h); err != nil {
 		return Habit{}, "", err
 	}
+	d.habitsChanged()
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "approved: "+outcome); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
@@ -232,11 +233,16 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 // autorun executes a graduated, allowed command without per-instance
 // approval, the payoff of graduation. A failed autonomous run demotes the
 // pair so it stops firing until the operator reconfirms it. The caller
-// must have already checked mayExecute and graduation.
-func (d *Daemon) autorun(dec Decision, at time.Time) (outcome string, demoted bool) {
+// must have already checked mayExecute and graduation. The trigger names
+// who supplied the cue in the audit trail: "" for the operator's propose,
+// "observed" for automatic cueing.
+func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome string, demoted bool) {
 	c := dec.Proposed
 	ran, ok, outcome := d.execute(c.Command)
-	verb := "autonomous: "
+	verb := "autonomous"
+	if trigger != "" {
+		verb += " (" + trigger + ")"
+	}
 	if ran && !ok {
 		if h, err := d.store.LoadHabit(dec.CueTemplate, c.Command); err == nil {
 			h.Denials++
@@ -246,11 +252,12 @@ func (d *Daemon) autorun(dec Decision, at time.Time) (outcome string, demoted bo
 				fmt.Fprintf(d.out, "demotion not persisted: %v\n", err)
 			} else {
 				demoted = true
-				verb = "autonomous failed, demoted: "
+				verb += " failed, demoted"
 			}
 		}
 	}
-	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, verb+outcome); err != nil {
+	d.habitsChanged()
+	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, verb+": "+outcome); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
 	if ran {
@@ -281,6 +288,7 @@ func (d *Daemon) deny(dec Decision, at time.Time) (Habit, error) {
 	if err := d.store.SaveHabit(h); err != nil {
 		return Habit{}, err
 	}
+	d.habitsChanged()
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "denied"); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
