@@ -312,8 +312,11 @@ func printStatus(st *StatusInfo) {
 	} else {
 		fmt.Println("  execution: off (dry-run); enable in config.json")
 	}
-	if st.Running != "" {
-		fmt.Printf("  running now: %q\n", st.Running)
+	for _, cmd := range st.Running {
+		fmt.Printf("  running now: %q\n", cmd)
+	}
+	if st.Queued > 0 {
+		fmt.Printf("  queued: %d action(s) waiting on a slot or a claimed resource\n", st.Queued)
 	}
 }
 

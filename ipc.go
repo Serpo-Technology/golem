@@ -115,8 +115,9 @@ type StatusInfo struct {
 	PromotionBar   int                     `json:"promotion_bar"`
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
-	Running        string                  `json:"running,omitempty"`
-	Warm           []*WarmInfo             `json:"warm,omitempty"` // workspace concepts, hottest first
+	Running        []string                `json:"running,omitempty"` // in-flight actions, oldest first
+	Queued         int                     `json:"queued,omitempty"`  // actions waiting on claims or a slot
+	Warm           []*WarmInfo             `json:"warm,omitempty"`    // workspace concepts, hottest first
 }
 
 // WarmInfo is one workspace entry: a concept gloss and its activation.

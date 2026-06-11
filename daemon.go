@@ -73,17 +73,41 @@ type Daemon struct {
 	gradCuesLoaded bool
 	lastAutoCue    map[string]time.Time
 
-	// Commands run off the loop, one at a time: running marks a command
-	// in flight, and execDone carries its result back into the loop where
-	// the bookkeeping finishes single-threaded.
-	running    bool
-	runningCmd string
-	execDone   chan execResult
+	// Committed actions fan out as goroutines, the parallel substrate
+	// under a serial arbiter: decision stays on the loop, running maps
+	// each in-flight action to the resource claims it holds, waiting
+	// parks actions whose claims collide or that found no free slot,
+	// and every outcome marshals back through execDone so habit, audit,
+	// and feedback bookkeeping stay single-threaded.
+	running   map[uint64]*actionRun
+	nextRunID uint64
+	waiting   []*queuedAction
+	execDone  chan execResult
 
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
 	events *EventLog
 }
+
+// actionRun is one command in flight and the claims it holds.
+type actionRun struct {
+	cmd    string
+	claims []string
+}
+
+// queuedAction is a committed command waiting its turn: start launches
+// it once its claims come free, drop resolves it without running when
+// the daemon stops first.
+type queuedAction struct {
+	cmd    string
+	claims []string
+	start  func()
+	drop   func(reason string)
+}
+
+// waitingCap bounds the action queue. A queue this deep means something
+// is wrong upstream, and refusing loudly beats hoarding stale intents.
+const waitingCap = 16
 
 // event stamps and appends one line to the structured trail. A write
 // error closes the trail rather than spamming the daemon log.
@@ -103,6 +127,7 @@ func (d *Daemon) event(ev Event) {
 // finish completes the habit, audit, feedback, and reply work that must
 // run single-threaded, so the loop calls it, never the exec goroutine.
 type execResult struct {
+	id      uint64
 	ran, ok bool
 	outcome string
 	finish  func(ran, ok bool, outcome string)
@@ -209,7 +234,8 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		obs:          make(chan Observation, 256),
 		reqs:         make(chan ipcReq),
 		stop:         make(chan struct{}),
-		execDone:     make(chan execResult, 1),
+		running:      make(map[uint64]*actionRun),
+		execDone:     make(chan execResult, 16),
 		hot:          newHotTier(),
 		ws:           newWorkspace(),
 	}
@@ -371,9 +397,7 @@ func (d *Daemon) Run() error {
 			}
 
 		case res := <-d.execDone:
-			d.running = false
-			d.runningCmd = ""
-			res.finish(res.ran, res.ok, res.outcome)
+			d.finishRun(res)
 
 		case <-homeostasis.C:
 			d.chem.Decay()
@@ -394,45 +418,157 @@ func (d *Daemon) Run() error {
 	}
 }
 
-// startExec runs one command off the brain loop. The goroutine touches no
-// daemon state: it runs the command and posts the result to execDone,
-// where the loop calls finish single-threaded. While the command runs the
-// loop keeps sensing and answering; one command runs at a time, so callers
-// must check d.running first.
-func (d *Daemon) startExec(cmd string, finish func(ran, ok bool, outcome string)) {
-	d.running = true
-	d.runningCmd = cmd
+// parallelCap is how many committed actions may fan out at once.
+func (d *Daemon) parallelCap() int {
+	if d.cfg.ExecuteParallel < 1 {
+		return 1
+	}
+	return d.cfg.ExecuteParallel
+}
+
+// claimsOf derives a command's resource claims. Policy has already
+// parsed the command by the time anything commits it, so a parse error
+// here just means no claims to hold.
+func claimsOf(cmd string) []string {
+	p, err := parsePipeline(cmd)
+	if err != nil {
+		return nil
+	}
+	return p.claims()
+}
+
+// claimConflict reports the running command holding one of the given
+// claims, if any does. This is effector exclusion: one hand cannot grab
+// two things, so two actions touching the same resource never overlap.
+func (d *Daemon) claimConflict(claims []string) (string, bool) {
+	for _, run := range d.running {
+		for _, held := range run.claims {
+			for _, want := range claims {
+				if held == want {
+					return run.cmd, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// canStart reports whether a committed command could fan out right now:
+// a slot free under the cap and no claim held by a running action.
+func (d *Daemon) canStart(claims []string) bool {
+	if len(d.running) >= d.parallelCap() {
+		return false
+	}
+	_, conflict := d.claimConflict(claims)
+	return !conflict
+}
+
+// commitAction is the serial arbiter's hand-off to the parallel
+// substrate: the decision already chose this command, and the only
+// question left is when it may run. It starts now when its claims are
+// free under the cap, parks in arrival order when not, and errors only
+// when the wait queue itself is full. finish resolves a completed run;
+// drop resolves a parked action that the daemon stops before starting.
+func (d *Daemon) commitAction(cmd string, finish func(ran, ok bool, outcome string), drop func(reason string)) (queued bool, err error) {
+	claims := claimsOf(cmd)
+	if d.canStart(claims) {
+		d.startExec(cmd, claims, finish)
+		return false, nil
+	}
+	if len(d.waiting) >= waitingCap {
+		return false, errors.New("the action queue is full; try again when something finishes")
+	}
+	d.waiting = append(d.waiting, &queuedAction{
+		cmd:    cmd,
+		claims: claims,
+		start:  func() { d.startExec(cmd, claims, finish) },
+		drop:   drop,
+	})
+	return true, nil
+}
+
+// startExec runs one command off the brain loop, holding its claims in
+// the run table until the outcome marshals back. The goroutine touches
+// no daemon state: it runs the command and posts the result to execDone,
+// where the loop calls finish single-threaded. While commands run the
+// loop keeps sensing and answering.
+func (d *Daemon) startExec(cmd string, claims []string, finish func(ran, ok bool, outcome string)) {
+	d.nextRunID++
+	id := d.nextRunID
+	d.running[id] = &actionRun{cmd: cmd, claims: claims}
 	timeout := d.execTimeout()
 	go func() {
 		ran, ok, outcome := runCommand(cmd, timeout)
-		d.execDone <- execResult{ran: ran, ok: ok, outcome: outcome, finish: finish}
+		d.execDone <- execResult{id: id, ran: ran, ok: ok, outcome: outcome, finish: finish}
 	}()
 }
 
-// settleExecution waits for the in-flight command, if any, and completes
-// it the way the Run loop would. Only loopless drivers need it: demos,
-// tests, and shutdown, where the loop has already stopped selecting.
-func (d *Daemon) settleExecution() {
-	if !d.running {
-		return
-	}
-	res := <-d.execDone
-	d.running = false
-	d.runningCmd = ""
+// finishRun reabsorbs one completed action: release its claims, finish
+// its bookkeeping single-threaded, and start whatever the freed claims
+// unblocked.
+func (d *Daemon) finishRun(res execResult) {
+	delete(d.running, res.id)
 	res.finish(res.ran, res.ok, res.outcome)
+	d.pumpQueue()
+}
+
+// pumpQueue starts every waiting action whose claims have come free, in
+// arrival order. An action whose claims are still held stays parked
+// without blocking a free sibling behind it.
+func (d *Daemon) pumpQueue() {
+	kept := d.waiting[:0]
+	for _, q := range d.waiting {
+		if d.canStart(q.claims) {
+			q.start()
+			continue
+		}
+		kept = append(kept, q)
+	}
+	d.waiting = kept
+}
+
+// settleExecution drains every in-flight command the way the Run loop
+// would and resolves the wait queue without running it: an action that
+// never started must not start while the daemon is going down. Only
+// loopless drivers call it: shutdown, demos, and tests.
+func (d *Daemon) settleExecution() {
+	for _, q := range d.waiting {
+		q.drop("daemon stopping")
+	}
+	d.waiting = nil
+	for len(d.running) > 0 {
+		res := <-d.execDone
+		delete(d.running, res.id)
+		res.finish(res.ran, res.ok, res.outcome)
+	}
+}
+
+// drainActions completes every running and queued action the way the
+// Run loop would, queue included. It serves drivers that want the work
+// done rather than abandoned: demos and tests.
+func (d *Daemon) drainActions() {
+	for len(d.running) > 0 {
+		d.finishRun(<-d.execDone)
+	}
 }
 
 // handleNow services one request synchronously, completing any execution
-// it starts before returning. It is the entry point for demos and tests
-// that drive the daemon without its Run loop.
+// it starts (or parks) before returning. It is the entry point for demos
+// and tests that drive the daemon without its Run loop.
 func (d *Daemon) handleNow(req Request) (Response, bool) {
 	reply := make(chan Response, 1)
 	resp, deferred, quit := d.handle(req, reply)
 	if !deferred {
 		return resp, quit
 	}
-	d.settleExecution()
-	return <-reply, quit
+	for {
+		select {
+		case resp := <-reply:
+			return resp, quit
+		case res := <-d.execDone:
+			d.finishRun(res)
+		}
+	}
 }
 
 // startSensors launches the built-in senses the config asks for. Every
@@ -491,13 +627,14 @@ func (d *Daemon) acceptLoop(l net.Listener) {
 
 func (d *Daemon) serveConn(conn net.Conn) {
 	defer conn.Close()
-	// The deadline must outlast a command the loop may run synchronously,
-	// or the client would give up on a request that is still executing.
+	// The deadline must outlast a command that waits out a conflicting
+	// run before taking its own full time, or the client would give up
+	// on a request that is still queued or executing.
 	execBudget := d.cfg.ExecuteTimeoutSec
 	if execBudget <= 0 {
 		execBudget = defaultExecuteTimeoutSec
 	}
-	conn.SetDeadline(time.Now().Add(time.Duration(execBudget+15) * time.Second))
+	conn.SetDeadline(time.Now().Add(time.Duration(2*execBudget+15) * time.Second))
 
 	line, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
@@ -699,6 +836,20 @@ func (d *Daemon) bindSuccessor(earlier recentMoment, f *Fragment) {
 		return
 	}
 	d.event(Event{Ev: "link", From: earlier.id, To: f.ID, Rel: RelSuccessor, Weight: w})
+}
+
+// runningCmds lists the in-flight commands oldest first, for status.
+func (d *Daemon) runningCmds() []string {
+	ids := make([]uint64, 0, len(d.running))
+	for id := range d.running {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, d.running[id].cmd)
+	}
+	return out
 }
 
 // dedupeInfos keeps the first appearance of each fragment in a reply, so
@@ -925,9 +1076,11 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	close(d.stop)
 	listener.Close()
 
-	// An in-flight command finishes and its outcome is recorded before
-	// the final consolidation, so stopping cannot lose a result. The wait
-	// is bounded by the execution timeout.
+	// Every in-flight command finishes and its outcome is recorded before
+	// the final consolidation, so stopping cannot lose a result; queued
+	// actions that never started are dropped with an audit line instead
+	// of starting on the way down. The wait is bounded by the execution
+	// timeout, which every running command shares.
 	d.settleExecution()
 
 	d.replay(d.lastSleep)
@@ -1017,7 +1170,8 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			PromotionBar:   d.promotionBar(),
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
-			Running:        d.runningCmd,
+			Running:        d.runningCmds(),
+			Queued:         len(d.waiting),
 			Warm:           d.warmInfos(3),
 		}}, false, false
 
@@ -1158,20 +1312,28 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 		di := decisionInfo(dec)
 		// A graduated, allowed command is the payoff of graduation: it runs
 		// now, with no separate approval, and there is nothing left pending.
-		// The run happens off the loop; the reply waits for its outcome.
+		// The run happens off the loop (parked first if its claims are
+		// held); the reply waits for its outcome either way.
 		if dec.Proposed != nil && !dec.Conflict && dec.Status == HabitGraduated {
 			if allowed, _ := d.mayExecute(dec.Proposed.Command); allowed {
-				if d.running {
-					return Response{Error: "an action is already running (" + d.runningCmd + "); propose again when it finishes"}, false, false
-				}
-				d.pending = nil
-				d.startExec(dec.Proposed.Command, func(ran, ok bool, outcome string) {
+				cmd := dec.Proposed.Command
+				finish := func(ran, ok bool, outcome string) {
 					demoted := d.autorunFinish(dec, "", ran, ok, outcome, time.Now())
 					di.Autonomous = true
 					di.Outcome = outcome
 					di.Demoted = demoted
 					reply <- Response{OK: true, Decision: di}
-				})
+				}
+				drop := func(reason string) {
+					if err := d.store.Audit(time.Now().Unix(), dec.CueTemplate, cmd, "queued action dropped: "+reason); err != nil {
+						fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+					}
+					reply <- Response{Error: "the queued action was dropped: " + reason}
+				}
+				if _, err := d.commitAction(cmd, finish, drop); err != nil {
+					return Response{Error: err.Error()}, false, false
+				}
+				d.pending = nil
 				return Response{}, true, false
 			}
 		}
@@ -1196,15 +1358,11 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 		dec := *d.pending
 		cmd := dec.Proposed.Command
 		allowed, reason := d.mayExecute(cmd)
-		if allowed && d.running {
-			// The proposal stays pending, so the operator can just retry.
-			return Response{Error: "an action is already running (" + d.runningCmd + "); approve again when it finishes"}, false, false
-		}
-		if err := d.approveStart(dec); err != nil {
-			return Response{Error: err.Error()}, false, false
-		}
-		d.pending = nil
 		if !allowed {
+			if err := d.approveStart(dec); err != nil {
+				return Response{Error: err.Error()}, false, false
+			}
+			d.pending = nil
 			outcome := dryRun(reason, cmd)
 			h, err := d.approveFinish(dec, false, true, outcome, time.Now())
 			if err != nil {
@@ -1215,7 +1373,7 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
 			}}, false, false
 		}
-		d.startExec(cmd, func(ran, ok bool, outcome string) {
+		finish := func(ran, ok bool, outcome string) {
 			h, err := d.approveFinish(dec, ran, ok, outcome, time.Now())
 			if err != nil {
 				reply <- Response{Error: err.Error()}
@@ -1225,7 +1383,27 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 				Command: cmd, Outcome: outcome,
 				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
 			}}
-		})
+		}
+		drop := func(reason string) {
+			if err := d.store.Audit(time.Now().Unix(), dec.CueTemplate, cmd, "queued action dropped: "+reason); err != nil {
+				fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+			}
+			reply <- Response{Error: "the queued action was dropped: " + reason}
+		}
+		// A full queue refuses before anything changes, so the proposal
+		// stays pending and the grounding is untouched for the retry.
+		if !d.canStart(claimsOf(cmd)) && len(d.waiting) >= waitingCap {
+			return Response{Error: "the action queue is full; approve again when something finishes"}, false, false
+		}
+		// The grounding strengthens at commitment, whether the run starts
+		// now or waits its turn in the queue.
+		if err := d.approveStart(dec); err != nil {
+			return Response{Error: err.Error()}, false, false
+		}
+		if _, err := d.commitAction(cmd, finish, drop); err != nil {
+			return Response{Error: err.Error()}, false, false
+		}
+		d.pending = nil
 		return Response{}, true, false
 
 	case "deny":

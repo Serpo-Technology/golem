@@ -105,14 +105,19 @@ func (d *Daemon) autoCue(o Observation, tpl string) {
 				cue, dec.Proposed.Command, reason)
 			continue
 		}
-		if d.running {
-			fmt.Fprintf(d.out, "      . observed cue %q matched while %q is still running; skipped\n",
-				cue, d.runningCmd)
+		cmd := dec.Proposed.Command
+		// A reflex never queues: when the slots are full or a running
+		// action holds one of its claims, the habit skips this firing
+		// and the cooldown waits for the cue to recur. Stale reflexes
+		// are worse than missed ones.
+		claims := claimsOf(cmd)
+		if !d.canStart(claims) {
+			fmt.Fprintf(d.out, "      . observed cue %q matched while %q cannot start (busy or claimed); skipped\n",
+				cue, cmd)
 			continue
 		}
-		cmd := dec.Proposed.Command
 		at := o.At
-		d.startExec(cmd, func(ran, ok bool, outcome string) {
+		d.startExec(cmd, claims, func(ran, ok bool, outcome string) {
 			demoted := d.autorunFinish(dec, "observed", ran, ok, outcome, at)
 			fmt.Fprintf(d.out, "      > observed cue %q ran %q -> %s\n", cue, cmd, outcome)
 			if demoted {

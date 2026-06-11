@@ -23,6 +23,7 @@ const (
 	defaultGraduation        = 3
 	defaultConflictMargin    = 0.15
 	defaultExecuteTimeoutSec = 30
+	defaultExecuteParallel   = 4
 	defaultAutoCueCooldown   = 60
 )
 
@@ -97,6 +98,10 @@ type Config struct {
 	ExecuteAllowlist []string `json:"execute_allowlist"`
 	// ExecuteTimeoutSec bounds how long a single command may run.
 	ExecuteTimeoutSec float64 `json:"execute_timeout_sec"`
+	// ExecuteParallel caps how many committed actions may run at once.
+	// Actions whose resource claims collide serialize regardless of the
+	// cap; this bounds only the genuinely independent ones.
+	ExecuteParallel int `json:"execute_parallel"`
 	// AutoCueCooldownSec is the minimum gap between automatic firings of
 	// the same graduated cue, so a storm of matching observations cannot
 	// run one habit over and over.
@@ -136,6 +141,7 @@ func DefaultConfig() Config {
 		ExecuteEnabled:      false,
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
+		ExecuteParallel:     defaultExecuteParallel,
 		AutoCueCooldownSec:  defaultAutoCueCooldown,
 		Channels: ChannelsConfig{
 			Vitals:    true,

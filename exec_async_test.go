@@ -32,19 +32,45 @@ func execTestConfig() Config {
 	return cfg
 }
 
+// ground a cue over IPC the way the tests need it: enough repetitions to
+// propose cleanly.
+func teachOverIPC(t *testing.T, home, cue, command string) {
+	t.Helper()
+	for range 4 {
+		if _, err := ipcCall(home, Request{Cmd: "teach", Content: cue, Command: command}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// pollStatus polls until the condition holds or the deadline passes, and
+// returns the last status seen.
+func pollStatus(t *testing.T, home string, want func(*StatusInfo) bool) *StatusInfo {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	var st *StatusInfo
+	for time.Now().Before(deadline) {
+		resp, err := ipcCall(home, Request{Cmd: "status"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		st = resp.Status
+		if want(st) {
+			return st
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return st
+}
+
 // The brain loop keeps answering while a command runs: status returns
-// immediately mid-run and names the command, a second action is refused
-// rather than queued, and the triggering client still gets its outcome.
+// immediately mid-run and names the command, and the triggering client
+// still gets its outcome.
 func TestLoopAnswersMidRun(t *testing.T) {
 	home := t.TempDir()
 	seedGraduatedHabit(t, home, "take a nap", "sleep 1")
 	home, done := startTestDaemonWith(t, home, execTestConfig())
-
-	for range 4 {
-		if _, err := ipcCall(home, Request{Cmd: "teach", Content: "take a nap", Command: "sleep 1"}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	teachOverIPC(t, home, "take a nap", "sleep 1")
 
 	proposed := make(chan Response, 1)
 	go func() {
@@ -52,33 +78,11 @@ func TestLoopAnswersMidRun(t *testing.T) {
 		proposed <- resp
 	}()
 
-	// Status must answer while the command runs. Before this change the
-	// loop was blocked for the whole second and the call timed out as
-	// "daemon busy".
-	var running string
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := ipcCall(home, Request{Cmd: "status"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if resp.Status.Running != "" {
-			running = resp.Status.Running
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if running != "sleep 1" {
+	st := pollStatus(t, home, func(st *StatusInfo) bool { return len(st.Running) > 0 })
+	if len(st.Running) == 0 || st.Running[0] != "sleep 1" {
 		resp := <-proposed
-		t.Fatalf("status should answer mid-run and name the command, got %q; propose said: %+v / %q",
-			running, resp.Decision, resp.Error)
-	}
-
-	// One command at a time: a second action is refused with a clear
-	// error, never silently queued.
-	if _, err := ipcCall(home, Request{Cmd: "propose", Content: "take a nap"}); err == nil ||
-		!strings.Contains(err.Error(), "already running") {
-		t.Fatalf("a second action should be refused while one runs, got %v", err)
+		t.Fatalf("status should answer mid-run and name the command, got %v; propose said: %+v / %q",
+			st.Running, resp.Decision, resp.Error)
 	}
 
 	resp := <-proposed
@@ -89,12 +93,97 @@ func TestLoopAnswersMidRun(t *testing.T) {
 		t.Fatalf("the run should have succeeded, got %q", resp.Decision.Outcome)
 	}
 
-	if _, err := ipcCall(home, Request{Cmd: "status"}); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := ipcCall(home, Request{Cmd: "stop"}); err != nil {
 		t.Fatal(err)
 	}
+	<-done
+}
+
+// Two actions whose claims collide serialize: the second waits in the
+// queue while the first holds the claim, then runs, and both clients get
+// real outcomes. Nothing overlaps and nothing is refused.
+func TestSameClaimActionsSerialize(t *testing.T) {
+	home := t.TempDir()
+	seedGraduatedHabit(t, home, "take a nap", "sleep 0.5")
+	home, done := startTestDaemonWith(t, home, execTestConfig())
+	teachOverIPC(t, home, "take a nap", "sleep 0.5")
+
+	start := time.Now()
+	first := make(chan Response, 1)
+	second := make(chan Response, 1)
+	go func() {
+		resp, _ := ipcCall(home, Request{Cmd: "propose", Content: "take a nap"})
+		first <- resp
+	}()
+	pollStatus(t, home, func(st *StatusInfo) bool { return len(st.Running) > 0 })
+	go func() {
+		resp, _ := ipcCall(home, Request{Cmd: "propose", Content: "take a nap"})
+		second <- resp
+	}()
+
+	// The second action must park rather than run alongside its twin.
+	st := pollStatus(t, home, func(st *StatusInfo) bool { return st.Queued > 0 })
+	if st.Queued == 0 {
+		t.Fatalf("a conflicting action should wait in the queue: %+v", st)
+	}
+	if len(st.Running) > 1 {
+		t.Fatalf("conflicting actions must never overlap: %v", st.Running)
+	}
+
+	r1, r2 := <-first, <-second
+	elapsed := time.Since(start)
+	for _, r := range []Response{r1, r2} {
+		if r.Decision == nil || !r.Decision.Autonomous || !strings.HasPrefix(r.Decision.Outcome, "ok") {
+			t.Fatalf("both serialized runs should complete: %+v %q", r.Decision, r.Error)
+		}
+	}
+	if elapsed < 950*time.Millisecond {
+		t.Fatalf("two 0.5s actions on one claim should take at least their sum, took %s", elapsed)
+	}
+
+	ipcCall(home, Request{Cmd: "stop"})
+	<-done
+}
+
+// Two actions with disjoint claims run at once: both are visible in the
+// run table together and the pair finishes in far less than serial time.
+func TestUnclaimedActsOverlap(t *testing.T) {
+	home := t.TempDir()
+	seedGraduatedHabit(t, home, "short nap", "sleep 0.6")
+	seedGraduatedHabit(t, home, "long nap", "sleep 0.7")
+	home, done := startTestDaemonWith(t, home, execTestConfig())
+	teachOverIPC(t, home, "short nap", "sleep 0.6")
+	teachOverIPC(t, home, "long nap", "sleep 0.7")
+
+	start := time.Now()
+	first := make(chan Response, 1)
+	second := make(chan Response, 1)
+	go func() {
+		resp, _ := ipcCall(home, Request{Cmd: "propose", Content: "short nap"})
+		first <- resp
+	}()
+	go func() {
+		resp, _ := ipcCall(home, Request{Cmd: "propose", Content: "long nap"})
+		second <- resp
+	}()
+
+	st := pollStatus(t, home, func(st *StatusInfo) bool { return len(st.Running) == 2 })
+	if len(st.Running) != 2 {
+		t.Fatalf("independent actions should run at once, saw %v", st.Running)
+	}
+
+	r1, r2 := <-first, <-second
+	elapsed := time.Since(start)
+	for _, r := range []Response{r1, r2} {
+		if r.Decision == nil || !r.Decision.Autonomous || !strings.HasPrefix(r.Decision.Outcome, "ok") {
+			t.Fatalf("both parallel runs should complete: %+v %q", r.Decision, r.Error)
+		}
+	}
+	if elapsed >= 1200*time.Millisecond {
+		t.Fatalf("independent actions should overlap, not sum: took %s", elapsed)
+	}
+
+	ipcCall(home, Request{Cmd: "stop"})
 	<-done
 }
 
@@ -104,28 +193,11 @@ func TestStopSettlesInFlightRun(t *testing.T) {
 	home := t.TempDir()
 	seedGraduatedHabit(t, home, "quick nap", "sleep 0.4")
 	home, done := startTestDaemonWith(t, home, execTestConfig())
+	teachOverIPC(t, home, "quick nap", "sleep 0.4")
 
-	for range 4 {
-		if _, err := ipcCall(home, Request{Cmd: "teach", Content: "quick nap", Command: "sleep 0.4"}); err != nil {
-			t.Fatal(err)
-		}
-	}
 	go ipcCall(home, Request{Cmd: "propose", Content: "quick nap"})
-
-	deadline := time.Now().Add(3 * time.Second)
-	started := false
-	for time.Now().Before(deadline) {
-		resp, err := ipcCall(home, Request{Cmd: "status"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if resp.Status.Running != "" {
-			started = true
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if !started {
+	st := pollStatus(t, home, func(st *StatusInfo) bool { return len(st.Running) > 0 })
+	if len(st.Running) == 0 {
 		t.Fatal("the autonomous run never started")
 	}
 
@@ -156,4 +228,63 @@ func TestStopSettlesInFlightRun(t *testing.T) {
 		}
 	}
 	t.Fatalf("the in-flight outcome should be audited before shutdown, got %+v", entries)
+}
+
+// A queued action never starts once the daemon is stopping: it resolves
+// with a drop the audit trail records, while the running action still
+// settles normally.
+func TestQueueDropsAtStop(t *testing.T) {
+	home := t.TempDir()
+	seedGraduatedHabit(t, home, "take a nap", "sleep 0.8")
+	home, done := startTestDaemonWith(t, home, execTestConfig())
+	teachOverIPC(t, home, "take a nap", "sleep 0.8")
+
+	go ipcCall(home, Request{Cmd: "propose", Content: "take a nap"})
+	pollStatus(t, home, func(st *StatusInfo) bool { return len(st.Running) > 0 })
+
+	dropped := make(chan error, 1)
+	go func() {
+		_, err := ipcCall(home, Request{Cmd: "propose", Content: "take a nap"})
+		dropped <- err
+	}()
+	pollStatus(t, home, func(st *StatusInfo) bool { return st.Queued > 0 })
+
+	if _, err := ipcCall(home, Request{Cmd: "stop"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-dropped:
+		if err == nil || !strings.Contains(err.Error(), "dropped") {
+			t.Fatalf("the queued client should learn its action was dropped, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the queued client never got an answer")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("daemon exited with error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("daemon did not exit after stop")
+	}
+
+	s, err := OpenStore(filepath.Join(home, "memory.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	entries, _ := s.AuditTail(10)
+	var sawDrop, sawSettled bool
+	for _, e := range entries {
+		if strings.Contains(e.Outcome, "queued action dropped") {
+			sawDrop = true
+		}
+		if strings.HasPrefix(e.Outcome, "autonomous") && strings.Contains(e.Outcome, "ok") {
+			sawSettled = true
+		}
+	}
+	if !sawDrop || !sawSettled {
+		t.Fatalf("the trail should hold both the settled run and the drop, got %+v", entries)
+	}
 }

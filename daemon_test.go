@@ -32,6 +32,11 @@ func startTestDaemonWith(t *testing.T, home string, cfg Config) (string, chan er
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("daemon exited before serving: %v", err)
+		default:
+		}
 		if conn, err := net.Dial("unix", socketPath(home)); err == nil {
 			conn.Close()
 			return home, done
@@ -138,7 +143,8 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 		drops:        make(map[string]*atomic.Int64),
 		governors:    make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
-		execDone:     make(chan execResult, 1),
+		running:      make(map[uint64]*actionRun),
+		execDone:     make(chan execResult, 16),
 		hot:          newHotTier(),
 		ws:           newWorkspace(),
 	}, s
