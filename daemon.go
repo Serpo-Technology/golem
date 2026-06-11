@@ -764,12 +764,17 @@ func (d *Daemon) readyToSleep() bool {
 }
 
 // sleepCycle is one consolidation night: decay and prune in the store,
-// flush predictor state, wake with reset sleep pressure.
+// merge recurring shapes into prototypes, flush predictor state, wake
+// with reset sleep pressure.
 func (d *Daemon) sleepCycle() {
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err != nil {
 		fmt.Fprintf(d.out, "sleep error: %v\n", err)
 		return
+	}
+	merged, err := d.store.MergeDuplicates()
+	if err != nil {
+		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
@@ -779,8 +784,8 @@ func (d *Daemon) sleepCycle() {
 	d.sleeps++
 	d.lastSleep = time.Now()
 	held, _ := d.store.Count()
-	fmt.Fprintf(d.out, "zzz night %d: pruned %d faded fragment(s), %d held.\n",
-		d.sleeps, pruned, held)
+	fmt.Fprintf(d.out, "zzz night %d: pruned %d faded fragment(s), merged %d into prototypes, %d held.\n",
+		d.sleeps, pruned, merged, held)
 }
 
 func (d *Daemon) flushModels() {
@@ -810,6 +815,9 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	if err == nil {
 		d.sleeps++
 		fmt.Fprintf(d.out, "zzz final night %d: pruned %d fragment(s).\n", d.sleeps, pruned)
+	}
+	if _, err := d.store.MergeDuplicates(); err != nil {
+		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	d.flushModels()
 	d.store.Checkpoint()

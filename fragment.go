@@ -28,5 +28,6 @@ type Fragment struct {
 	Limbic   LimbicState // neurochemical snapshot at the instant of encoding
 	Time     time.Time
 	Weight   float64  // synaptic weight; decays during sleep, drives pruning
+	Count    int      // occurrences this fragment stands for; above 1 it is a prototype
 	Links    []uint64 // synaptic links to other fragments (the association hook)
 }

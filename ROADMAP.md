@@ -154,8 +154,11 @@ observations. Execution ships off by default.
 
 Goal: sleep does more than decay.
 
-- [ ] Merge near-duplicate fragments into prototype fragments carrying a
-      count and exemplar pointers.
+- [x] Merge near-duplicate fragments into prototype fragments carrying a
+      count and exemplar pointers. Three occurrences of one shape collapse
+      at sleep: the newest survives as the prototype with the group count,
+      the sharpest stays as a linked exemplar, and absorbed edges fold
+      onto the prototype with summed weights.
 - [ ] Hot and cold tiers: working set in RAM, archive in sqlite, promotion
       back to hot on recall.
 - [ ] Replay: during sleep, re-fire the day's high-weight fragments

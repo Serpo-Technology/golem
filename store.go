@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS fragments (
 	noradrenaline REAL    NOT NULL,
 	serotonin     REAL    NOT NULL,
 	at            INTEGER NOT NULL,
-	weight        REAL    NOT NULL
+	weight        REAL    NOT NULL,
+	count         INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS links (
 	from_id INTEGER NOT NULL,
@@ -83,6 +84,21 @@ CREATE TABLE IF NOT EXISTS audit (
 		db.Close()
 		return nil, err
 	}
+	// Databases written before consolidation lack the count column;
+	// CREATE TABLE IF NOT EXISTS leaves an existing table untouched, so
+	// the column is added in place.
+	var hasCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('fragments') WHERE name = 'count'`).Scan(&hasCount); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if hasCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE fragments ADD COLUMN count INTEGER NOT NULL DEFAULT 1`); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	return &Store{db: db}, nil
 }
 
@@ -91,12 +107,15 @@ func (s *Store) Close() error { return s.db.Close() }
 // Encode stores a new moment with full starting weight and stamps its ID.
 func (s *Store) Encode(f *Fragment) (uint64, error) {
 	f.Weight = 1.0
+	if f.Count < 1 {
+		f.Count = 1
+	}
 	res, err := s.db.Exec(`INSERT INTO fragments
-		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight)
-		VALUES (?,?,?,?,?,?,?,?,?)`,
+		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
 		f.Channel, f.Content, f.Template, f.Surprise,
 		f.Limbic.Dopamine, f.Limbic.Noradrenaline, f.Limbic.Serotonin,
-		f.Time.UnixNano(), f.Weight)
+		f.Time.UnixNano(), f.Weight, f.Count)
 	if err != nil {
 		return 0, err
 	}
@@ -152,14 +171,14 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 }
 
 const fragmentCols = `id, channel, content, template, surprise,
-	dopamine, noradrenaline, serotonin, at, weight`
+	dopamine, noradrenaline, serotonin, at, weight, count`
 
 func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var f Fragment
 	var at int64
 	if err := rows.Scan(&f.ID, &f.Channel, &f.Content, &f.Template, &f.Surprise,
 		&f.Limbic.Dopamine, &f.Limbic.Noradrenaline, &f.Limbic.Serotonin,
-		&at, &f.Weight); err != nil {
+		&at, &f.Weight, &f.Count); err != nil {
 		return nil, err
 	}
 	f.Time = time.Unix(0, at)
@@ -240,6 +259,196 @@ func (s *Store) Count() (int, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM fragments`).Scan(&n)
 	return n, err
+}
+
+// Sleep merges near-duplicates: once a shape has recurred mergeThreshold
+// times, its occurrences collapse into a prototype. The newest occurrence
+// survives as the prototype and
+// carries the group's total count; the single most surprising other
+// occurrence stays behind as an exemplar, linked to the prototype; the
+// rest are absorbed. Absorbed fragments' edges fold into the prototype
+// with their weights summed (capped at 1.0), so groundings and recall
+// paths keep their strength through the merge.
+const (
+	mergeThreshold     = 3
+	exemplarLinkWeight = 0.6
+)
+
+// MergeDuplicates runs one merge pass and reports how many fragments were
+// absorbed into prototypes.
+func (s *Store) MergeDuplicates() (int, error) {
+	type group struct{ channel, template string }
+	rows, err := s.db.Query(`SELECT channel, template FROM fragments
+		GROUP BY channel, template HAVING COUNT(*) >= ?`, mergeThreshold)
+	if err != nil {
+		return 0, err
+	}
+	var groups []group
+	for rows.Next() {
+		var g group
+		if err := rows.Scan(&g.channel, &g.template); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		groups = append(groups, g)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	merged := 0
+	for _, g := range groups {
+		n, err := s.mergeGroup(g.channel, g.template)
+		if err != nil {
+			return merged, err
+		}
+		merged += n
+	}
+	return merged, nil
+}
+
+func (s *Store) mergeGroup(channel, template string) (int, error) {
+	type member struct {
+		id       uint64
+		surprise float64
+		weight   float64
+		count    int
+	}
+	rows, err := s.db.Query(`SELECT id, surprise, weight, count FROM fragments
+		WHERE channel = ? AND template = ? ORDER BY at DESC, id DESC`, channel, template)
+	if err != nil {
+		return 0, err
+	}
+	var members []member
+	for rows.Next() {
+		var m member
+		if err := rows.Scan(&m.id, &m.surprise, &m.weight, &m.count); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		members = append(members, m)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(members) < mergeThreshold {
+		return 0, nil
+	}
+
+	proto := members[0]
+	exemplar := members[1]
+	for _, m := range members[2:] {
+		if m.surprise > exemplar.surprise {
+			exemplar = m
+		}
+	}
+	fold := map[uint64]bool{proto.id: true}
+	total, maxWeight := proto.count, proto.weight
+	var absorbed []uint64
+	for _, m := range members[1:] {
+		if m.id == exemplar.id {
+			continue
+		}
+		fold[m.id] = true
+		absorbed = append(absorbed, m.id)
+		total += m.count
+		if m.weight > maxWeight {
+			maxWeight = m.weight
+		}
+	}
+
+	// Aggregate every edge touching the fold set onto the prototype.
+	// Edges inside the fold set are self-association and drop.
+	ids := make([]any, 0, len(fold))
+	marks := make([]string, 0, len(fold))
+	for id := range fold {
+		ids = append(ids, id)
+		marks = append(marks, "?")
+	}
+	in := strings.Join(marks, ",")
+	rows, err = s.db.Query(`SELECT from_id, to_id, weight FROM links
+		WHERE from_id IN (`+in+`) OR to_id IN (`+in+`)`, append(append([]any{}, ids...), ids...)...)
+	if err != nil {
+		return 0, err
+	}
+	outW := map[uint64]float64{}
+	inW := map[uint64]float64{}
+	for rows.Next() {
+		var e LinkEdge
+		if err := rows.Scan(&e.From, &e.To, &e.Weight); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		switch {
+		case fold[e.From] && fold[e.To]:
+		case fold[e.From]:
+			outW[e.To] += e.Weight
+		default:
+			inW[e.From] += e.Weight
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM links WHERE from_id IN (`+in+`) OR to_id IN (`+in+`)`,
+		append(append([]any{}, ids...), ids...)...); err != nil {
+		return 0, err
+	}
+	put := func(from, to uint64, w float64) error {
+		if w > 1 {
+			w = 1
+		}
+		_, err := tx.Exec(`INSERT INTO links (from_id, to_id, weight) VALUES (?,?,?)
+			ON CONFLICT(from_id, to_id) DO UPDATE SET weight = max(weight, excluded.weight)`,
+			from, to, w)
+		return err
+	}
+	for to, w := range outW {
+		if err := put(proto.id, to, w); err != nil {
+			return 0, err
+		}
+	}
+	for from, w := range inW {
+		if err := put(from, proto.id, w); err != nil {
+			return 0, err
+		}
+	}
+	// The exemplar pointer: the prototype and its kept exemplar stay
+	// reachable from each other.
+	if err := put(proto.id, exemplar.id, exemplarLinkWeight); err != nil {
+		return 0, err
+	}
+	if err := put(exemplar.id, proto.id, exemplarLinkWeight); err != nil {
+		return 0, err
+	}
+	if len(absorbed) > 0 {
+		am := make([]string, len(absorbed))
+		av := make([]any, len(absorbed))
+		for i, id := range absorbed {
+			am[i] = "?"
+			av[i] = id
+		}
+		if _, err := tx.Exec(`DELETE FROM fragments WHERE id IN (`+strings.Join(am, ",")+`)`, av...); err != nil {
+			return 0, err
+		}
+	}
+	if _, err := tx.Exec(`UPDATE fragments SET count = ?, weight = ? WHERE id = ?`,
+		total, maxWeight, proto.id); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return len(absorbed), nil
 }
 
 // SaveModel persists one channel predictor's counts, replacing what was

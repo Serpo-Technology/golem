@@ -348,6 +348,9 @@ func printFragments(frags []*FragmentInfo) {
 		if f.Activation > 0 && f.Activation < 1 {
 			extra = fmt.Sprintf("  assoc %.2f", f.Activation)
 		}
+		if f.Count > 1 {
+			extra += fmt.Sprintf("  x%d", f.Count)
+		}
 		if f.LinkCount > 0 {
 			extra += fmt.Sprintf("  links %d", f.LinkCount)
 		}

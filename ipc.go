@@ -108,15 +108,20 @@ type FragmentInfo struct {
 	Limbic     LimbicState `json:"limbic"`
 	AtUnix     int64       `json:"at_unix"`
 	Weight     float64     `json:"weight"`
+	Count      int         `json:"count,omitempty"` // above 1 the fragment is a prototype
 	Activation float64     `json:"activation,omitempty"`
 	LinkCount  int         `json:"links,omitempty"`
 }
 
 func fragmentInfo(f *Fragment) *FragmentInfo {
-	return &FragmentInfo{
+	info := &FragmentInfo{
 		ID: f.ID, Channel: f.Channel, Content: f.Content, Template: f.Template,
 		Surprise: f.Surprise, Limbic: f.Limbic, AtUnix: f.Time.Unix(), Weight: f.Weight,
 	}
+	if f.Count > 1 {
+		info.Count = f.Count
+	}
+	return info
 }
 
 type ObserveResult struct {
