@@ -230,6 +230,15 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if err := dropOrphanLinks(); err != nil {
 		return int(pruned), err
 	}
+	// An utterance never instantiates a concept; any grounds edge that
+	// points at one is a leftover from before that rule, and dropping it
+	// here lets a concept born from a question die of disconnection on
+	// the same night.
+	if _, err := s.db.Exec(`DELETE FROM links WHERE rel = ?
+		AND to_id IN (SELECT id FROM fragments WHERE channel = ?)`,
+		RelGrounds, utteranceChannel); err != nil {
+		return int(pruned), err
+	}
 	// A word that no edge touches names nothing and recalls nothing; a
 	// concept that grounds nothing stands for nothing. Both fade out of
 	// the graph, and the edges that pointed at them follow.

@@ -53,30 +53,38 @@ func (s *Store) ConceptsByGloss(phrase string, limit int) ([]*Fragment, error) {
 		ORDER BY id LIMIT ?`, KindConcept, q, q, limit)
 }
 
+// utteranceChannel is speech: language about the world rather than the
+// world itself. An utterance's shape mints words that name concepts and
+// never becomes a concept, or a question asked often enough would
+// distil into a thing.
+const utteranceChannel = "tell"
+
 // ConceptCandidates lists episodic shapes recurrent enough to deserve a
 // concept and not yet distilled into one, most recurrent first.
+// Utterances are excluded: only lived experience earns an abstraction.
 func (s *Store) ConceptCandidates(minCount, limit int) ([]*Fragment, error) {
 	if limit < 1 {
 		return nil, nil
 	}
 	return s.query(`SELECT `+fragmentCols+` FROM fragments
-		WHERE kind = ? AND count >= ?
+		WHERE kind = ? AND count >= ? AND channel <> ?
 		AND template NOT IN (SELECT template FROM fragments WHERE kind = ?)
 		ORDER BY count DESC, id DESC LIMIT ?`,
-		KindEpisodic, minCount, KindConcept, limit)
+		KindEpisodic, minCount, utteranceChannel, KindConcept, limit)
 }
 
 // Reground writes the missing grounds edges from every concept to the
 // episodic fragments matching its template, and reports how many were
 // added. It serves both newborn concepts (their first grounding) and old
-// ones whose shape has recurred since the last night.
+// ones whose shape has recurred since the last night. Utterances never
+// instantiate a concept, so they take no grounds edges.
 func (s *Store) Reground(weight float64) (int, error) {
 	res, err := s.db.Exec(`INSERT OR IGNORE INTO links (from_id, to_id, rel, weight)
 		SELECT c.id, e.id, ?, ?
 		FROM fragments c
-		JOIN fragments e ON e.template = c.template AND e.kind = ?
+		JOIN fragments e ON e.template = c.template AND e.kind = ? AND e.channel <> ?
 		WHERE c.kind = ?`,
-		RelGrounds, weight, KindEpisodic, KindConcept)
+		RelGrounds, weight, KindEpisodic, utteranceChannel, KindConcept)
 	if err != nil {
 		return 0, err
 	}

@@ -290,3 +290,32 @@ func TestConceptInfosListing(t *testing.T) {
 		t.Fatalf("names should list per language: got %q, want %q", got, want)
 	}
 }
+
+// A question asked often enough used to recur into a concept of its
+// own; genesis now refuses utterance shapes, so the lexicon keeps
+// pointing at the world.
+func TestQuestionsDoNotBecomeConcepts(t *testing.T) {
+	d, s := testDaemon(t)
+	feedShape(t, s, "syslog", "disk space low", 4, time.Now().Add(-2*time.Hour))
+	for range 4 {
+		say(t, d, "what usually happens after disk space low")
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+
+	concepts, err := s.Concepts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range concepts {
+		if strings.Contains(c.Content, "usually happens") {
+			t.Fatalf("an utterance shape must not distil into a concept: %q", c.Content)
+		}
+	}
+	if len(concepts) == 0 || concepts[0].Content != "disk space low" {
+		t.Fatalf("the lived shape should still distil: %+v", concepts)
+	}
+}
