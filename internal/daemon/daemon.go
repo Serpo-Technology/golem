@@ -1554,6 +1554,13 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 	case "voice":
 		return d.handleVoice(req), false, false
 
+	case "sleep":
+		// Consolidate once on demand and stay running, the same cycle the
+		// homeostasis tick fires when the daemon falls quiet. It runs on the
+		// loop, so memory is never touched concurrently.
+		d.sleepCycle()
+		return wire.Response{OK: true}, false, false
+
 	case "stop":
 		return wire.Response{OK: true}, false, true
 

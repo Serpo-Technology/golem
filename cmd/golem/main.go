@@ -69,6 +69,7 @@ Usage:
                                   the system default (say -v ? lists them)
   golem dump                      list every fragment held in memory
   golem dump --dot                export the memory graph as graphviz dot
+  golem sleep                     consolidate once now and keep running
   golem stop                      ask the daemon to sleep once and shut down
   golem shellhook                 print the zsh hook that feeds the shell channel
   golem launchd                   print a launchd plist for start-at-login
@@ -291,6 +292,10 @@ func main() {
 			state = "on"
 		}
 		fmt.Printf("voice: %s (%s)\n", state, name)
+
+	case "sleep":
+		call(home, wire.Request{Cmd: "sleep"})
+		fmt.Println("golem consolidated once and is still awake.")
 
 	case "stop":
 		call(home, wire.Request{Cmd: "stop"})
