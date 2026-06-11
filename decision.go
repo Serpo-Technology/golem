@@ -100,7 +100,9 @@ func (d *Daemon) decide(cue string) (Decision, error) {
 	for _, a := range anchors {
 		ids = append(ids, a.ID)
 	}
-	edges, err := d.store.LinksFrom(ids)
+	// Grounding is co-occurrence. The successor edge a cue also earns by
+	// preceding its command would double-count the same evidence here.
+	edges, err := d.store.LinksFromRel(ids, RelTemporal)
 	if err != nil {
 		return dec, err
 	}

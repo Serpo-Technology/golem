@@ -64,7 +64,9 @@ func (h *hotTier) get(id uint64) (*Fragment, bool) {
 }
 
 // search matches the query against content and template, ranked the way
-// the archive ranks recall: most stressful first.
+// the archive ranks recall: most stressful first. Only moments answer;
+// word and concept nodes promoted by graph walks are not recall hits
+// themselves.
 func (h *hotTier) search(query string, limit int) []*Fragment {
 	q := strings.ToLower(query)
 	if q == "" {
@@ -72,6 +74,9 @@ func (h *hotTier) search(query string, limit int) []*Fragment {
 	}
 	var out []*Fragment
 	for _, f := range h.frags {
+		if f.Kind != "" && f.Kind != KindEpisodic {
+			continue
+		}
 		if strings.Contains(strings.ToLower(f.Content), q) ||
 			strings.Contains(strings.ToLower(f.Template), q) {
 			out = append(out, f)

@@ -40,6 +40,7 @@ type Response struct {
 type LinkInfo struct {
 	From   uint64  `json:"from"`
 	To     uint64  `json:"to"`
+	Rel    string  `json:"rel,omitempty"`
 	Weight float64 `json:"weight"`
 }
 
@@ -119,6 +120,9 @@ type FragmentInfo struct {
 	AtUnix     int64       `json:"at_unix"`
 	Weight     float64     `json:"weight"`
 	Count      int         `json:"count,omitempty"` // above 1 the fragment is a prototype
+	Kind       string      `json:"kind,omitempty"`  // word and concept nodes; empty means episodic
+	Lang       string      `json:"lang,omitempty"`
+	Category   string      `json:"category,omitempty"`
 	Activation float64     `json:"activation,omitempty"`
 	LinkCount  int         `json:"links,omitempty"`
 }
@@ -127,9 +131,13 @@ func fragmentInfo(f *Fragment) *FragmentInfo {
 	info := &FragmentInfo{
 		ID: f.ID, Channel: f.Channel, Content: f.Content, Template: f.Template,
 		Surprise: f.Surprise, Limbic: f.Limbic, AtUnix: f.Time.Unix(), Weight: f.Weight,
+		Lang: f.Lang, Category: f.Category,
 	}
 	if f.Count > 1 {
 		info.Count = f.Count
+	}
+	if f.Kind != "" && f.Kind != KindEpisodic {
+		info.Kind = f.Kind
 	}
 	return info
 }

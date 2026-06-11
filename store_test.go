@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"os"
@@ -307,5 +308,125 @@ func TestModelRoundtrip(t *testing.T) {
 	chans, err := s.ModelChannels()
 	if err != nil || len(chans) != 1 || chans[0] != "syslog" {
 		t.Fatalf("channel listing wrong: %v %v", chans, err)
+	}
+}
+
+func TestBumpSuccIsOrderSensitive(t *testing.T) {
+	s, _ := tempStore(t)
+	c1, err := s.BumpSucc("run: make test", "run: make deploy")
+	if err != nil || c1 != 1 {
+		t.Fatalf("first bump: %d %v", c1, err)
+	}
+	c2, err := s.BumpSucc("run: make test", "run: make deploy")
+	if err != nil || c2 != 2 {
+		t.Fatalf("same order should accumulate: %d %v", c2, err)
+	}
+	c3, err := s.BumpSucc("run: make deploy", "run: make test")
+	if err != nil || c3 != 1 {
+		t.Fatalf("reversed order is a different pair: %d %v", c3, err)
+	}
+}
+
+// Two relations may hold between the same pair of nodes without
+// clobbering each other, and a rel-filtered read sees only its own.
+func TestLinkRelationsCoexist(t *testing.T) {
+	s, _ := tempStore(t)
+	a := encodeAt(t, s, "tell", "the cue", 1.0, time.Now())
+	b := encodeAt(t, s, "shell", "run: make test", 1.0, time.Now())
+
+	if err := s.Link(a.ID, b.ID, 0.4); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(a.ID, b.ID, RelSuccessor, 0.7); err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := s.LinksFrom([]uint64{a.ID})
+	if err != nil || len(all) != 2 {
+		t.Fatalf("both relations should leave the node: %+v %v", all, err)
+	}
+	succ, err := s.LinksFromRel([]uint64{a.ID}, RelSuccessor)
+	if err != nil || len(succ) != 1 || succ[0].Weight != 0.7 {
+		t.Fatalf("rel filter should see one edge: %+v %v", succ, err)
+	}
+
+	// Strengthening one relation must not bleed into the other.
+	if err := s.StrengthenLinks(succ, 0.1); err != nil {
+		t.Fatal(err)
+	}
+	temporal, _ := s.LinksFromRel([]uint64{a.ID}, RelTemporal)
+	if len(temporal) != 1 || temporal[0].Weight != 0.4 {
+		t.Fatalf("temporal edge should be untouched: %+v", temporal)
+	}
+	succ, _ = s.LinksFromRel([]uint64{a.ID}, RelSuccessor)
+	if math.Abs(succ[0].Weight-0.8) > 1e-9 {
+		t.Fatalf("successor edge should have gained: %+v", succ)
+	}
+}
+
+// A database from before edge relations and node kinds reads back whole:
+// links carry the temporal relation, fragments read as episodic moments.
+func TestRelAndKindMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		CREATE TABLE fragments (
+			id            INTEGER PRIMARY KEY AUTOINCREMENT,
+			channel       TEXT    NOT NULL,
+			content       TEXT    NOT NULL,
+			template      TEXT    NOT NULL,
+			surprise      REAL    NOT NULL,
+			dopamine      REAL    NOT NULL,
+			noradrenaline REAL    NOT NULL,
+			serotonin     REAL    NOT NULL,
+			at            INTEGER NOT NULL,
+			weight        REAL    NOT NULL
+		);
+		CREATE TABLE links (
+			from_id INTEGER NOT NULL,
+			to_id   INTEGER NOT NULL,
+			weight  REAL    NOT NULL,
+			PRIMARY KEY (from_id, to_id)
+		);
+		INSERT INTO fragments (channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight)
+			VALUES ('syslog', 'old line', 'old line', 3.0, 0.2, 0.1, 0.5, 1000, 1.0),
+			       ('vitals', 'old vitals', 'old vitals', 2.0, 0.2, 0.1, 0.5, 2000, 1.0);
+		INSERT INTO links (from_id, to_id, weight) VALUES (1, 2, 0.6), (2, 1, 0.6);`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	frags, err := s.Dump()
+	if err != nil || len(frags) != 2 {
+		t.Fatalf("old fragments should read back: %v %v", frags, err)
+	}
+	for _, f := range frags {
+		if f.Kind != KindEpisodic {
+			t.Fatalf("a pre-migration fragment is a moment, got kind %q", f.Kind)
+		}
+	}
+	edges, err := s.LinksFrom([]uint64{1})
+	if err != nil || len(edges) != 1 {
+		t.Fatalf("old links should survive the rebuild: %+v %v", edges, err)
+	}
+	if edges[0].Rel != RelTemporal || edges[0].Weight != 0.6 {
+		t.Fatalf("a pre-migration edge is temporal co-occurrence: %+v", edges[0])
+	}
+
+	// The rebuilt table must accept the wider primary key.
+	if err := s.LinkRel(1, 2, RelSuccessor, 0.3); err != nil {
+		t.Fatal(err)
+	}
+	if both, _ := s.LinksFrom([]uint64{1}); len(both) != 2 {
+		t.Fatalf("the rebuilt table should hold two relations per pair: %+v", both)
 	}
 }

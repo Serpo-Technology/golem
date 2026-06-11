@@ -314,3 +314,48 @@ func TestCountColumnMigration(t *testing.T) {
 		t.Fatalf("a pre-migration fragment should read back with count 1, got %+v", frags)
 	}
 }
+
+// Edges fold onto the prototype per relation: a grounding stays a
+// grounding and an order stays an order, with weights summed within each
+// relation rather than across them.
+func TestMergeFoldsEdgesPerRelation(t *testing.T) {
+	_, s := testDaemon(t)
+	now := time.Now()
+
+	target := encodeAt(t, s, "tell", "the anchor", 4.0, now)
+	var ids []uint64
+	for i := 0; i < 4; i++ {
+		f := encodeAt(t, s, "shell", "run: make build", 3.0, now.Add(time.Duration(i)*time.Minute))
+		if err := s.Link(target.ID, f.ID, 0.3); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(target.ID, f.ID, RelSuccessor, 0.2); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, f.ID)
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	proto := ids[3] // newest survives
+
+	temporal, _ := s.LinksFromRel([]uint64{target.ID}, RelTemporal)
+	succ, _ := s.LinksFromRel([]uint64{target.ID}, RelSuccessor)
+	var tw, sw float64
+	for _, e := range temporal {
+		if e.To == proto {
+			tw = e.Weight
+		}
+	}
+	for _, e := range succ {
+		if e.To == proto {
+			sw = e.Weight
+		}
+	}
+	if tw < 0.89 {
+		t.Fatalf("temporal weights should sum within their relation, got %.2f", tw)
+	}
+	if sw < 0.59 || sw > 0.61 {
+		t.Fatalf("successor weights should sum within their relation, got %.2f", sw)
+	}
+}
