@@ -53,11 +53,15 @@ func (s *Store) ConceptsByGloss(phrase string, limit int) ([]*Fragment, error) {
 		ORDER BY id LIMIT ?`, KindConcept, q, q, limit)
 }
 
-// utteranceChannel is speech: language about the world rather than the
-// world itself. An utterance's shape mints words that name concepts and
-// never becomes a concept, or a question asked often enough would
-// distil into a thing.
-const utteranceChannel = "tell"
+// Internal channels carry the mind rather than the world: speech is
+// language about experience, thought is the inner loop's own activity.
+// Neither shape ever becomes a concept (a question asked often enough
+// would distil into a thing, a habitual thought into a fact), and
+// neither counts as company when words are weighed.
+const (
+	utteranceChannel = "tell"
+	thoughtChannel   = "thought"
+)
 
 // ConceptCandidates lists episodic shapes recurrent enough to deserve a
 // concept and not yet distilled into one, most recurrent first.
@@ -67,10 +71,10 @@ func (s *Store) ConceptCandidates(minCount, limit int) ([]*Fragment, error) {
 		return nil, nil
 	}
 	return s.query(`SELECT `+fragmentCols+` FROM fragments
-		WHERE kind = ? AND count >= ? AND channel <> ?
+		WHERE kind = ? AND count >= ? AND channel NOT IN (?, ?)
 		AND template NOT IN (SELECT template FROM fragments WHERE kind = ?)
 		ORDER BY count DESC, id DESC LIMIT ?`,
-		KindEpisodic, minCount, utteranceChannel, KindConcept, limit)
+		KindEpisodic, minCount, utteranceChannel, thoughtChannel, KindConcept, limit)
 }
 
 // Reground writes the missing grounds edges from every concept to the
@@ -82,9 +86,9 @@ func (s *Store) Reground(weight float64) (int, error) {
 	res, err := s.db.Exec(`INSERT OR IGNORE INTO links (from_id, to_id, rel, weight)
 		SELECT c.id, e.id, ?, ?
 		FROM fragments c
-		JOIN fragments e ON e.template = c.template AND e.kind = ? AND e.channel <> ?
+		JOIN fragments e ON e.template = c.template AND e.kind = ? AND e.channel NOT IN (?, ?)
 		WHERE c.kind = ?`,
-		RelGrounds, weight, KindEpisodic, utteranceChannel, KindConcept)
+		RelGrounds, weight, KindEpisodic, utteranceChannel, thoughtChannel, KindConcept)
 	if err != nil {
 		return 0, err
 	}
@@ -197,7 +201,7 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 			SELECT l.from_id AS wid, SUM(l.weight) AS total
 			FROM links l
 			JOIN fragments w2 ON w2.id = l.from_id AND w2.kind = ?
-			JOIN fragments e2 ON e2.id = l.to_id AND e2.kind = ? AND e2.channel <> ?
+			JOIN fragments e2 ON e2.id = l.to_id AND e2.kind = ? AND e2.channel NOT IN (?, ?)
 			WHERE l.rel = ?
 			GROUP BY l.from_id
 		)
@@ -206,14 +210,14 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 		                 WHERE from_id = w.id AND to_id = c.id AND rel = ?), 0)
 		FROM fragments w
 		JOIN links l1 ON l1.from_id = w.id AND l1.rel = ?
-		JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel <> ?
+		JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel NOT IN (?, ?)
 		JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
 		JOIN fragments c ON c.id = l2.from_id AND c.kind = ?
 		JOIN wt ON wt.wid = w.id
 		WHERE w.kind = ?
 		GROUP BY w.id, c.id`,
-		KindWord, KindEpisodic, utteranceChannel, RelTemporal,
-		RelNames, RelTemporal, KindEpisodic, utteranceChannel,
+		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelTemporal,
+		RelNames, RelTemporal, KindEpisodic, utteranceChannel, thoughtChannel,
 		RelGrounds, KindConcept, KindWord)
 	if err != nil {
 		return nil, err

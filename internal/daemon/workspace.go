@@ -79,6 +79,21 @@ func (w *workspace) decay() {
 	}
 }
 
+// cool applies fatigue to one concept: a thought that has just been
+// thought from hands its warmth to its associations and steps back, so
+// the chain moves instead of circling.
+func (w *workspace) cool(id uint64, keep float64) {
+	if a, ok := w.act[id]; ok {
+		a *= keep
+		if a < workspaceFloor {
+			delete(w.act, id)
+			delete(w.touch, id)
+			return
+		}
+		w.act[id] = a
+	}
+}
+
 func (w *workspace) clear() {
 	w.act = make(map[uint64]float64)
 	w.touch = make(map[uint64]uint64)

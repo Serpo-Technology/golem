@@ -425,6 +425,10 @@ func (d *Daemon) Run() error {
 			}
 			if d.readyToSleep() {
 				d.sleepCycle()
+			} else if d.mindWandering() {
+				// One step of the inner loop per idle tick: replay run
+				// awake, bounded so the inner life never crowds sensing.
+				d.thinkStep()
 			}
 
 		case <-sigc:
@@ -663,7 +667,12 @@ func (d *Daemon) serveConn(conn net.Conn) {
 // definition. When bind is false the fragment neither links to the recent
 // past nor enters it, which is what retroactive annotation needs.
 func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveResult {
-	d.lastObs = time.Now()
+	// The quiet timers track the world: a thought is the mind's own
+	// activity, and mind-wandering must neither hold off sleep's
+	// input-silence test nor throttle itself.
+	if o.Channel != thoughtChannel {
+		d.lastObs = time.Now()
+	}
 	st := d.stat(o.Channel)
 	st.Observed++
 
@@ -677,7 +686,8 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	// consciousness. Speech is excluded (the operator has golem propose),
 	// and so are action echoes: the feedback channel and shell lines that
 	// are themselves commands, or an outcome could re-cue its own habit.
-	if !forced && o.Channel != "action" && !strings.HasPrefix(o.Content, senses.ActionPrefix) {
+	if !forced && o.Channel != "action" && o.Channel != thoughtChannel &&
+		!strings.HasPrefix(o.Content, senses.ActionPrefix) {
 		d.autoCue(o, tpl)
 	}
 
@@ -697,7 +707,9 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		return wire.ObserveResult{Bits: bits}
 	}
 
-	d.lastSurprise = time.Now()
+	if o.Channel != thoughtChannel {
+		d.lastSurprise = time.Now()
+	}
 	d.chem.SpikeNoradrenaline(bits * limbic.NASpikePerBit)
 	d.chem.SuppressSleep(limbic.SleepSuppressOnSurprise)
 

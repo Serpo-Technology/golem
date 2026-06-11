@@ -235,8 +235,8 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// here lets a concept born from a question die of disconnection on
 	// the same night.
 	if _, err := s.db.Exec(`DELETE FROM links WHERE rel = ?
-		AND to_id IN (SELECT id FROM fragments WHERE channel = ?)`,
-		RelGrounds, utteranceChannel); err != nil {
+		AND to_id IN (SELECT id FROM fragments WHERE channel IN (?, ?))`,
+		RelGrounds, utteranceChannel, thoughtChannel); err != nil {
 		return int(pruned), err
 	}
 	// A word that no edge touches names nothing and recalls nothing; a
