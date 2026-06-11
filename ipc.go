@@ -83,6 +83,7 @@ type StatusInfo struct {
 	Sleeps         int                     `json:"sleeps"`
 	LastSleepUnix  int64                   `json:"last_sleep_unix"`
 	Chem           LimbicState             `json:"chem"`
+	PromotionBar   int                     `json:"promotion_bar"`
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
 }

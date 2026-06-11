@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,13 @@ const (
 	actionFloor     = 0.05
 	dopamineFloor   = 0.5 // saliency = link strength scaled into [0.5, 1.5] by dopamine
 	clarifyTopCount = 3
+
+	// Trust moves on every judged outcome: corrections cost almost four
+	// times what a confirmation earns, so a streak of denials raises the
+	// graduation bar quickly and a few good runs do not erase it.
+	trustOnConfirm    = 0.04
+	trustOnCorrection = 0.15
+	trustOnAutonomous = 0.02
 )
 
 // Candidate is one command the cue could mean, aggregated across every
@@ -41,6 +49,19 @@ type Decision struct {
 	Conflict     bool
 	Question     string
 	Status       string // habit status of the proposed command
+}
+
+// promotionBar is how many consistent approvals graduation takes under
+// current trust. At baseline oxytocin the configured requirement applies
+// as written; falling trust raises the bar in proportion, for every pair
+// at once, and high trust never lowers it below the configured floor.
+func (d *Daemon) promotionBar() int {
+	n := d.cfg.GraduationApprovals
+	ox := d.chem.Snapshot().Oxytocin
+	if ox >= oxytocinBaseline {
+		return n
+	}
+	return int(math.Ceil(float64(n) * oxytocinBaseline / ox))
 }
 
 // commandOf reports the shell command a fragment represents, if it is one.
@@ -207,15 +228,19 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 		h.Denials++
 		h.Approvals = 0
 		h.Status = HabitDemoted
+		d.chem.LowerTrust(trustOnCorrection)
 	case isDenylisted(c.Command):
 		h.Approvals++
 		h.Status = HabitProposing // never promotable
-	case h.Approvals+1 >= d.cfg.GraduationApprovals:
+		d.chem.RaiseTrust(trustOnConfirm)
+	case h.Approvals+1 >= d.promotionBar():
 		h.Approvals++
 		h.Status = HabitGraduated
+		d.chem.RaiseTrust(trustOnConfirm)
 	default:
 		h.Approvals++
 		h.Status = HabitProposing
+		d.chem.RaiseTrust(trustOnConfirm)
 	}
 	if err := d.store.SaveHabit(h); err != nil {
 		return Habit{}, "", err
@@ -244,6 +269,7 @@ func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome st
 		verb += " (" + trigger + ")"
 	}
 	if ran && !ok {
+		d.chem.LowerTrust(trustOnCorrection)
 		if h, err := d.store.LoadHabit(dec.CueTemplate, c.Command); err == nil {
 			h.Denials++
 			h.Approvals = 0
@@ -255,6 +281,8 @@ func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome st
 				verb += " failed, demoted"
 			}
 		}
+	} else if ran {
+		d.chem.RaiseTrust(trustOnAutonomous)
 	}
 	d.habitsChanged()
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, verb+": "+outcome); err != nil {
@@ -279,6 +307,7 @@ func (d *Daemon) deny(dec Decision, at time.Time) (Habit, error) {
 	if err := d.store.NudgeLinks(c.Edges, -denyDelta); err != nil {
 		return Habit{}, err
 	}
+	d.chem.LowerTrust(trustOnCorrection)
 	h, err := d.store.LoadHabit(dec.CueTemplate, c.Command)
 	if err != nil {
 		return Habit{}, err

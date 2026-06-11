@@ -137,17 +137,18 @@ Goal: from memory to proposals, with a human gate.
       own, behind the same conflict veto and execution gates, with a
       per-cue cooldown against storms. Action echoes and speech never
       cue; the operator keeps golem propose.
-- [ ] Oxytocin as trust: frequent corrections lower it globally, which
-      raises the promotion bar N everywhere.
+- [x] Oxytocin as trust: denials and failed runs lower it globally and it
+      recovers slowly; while it is low the graduation bar rises for every
+      pair in proportion, never dropping below the configured N.
 
 Done when: at least one boring real pair (for example a log rotation) has
 graduated and runs unattended with a full audit trail.
 
 Status: the loop is built and demonstrated end to end (golem demo decide
-and golem demo execute): grounding, graduation, the ACC conflict veto, the
-denylist, real execution under three gates, failed-run demotion, outcome
-feedback, and automatic cueing from observations. Execution ships off by
-default. Oxytocin-scaled promotion is the open item.
+and golem demo execute): grounding, graduation under a trust-scaled bar,
+the ACC conflict veto, the denylist, real execution under three gates,
+failed-run demotion, outcome feedback, and automatic cueing from
+observations. Execution ships off by default.
 
 ## Step 6: Consolidation
 

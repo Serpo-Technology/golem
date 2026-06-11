@@ -9,6 +9,7 @@ type LimbicState struct {
 	Dopamine      float64 // curiosity / reward weighting
 	Noradrenaline float64 // alertness; spikes on surprise
 	Serotonin     float64 // stability / sleep pressure
+	Oxytocin      float64 // trust in the system's own judgement; corrections lower it
 }
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."

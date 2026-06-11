@@ -86,8 +86,8 @@ func main() {
 	case "chem":
 		resp := call(home, Request{Cmd: "chem"})
 		c := resp.Chem
-		fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f\n",
-			c.Dopamine, c.Noradrenaline, c.Serotonin)
+		fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
+			c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
 
 	case "observe":
 		if len(args) < 3 {
@@ -240,8 +240,11 @@ func printStatus(st *StatusInfo) {
 	} else {
 		fmt.Println("  nights slept: 0")
 	}
-	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f\n",
-		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin)
+	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f, oxytocin %.2f\n",
+		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin, st.Chem.Oxytocin)
+	if st.PromotionBar > 0 {
+		fmt.Printf("  graduation bar: %d consistent approval(s)\n", st.PromotionBar)
+	}
 	if st.ExecuteEnabled {
 		fmt.Printf("  execution: ON, %d command(s) allowlisted\n", st.AllowlistSize)
 	} else {

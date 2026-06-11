@@ -800,6 +800,7 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 			Sleeps:         d.sleeps,
 			LastSleepUnix:  d.lastSleep.Unix(),
 			Chem:           d.chem.Snapshot(),
+			PromotionBar:   d.promotionBar(),
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
 		}}, false
