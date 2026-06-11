@@ -155,8 +155,7 @@ func TestTenseParsesAndRealizes(t *testing.T) {
 		Action: Term{Phrase: "follow"},
 		Habit:  true,
 		Past:   true,
-		Rel:    "after",
-		Anchor: Term{Phrase: "make test"},
+		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
 	if got := Realize(past, calm); got != "After make test, make deploy usually followed." {
 		t.Fatalf("past habitual form wrong: %q", got)
@@ -177,8 +176,7 @@ func TestTenseParsesAndRealizes(t *testing.T) {
 		Agent:  Term{Phrase: "make deploy"},
 		Action: Term{Phrase: "follow"},
 		Past:   true,
-		Rel:    "after",
-		Anchor: Term{Phrase: "make test"},
+		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
 	if got := Realize(hedgedPast, LimbicState{Oxytocin: 0.2}); got != "After make test, make deploy may have followed." {
 		t.Fatalf("hedged past form wrong: %q", got)
@@ -194,8 +192,7 @@ func TestPluralSubjectAgrees(t *testing.T) {
 		Agent:  Term{Phrase: "make deploy and make lint", Plural: true},
 		Action: Term{Phrase: "follow"},
 		Habit:  true,
-		Rel:    "after",
-		Anchor: Term{Phrase: "make test"},
+		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
 	if got := Realize(f, calm); got != "After make test, make deploy and make lint usually follow." {
 		t.Fatalf("plural agreement wrong: %q", got)

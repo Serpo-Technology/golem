@@ -310,3 +310,103 @@ func TestWeakNamingIsTentative(t *testing.T) {
 		t.Fatalf("a tentative pointer must not borrow the concept's tally: %q", weak.Say)
 	}
 }
+
+// "Which command follows X" routes through the sortal: a louder
+// non-command successor is filtered out instead of winning, and the
+// question no longer falls back to a definition.
+func TestWhichCommandFiltersBySort(t *testing.T) {
+	d, _ := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+	// Each test run is chased by a syslog complaint and then the deploy;
+	// the complaint recurs more often, so unrestricted ranking favors it.
+	for i := range 4 {
+		at := base.Add(time.Duration(i) * 10 * time.Minute)
+		d.recent = nil
+		d.process(Observation{Channel: "shell", Content: "run: make test", At: at}, true, true)
+		d.process(Observation{Channel: "syslog", Content: "Disk filled during tests", At: at.Add(3 * time.Second)}, true, true)
+		if i < 3 {
+			d.process(Observation{Channel: "shell", Content: "run: make deploy", At: at.Add(6 * time.Second)}, true, true)
+		}
+	}
+	d.recent = nil
+
+	unrestricted := say(t, d, "what usually happens after make test")
+	if !strings.Contains(unrestricted.Say, "Disk filled") {
+		t.Fatalf("without a sortal the louder successor should win: %q", unrestricted.Say)
+	}
+	restricted := say(t, d, "which command follows make test")
+	if restricted.Say != "After make test, make deploy usually follows." {
+		t.Fatalf("the sortal should keep only command shapes: %q", restricted.Say)
+	}
+}
+
+// A plural sortal invites the field: coordinated subjects with plural
+// agreement.
+func TestWhichCommandsAnswerPlural(t *testing.T) {
+	d, _ := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+	feedSequence(t, d, "run: make test", "run: make deploy", 3, base)
+	feedSequence(t, d, "run: make test", "run: make lint", 3, base.Add(2*time.Minute))
+
+	resp := say(t, d, "which commands follow make test")
+	want1 := "After make test, make deploy and make lint usually follow."
+	want2 := "After make test, make lint and make deploy usually follow."
+	if resp.Say != want1 && resp.Say != want2 {
+		t.Fatalf("a plural sortal should coordinate the field: %q", resp.Say)
+	}
+	single := say(t, d, "which command follows make test")
+	if strings.Contains(single.Say, " and ") {
+		t.Fatalf("a singular sortal should take the winner alone: %q", single.Say)
+	}
+}
+
+// "After X and before Y" intersects: only what both qualifiers agree on
+// survives, and the answer fronts both.
+func TestAfterAndBeforeIntersect(t *testing.T) {
+	d, _ := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+	for i := range 3 {
+		at := base.Add(time.Duration(i) * 10 * time.Minute)
+		d.recent = nil
+		d.process(Observation{Channel: "shell", Content: "run: make test", At: at}, true, true)
+		d.process(Observation{Channel: "shell", Content: "run: make deploy", At: at.Add(5 * time.Second)}, true, true)
+		d.process(Observation{Channel: "shell", Content: "run: make push", At: at.Add(10 * time.Second)}, true, true)
+	}
+	d.recent = nil
+
+	resp := say(t, d, "what happens after make test and before make push")
+	if resp.Say != "After make test and before make push, make deploy usually happens." {
+		t.Fatalf("the intersection should answer with both qualifiers fronted: %q", resp.Say)
+	}
+}
+
+// When and where read the newest moment behind the anchor; how many
+// counts the tally; why and who name the gap honestly.
+func TestWhenWhereCountAndGaps(t *testing.T) {
+	d, _ := testDaemon(t)
+	base := time.Now().Add(-2 * time.Hour)
+	feedSequence(t, d, "run: make test", "run: make deploy", 3, base)
+	newest := base.Add(2 * 10 * time.Minute) // the third round's test run
+
+	when := say(t, d, "when did make test happen")
+	want := "Make test last happened on " + newest.Format("Jan 2 at 15:04") + "."
+	if when.Say != want {
+		t.Fatalf("when-answer should carry the newest time: got %q want %q", when.Say, want)
+	}
+	where := say(t, d, "where did make test happen")
+	if where.Say != "Make test happened on the shell channel." {
+		t.Fatalf("where-answer should name the channel: %q", where.Say)
+	}
+	count := say(t, d, "how many times did make test happen")
+	if !strings.Contains(count.Say, "I have seen make test") || !strings.Contains(count.Say, "times") {
+		t.Fatalf("how-many should count the tally: %q", count.Say)
+	}
+	why := say(t, d, "why did make test happen")
+	if why.Say != "I do not know why yet." {
+		t.Fatalf("why has no causal model and should say so: %q", why.Say)
+	}
+	who := say(t, d, "who ran make test")
+	if who.Say != "I do not know who yet." {
+		t.Fatalf("who has no agent model and should say so: %q", who.Say)
+	}
+}

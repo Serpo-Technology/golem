@@ -339,7 +339,11 @@ func (d *Daemon) conceptDecision(c *Fragment) (Decision, error) {
 // staged proposal. All planning reads memory; the only side effects are
 // workspace warmth and the pending proposal slot.
 func (d *Daemon) plan(frame Frame, raw string) (string, *DecisionInfo) {
-	for _, t := range []Term{frame.Agent, frame.Patient, frame.Anchor} {
+	terms := []Term{frame.Agent, frame.Patient}
+	for _, q := range frame.Quals {
+		terms = append(terms, q.Anchor)
+	}
+	for _, t := range terms {
 		if t.Concept != nil {
 			d.ws.excite(t.Concept.ID, exciteSpeech)
 		}
@@ -361,42 +365,41 @@ func (d *Daemon) plan(frame Frame, raw string) (string, *DecisionInfo) {
 	}
 }
 
-// planQuestion answers from grounded memory or admits it cannot.
+// planQuestion answers from grounded memory or admits it cannot. The
+// interrogative routes the question: what and which ask along order or
+// for definitions, when asks for a time, where for a channel, how many
+// for a count, and who and why name gaps GOLEM genuinely has.
 func (d *Daemon) planQuestion(frame Frame) string {
 	chem := d.chem.Snapshot()
 
-	// "What happens after X" and "what comes before X."
-	if frame.Rel != "" && !frame.Anchor.empty() {
-		anchors, anchorTerm := d.anchorEpisodes(frame.Anchor)
-		if len(anchors) > 0 {
-			ranked := d.successorsOf(anchors, frame.Rel)
-			if len(ranked) > 0 && ranked[0].weight >= successorFloor {
-				if frame.Rel == "before" {
-					// "make test usually precedes make deploy."
-					return Realize(Frame{
-						Force:   ForceStatement,
-						Agent:   Term{Phrase: ranked[0].speak},
-						Action:  Term{Phrase: "precede"},
-						Habit:   true,
-						Past:    frame.Past,
-						Patient: anchorTerm,
-					}, chem)
-				}
-				// "After make test, make deploy usually follows." A past
-				// question gets a past answer.
-				return Realize(Frame{
-					Force:  ForceStatement,
-					Agent:  Term{Phrase: ranked[0].speak},
-					Action: Term{Phrase: "follow"},
-					Habit:  true,
-					Past:   frame.Past,
-					Rel:    frame.Rel,
-					Anchor: anchorTerm,
-				}, chem)
-			}
+	// A relation carried by the verb is a qualifier in disguise: "which
+	// command follows X" asks after X, "what preceded X" asks before it.
+	quals := frame.Quals
+	if len(quals) == 0 && !frame.Patient.empty() &&
+		(frame.Action.Phrase == "follow" || frame.Action.Phrase == "precede") {
+		rel := "after"
+		if frame.Action.Phrase == "precede" {
+			rel = "before"
 		}
+		quals = []Qualifier{{Rel: rel, Anchor: frame.Patient}}
+	}
+
+	switch {
+	case frame.Wh == "why", frame.Wh == "who":
+		// No causal model and no agents: the honest answer is the gap
+		// itself.
 		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
-			Negate: true, Past: frame.Past, Rel: frame.Rel, Anchor: anchorTerm}, chem)
+			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
+	case frame.Counting:
+		return d.planCount(frame, quals, chem)
+	case frame.Wh == "when", frame.Wh == "where":
+		return d.planWhence(frame, quals, chem)
+	}
+
+	// "What happens after X", "what comes before X", "which command
+	// follows X and precedes Y."
+	if len(quals) > 0 && !quals[0].Anchor.empty() {
+		return d.planSuccession(frame, quals, chem)
 	}
 
 	// "What is X": definitions read the concept layer.
@@ -446,6 +449,173 @@ func (d *Daemon) planQuestion(frame Frame) string {
 	}
 	return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 		Negate: true, Patient: Term{Phrase: "that"}}, chem)
+}
+
+// planSuccession answers order questions: the qualifiers pick the
+// anchors, the successor edges vote, a second qualifier intersects, the
+// sortal restricts the kind of answer, and a plural sortal invites a
+// coordinated list.
+func (d *Daemon) planSuccession(frame Frame, quals []Qualifier, chem LimbicState) string {
+	anchors, anchorTerm := d.anchorEpisodes(quals[0].Anchor)
+	outQuals := []Qualifier{{Rel: quals[0].Rel, Anchor: anchorTerm}}
+
+	var ranked []successorRank
+	if len(anchors) > 0 {
+		ranked = d.successorsOf(anchors, quals[0].Rel)
+	}
+
+	// "After X and before Y": what follows X is kept only when it also
+	// precedes Y.
+	if len(quals) > 1 && !quals[1].Anchor.empty() {
+		second, secondTerm := d.anchorEpisodes(quals[1].Anchor)
+		outQuals = append(outQuals, Qualifier{Rel: quals[1].Rel, Anchor: secondTerm})
+		within := map[string]bool{}
+		if len(second) > 0 {
+			for _, r := range d.successorsOf(second, quals[1].Rel) {
+				within[r.template] = true
+			}
+		}
+		kept := ranked[:0]
+		for _, r := range ranked {
+			if within[r.template] {
+				kept = append(kept, r)
+			}
+		}
+		ranked = kept
+	}
+
+	// A sortal narrows the kind: "which command" wants only shapes that
+	// live in command position.
+	if frame.Sort == "command" || frame.Sort == "action" {
+		kept := ranked[:0]
+		for _, r := range ranked {
+			if strings.HasPrefix(r.template, actionPrefix) {
+				kept = append(kept, r)
+			}
+		}
+		ranked = kept
+	}
+
+	var strong []successorRank
+	for _, r := range ranked {
+		if r.weight >= successorFloor {
+			strong = append(strong, r)
+		}
+	}
+	if len(strong) == 0 {
+		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+			Negate: true, Past: frame.Past, Quals: outQuals}, chem)
+	}
+
+	// A plural sortal asks for the field, capped at three; everything
+	// else takes the winner.
+	subjects := []string{strong[0].speak}
+	if frame.SortPl {
+		for _, r := range strong[1:] {
+			if len(subjects) == 3 {
+				break
+			}
+			subjects = append(subjects, r.speak)
+		}
+	}
+	subject := Term{Phrase: joinAnd(subjects), Plural: len(subjects) > 1}
+
+	if quals[0].Rel == "before" && len(outQuals) == 1 {
+		// "make test usually precedes make deploy."
+		return Realize(Frame{
+			Force:   ForceStatement,
+			Agent:   subject,
+			Action:  Term{Phrase: "precede"},
+			Habit:   true,
+			Past:    frame.Past,
+			Patient: anchorTerm,
+		}, chem)
+	}
+	// "After make test, make deploy usually follows." With a second
+	// qualifier the verb turns neutral: "after X and before Y, Z usually
+	// happens."
+	verb := "follow"
+	if len(outQuals) > 1 {
+		verb = "happen"
+	}
+	return Realize(Frame{
+		Force:  ForceStatement,
+		Agent:  subject,
+		Action: Term{Phrase: verb},
+		Habit:  true,
+		Past:   frame.Past,
+		Quals:  outQuals,
+	}, chem)
+}
+
+// whenceAnchor picks the term a when/where/count question is about: the
+// qualifier's anchor when one was spoken, otherwise the patient or the
+// subject.
+func whenceAnchor(frame Frame, quals []Qualifier) Term {
+	if len(quals) > 0 && !quals[0].Anchor.empty() {
+		return quals[0].Anchor
+	}
+	if !frame.Patient.empty() {
+		return frame.Patient
+	}
+	return frame.Agent
+}
+
+// planWhence answers when and where: the newest moment the anchor
+// stands for supplies its time or its channel.
+func (d *Daemon) planWhence(frame Frame, quals []Qualifier, chem LimbicState) string {
+	topic := whenceAnchor(frame, quals)
+	ids, face := d.anchorEpisodes(topic)
+	if len(ids) == 0 {
+		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
+	}
+	frags, err := d.fragmentsByIDsTiered(ids)
+	if err != nil || len(frags) == 0 {
+		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
+	}
+	newest := frags[0]
+	for _, f := range frags {
+		if f.Time.After(newest.Time) {
+			newest = f
+		}
+	}
+	at := "the " + newest.Channel + " channel"
+	last := false
+	if frame.Wh == "when" {
+		at = newest.Time.Format("Jan 2 at 15:04")
+		last = true
+	}
+	// "Make test last happened on Jun 11 at 09:14." / "Make test
+	// happened on the shell channel."
+	return Realize(Frame{
+		Force:  ForceStatement,
+		Agent:  face,
+		Action: Term{Phrase: "happen"},
+		Past:   true,
+		Last:   last,
+		At:     at,
+	}, chem)
+}
+
+// planCount answers "how many times" and "how often" with the tally of
+// moments behind the anchor, prototype counts included.
+func (d *Daemon) planCount(frame Frame, quals []Qualifier, chem LimbicState) string {
+	topic := whenceAnchor(frame, quals)
+	ids, face := d.anchorEpisodes(topic)
+	if len(ids) > 0 {
+		if frags, err := d.fragmentsByIDsTiered(ids); err == nil && len(frags) > 0 {
+			n := 0
+			for _, f := range frags {
+				n += f.Count
+			}
+			return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "see"},
+				Patient: face, Times: n}, chem)
+		}
+	}
+	return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
 }
 
 // planCommand turns command force into a staged proposal: by taught cue

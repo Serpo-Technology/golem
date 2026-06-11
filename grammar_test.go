@@ -30,11 +30,12 @@ func TestParseReadsForce(t *testing.T) {
 // grammatical filler stripped from the anchor span.
 func TestParseFillsTemporalAnchor(t *testing.T) {
 	f := Parse("what usually happens after the make test", nil)
-	if f.Rel != "after" {
-		t.Fatalf("the relator should be read, got %q", f.Rel)
+	rel, anchor := f.firstQual()
+	if rel != "after" {
+		t.Fatalf("the relator should be read, got %q", rel)
 	}
-	if f.Anchor.Phrase != "make test" {
-		t.Fatalf("the anchor span should drop the determiner, got %q", f.Anchor.Phrase)
+	if anchor.Phrase != "make test" {
+		t.Fatalf("the anchor span should drop the determiner, got %q", anchor.Phrase)
 	}
 	if f.Action.Phrase != "follow" {
 		t.Fatalf("a happen-verb should fill the action, got %q", f.Action.Phrase)
@@ -43,9 +44,9 @@ func TestParseFillsTemporalAnchor(t *testing.T) {
 		t.Fatal("the habit adverb should be read")
 	}
 
-	g := Parse("what comes before make deploy", nil)
-	if g.Rel != "before" || g.Anchor.Phrase != "make deploy" {
-		t.Fatalf("before-questions parse the same way, got %q %q", g.Rel, g.Anchor.Phrase)
+	grel, ganchor := Parse("what comes before make deploy", nil).firstQual()
+	if grel != "before" || ganchor.Phrase != "make deploy" {
+		t.Fatalf("before-questions parse the same way, got %q %q", grel, ganchor.Phrase)
 	}
 }
 
@@ -82,8 +83,7 @@ func TestRealizeSuccessorAnswer(t *testing.T) {
 		Agent:  Term{Phrase: "make deploy"},
 		Action: Term{Phrase: "follow"},
 		Habit:  true,
-		Rel:    "after",
-		Anchor: Term{Phrase: "make test"},
+		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
 	calm := LimbicState{Oxytocin: oxytocinBaseline}
 	if got := Realize(f, calm); got != "After make test, make deploy usually follows." {
@@ -116,7 +116,7 @@ func TestRealizePrecedeAnswer(t *testing.T) {
 func TestRealizeIgnoranceAndCuriosity(t *testing.T) {
 	calm := LimbicState{Oxytocin: oxytocinBaseline}
 	ign := Frame{Force: ForceStatement, Action: Term{Phrase: "know"}, Negate: true,
-		Rel: "after", Anchor: Term{Phrase: "make test"}}
+		Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}
 	if got := Realize(ign, calm); got != "I do not know what follows make test yet." {
 		t.Fatalf("ignorance form wrong: %q", got)
 	}
@@ -181,5 +181,89 @@ func TestNegationDoesNotInvert(t *testing.T) {
 	g := Parse("make test does not follow make deploy", nil)
 	if !g.Negate || g.Action.Phrase != "follow" {
 		t.Fatalf("do-support negation should parse to a denied follow: %+v", g)
+	}
+}
+
+// Each relator opens its own qualifier, so a second temporal clause
+// stops folding into the first anchor.
+func TestParseTwoQualifiers(t *testing.T) {
+	f := Parse("what happens after make test and before make deploy", nil)
+	if len(f.Quals) != 2 {
+		t.Fatalf("two relators should make two qualifiers: %+v", f.Quals)
+	}
+	if f.Quals[0].Rel != "after" || f.Quals[0].Anchor.Phrase != "make test" {
+		t.Fatalf("first qualifier wrong: %+v", f.Quals[0])
+	}
+	if f.Quals[1].Rel != "before" || f.Quals[1].Anchor.Phrase != "make deploy" {
+		t.Fatalf("second qualifier wrong: %+v", f.Quals[1])
+	}
+}
+
+// The interrogative is typed, the sortal narrows the kind of answer,
+// and a post-verb span is the object even with no relator anywhere.
+func TestParseWhTypingAndSortal(t *testing.T) {
+	f := Parse("which command follows make test", nil)
+	if f.Wh != "which" || f.Sort != "command" || f.SortPl {
+		t.Fatalf("wh and sortal should be read: %+v", f)
+	}
+	if f.Action.Phrase != "follow" || f.Patient.Phrase != "make test" {
+		t.Fatalf("the verb-carried relation should leave the anchor in the patient: %+v", f)
+	}
+	g := Parse("which commands follow make test", nil)
+	if !g.SortPl {
+		t.Fatalf("a plural sortal should be marked: %+v", g)
+	}
+	h := Parse("when did make test happen", nil)
+	if h.Wh != "when" || !h.Past || h.Agent.Phrase != "make test" {
+		t.Fatalf("when-questions read tense and subject: %+v", h)
+	}
+	c := Parse("how many times did make test happen", nil)
+	if c.Wh != "how" || !c.Counting || !c.Past {
+		t.Fatalf("how-many should count: %+v", c)
+	}
+	o := Parse("how often does make test happen", nil)
+	if !o.Counting {
+		t.Fatalf("how-often should count: %+v", o)
+	}
+}
+
+// Two qualifiers front the clause coordinated, with a neutral verb.
+func TestRealizeTwoQualifiers(t *testing.T) {
+	calm := LimbicState{Oxytocin: oxytocinBaseline}
+	f := Frame{
+		Force:  ForceStatement,
+		Agent:  Term{Phrase: "make deploy"},
+		Action: Term{Phrase: "happen"},
+		Habit:  true,
+		Quals: []Qualifier{
+			{Rel: "after", Anchor: Term{Phrase: "make test"}},
+			{Rel: "before", Anchor: Term{Phrase: "make push"}},
+		},
+	}
+	if got := Realize(f, calm); got != "After make test and before make push, make deploy usually happens." {
+		t.Fatalf("coordinated qualifiers wrong: %q", got)
+	}
+	ign := Frame{Force: ForceStatement, Action: Term{Phrase: "know"}, Negate: true,
+		Quals: []Qualifier{
+			{Rel: "after", Anchor: Term{Phrase: "make test"}},
+			{Rel: "before", Anchor: Term{Phrase: "make push"}},
+		}}
+	if got := Realize(ign, calm); got != "I do not know what follows make test and what precedes make push yet." {
+		t.Fatalf("coordinated ignorance wrong: %q", got)
+	}
+}
+
+// A time or place complement and the "last" adverb realize cleanly.
+func TestRealizeWhenceAnswers(t *testing.T) {
+	calm := LimbicState{Oxytocin: oxytocinBaseline}
+	when := Frame{Force: ForceStatement, Agent: Term{Phrase: "make test"},
+		Action: Term{Phrase: "happen"}, Past: true, Last: true, At: "Jun 11 at 09:14"}
+	if got := Realize(when, calm); got != "Make test last happened on Jun 11 at 09:14." {
+		t.Fatalf("when-answer wrong: %q", got)
+	}
+	where := Frame{Force: ForceStatement, Agent: Term{Phrase: "make test"},
+		Action: Term{Phrase: "happen"}, Past: true, At: "the shell channel"}
+	if got := Realize(where, calm); got != "Make test happened on the shell channel." {
+		t.Fatalf("where-answer wrong: %q", got)
 	}
 }

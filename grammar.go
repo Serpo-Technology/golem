@@ -29,11 +29,25 @@ const (
 	catCop   = "cop"   // copulas: definition questions
 	catHap   = "hap"   // happen-verbs: event questions
 	catNeg   = "neg"   // negators: deny the predicate
+	catCnt   = "cnt"   // count quantifiers: "how many" asks for a number
 	catFn    = "fn"    // grammatical filler with no slot of its own
 )
 
+// sortalNouns restrict what kind of thing a question wants back, the
+// "command" of "which command follows X". They are meta-vocabulary
+// about GOLEM's own ontology, so they ship with the grammar instead of
+// competing with content words for grounding. Plural forms invite more
+// than one answer.
+var sortalNouns = map[string]string{
+	"command": "command", "commands": "command",
+	"action": "action", "actions": "action",
+	"thing": "thing", "things": "thing",
+	"event": "event", "events": "event",
+	"step": "step", "steps": "step",
+}
+
 var innateCategory = map[string]string{
-	"what": catWh, "when": catWh, "which": catWh, "who": catWh, "why": catWh, "how": catWh,
+	"what": catWh, "when": catWh, "which": catWh, "where": catWh, "who": catWh, "why": catWh, "how": catWh,
 	"after": catRel, "before": catRel,
 	"usually": catAdv, "always": catAdv, "often": catAdv, "sometimes": catAdv,
 	"again": catAgain,
@@ -45,10 +59,12 @@ var innateCategory = map[string]string{
 	"follow": catHap, "come": catHap, "happen": catHap,
 	"precedes": catHap, "preceded": catHap, "precede": catHap,
 	"not": catNeg, "never": catNeg, "no": catNeg, "cannot": catNeg,
+	"many": catCnt, "much": catCnt,
 	"i": catFn, "you": catFn, "we": catFn, "me": catFn, "us": catFn,
 	"to": catFn, "of": catFn, "in": catFn, "on": catFn, "at": catFn, "and": catFn, "or": catFn,
 	"does": catFn, "did": catFn, "next": catFn, "then": catFn, "now": catFn, "yet": catFn,
 	"please": catFn, "know": catFn, "about": catFn, "with": catFn, "for": catFn,
+	"times": catFn, "time": catFn,
 }
 
 func isFunctionWord(w string) bool {
@@ -141,27 +157,48 @@ func (t Term) speak() string {
 // temporal qualifier carries "what follows X" shapes; Unknown keeps the
 // words that resolved to nothing.
 type Frame struct {
-	Force   Force
-	Agent   Term   // who or what the clause is about
-	Action  Term   // the predicate; for innate verbs only Phrase is set
-	Patient Term   // what is acted on or asked about
-	Rel     string // temporal qualifier on the clause: "", "after", "before"
-	Anchor  Term   // what the qualifier attaches to
-	Past    bool   // tense: the clause is about a settled moment, "followed" against "follows"
-	Negate  bool   // the predicate is denied
-	Hedge   bool   // the claim is tentative ("may name")
-	Habit   bool   // habitual aspect: the clause states a regularity ("usually")
-	Times   int    // occurrence count, for "I have seen it N times"
-	Pro     bool   // the patient was a pro-form; resolve it from the workspace
-	Again   bool   // repetition was requested
-	Unknown []string
+	Force    Force
+	Wh       string      // the interrogative that opened a question: what, which, when, where, why, who, how
+	Agent    Term        // who or what the clause is about
+	Action   Term        // the predicate; for innate verbs only Phrase is set
+	Patient  Term        // what is acted on or asked about
+	Quals    []Qualifier // temporal adjuncts in spoken order; "after X and before Y" is two
+	Sort     string      // sortal restriction from "which command": the kind of answer asked for
+	SortPl   bool        // the sortal was plural, inviting more than one answer
+	Counting bool        // "how many" or "how often": the answer is a count
+	Past     bool        // tense: the clause is about a settled moment, "followed" against "follows"
+	Negate   bool        // the predicate is denied
+	Hedge    bool        // the claim is tentative ("may name")
+	Habit    bool        // habitual aspect: the clause states a regularity ("usually")
+	Times    int         // occurrence count, for "I have seen it N times"
+	At       string      // a time or place complement, preformatted by the planner
+	Last     bool        // the most recent occurrence: "last happened"
+	Pro      bool        // the patient was a pro-form; resolve it from the workspace
+	Again    bool        // repetition was requested
+	Unknown  []string
+}
+
+// Qualifier is one temporal adjunct: a relator and the anchor it
+// attaches to.
+type Qualifier struct {
+	Rel    string
+	Anchor Term
+}
+
+// firstQual returns the leading temporal qualifier, the common case.
+func (f Frame) firstQual() (string, Term) {
+	if len(f.Quals) == 0 {
+		return "", Term{}
+	}
+	return f.Quals[0].Rel, f.Quals[0].Anchor
 }
 
 // Parse runs the innate grammar backward: an utterance becomes a frame.
 // The resolver is the learned half, mapping a surface phrase to its
 // concept; everything else here is wired in. The grammar is small on
-// purpose: force from the opening word, one temporal qualifier, and
-// content spans into thematic roles.
+// purpose: force and interrogative from the opening word, temporal
+// qualifiers each owning their anchor, and content spans into thematic
+// roles by their position against the verb.
 func Parse(utterance string, resolve func(string) *Fragment) Frame {
 	tokens, question := tokenize(utterance)
 	f := Frame{Force: ForceStatement}
@@ -171,30 +208,48 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 	switch {
 	case innateCategory[tokens[0]] == catWh:
 		f.Force = ForceQuestion
+		f.Wh = tokens[0]
 	case innateCategory[tokens[0]] == catImp:
 		f.Force = ForceCommand
 	case question:
 		f.Force = ForceQuestion
 	}
 
-	// Split the clause at the temporal relator, if any: what precedes it
-	// is the main clause, what follows is the anchor.
+	// Each relator opens a qualifier whose anchor runs to the next
+	// relator, so "after X and before Y" parses as two qualifiers
+	// instead of folding the second relator into the first anchor.
 	main := tokens
 	for i, tok := range tokens {
-		if innateCategory[tok] == catRel {
-			f.Rel = tok
-			main = tokens[:i]
-			anchor := contentSpan(tokens[i+1:])
-			f.Anchor = resolveTerm(anchor, resolve)
-			break
+		if innateCategory[tok] != catRel {
+			continue
 		}
+		main = tokens[:i]
+		for i < len(tokens) {
+			rel := tokens[i]
+			j := i + 1
+			for j < len(tokens) && innateCategory[tokens[j]] != catRel {
+				j++
+			}
+			anchor := contentSpan(tokens[i+1 : j])
+			q := Qualifier{Rel: rel, Anchor: resolveTerm(anchor, resolve)}
+			if anchor != "" {
+				f.Quals = append(f.Quals, q)
+			}
+			i = j
+		}
+		break
 	}
 
-	var spans []string
+	type span struct {
+		text     string
+		postVerb bool
+	}
+	var spans []span
 	var current []string
+	verbSeen := false
 	flush := func() {
 		if len(current) > 0 {
-			spans = append(spans, strings.Join(current, " "))
+			spans = append(spans, span{strings.Join(current, " "), verbSeen})
 			current = nil
 		}
 	}
@@ -207,19 +262,32 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 			flush()
 			continue
 		}
+		if base, ok := sortalNouns[tok]; ok {
+			f.Sort = base
+			f.SortPl = tok != base
+			flush()
+			continue
+		}
 		switch innateCategory[tok] {
 		case catHap:
+			// The span before the verb closes as the subject before the
+			// flag flips; what follows is the object.
+			flush()
 			v := happenVerbs[tok]
 			f.Action = Term{Phrase: v.base}
 			if v.past {
 				f.Past = true
 			}
-			flush()
+			verbSeen = true
 		case catCop:
+			flush()
 			f.Action = Term{Phrase: "be"}
 			if tok == "was" || tok == "were" {
 				f.Past = true
 			}
+			verbSeen = true
+		case catCnt:
+			f.Counting = true
 			flush()
 		case catPro:
 			f.Pro = true
@@ -240,25 +308,38 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 		}
 	}
 	flush()
+	// "How often" counts the way "how many" does.
+	if f.Wh == "how" && f.Habit {
+		f.Counting = true
+	}
 
-	// Content spans fill the open roles in order: the span before a
-	// happen-verb is the agent, anything else is the patient.
-	for _, span := range spans {
-		term := resolveTerm(span, resolve)
+	// Position against the verb assigns the roles: a pre-verb span is
+	// the subject, a post-verb span the object. A command's spans are
+	// what the command acts on.
+	for _, sp := range spans {
+		term := resolveTerm(sp.text, resolve)
 		switch {
-		case f.Action.Phrase == "follow" && f.Agent.empty() && f.Patient.empty():
-			f.Agent = term
-		case f.Patient.empty():
-			f.Patient = term
-		case f.Agent.empty():
-			f.Agent = term
+		case f.Force == ForceCommand, sp.postVerb:
+			if f.Patient.empty() {
+				f.Patient = term
+			} else if f.Agent.empty() {
+				f.Agent = term
+			}
+		default:
+			if f.Agent.empty() {
+				f.Agent = term
+			} else if f.Patient.empty() {
+				f.Patient = term
+			}
 		}
-		if term.Concept == nil && span != "" {
-			f.Unknown = append(f.Unknown, span)
+		if term.Concept == nil && sp.text != "" {
+			f.Unknown = append(f.Unknown, sp.text)
 		}
 	}
-	if f.Anchor.Concept == nil && f.Anchor.Phrase != "" {
-		f.Unknown = append(f.Unknown, f.Anchor.Phrase)
+	for _, q := range f.Quals {
+		if q.Anchor.Concept == nil && q.Anchor.Phrase != "" {
+			f.Unknown = append(f.Unknown, q.Anchor.Phrase)
+		}
 	}
 	return f
 }
@@ -294,13 +375,20 @@ func resolveTerm(phrase string, resolve func(string) *Fragment) Term {
 // judgement was recently corrected should sound like it.
 func Realize(f Frame, chem LimbicState) string {
 	var b strings.Builder
-	// The temporal adjunct fronts the clause only when the predicate is
-	// the ordered event itself; for "know" the anchor lives inside the
-	// embedded clause instead.
-	if f.Rel != "" && !f.Anchor.empty() && f.Force != ForceQuestion && f.Action.Phrase == "follow" {
-		b.WriteString(relWord(f.Rel))
-		b.WriteString(" ")
-		b.WriteString(f.Anchor.speak())
+	// Temporal adjuncts front the clause only when the predicate is the
+	// ordered event itself; for "know" the anchors live inside the
+	// embedded clause instead. Two qualifiers coordinate: "after X and
+	// before Y, ...".
+	rel, anchor := f.firstQual()
+	if rel != "" && !anchor.empty() && f.Force != ForceQuestion &&
+		(f.Action.Phrase == "follow" || f.Action.Phrase == "happen" || f.Action.Phrase == "run") {
+		parts := make([]string, 0, len(f.Quals))
+		for _, q := range f.Quals {
+			if !q.Anchor.empty() {
+				parts = append(parts, relWord(q.Rel)+" "+q.Anchor.speak())
+			}
+		}
+		b.WriteString(strings.Join(parts, " and "))
 		b.WriteString(", ")
 	}
 
@@ -328,12 +416,19 @@ func Realize(f Frame, chem LimbicState) string {
 		case f.Habit:
 			b.WriteString("usually ")
 			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
+		case f.Last:
+			b.WriteString("last ")
+			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
 		default:
 			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
 		}
 		if !f.Patient.empty() {
 			b.WriteString(" ")
 			b.WriteString(f.Patient.speak())
+		}
+		if f.At != "" {
+			b.WriteString(" on ")
+			b.WriteString(f.At)
 		}
 	case "know":
 		// A knowledge claim is about now even when the gap it names is
@@ -392,17 +487,25 @@ func Realize(f Frame, chem LimbicState) string {
 }
 
 // embeddedClause renders the thing not known: a patient phrase, or the
-// wh-clause a temporal question asked about, inflected for the tense
-// the question carried.
+// wh-clauses the temporal qualifiers asked about, inflected for the
+// tense the question carried and coordinated when there are two.
 func embeddedClause(f Frame) string {
 	if !f.Patient.empty() {
 		return f.Patient.speak()
 	}
-	if f.Rel == "before" {
-		return "what " + finiteVerb("precede", false, false, f.Past) + " " + f.Anchor.speak()
+	var parts []string
+	for _, q := range f.Quals {
+		if q.Anchor.empty() {
+			continue
+		}
+		verb := "follow"
+		if q.Rel == "before" {
+			verb = "precede"
+		}
+		parts = append(parts, "what "+finiteVerb(verb, false, false, f.Past)+" "+q.Anchor.speak())
 	}
-	if f.Rel == "after" {
-		return "what " + finiteVerb("follow", false, false, f.Past) + " " + f.Anchor.speak()
+	if len(parts) > 0 {
+		return strings.Join(parts, " and ")
 	}
 	return "that"
 }
