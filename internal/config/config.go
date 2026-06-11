@@ -176,7 +176,7 @@ func Default() Config {
 			WatchDirs: []string{},
 			TailFiles: []string{},
 			WatchURLs: []string{},
-			VoiceName: "Aman",
+			VoiceName: "Samantha",
 		},
 	}
 }
