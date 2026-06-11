@@ -93,7 +93,11 @@ type successorRank struct {
 
 // successorsOf aggregates the successor edges leaving (or entering, for
 // "before") the given moments, grouped by the shape they point at. The
-// strongest shape is the habit the question asked about.
+// strongest shape is the habit the question asked about. Utterances are
+// excluded from the answer: a question asked seconds after an event is
+// genuinely that event's successor in the graph, but "what follows X"
+// asks about the world, and an answer that names the asking would chase
+// its own tail.
 func (d *Daemon) successorsOf(ids []uint64, rel string) []successorRank {
 	var edges []LinkEdge
 	var err error
@@ -129,7 +133,7 @@ func (d *Daemon) successorsOf(ids []uint64, rel string) []successorRank {
 			id = e.From
 		}
 		f := byID[id]
-		if f == nil {
+		if f == nil || f.Channel == "tell" {
 			continue
 		}
 		r := agg[f.Template]

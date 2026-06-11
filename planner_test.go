@@ -91,6 +91,26 @@ func TestAnswersWhatPrecedesQuestion(t *testing.T) {
 	}
 }
 
+// A question asked seconds after an event binds as that event's
+// successor in the graph, and must still never appear in the answer.
+// With nothing else following the fresh moment, the honest answer is
+// ignorance, never the question itself.
+func TestQuestionNeverAnswersItself(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.process(Observation{Channel: "vitals", Content: "disk space low", At: time.Now()}, true, true)
+
+	resp := say(t, d, "what usually happens after disk space low")
+	if resp.Say != "I do not know what follows disk space low yet." {
+		t.Fatalf("the asking must not become the answer: %q", resp.Say)
+	}
+	// Asked again, the first question is now also in the graph; the
+	// answer still must not surface it.
+	resp = say(t, d, "what usually happens after disk space low")
+	if strings.Contains(resp.Say, "usually happens") {
+		t.Fatalf("an earlier question leaked into the answer: %q", resp.Say)
+	}
+}
+
 // Outside what is grounded, GOLEM says it does not know.
 func TestAdmitsIgnorance(t *testing.T) {
 	d, _ := testDaemon(t)
