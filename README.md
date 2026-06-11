@@ -112,6 +112,14 @@ GOLEM does not store sentences to repeat them. It builds them. Following Levelt'
 - **What to Say:** a message planner above the grammar chooses the content. With nothing grounded for a query, GOLEM says it does not know; when curiosity is high, it asks.
 - **One Example is Enough:** the grammar is innate; only the lexicon (which words point to which concepts) is learned, and a word taught in a second language attaches to the same concept as its English synonym.
 
+### 8. Action: Parallel Substrate, Serial Commitment
+
+The brain is parallel underneath and serial only where it commits: billions of neurons fire at once, and what is serial is the basal-ganglia gate that picks one action and the single thread of attention. GOLEM mirrors this. Senses and committed actions run as goroutines; the `select` loop is the one serial thread, the global workspace and the action-selection gate at the same time.
+
+- **Decision is serial:** the winner-take-all selection lives on the loop and never races, so two conflicting choices cannot fire together.
+- **Execution is parallel, bounded:** committed actions fan out as goroutines up to a cap, held apart by **effector exclusion**. Two actions touching the same resource serialize while independent ones run free. A machine has many effectors a body does not, and this uses them without a second thread ever deciding or writing memory.
+- **No shell in the loop:** an action is a structured pipeline of argument stages wired with explicit pipes, each stage authorized on its own, so a command runs without ever handing a string to `/bin/sh`.
+
 ---
 
 ## Typical Examples of Operation
@@ -175,7 +183,7 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 ## Technical Specifications
 
 - **Language:** Go (1.25+)
-- **Concurrency:** Heavy use of `goroutines` for sensory channels and `select` for the Global Workspace (Consciousness).
+- **Concurrency:** parallel substrate, serial commitment. Sensory channels run as `goroutines` and committed execution runs off the loop; the `select` loop is the single serial thread that decides and writes memory, the Global Workspace and the action gate at once.
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
 - **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org, fsnotify); no model weights, no frameworks, no cgo.
 

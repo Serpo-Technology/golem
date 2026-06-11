@@ -204,7 +204,55 @@ Goal: see the graph before building the GUI that edits it.
       gained a rel column and a wider primary key), which restarts that
       clock.
 
-## Step 8: The concept layer and grammar
+## Step 8: The action layer: pipelines and parallel execution
+
+Goal: lift the two execution limits without loosening safety, by taking
+the shell out of the loop and letting independent actions run at once.
+
+Two limits stand today, and both trace to one choice. Commands run through
+`/bin/sh -c`, and the allowlist matches by prefix, so the shell-control ban
+is the only thing stopping a prefix match from authorizing a whole compound
+program; and a single in-flight slot refuses any second action. Removing the
+shell and generalizing the slot lifts both, guided by how the brain itself
+is built: a parallel substrate with serial commitment.
+
+Structured pipelines, no shell:
+
+- [ ] Parse a command into a pipeline of argv stages with explicit pipe and
+      redirect structure, never handing the string to a shell.
+- [ ] Run the stages with Go's own piping, one stage's output wired to the
+      next stage's input.
+- [ ] Authorize each stage's program against the allowlist and denylist on
+      its own, so a prefix match can no longer clear a compound program.
+- [ ] Refuse what the safe subset cannot model: command substitution,
+      backticks, subshells, globbing, variable expansion. "Parse into the
+      safe pipeline or refuse" replaces the shell-control ban.
+- [ ] Commands stay plain strings everywhere upstream (teach, grounding,
+      proposals); only the executor changes.
+
+Parallel action, serial commitment:
+
+- [ ] Decision stays serial on the brain loop: the winner-take-all
+      selection never races, and only committed execution fans out.
+- [ ] Bounded concurrency: committed actions run as goroutines up to a cap;
+      every outcome still marshals back through one channel, so habit,
+      audit, and feedback bookkeeping stay single-threaded.
+- [ ] Effector exclusion: two actions that touch the same resource (a file,
+      a port, a working directory) serialize; independent ones run free.
+      This is the brain's "one hand cannot grab two things," generalized
+      from limbs to resources.
+- [ ] Stop settles every in-flight command before the final consolidation.
+
+This is the parallel-processor, serial-arbiter, single-threaded-reabsorption
+pattern in miniature, the same shape the later thoughts-as-goroutines work
+will apply to cognition itself.
+
+Done when: a grounded pipeline such as "make test | tee log" runs with each
+stage authorized and no shell involved, two independent allowlisted actions
+run at once while two that touch the same file serialize, and the audit
+trail stays coherent through both.
+
+## Step 9: The concept layer and grammar
 
 Goal: GOLEM understands and speaks about its own experience, grounded, and
 without learned weights.
@@ -303,7 +351,7 @@ what keeps only the true names over time. A spoken command stages a
 proposal behind the usual approve gate and never runs by itself; golem
 propose remains the lever that can fire a graduated pair autonomously.
 
-## Step 9: Full English and Turkish grammars
+## Step 10: Full English and Turkish grammars
 
 Goal: grow the innate grammar from a working skeleton into grammars that
 cover GOLEM's own speech in full, English first and then Turkish, one
