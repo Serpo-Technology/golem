@@ -46,6 +46,9 @@ type DecisionInfo struct {
 	Conflict     bool     `json:"conflict,omitempty"`
 	Question     string   `json:"question,omitempty"`
 	Alternatives []string `json:"alternatives,omitempty"`
+	Autonomous   bool     `json:"autonomous,omitempty"`
+	Outcome      string   `json:"outcome,omitempty"`
+	Demoted      bool     `json:"demoted,omitempty"`
 }
 
 // ActionResult is the wire form of an approve or deny outcome.
@@ -73,13 +76,15 @@ type AuditInfo struct {
 }
 
 type StatusInfo struct {
-	PID           int                     `json:"pid"`
-	UptimeSec     float64                 `json:"uptime_sec"`
-	Fragments     int                     `json:"fragments"`
-	Channels      map[string]*ChannelStat `json:"channels"`
-	Sleeps        int                     `json:"sleeps"`
-	LastSleepUnix int64                   `json:"last_sleep_unix"`
-	Chem          LimbicState             `json:"chem"`
+	PID            int                     `json:"pid"`
+	UptimeSec      float64                 `json:"uptime_sec"`
+	Fragments      int                     `json:"fragments"`
+	Channels       map[string]*ChannelStat `json:"channels"`
+	Sleeps         int                     `json:"sleeps"`
+	LastSleepUnix  int64                   `json:"last_sleep_unix"`
+	Chem           LimbicState             `json:"chem"`
+	ExecuteEnabled bool                    `json:"execute_enabled"`
+	AllowlistSize  int                     `json:"allowlist_size"`
 }
 
 type ChannelStat struct {
@@ -128,7 +133,9 @@ func ipcCall(home string, req Request) (Response, error) {
 		return resp, err
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	// Generous, because an approve or propose may run a command for as
+	// long as the daemon's execution timeout allows.
+	conn.SetDeadline(time.Now().Add(120 * time.Second))
 
 	payload, err := json.Marshal(req)
 	if err != nil {

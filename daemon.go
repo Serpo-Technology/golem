@@ -375,7 +375,13 @@ func (d *Daemon) acceptLoop(l net.Listener) {
 
 func (d *Daemon) serveConn(conn net.Conn) {
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	// The deadline must outlast a command the loop may run synchronously,
+	// or the client would give up on a request that is still executing.
+	execBudget := d.cfg.ExecuteTimeoutSec
+	if execBudget <= 0 {
+		execBudget = defaultExecuteTimeoutSec
+	}
+	conn.SetDeadline(time.Now().Add(time.Duration(execBudget+15) * time.Second))
 
 	line, err := bufio.NewReader(conn).ReadBytes('\n')
 	if err != nil {
@@ -772,13 +778,15 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 			d.stat(name).Dropped = ctr.Load()
 		}
 		return Response{OK: true, Status: &StatusInfo{
-			PID:           os.Getpid(),
-			UptimeSec:     time.Since(d.started).Seconds(),
-			Fragments:     held,
-			Channels:      d.stats,
-			Sleeps:        d.sleeps,
-			LastSleepUnix: d.lastSleep.Unix(),
-			Chem:          d.chem.Snapshot(),
+			PID:            os.Getpid(),
+			UptimeSec:      time.Since(d.started).Seconds(),
+			Fragments:      held,
+			Channels:       d.stats,
+			Sleeps:         d.sleeps,
+			LastSleepUnix:  d.lastSleep.Unix(),
+			Chem:           d.chem.Snapshot(),
+			ExecuteEnabled: d.cfg.ExecuteEnabled,
+			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
 		}}, false
 
 	case "chem":
@@ -874,8 +882,21 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		if err != nil {
 			return Response{Error: err.Error()}, false
 		}
+		di := decisionInfo(dec)
+		// A graduated, allowed command is the payoff of graduation: it runs
+		// now, with no separate approval, and there is nothing left pending.
+		if dec.Proposed != nil && !dec.Conflict && dec.Status == HabitGraduated {
+			if allowed, _ := d.mayExecute(dec.Proposed.Command); allowed {
+				outcome, demoted := d.autorun(dec, time.Now())
+				di.Autonomous = true
+				di.Outcome = outcome
+				di.Demoted = demoted
+				d.pending = nil
+				return Response{OK: true, Decision: di}, false
+			}
+		}
 		d.pending = &dec
-		return Response{OK: true, Decision: decisionInfo(dec)}, false
+		return Response{OK: true, Decision: di}, false
 
 	case "approve":
 		if d.pending == nil || d.pending.Proposed == nil {

@@ -128,19 +128,26 @@ Goal: from memory to proposals, with a human gate.
 - [x] Manual grounding: golem teach (used by the seeding demo) binds a cue
       to a command directly, so the loop can be exercised without waiting
       a week for organic shell data.
-- [ ] Real execution behind autonomy: graduated pairs actually run, gated
-      by an allowlist and an explicit opt-in. Execution is dry-run until
-      then.
+- [x] Real execution behind autonomy: graduated pairs actually run, gated
+      by an allowlist and an explicit opt-in. Three gates, all required:
+      the master switch, the denylist, the allowlist. A failed run demotes;
+      outcomes feed back as memory.
+- [ ] Automatic cueing: an observation that matches a graduated cue
+      triggers a proposal on its own, so a graduated pair runs with no
+      human supplying the cue. Today the cue still comes from golem
+      propose.
 - [ ] Oxytocin as trust: frequent corrections lower it globally, which
       raises the promotion bar N everywhere.
 
 Done when: at least one boring real pair (for example a log rotation) has
 graduated and runs unattended with a full audit trail.
 
-Status: the loop is built and demonstrated end to end (golem demo decide):
-grounding, graduation, the ACC conflict veto, and the denylist that keeps
-destructive commands from ever graduating. Execution is dry-run; turning
-it real is the remaining opt-in.
+Status: the loop is built and demonstrated end to end (golem demo decide
+and golem demo execute): grounding, graduation, the ACC conflict veto, the
+denylist, real execution under three gates, failed-run demotion, and
+outcome feedback. Execution ships off by default. The remaining gap to
+"unattended" is automatic cueing: a graduated pair still needs a human to
+type the cue via golem propose.
 
 ## Step 6: Consolidation
 
@@ -165,6 +172,20 @@ Goal: see the graph before building the GUI that edits it.
 - [ ] Structured event log for every encode, prune, link, and proposal.
 - [ ] GME (the GUI editor) starts only after the storage schema has
       survived a few weeks without changing.
+
+## Known limitations
+
+- A command runs synchronously on the single brain loop, so while it runs
+  the loop is blocked: sensors back up on their bounded queues and other
+  CLI calls get "daemon busy". Connection deadlines are sized to outlast
+  the execution timeout so the triggering client still gets its result.
+  Moving execution off the loop (run in a goroutine, marshal the outcome
+  back) is the proper fix and is future work.
+- Only simple commands execute. Anything with shell control characters
+  (chaining, pipes, redirects, substitution) is refused, because an
+  allowlist entry matches a command by prefix and a shell would otherwise
+  run the whole compound program. Pipelines that should run autonomously
+  would need to be wrapped in a script the allowlist names.
 
 ## Open questions
 

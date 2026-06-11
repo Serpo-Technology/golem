@@ -22,6 +22,7 @@ const (
 	defaultCalibWarmup       = 30
 	defaultGraduation        = 3
 	defaultConflictMargin    = 0.15
+	defaultExecuteTimeoutSec = 30
 )
 
 // actionDenylist is the set of command substrings GOLEM will always
@@ -83,6 +84,18 @@ type Config struct {
 	// actions sit within this fraction of each other, GOLEM asks instead
 	// of choosing.
 	ConflictMargin float64 `json:"conflict_margin"`
+	// ExecuteEnabled is the master switch for actually running commands.
+	// Off by default: until it is on, every approved or graduated action
+	// is a dry run. Turning it on requires editing this file and
+	// restarting; nothing can enable it from a single command.
+	ExecuteEnabled bool `json:"execute_enabled"`
+	// ExecuteAllowlist is the set of commands cleared to run for real,
+	// matched by exact command or whole-word prefix ("go build" clears
+	// "go build ./..." but not "google-chrome"). Empty means nothing runs,
+	// even with the master switch on. The denylist always overrides this.
+	ExecuteAllowlist []string `json:"execute_allowlist"`
+	// ExecuteTimeoutSec bounds how long a single command may run.
+	ExecuteTimeoutSec float64 `json:"execute_timeout_sec"`
 }
 
 type ChannelsConfig struct {
@@ -115,6 +128,9 @@ func DefaultConfig() Config {
 		PredictorWindows:    map[string]float64{"syslog": 8192},
 		GraduationApprovals: defaultGraduation,
 		ConflictMargin:      defaultConflictMargin,
+		ExecuteEnabled:      false,
+		ExecuteAllowlist:    []string{},
+		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,

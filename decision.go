@@ -193,27 +193,70 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 	}
 	d.chem.SpikeDopamine(recallReward)
 
+	ran, ok, outcome := d.execute(c.Command)
+
 	h, err := d.store.LoadHabit(dec.CueTemplate, c.Command)
 	if err != nil {
 		return Habit{}, "", err
 	}
-	h.Approvals++
-	if isDenylisted(c.Command) {
+	switch {
+	case ran && !ok:
+		// A command that errors is a correction. Demote it and reset the
+		// approval count, so re-graduation takes fresh consistent
+		// approvals rather than a single success after a failure.
+		h.Denials++
+		h.Approvals = 0
+		h.Status = HabitDemoted
+	case isDenylisted(c.Command):
+		h.Approvals++
 		h.Status = HabitProposing // never promotable
-	} else if h.Approvals >= d.cfg.GraduationApprovals {
+	case h.Approvals+1 >= d.cfg.GraduationApprovals:
+		h.Approvals++
 		h.Status = HabitGraduated
-	} else {
+	default:
+		h.Approvals++
 		h.Status = HabitProposing
 	}
 	if err := d.store.SaveHabit(h); err != nil {
 		return Habit{}, "", err
 	}
-
-	outcome := d.execute(c.Command)
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "approved: "+outcome); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
+	if ran {
+		d.feedback(c.Command, outcome, at)
+	}
 	return h, outcome, nil
+}
+
+// autorun executes a graduated, allowed command without per-instance
+// approval, the payoff of graduation. A failed autonomous run demotes the
+// pair so it stops firing until the operator reconfirms it. The caller
+// must have already checked mayExecute and graduation.
+func (d *Daemon) autorun(dec Decision, at time.Time) (outcome string, demoted bool) {
+	c := dec.Proposed
+	ran, ok, outcome := d.execute(c.Command)
+	verb := "autonomous: "
+	if ran && !ok {
+		if h, err := d.store.LoadHabit(dec.CueTemplate, c.Command); err == nil {
+			h.Denials++
+			h.Approvals = 0
+			h.Status = HabitDemoted
+			if err := d.store.SaveHabit(h); err != nil {
+				fmt.Fprintf(d.out, "demotion not persisted: %v\n", err)
+			} else {
+				demoted = true
+				verb = "autonomous failed, demoted: "
+			}
+		}
+	}
+	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, verb+outcome); err != nil {
+		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+	}
+	if ran {
+		d.feedback(c.Command, outcome, at)
+	}
+	return outcome, demoted
 }
 
 // deny rejects a proposed candidate: it weakens the grounding and demotes
@@ -242,14 +285,6 @@ func (d *Daemon) deny(dec Decision, at time.Time) (Habit, error) {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
 	return h, nil
-}
-
-// execute carries out an approved command under the current policy.
-// Execution is off by default: GOLEM shows the command it would run and
-// records the intent, but does not touch the system until the operator
-// turns autonomy on for specific commands. The dangerous step is opt-in.
-func (d *Daemon) execute(cmd string) string {
-	return "[dry-run] would run: " + cmd
 }
 
 // teach grounds a cue to a command directly, the manual-grounding path:

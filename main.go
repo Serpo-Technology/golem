@@ -57,9 +57,12 @@ func main() {
 
 	switch args[0] {
 	case "demo":
-		if len(args) >= 2 && args[1] == "decide" {
+		switch {
+		case len(args) >= 2 && args[1] == "decide":
 			runDecisionDemo()
-		} else {
+		case len(args) >= 2 && args[1] == "execute":
+			runExecutionDemo()
+		default:
 			runDemo()
 		}
 
@@ -239,6 +242,11 @@ func printStatus(st *StatusInfo) {
 	}
 	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f\n",
 		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin)
+	if st.ExecuteEnabled {
+		fmt.Printf("  execution: ON, %d command(s) allowlisted\n", st.AllowlistSize)
+	} else {
+		fmt.Println("  execution: off (dry-run); enable in config.json")
+	}
 }
 
 func tellOnce(home, words string) {
@@ -294,13 +302,21 @@ func printDecision(d *DecisionInfo) {
 		fmt.Println("  resolve by proposing the specific cue, then approve.")
 		return
 	}
+	if d.Autonomous {
+		fmt.Printf("ran autonomously: %s\n  %s\n", d.Proposed, d.Outcome)
+		if d.Demoted {
+			fmt.Println("  the run failed, so this pair is demoted until you reconfirm it.")
+		}
+		return
+	}
 	mark := ""
 	if d.Denylisted {
 		mark = "  (denylisted; always confirm)"
 	}
 	fmt.Printf("proposing: %s  [saliency %.2f, %s]%s\n", d.Proposed, d.Saliency, d.Status, mark)
 	if d.Status == "graduated" {
-		fmt.Println("  this pair has graduated; it would run autonomously.")
+		fmt.Println("  graduated, but execution is off or this command is not allowlisted,")
+		fmt.Println("  so it stays pending. golem approve  to run it now.")
 	} else {
 		fmt.Println("  golem approve  to run and confirm, or  golem deny  to reject.")
 	}
