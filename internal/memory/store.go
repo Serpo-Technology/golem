@@ -636,6 +636,16 @@ func (s *Store) LinkRel(from, to uint64, rel string, weight float64) error {
 	return err
 }
 
+// SetLinkRel writes an edge's weight outright, down as well as up. A
+// consolidation pass that recomputes a relation from counts owns its
+// edges: practice and decay are overwritten by the fresh truth.
+func (s *Store) SetLinkRel(from, to uint64, rel string, weight float64) error {
+	_, err := s.db.Exec(`INSERT INTO links (from_id, to_id, rel, weight) VALUES (?,?,?,?)
+		ON CONFLICT(from_id, to_id, rel) DO UPDATE SET weight = excluded.weight`,
+		from, to, rel, weight)
+	return err
+}
+
 // LinksFrom returns every edge leaving the given fragments, whatever its
 // relation.
 func (s *Store) LinksFrom(ids []uint64) ([]LinkEdge, error) {

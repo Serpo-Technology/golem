@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -28,14 +29,21 @@ import (
 const (
 	conceptBudgetScale = 16 // concepts mintable in one night at full serotonin
 	groundsWeight      = 0.8
-	namesBaseWeight    = 0.25
-	namesDopamineGain  = 0.5
-	namesRepeatBonus   = 0.08 // per co-occurring grounded episode beyond the first
-	namesMaxWeight     = 0.95
-	// A name at least two co-occurrences below the concept's firmest is a
-	// weak pointer, spoken tentatively. The gap reads the repeat-bonus
-	// spread, so it tracks how much less often a word kept the concept's
-	// company, not the shared dopamine that lifts every name alike.
+	// Naming is cross-situational: a bond's strength is the reliability
+	// of the pairing, not the count of meetings. The smoothing mass is
+	// about one co-occurrence, so a single meeting reads as half
+	// evidence; the gain scales reliability into link-weight range with
+	// dopamine deciding how readily words bond at all; bonds that would
+	// start below the write floor are not worth an edge.
+	namesSmoothing    = 0.3
+	namesGainBase     = 0.6
+	namesDopamineGain = 0.75
+	namesMaxWeight    = 0.95
+	namesWriteFloor   = 0.1
+	// A name well below the concept's firmest is a weak pointer, spoken
+	// tentatively. The gap reads the reliability spread, so it tracks
+	// how much less faithfully a word kept the concept's company, not
+	// the shared dopamine gain that lifts every name alike.
 	namesContrastGap = 0.12
 )
 
@@ -97,25 +105,30 @@ func (d *Daemon) growConcepts() (born, named int) {
 		fmt.Fprintf(d.out, "naming error: %v\n", err)
 		return born, 0
 	}
-	da := d.chem.Snapshot().Dopamine
+	conceptTotal := map[uint64]float64{}
 	for _, p := range pairs {
-		// Firmness is how heavily the word stayed bound to the concept's
-		// episodes. Sleep folds repeated co-occurrences into one prototype
-		// edge by summing their weights, so accumulated affinity, not the
-		// distinct episode count that merge collapses to one, carries how
-		// often the word kept the concept's company.
-		extra := p.Affinity/linkBaseWeight - 1
-		if extra < 0 {
-			extra = 0
-		}
-		w := namesBaseWeight + namesDopamineGain*da + namesRepeatBonus*extra
+		conceptTotal[p.Concept] += p.Cooc
+	}
+	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
+	for _, p := range pairs {
+		// Cross-situational reliability: the share of the word's company
+		// that lands on this concept, blended with the share of the
+		// concept's company that is this word. A promiscuous word splits
+		// its mass across its targets and bonds weakly to each; a word
+		// paired with one concept nearly every time keeps almost all of
+		// its mass there. The bond is set from the fresh ratio, down as
+		// well as up, so a word that drifts to new company loosens its
+		// old bonds at the next consolidation.
+		pcw := p.Cooc / (p.WordTotal + namesSmoothing)
+		pwc := p.Cooc / (conceptTotal[p.Concept] + namesSmoothing)
+		w := math.Sqrt(pcw*pwc) * gain
 		if w > namesMaxWeight {
 			w = namesMaxWeight
 		}
-		if w <= p.Existing {
+		if p.Existing == 0 && w < namesWriteFloor {
 			continue
 		}
-		if err := d.store.LinkRel(p.Word, p.Concept, memory.RelNames, w); err != nil {
+		if err := d.store.SetLinkRel(p.Word, p.Concept, memory.RelNames, w); err != nil {
 			fmt.Fprintf(d.out, "naming link error: %v\n", err)
 			continue
 		}

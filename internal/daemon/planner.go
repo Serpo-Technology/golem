@@ -66,11 +66,11 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 }
 
 // namingContrast measures how firmly a phrase names a concept against the
-// concept's firmest name. The repeat bonus is the only part of a naming
-// weight that varies per word; the dopamine that lifts every name the same
+// concept's firmest name. Reliability is the only part of a naming weight
+// that varies per word; the dopamine gain that lifts every name the same
 // cancels in the gap, so a large gap means this word kept the concept's
-// company far less often than its best-established name and is a weak
-// pointer, not a settled one.
+// company far less faithfully than its best-established name and is a
+// weak pointer, not a settled one.
 func (d *Daemon) namingContrast(phrase string, conceptID uint64) (asked, top float64) {
 	if into, err := d.store.LinksToRel([]uint64{conceptID}, memory.RelNames); err == nil {
 		for _, e := range into {

@@ -319,3 +319,81 @@ func TestQuestionsDoNotBecomeConcepts(t *testing.T) {
 		t.Fatalf("the lived shape should still distil: %+v", concepts)
 	}
 }
+
+// A word scattered across many concepts splits its mass and bonds
+// weakly to each; a word faithful to one concept bonds firmly. The
+// textbook cross-situational contrast.
+func TestPromiscuousWordBondsWeakly(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+
+	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
+	cpu := feedShape(t, s, "vitals", "cpu load went high", 4, base.Add(time.Minute))
+	net := feedShape(t, s, "syslog", "Connection refused peer", 4, base.Add(2*time.Minute))
+
+	// "disk" keeps company only with the disk shape; "low" is said once
+	// into each of the three.
+	d.mintWords("disk", "en", 0, disk)
+	scattered := []recentMoment{disk[0], cpu[0], net[0]}
+	d.mintWords("low", "en", 0, scattered)
+
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+
+	diskConcept, _ := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	var faithful, promiscuous float64
+	words, _ := s.WordNodesByForms([]string{"disk", "low"})
+	for _, w := range words {
+		bond := edgeWeightRel(t, s, w.ID, diskConcept.ID, memory.RelNames)
+		if w.Content == "disk" {
+			faithful = bond
+		} else {
+			promiscuous = bond
+		}
+	}
+	if faithful == 0 {
+		t.Fatal("the faithful word should bond to its concept")
+	}
+	if promiscuous >= faithful/2 {
+		t.Fatalf("a scattered word should bond far more weakly: faithful %.2f, scattered %.2f",
+			faithful, promiscuous)
+	}
+}
+
+// Reliability is recomputed and set at each consolidation, down as well
+// as up: a bond formed when a word kept one concept's company loosens
+// once the word drifts to other company.
+func TestBondLoosensWhenMassShifts(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+
+	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
+	d.mintWords("blinker", "en", 0, disk[:1])
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+	diskConcept, _ := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	words, _ := s.WordNodesByForms([]string{"blinker"})
+	before := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+	if before == 0 {
+		t.Fatal("the first pairing should bond, even if weakly")
+	}
+
+	// The word then keeps company with a different recurring shape.
+	cpu := feedShape(t, s, "vitals", "cpu load went high", 4, base.Add(time.Hour))
+	for range 3 {
+		d.mintWords("blinker", "en", 0, cpu[:1])
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+
+	after := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+	if after >= before {
+		t.Fatalf("drifting company should loosen the old bond: before %.2f, after %.2f", before, after)
+	}
+}

@@ -174,32 +174,47 @@ func (s *Store) LinksToRel(ids []uint64, rel string) ([]LinkEdge, error) {
 	return out, rows.Err()
 }
 
-// NamingPair is one word-concept bond the naming pass should consider:
-// the word has kept company with this many episodes that ground the
-// concept, and Existing is the bond's current strength (zero when new).
+// NamingPair is one word-concept pairing the naming pass should weigh:
+// the co-occurrence mass between the word and the concept's grounded
+// episodes, the word's total episodic company for the denominator, and
+// the bond's current strength (zero when new). Mass survives the merge
+// pass because absorbed edges fold onto prototypes with summed weights.
 type NamingPair struct {
-	Word     uint64
-	Concept  uint64
-	Episodes int
-	Affinity float64 // summed co-occurrence weight, firmer the more company kept
-	Existing float64
+	Word      uint64
+	Concept   uint64
+	Cooc      float64 // co-occurrence mass with this concept's episodes
+	WordTotal float64 // the word's mass across all lived episodes
+	Existing  float64
 }
 
 // NamingPairs aggregates word-to-concept co-occurrence over the whole
-// graph: for every word node, the concepts grounding the episodes the
-// word has bound to.
+// graph. Utterance episodes count for nothing on either side: a word
+// always keeps company with its own saying, and that company says
+// nothing about the world.
 func (s *Store) NamingPairs() ([]NamingPair, error) {
 	rows, err := s.db.Query(`
-		SELECT w.id, c.id, COUNT(DISTINCT l1.to_id), SUM(l1.weight),
+		WITH wt AS (
+			SELECT l.from_id AS wid, SUM(l.weight) AS total
+			FROM links l
+			JOIN fragments w2 ON w2.id = l.from_id AND w2.kind = ?
+			JOIN fragments e2 ON e2.id = l.to_id AND e2.kind = ? AND e2.channel <> ?
+			WHERE l.rel = ?
+			GROUP BY l.from_id
+		)
+		SELECT w.id, c.id, SUM(l1.weight), wt.total,
 		       COALESCE((SELECT weight FROM links
 		                 WHERE from_id = w.id AND to_id = c.id AND rel = ?), 0)
 		FROM fragments w
 		JOIN links l1 ON l1.from_id = w.id AND l1.rel = ?
-		JOIN links l2 ON l2.to_id = l1.to_id AND l2.rel = ?
+		JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel <> ?
+		JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
 		JOIN fragments c ON c.id = l2.from_id AND c.kind = ?
+		JOIN wt ON wt.wid = w.id
 		WHERE w.kind = ?
 		GROUP BY w.id, c.id`,
-		RelNames, RelTemporal, RelGrounds, KindConcept, KindWord)
+		KindWord, KindEpisodic, utteranceChannel, RelTemporal,
+		RelNames, RelTemporal, KindEpisodic, utteranceChannel,
+		RelGrounds, KindConcept, KindWord)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +222,7 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 	var out []NamingPair
 	for rows.Next() {
 		var p NamingPair
-		if err := rows.Scan(&p.Word, &p.Concept, &p.Episodes, &p.Affinity, &p.Existing); err != nil {
+		if err := rows.Scan(&p.Word, &p.Concept, &p.Cooc, &p.WordTotal, &p.Existing); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
