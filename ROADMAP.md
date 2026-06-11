@@ -178,11 +178,16 @@ event stream that still answers the same recall queries.
 
 Goal: see the graph before building the GUI that edits it.
 
-- [ ] `golem dump --dot` graph export and `golem chem --watch` live
-      chemistry.
-- [ ] Structured event log for every encode, prune, link, and proposal.
+- [x] `golem dump --dot` graph export and `golem chem --watch` live
+      chemistry. Dump now carries the link graph on the wire; the dot
+      output renders with graphviz as-is.
+- [x] Structured event log for every encode, prune, link, and proposal:
+      one JSON object per line in events.jsonl, plus replay, merge,
+      sleep, approval, denial, and autonomous entries. Size-capped with
+      one rotated generation, so the trail cannot quietly eat the disk.
 - [ ] GME (the GUI editor) starts only after the storage schema has
-      survived a few weeks without changing.
+      survived a few weeks without changing. The fragments table gained
+      its count column on 2026-06-11, which restarts that clock.
 
 ## Known limitations
 

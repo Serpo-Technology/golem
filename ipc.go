@@ -27,11 +27,20 @@ type Response struct {
 	Status    *StatusInfo     `json:"status,omitempty"`
 	Chem      *LimbicState    `json:"chem,omitempty"`
 	Fragments []*FragmentInfo `json:"fragments,omitempty"`
+	Links     []*LinkInfo     `json:"links,omitempty"`
 	Observe   *ObserveResult  `json:"observe,omitempty"`
 	Decision  *DecisionInfo   `json:"decision,omitempty"`
 	Action    *ActionResult   `json:"action,omitempty"`
 	Habits    []*HabitInfo    `json:"habits,omitempty"`
 	Audit     []*AuditInfo    `json:"audit,omitempty"`
+}
+
+// LinkInfo is the wire form of one association edge, set on dump so the
+// graph can be exported whole.
+type LinkInfo struct {
+	From   uint64  `json:"from"`
+	To     uint64  `json:"to"`
+	Weight float64 `json:"weight"`
 }
 
 // DecisionInfo is the wire form of a proposal: a winning command, or a

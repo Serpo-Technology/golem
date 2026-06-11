@@ -249,6 +249,7 @@ func (d *Daemon) approveFinish(dec Decision, ran, ok bool, outcome string, at ti
 		return Habit{}, err
 	}
 	d.habitsChanged()
+	d.event(Event{Ev: "approval", Cue: dec.CueTemplate, Action: c.Command, Outcome: outcome})
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "approved: "+outcome); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
@@ -301,6 +302,7 @@ func (d *Daemon) autorunFinish(dec Decision, trigger string, ran, ok bool, outco
 		d.chem.RaiseTrust(trustOnAutonomous)
 	}
 	d.habitsChanged()
+	d.event(Event{Ev: "autonomous", Cue: dec.CueTemplate, Action: c.Command, Outcome: verb + ": " + outcome})
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, verb+": "+outcome); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
@@ -342,6 +344,7 @@ func (d *Daemon) deny(dec Decision, at time.Time) (Habit, error) {
 		return Habit{}, err
 	}
 	d.habitsChanged()
+	d.event(Event{Ev: "denial", Cue: dec.CueTemplate, Action: c.Command})
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "denied"); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}

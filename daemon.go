@@ -74,6 +74,24 @@ type Daemon struct {
 	running    bool
 	runningCmd string
 	execDone   chan execResult
+
+	// events is the structured trail (nil when it could not open; the
+	// brain never dies for its diary).
+	events *EventLog
+}
+
+// event stamps and appends one line to the structured trail. A write
+// error closes the trail rather than spamming the daemon log.
+func (d *Daemon) event(ev Event) {
+	if d.events == nil {
+		return
+	}
+	ev.At = time.Now().UnixMilli()
+	if err := d.events.Append(ev); err != nil {
+		fmt.Fprintf(d.out, "event log failed, closing it: %v\n", err)
+		d.events.Close()
+		d.events = nil
+	}
 }
 
 // execResult is a finished command on its way back into the brain loop.
@@ -182,6 +200,11 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 	if err := d.loadModels(); err != nil {
 		store.Close()
 		return nil, err
+	}
+	if events, err := OpenEventLog(home); err == nil {
+		d.events = events
+	} else {
+		fmt.Fprintf(out, "event log unavailable: %v\n", err)
 	}
 	return d, nil
 }
@@ -539,6 +562,7 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 	}
 	st.Conscious++
 	d.hot.put(frag)
+	d.event(Event{Ev: "encode", Channel: o.Channel, ID: id, Bits: bits, Tpl: clip(tpl, 120)})
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
 		bits, o.Channel, clip(o.Content, 140), clip(tpl, 140), frag.Limbic.Noradrenaline, id)
 
@@ -606,6 +630,7 @@ func (d *Daemon) bindTo(f *Fragment, targets []recentMoment) []uint64 {
 			continue
 		}
 		d.store.Link(r.id, f.ID, w)
+		d.event(Event{Ev: "link", From: f.ID, To: r.id, Weight: w})
 		linked = append(linked, r.id)
 	}
 	if confirmed {
@@ -795,6 +820,10 @@ func (d *Daemon) sleepCycle() {
 	d.sleeps++
 	d.lastSleep = time.Now()
 	held, _ := d.store.Count()
+	d.event(Event{Ev: "replay", Count: woven})
+	d.event(Event{Ev: "prune", Count: pruned})
+	d.event(Event{Ev: "merge", Count: merged})
+	d.event(Event{Ev: "sleep", Count: held})
 	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d held.\n",
 		d.sleeps, woven, pruned, merged, held)
 }
@@ -833,6 +862,9 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	}
 	d.flushModels()
 	d.store.Checkpoint()
+	d.event(Event{Ev: "prune", Count: pruned})
+	d.event(Event{Ev: "sleep"})
+	d.events.Close()
 	d.store.Close()
 	os.Remove(sock)
 	fmt.Fprintln(d.out, "golem asleep.")
@@ -977,7 +1009,12 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			info.LinkCount = degrees[f.ID]
 			infos = append(infos, info)
 		}
-		return Response{OK: true, Fragments: infos}, false, false
+		edges, _ := d.store.AllLinks()
+		links := make([]*LinkInfo, 0, len(edges))
+		for _, e := range edges {
+			links = append(links, &LinkInfo{From: e.From, To: e.To, Weight: e.Weight})
+		}
+		return Response{OK: true, Fragments: infos, Links: links}, false, false
 
 	case "teach":
 		if req.Content == "" || req.Command == "" {
@@ -1014,6 +1051,14 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 				return Response{}, true, false
 			}
 		}
+		outcome := "proposed"
+		switch {
+		case dec.Proposed == nil:
+			outcome = "ungrounded"
+		case dec.Conflict:
+			outcome = "conflict"
+		}
+		d.event(Event{Ev: "proposal", Cue: dec.CueTemplate, Action: di.Proposed, Outcome: outcome})
 		d.pending = &dec
 		return Response{OK: true, Decision: di}, false, false
 

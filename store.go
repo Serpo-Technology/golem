@@ -603,6 +603,24 @@ func (s *Store) FragmentsByIDs(ids []uint64) ([]*Fragment, error) {
 		WHERE id IN (`+strings.Join(marks, ",")+`)`, args...)
 }
 
+// AllLinks returns the whole association graph, for export.
+func (s *Store) AllLinks() ([]LinkEdge, error) {
+	rows, err := s.db.Query(`SELECT from_id, to_id, weight FROM links`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LinkEdge
+	for rows.Next() {
+		var e LinkEdge
+		if err := rows.Scan(&e.From, &e.To, &e.Weight); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // LinkCounts returns each fragment's out-degree, for display.
 func (s *Store) LinkCounts() (map[uint64]int, error) {
 	rows, err := s.db.Query(`SELECT from_id, COUNT(*) FROM links GROUP BY from_id`)

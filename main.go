@@ -19,6 +19,7 @@ Usage:
   golem demo consolidate          one day, one night: merge and replay
   golem status                    show daemon status
   golem chem                      show current neurochemistry
+  golem chem --watch              print it once a second until interrupted
   golem observe <channel> <text>  feed one observation to the daemon
   golem tell <words>              speak to GOLEM; the words become a memory
                                   bound to the moments around them, and the
@@ -39,6 +40,7 @@ Usage:
   golem habits                    list grounded cue-and-command pairs
   golem audit                     show the recent decision trail
   golem dump                      list every fragment held in memory
+  golem dump --dot                export the memory graph as graphviz dot
   golem stop                      ask the daemon to sleep once and shut down
   golem shellhook                 print the zsh hook that feeds the shell channel
   golem launchd                   print a launchd plist for start-at-login
@@ -89,10 +91,19 @@ func main() {
 		printStatus(resp.Status)
 
 	case "chem":
-		resp := call(home, Request{Cmd: "chem"})
-		c := resp.Chem
-		fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
-			c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
+		watch := len(args) >= 2 && args[1] == "--watch"
+		for {
+			resp := call(home, Request{Cmd: "chem"})
+			c := resp.Chem
+			if !watch {
+				fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
+					c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
+				break
+			}
+			fmt.Printf("%s  dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
+				time.Now().Format("15:04:05"), c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
+			time.Sleep(time.Second)
+		}
 
 	case "observe":
 		if len(args) < 3 {
@@ -129,6 +140,10 @@ func main() {
 
 	case "dump":
 		resp := call(home, Request{Cmd: "dump"})
+		if len(args) >= 2 && args[1] == "--dot" {
+			fmt.Print(renderDOT(resp.Fragments, resp.Links))
+			return
+		}
 		if len(resp.Fragments) == 0 {
 			fmt.Println("memory is empty.")
 			return
