@@ -1213,7 +1213,12 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 		// The grammar reads the utterance's force and the planner
 		// decides the reply: an answer, an admission, or a staged
 		// proposal. Verbatim memory above is untouched by any of it.
+		// The answer language follows the question's: detected from
+		// the closed class, with the spoken --lang tag as fallback.
 		frame := Parse(req.Content, d.resolveConcept)
+		if frame.Lang == "" && req.Lang != "" {
+			frame.Lang = req.Lang
+		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content)
 		// What do these words point at? The new fragment just bound to the
 		// recent past, so a spread from it is GOLEM's side of the exchange.

@@ -158,6 +158,7 @@ func (t Term) speak() string {
 // words that resolved to nothing.
 type Frame struct {
 	Force    Force
+	Lang     string      // the language the utterance arrived in; answers go back the same way
 	Wh       string      // the interrogative that opened a question: what, which, when, where, why, who, how
 	Agent    Term        // who or what the clause is about
 	Action   Term        // the predicate; for innate verbs only Phrase is set
@@ -204,6 +205,11 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 	f := Frame{Force: ForceStatement}
 	if len(tokens) == 0 {
 		return f
+	}
+	// The closed classes share no forms, so one hit decides the grammar
+	// the utterance is read with.
+	if detectTurkish(tokens) {
+		return parseTurkish(tokens, question, resolve)
 	}
 	switch {
 	case innateCategory[tokens[0]] == catWh:
@@ -368,12 +374,17 @@ func resolveTerm(phrase string, resolve func(string) *Fragment) Term {
 	return Term{Concept: resolve(phrase), Phrase: phrase}
 }
 
-// Realize runs the innate grammar forward: a frame becomes an English
-// sentence, assembled as adjunct, subject, predicate, complement, never
-// as a stored string. Oxytocin decides whether an inferential claim
-// asserts ("usually follows") or hedges ("may follow"): a system whose
-// judgement was recently corrected should sound like it.
+// Realize runs the innate grammar forward: a frame becomes a sentence,
+// assembled as adjunct, subject, predicate, complement, never as a
+// stored string. The frame's language picks the parameter setting; the
+// chemistry reads the same either way. Oxytocin decides whether an
+// inferential claim asserts ("usually follows") or hedges ("may
+// follow"): a system whose judgement was recently corrected should
+// sound like it.
 func Realize(f Frame, chem LimbicState) string {
+	if f.Lang == "tr" {
+		return realizeTurkish(f, chem)
+	}
 	var b strings.Builder
 	// Temporal adjuncts front the clause only when the predicate is the
 	// ordered event itself; for "know" the anchors live inside the

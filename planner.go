@@ -334,6 +334,13 @@ func (d *Daemon) conceptDecision(c *Fragment) (Decision, error) {
 	return dec, nil
 }
 
+// realizeAs answers in the language the question arrived in: the
+// frame's language is the one knob the planner sets on every reply.
+func (d *Daemon) realizeAs(lang string, f Frame, chem LimbicState) string {
+	f.Lang = lang
+	return Realize(f, chem)
+}
+
 // plan acts on one parsed frame. It returns the sentence GOLEM says
 // (empty when silence is the honest reply) and, for command force, the
 // staged proposal. All planning reads memory; the only side effects are
@@ -358,7 +365,7 @@ func (d *Daemon) plan(frame Frame, raw string) (string, *DecisionInfo) {
 		// A statement teaches; GOLEM only speaks up when curiosity about
 		// an unknown word wins.
 		if len(frame.Unknown) > 0 && d.chem.Snapshot().Dopamine >= curiosityGate {
-			return Realize(Frame{Force: ForceQuestion, Action: Term{Phrase: "be"},
+			return d.realizeAs(frame.Lang, Frame{Force: ForceQuestion, Action: Term{Phrase: "be"},
 				Patient: Term{Phrase: frame.Unknown[0]}}, d.chem.Snapshot()), nil
 		}
 		return "", nil
@@ -388,7 +395,7 @@ func (d *Daemon) planQuestion(frame Frame) string {
 	case frame.Wh == "why", frame.Wh == "who":
 		// No causal model and no agents: the honest answer is the gap
 		// itself.
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
 	case frame.Counting:
 		return d.planCount(frame, quals, chem)
@@ -415,6 +422,12 @@ func (d *Daemon) planQuestion(frame Frame) string {
 			kind = "action"
 		}
 		kindWord := indefinite(kind)
+		if frame.Lang == "tr" {
+			kindWord = "bir şey"
+			if c.Category == "verb" {
+				kindWord = "bir eylem"
+			}
+		}
 		tentative := false
 		var parts []string
 		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {
@@ -424,12 +437,12 @@ func (d *Daemon) planQuestion(frame Frame) string {
 			// tentative pointer rather than asserted as fact.
 			asked, top := d.namingContrast(topic.Phrase, c.ID)
 			tentative = asked > 0 && top-asked > namesContrastGap
-			parts = append(parts, Realize(Frame{Force: ForceStatement,
+			parts = append(parts, d.realizeAs(frame.Lang, Frame{Force: ForceStatement,
 				Agent:  Term{Phrase: topic.Phrase},
 				Action: Term{Phrase: "name"}, Patient: Term{Phrase: c.Content},
 				Hedge: tentative}, chem))
 		} else {
-			parts = append(parts, Realize(Frame{Force: ForceStatement,
+			parts = append(parts, d.realizeAs(frame.Lang, Frame{Force: ForceStatement,
 				Agent:  Term{Phrase: c.Content},
 				Action: Term{Phrase: "be"}, Patient: Term{Phrase: kindWord}}, chem))
 		}
@@ -437,17 +450,17 @@ func (d *Daemon) planQuestion(frame Frame) string {
 		// pointer does not borrow that concept's tally as if it were the
 		// word's own.
 		if n := tally[c.ID]; n > 0 && !tentative {
-			parts = append(parts, Realize(Frame{Force: ForceStatement,
+			parts = append(parts, d.realizeAs(frame.Lang, Frame{Force: ForceStatement,
 				Action:  Term{Phrase: "see"},
 				Patient: Term{Phrase: "it"}, Times: n}, chem))
 		}
 		return strings.Join(parts, " ")
 	}
 	if topic.Phrase != "" {
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Patient: Term{Phrase: topic.Phrase}}, chem)
 	}
-	return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+	return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 		Negate: true, Patient: Term{Phrase: "that"}}, chem)
 }
 
@@ -503,7 +516,7 @@ func (d *Daemon) planSuccession(frame Frame, quals []Qualifier, chem LimbicState
 		}
 	}
 	if len(strong) == 0 {
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Past: frame.Past, Quals: outQuals}, chem)
 	}
 
@@ -522,7 +535,7 @@ func (d *Daemon) planSuccession(frame Frame, quals []Qualifier, chem LimbicState
 
 	if quals[0].Rel == "before" && len(outQuals) == 1 {
 		// "make test usually precedes make deploy."
-		return Realize(Frame{
+		return d.realizeAs(frame.Lang, Frame{
 			Force:   ForceStatement,
 			Agent:   subject,
 			Action:  Term{Phrase: "precede"},
@@ -538,7 +551,7 @@ func (d *Daemon) planSuccession(frame Frame, quals []Qualifier, chem LimbicState
 	if len(outQuals) > 1 {
 		verb = "happen"
 	}
-	return Realize(Frame{
+	return d.realizeAs(frame.Lang, Frame{
 		Force:  ForceStatement,
 		Agent:  subject,
 		Action: Term{Phrase: verb},
@@ -567,12 +580,12 @@ func (d *Daemon) planWhence(frame Frame, quals []Qualifier, chem LimbicState) st
 	topic := whenceAnchor(frame, quals)
 	ids, face := d.anchorEpisodes(topic)
 	if len(ids) == 0 {
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
 	}
 	frags, err := d.fragmentsByIDsTiered(ids)
 	if err != nil || len(frags) == 0 {
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
 	}
 	newest := frags[0]
@@ -589,7 +602,7 @@ func (d *Daemon) planWhence(frame Frame, quals []Qualifier, chem LimbicState) st
 	}
 	// "Make test last happened on Jun 11 at 09:14." / "Make test
 	// happened on the shell channel."
-	return Realize(Frame{
+	return d.realizeAs(frame.Lang, Frame{
 		Force:  ForceStatement,
 		Agent:  face,
 		Action: Term{Phrase: "happen"},
@@ -610,11 +623,11 @@ func (d *Daemon) planCount(frame Frame, quals []Qualifier, chem LimbicState) str
 			for _, f := range frags {
 				n += f.Count
 			}
-			return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "see"},
+			return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "see"},
 				Patient: face, Times: n}, chem)
 		}
 	}
-	return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+	return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 		Negate: true, Patient: Term{Phrase: frame.Wh}}, chem)
 }
 
@@ -641,7 +654,7 @@ func (d *Daemon) planCommand(frame Frame, raw string) (string, *DecisionInfo) {
 	}
 
 	if dec.Proposed == nil {
-		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
+		return d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
 			Negate: true, Patient: Term{Phrase: "how to " + raw}}, chem), nil
 	}
 
@@ -656,7 +669,7 @@ func (d *Daemon) planCommand(frame Frame, raw string) (string, *DecisionInfo) {
 	if dec.Conflict {
 		return dec.Question, di
 	}
-	say := Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "propose"},
+	say := d.realizeAs(frame.Lang, Frame{Force: ForceStatement, Action: Term{Phrase: "propose"},
 		Patient: Term{Phrase: dec.Proposed.Command}}, chem)
 	return say, di
 }
