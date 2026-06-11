@@ -289,6 +289,15 @@ go build -o golem ./cmd/golem
 
 > **Note:** GOLEM is designed to run in the background of your OS, observing and learning your patterns without the need for constant prompting.
 
+### Configuration
+
+The daemon reads `~/.golem/config.json` and writes one full of defaults on first run. [config.example.json](config.example.json) in the repository shows every field at its default, and a test pins it to the code, so the example cannot drift. The fields most worth knowing:
+
+- `channels` selects the built-in senses: `vitals` and `syslog` ship on; add `watch_dirs` for file events, `tail_files` for the reading channel, `watch_urls` for the web channel, `screen` for the frontmost app, and `voice` to speak replies.
+- `execute_enabled` and `execute_allowlist` are two of the three execution gates and both ship closed: nothing runs for real until you switch execution on and allowlist commands by hand.
+- `untrusted_channels` (the web by default) marks senses whose moments encode lightly and can never cue a habit or ground an action.
+- `surprise_threshold`, `z_gate`, and `predictor_windows` tune what reaches consciousness per channel; the sleep settings pace consolidation.
+
 ---
 
 ## Future Roadmap

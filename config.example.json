@@ -1,0 +1,36 @@
+{
+  "surprise_threshold": 2,
+  "predictor_window": 256,
+  "sleep_pressure_gate": 0.8,
+  "input_silence_sec": 1,
+  "calm_before_sleep_sec": 1.5,
+  "sleep_interval_sec": 600,
+  "nightly_decay": 0.1,
+  "prune_floor": 0.1,
+  "z_gate": 2.5,
+  "calibration_warmup": 30,
+  "encode_burst": 6,
+  "encode_refill_sec": 2,
+  "predictor_windows": {
+    "syslog": 8192
+  },
+  "channels": {
+    "synthetic": false,
+    "vitals": true,
+    "syslog": true,
+    "watch_dirs": [],
+    "tail_files": [],
+    "watch_urls": [],
+    "screen": false,
+    "voice": false
+  },
+  "graduation_approvals": 3,
+  "conflict_margin": 0.15,
+  "execute_enabled": false,
+  "execute_allowlist": [],
+  "execute_timeout_sec": 30,
+  "execute_parallel": 4,
+  "auto_cue_cooldown_sec": 60,
+  "web_poll_sec": 900,
+  "untrusted_channels": ["web"]
+}
