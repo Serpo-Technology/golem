@@ -49,6 +49,16 @@ type Config struct {
 	// relative gate applies.
 	ZGate             float64 `json:"z_gate"`
 	CalibrationWarmup int     `json:"calibration_warmup"`
+	// EncodeBurst and EncodeRefillSec are the per-channel refractory on
+	// memory formation: a channel may encode EncodeBurst fragments back to
+	// back, then earns one more per EncodeRefillSec. Surprises beyond that
+	// are counted and collapsed into a single storm-summary moment.
+	EncodeBurst     float64 `json:"encode_burst"`
+	EncodeRefillSec float64 `json:"encode_refill_sec"`
+	// PredictorWindows overrides the habituation window per channel. A
+	// chatty channel needs a longer memory to recognize its own long tail
+	// of recurring shapes.
+	PredictorWindows map[string]float64 `json:"predictor_windows"`
 	// Channels selects which built-in sensors the daemon runs. External
 	// senses (the shell hook, scripts) need no entry here; anything can
 	// feed any channel through golem observe.
@@ -80,6 +90,9 @@ func DefaultConfig() Config {
 		PruneFloor:         defaultPruneFloor,
 		ZGate:              defaultZGate,
 		CalibrationWarmup:  defaultCalibWarmup,
+		EncodeBurst:        6,
+		EncodeRefillSec:    2,
+		PredictorWindows:   map[string]float64{"syslog": 8192},
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,

@@ -40,9 +40,10 @@ type StatusInfo struct {
 }
 
 type ChannelStat struct {
-	Observed  int   `json:"observed"`
-	Conscious int   `json:"conscious"`
-	Dropped   int64 `json:"dropped"`
+	Observed   int   `json:"observed"`
+	Conscious  int   `json:"conscious"`
+	Suppressed int   `json:"suppressed"`
+	Dropped    int64 `json:"dropped"`
 }
 
 // FragmentInfo is the wire form of a Fragment. Activation is set on recall

@@ -16,6 +16,7 @@ The current build is the observation half of the design, on one synthetic log ch
 - Retrieval is by feeling: "show me when things felt wrong" returns the fragment with the highest noradrenaline at encoding.
 - The daemon form (`golem run`) accepts observations on any number of named channels and keeps its memory in sqlite under `~/.golem`, so fragments survive restarts and hard kills. Channel models persist too, flushed at each sleep and at shutdown.
 - Moments that occur near each other in time become linked. When the same pairing keeps recurring, the bond strengthens and dopamine rises, which raises the binding rate in turn.
+- Memory formation is rate limited per channel: an error storm collapses into a few exemplars plus one summary moment that records the storm's size.
 - `golem tell` is the linguistic channel: your words always encode, bind to the moments around them, and the reply is what they bring to mind. Words are pointers to experience.
 - `golem recall` returns direct matches plus the context cloud reached through the link graph, ranked by activation. Recall strengthens every path it walks; sleep decays the paths nothing walks.
 - A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `tell`, `recall`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.

@@ -47,6 +47,51 @@ type Daemon struct {
 	// recent holds the just-encoded moments that new fragments bind to.
 	// It serves as the hippocampal present.
 	recent []recentMoment
+
+	// governors throttle memory formation per channel, and pendingStorm
+	// counts the surprises each throttle suppressed until they can be
+	// summarized as one moment.
+	governors    map[string]*tokenBucket
+	pendingStorm map[string]int
+}
+
+// tokenBucket is the refractory on encoding: a burst allowance that
+// refills with time. Suppressing formation is cheaper and saner than
+// letting a storm mint hundreds of near-identical memories.
+type tokenBucket struct {
+	tokens float64
+	max    float64
+	refill float64 // tokens per second
+	last   time.Time
+}
+
+func (b *tokenBucket) advance(now time.Time) {
+	// Observation timestamps can lag the bucket's creation; time only
+	// ever moves the bucket forward.
+	if !now.After(b.last) {
+		return
+	}
+	b.tokens += now.Sub(b.last).Seconds() * b.refill
+	if b.tokens > b.max {
+		b.tokens = b.max
+	}
+	b.last = now
+}
+
+func (b *tokenBucket) take(now time.Time) bool {
+	b.advance(now)
+	if b.tokens >= 1 {
+		b.tokens--
+		return true
+	}
+	return false
+}
+
+// full reports whether the bucket has recovered its whole burst
+// allowance, which is what counts as a real lull on the channel.
+func (b *tokenBucket) full(now time.Time) bool {
+	b.advance(now)
+	return b.tokens >= b.max
 }
 
 type recentMoment struct {
@@ -87,18 +132,20 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		return nil, err
 	}
 	d := &Daemon{
-		home:        home,
-		cfg:         cfg,
-		out:         out,
-		store:       store,
-		chem:        NewNeurochemistry(),
-		predictors:  make(map[string]*Predictor),
-		calibrators: make(map[string]*Calibrator),
-		stats:       make(map[string]*ChannelStat),
-		drops:       make(map[string]*atomic.Int64),
-		obs:         make(chan Observation, 256),
-		reqs:        make(chan ipcReq),
-		stop:        make(chan struct{}),
+		home:         home,
+		cfg:          cfg,
+		out:          out,
+		store:        store,
+		chem:         NewNeurochemistry(),
+		predictors:   make(map[string]*Predictor),
+		calibrators:  make(map[string]*Calibrator),
+		stats:        make(map[string]*ChannelStat),
+		drops:        make(map[string]*atomic.Int64),
+		governors:    make(map[string]*tokenBucket),
+		pendingStorm: make(map[string]int),
+		obs:          make(chan Observation, 256),
+		reqs:         make(chan ipcReq),
+		stop:         make(chan struct{}),
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -119,7 +166,7 @@ func (d *Daemon) loadModels() error {
 		if err != nil {
 			return err
 		}
-		p := NewPredictor(d.cfg.PredictorWindow)
+		p := NewPredictor(d.windowFor(ch))
 		p.Seed(counts)
 		d.predictors[ch] = p
 	}
@@ -135,13 +182,45 @@ func (d *Daemon) loadModels() error {
 	return nil
 }
 
+// windowFor resolves a channel's habituation window. Both the lazy
+// creation path and model reload must use it, or a restart would rebuild
+// a long-window model under a short window and compact it to nothing.
+func (d *Daemon) windowFor(channel string) float64 {
+	if w, ok := d.cfg.PredictorWindows[channel]; ok {
+		return w
+	}
+	return d.cfg.PredictorWindow
+}
+
 func (d *Daemon) predictor(channel string) *Predictor {
 	p, ok := d.predictors[channel]
 	if !ok {
-		p = NewPredictor(d.cfg.PredictorWindow)
+		p = NewPredictor(d.windowFor(channel))
 		d.predictors[channel] = p
 	}
 	return p
+}
+
+func (d *Daemon) governor(channel string) *tokenBucket {
+	b, ok := d.governors[channel]
+	if !ok {
+		burst := d.cfg.EncodeBurst
+		if burst < 1 {
+			burst = 1
+		}
+		refillSec := d.cfg.EncodeRefillSec
+		if refillSec <= 0 {
+			refillSec = 2
+		}
+		b = &tokenBucket{
+			tokens: burst,
+			max:    burst,
+			refill: 1 / refillSec,
+			last:   time.Now(),
+		}
+		d.governors[channel] = b
+	}
+	return b
 }
 
 func (d *Daemon) calibrator(channel string) *Calibrator {
@@ -220,6 +299,7 @@ func (d *Daemon) Run() error {
 
 		case <-homeostasis.C:
 			d.chem.Decay()
+			d.flushStorms(time.Now())
 			if time.Since(d.lastSurprise) > d.cfg.CalmBeforeSleep() {
 				d.chem.BuildSleepPressure()
 			}
@@ -336,6 +416,15 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 		return ObserveResult{Bits: bits}
 	}
 
+	// The refractory: past the burst allowance, a storm of surprises is
+	// counted instead of encoded, and later collapsed into one summary
+	// moment. The predictor and calibrator have already learned the line.
+	if !forced && !d.governor(o.Channel).take(o.At) {
+		st.Suppressed++
+		d.pendingStorm[o.Channel]++
+		return ObserveResult{Bits: bits}
+	}
+
 	d.lastSurprise = time.Now()
 	d.chem.SpikeNoradrenaline(bits * naSpikePerBit)
 	d.chem.SuppressSleep(sleepSuppressOnSurprise)
@@ -355,7 +444,7 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 	}
 	st.Conscious++
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
-		bits, o.Channel, o.Content, tpl, frag.Limbic.Noradrenaline, id)
+		bits, o.Channel, clip(o.Content, 140), clip(tpl, 140), frag.Limbic.Noradrenaline, id)
 
 	if bind {
 		if linked := d.linkMoment(frag); len(linked) > 0 {
@@ -435,6 +524,36 @@ func fmtIDs(ids []uint64) string {
 		parts[i] = fmt.Sprintf("#%d", id)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// clip keeps diary lines readable and the log file honest; stored content
+// is not affected.
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "..."
+}
+
+// flushStorms turns each channel's suppressed surprises into one summary
+// moment once the storm has eased, where eased means the channel's whole
+// burst allowance has recovered. Anything sooner would fragment one storm
+// into a stream of partial summaries. The summary is forced: a storm is
+// always worth one memory, and it binds to the storm's own exemplars
+// still sitting in the recent window.
+func (d *Daemon) flushStorms(now time.Time) {
+	for ch, n := range d.pendingStorm {
+		if n == 0 || !d.governor(ch).full(now) {
+			continue
+		}
+		d.pendingStorm[ch] = 0
+		d.process(Observation{
+			Channel: ch,
+			Content: fmt.Sprintf("%s storm: %d surprising lines suppressed", ch, n),
+			At:      now,
+		}, true, true)
+	}
 }
 
 // spread walks the link graph outward from seed fragments, decaying
@@ -563,6 +682,9 @@ func (d *Daemon) sleepCycle() {
 		return
 	}
 	d.flushModels()
+	if err := d.store.Checkpoint(); err != nil {
+		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
+	}
 	d.chem.WakeRested()
 	d.sleeps++
 	d.lastSleep = time.Now()
@@ -595,6 +717,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 		fmt.Fprintf(d.out, "zzz final night %d: pruned %d fragment(s).\n", d.sleeps, pruned)
 	}
 	d.flushModels()
+	d.store.Checkpoint()
 	d.store.Close()
 	os.Remove(sock)
 	fmt.Fprintln(d.out, "golem asleep.")

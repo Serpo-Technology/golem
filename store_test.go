@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -227,6 +229,33 @@ func TestLinkFloorPrunesFadedEdges(t *testing.T) {
 	}
 	if n, _ := s.Count(); n != 2 {
 		t.Fatalf("the fragments themselves should survive, got %d", n)
+	}
+}
+
+// Checkpointing must actually fold the WAL back into the database file:
+// after a TRUNCATE checkpoint the -wal file is zero bytes. A passive
+// checkpoint or an ignored misspelled pragma would leave bytes behind.
+func TestCheckpointTruncatesWAL(t *testing.T) {
+	s, path := tempStore(t)
+	for i := 0; i < 50; i++ {
+		if _, err := s.Encode(&Fragment{Content: fmt.Sprintf("filler %d", i),
+			Surprise: 4, Time: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wal := path + "-wal"
+	if fi, err := os.Stat(wal); err != nil || fi.Size() == 0 {
+		t.Fatalf("the WAL should have grown before the checkpoint: %v", err)
+	}
+	if err := s.Checkpoint(); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(wal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() != 0 {
+		t.Fatalf("a truncating checkpoint should empty the WAL, %d bytes left", fi.Size())
 	}
 }
 

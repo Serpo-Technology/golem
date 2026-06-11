@@ -374,6 +374,13 @@ func (s *Store) LinkCounts() (map[uint64]int, error) {
 	return out, rows.Err()
 }
 
+// Checkpoint folds the write-ahead log back into the main database file,
+// keeping the on-disk footprint honest. Sleep is the natural moment.
+func (s *Store) Checkpoint() error {
+	_, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
+	return err
+}
+
 // CalibState is one channel's persisted saliency calibration.
 type CalibState struct {
 	N    int

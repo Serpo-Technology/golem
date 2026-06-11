@@ -173,8 +173,8 @@ func printStatus(st *StatusInfo) {
 		fmt.Println("  channels: none observed yet")
 	}
 	for name, ch := range st.Channels {
-		fmt.Printf("  channel %-10s observed %d, conscious %d, dropped %d\n",
-			name, ch.Observed, ch.Conscious, ch.Dropped)
+		fmt.Printf("  channel %-10s observed %d, conscious %d, suppressed %d, dropped %d\n",
+			name, ch.Observed, ch.Conscious, ch.Suppressed, ch.Dropped)
 	}
 	if st.Sleeps > 0 {
 		fmt.Printf("  nights slept: %d (last %s)\n", st.Sleeps, time.Unix(st.LastSleepUnix, 0).Format("15:04:05"))

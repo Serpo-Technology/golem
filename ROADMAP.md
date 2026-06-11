@@ -78,6 +78,16 @@ Goal: several channels share one workspace without starving or flooding it.
 Done when: shell, files, and vitals run side by side for a day with
 sensible relative alert rates.
 
+Soak notes (June 10): one day, four channels. Balance held: no channel
+starved, syslog admitted 0.74% to consciousness, 129 nights slept. But
+syslog storms overflowed the workspace (5.9% of the channel dropped),
+the store reached 18M with the WAL never checkpointing, and the raw
+fragments that survived were mostly routine error noise. In response,
+memory formation gained a per-channel refractory that collapses storms
+into summary moments, syslog got a longer habituation window, and sleep
+now checkpoints the WAL. The shell channel was nearly dark because the
+hook only loads in terminals opened after installation.
+
 ## Step 4: Association and language
 
 Goal: the Links field comes alive and words become pointers.

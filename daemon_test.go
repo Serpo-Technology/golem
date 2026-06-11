@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -82,6 +83,23 @@ func TestDaemonEndToEnd(t *testing.T) {
 		t.Fatalf("recall by query failed: %+v", resp.Fragments)
 	}
 
+	// Push the channel past its burst allowance and confirm the
+	// suppressed count survives onto the wire.
+	for i := 0; i < 12; i++ {
+		req := Request{Cmd: "observe", Channel: "testlog",
+			Content: fmt.Sprintf("burst shape %c happened", rune('a'+i))}
+		if _, err := ipcCall(home, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err = ipcCall(home, Request{Cmd: "status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch := resp.Status.Channels["testlog"]; ch == nil || ch.Suppressed < 1 {
+		t.Fatalf("suppression should be reported in status: %+v", resp.Status.Channels)
+	}
+
 	// Stop shuts the daemon down and removes the socket.
 	if _, err := ipcCall(home, Request{Cmd: "stop"}); err != nil {
 		t.Fatal(err)
@@ -107,14 +125,16 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 	}
 	t.Cleanup(func() { s.Close() })
 	return &Daemon{
-		store:       s,
-		chem:        NewNeurochemistry(),
-		out:         io.Discard,
-		cfg:         DefaultConfig(),
-		predictors:  make(map[string]*Predictor),
-		calibrators: make(map[string]*Calibrator),
-		stats:       make(map[string]*ChannelStat),
-		drops:       make(map[string]*atomic.Int64),
+		store:        s,
+		chem:         NewNeurochemistry(),
+		out:          io.Discard,
+		cfg:          DefaultConfig(),
+		predictors:   make(map[string]*Predictor),
+		calibrators:  make(map[string]*Calibrator),
+		stats:        make(map[string]*ChannelStat),
+		drops:        make(map[string]*atomic.Int64),
+		governors:    make(map[string]*tokenBucket),
+		pendingStorm: make(map[string]int),
 	}, s
 }
 
@@ -321,6 +341,204 @@ func TestLinkMomentWindowAndFanout(t *testing.T) {
 		if id <= 24 {
 			t.Fatalf("the cap should keep the most recent moments, bound #%d", id)
 		}
+	}
+}
+
+// A storm of novel shapes collapses into a burst of memories plus one
+// summary, and the suppressed count is reported per channel.
+func TestEncodeRefractoryAndStormSummary(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.EncodeBurst = 3
+	d.cfg.EncodeRefillSec = 2
+	d.cfg.CalibrationWarmup = 100 // keep the whole storm on the absolute floor
+	now := time.Now()
+
+	for i := 0; i < 40; i++ {
+		content := fmt.Sprintf("new shape %c appeared", rune('a'+i))
+		d.process(Observation{Channel: "stormy", Content: content, At: now}, false, true)
+	}
+	held, _ := s.Count()
+	if held != 3 {
+		t.Fatalf("the burst allowance should cap formation at 3, got %d", held)
+	}
+	// The first observations fall below the absolute floor while the
+	// channel has no prior, so they are gated, never suppressed.
+	if got := d.stats["stormy"].Suppressed; got != 34 {
+		t.Fatalf("suppressed surprises should be counted, got %d", got)
+	}
+
+	// Mid-storm, no summary forms.
+	d.flushStorms(now)
+	if held, _ = s.Count(); held != 3 {
+		t.Fatalf("no summary while the storm rages, got %d held", held)
+	}
+
+	// A partial recovery is still not a lull: one refilled token must not
+	// trigger a fragmentary summary.
+	d.flushStorms(now.Add(3 * time.Second))
+	if held, _ = s.Count(); held != 3 {
+		t.Fatalf("no summary before the burst allowance fully recovers, got %d held", held)
+	}
+
+	// Once the storm eases, the suppressed lines collapse into one moment.
+	d.flushStorms(now.Add(10 * time.Second))
+	frags, _ := s.Dump()
+	var summary *Fragment
+	for _, f := range frags {
+		if f.Channel == "stormy" && strings.Contains(f.Content, "storm: 34 surprising lines suppressed") {
+			summary = f
+		}
+	}
+	if summary == nil {
+		t.Fatalf("expected one storm summary, got %+v", frags)
+	}
+	if d.pendingStorm["stormy"] != 0 {
+		t.Fatal("the storm counter should reset after the summary")
+	}
+}
+
+// Forced observations (the linguistic channel) bypass the refractory.
+func TestForcedBypassesRefractory(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.EncodeBurst = 1
+	d.cfg.EncodeRefillSec = 60
+	now := time.Now()
+
+	for i := 0; i < 4; i++ {
+		content := fmt.Sprintf("note number %c", rune('a'+i))
+		res := d.process(Observation{Channel: "tell", Content: content, At: now}, true, true)
+		if !res.Conscious {
+			t.Fatalf("forced words must always encode, attempt %d", i)
+		}
+	}
+	if held, _ := s.Count(); held != 4 {
+		t.Fatal("forced observations should never be suppressed")
+	}
+}
+
+// Channels can carry their own habituation window.
+func TestPerChannelWindow(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.PredictorWindows = map[string]float64{"syslog": 8192}
+	if w := d.predictor("syslog").window; w != 8192 {
+		t.Fatalf("syslog should get its configured window, got %.0f", w)
+	}
+	if w := d.predictor("shell").window; w != defaultPredictorWindow {
+		t.Fatalf("other channels keep the default window, got %.0f", w)
+	}
+}
+
+// A persisted long-window model must come back under its long window. A
+// reload under the short default would compact the restored counts to
+// nothing within a handful of observations.
+func TestPerChannelWindowSurvivesReload(t *testing.T) {
+	home := t.TempDir()
+	s, err := OpenStore(filepath.Join(home, "memory.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := make(map[string]float64, 100)
+	for i := 0; i < 100; i++ {
+		counts[fmt.Sprintf("tail shape number %c%c", rune('a'+i/10), rune('a'+i%10))] = 4
+	}
+	if err := s.SaveModel("syslog", counts); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	cfg := DefaultConfig()
+	cfg.PredictorWindows = map[string]float64{"syslog": 8192}
+	cfg.Channels = ChannelsConfig{}
+	d, err := NewDaemon(home, cfg, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.store.Close()
+
+	p := d.predictors["syslog"]
+	if p == nil || p.window != 8192 {
+		t.Fatalf("the restored model should carry its configured window, got %+v", p)
+	}
+	for i := 0; i < 10; i++ {
+		p.Learn("a fresh shape")
+	}
+	if len(p.counts) < 100 {
+		t.Fatalf("reload must not destroy the long tail, %d templates left", len(p.counts))
+	}
+}
+
+// The refill grants new encodes at the configured rate, in both
+// directions: too early stays suppressed, on time encodes, and the next
+// one immediately after is suppressed again.
+func TestRefillGrantsEncodesOverTime(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.EncodeBurst = 1
+	d.cfg.EncodeRefillSec = 2
+	d.cfg.CalibrationWarmup = 100
+	now := time.Now()
+
+	obs := func(at time.Time, tag rune) ObserveResult {
+		return d.process(Observation{Channel: "paced",
+			Content: fmt.Sprintf("paced shape %c", tag), At: at}, false, true)
+	}
+	// Prime the channel past the cold start and the absolute floor, then
+	// exhaust the single-token burst.
+	for i, tag := range []rune{'a', 'b', 'c', 'd'} {
+		obs(now.Add(time.Duration(i)*time.Millisecond), tag)
+	}
+
+	if res := obs(now.Add(1*time.Second), 'e'); res.Conscious {
+		t.Fatal("one second is too early for a 2-second refill")
+	}
+	if res := obs(now.Add(2500*time.Millisecond), 'f'); !res.Conscious {
+		t.Fatal("the refill should grant an encode after 2.5 seconds")
+	}
+	if res := obs(now.Add(2500*time.Millisecond), 'g'); res.Conscious {
+		t.Fatal("the refilled token is spent; the next surprise waits")
+	}
+}
+
+// An idle channel must not bank tokens beyond its burst allowance.
+func TestIdleDoesNotBankTokens(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.EncodeBurst = 3
+	d.cfg.EncodeRefillSec = 2
+	d.cfg.CalibrationWarmup = 100
+	now := time.Now()
+
+	for i := 0; i < 10; i++ {
+		content := fmt.Sprintf("early shape %c", rune('a'+i))
+		d.process(Observation{Channel: "idle", Content: content, At: now}, false, true)
+	}
+	before, _ := s.Count()
+
+	later := now.Add(time.Hour)
+	for i := 0; i < 10; i++ {
+		content := fmt.Sprintf("later shape %c", rune('a'+i))
+		d.process(Observation{Channel: "idle", Content: content, At: later}, false, true)
+	}
+	after, _ := s.Count()
+	if after-before != 3 {
+		t.Fatalf("an hour idle should restore exactly the burst allowance, got %d new fragments", after-before)
+	}
+}
+
+// The diary clip keeps short lines intact, cuts long ones at the rune
+// boundary, and never splits a multibyte character.
+func TestClip(t *testing.T) {
+	if got := clip("short", 10); got != "short" {
+		t.Fatalf("short strings pass through, got %q", got)
+	}
+	if got := clip("exactly-ten", 11); got != "exactly-ten" {
+		t.Fatalf("strings at the limit pass through, got %q", got)
+	}
+	long := strings.Repeat("ab", 80)
+	if got := clip(long, 140); len([]rune(got)) != 143 || !strings.HasSuffix(got, "...") {
+		t.Fatalf("long strings clip to n runes plus ellipsis, got %d runes", len([]rune(got)))
+	}
+	wide := strings.Repeat("é", 150)
+	if got := clip(wide, 140); len([]rune(got)) != 143 || strings.Contains(got, "�") {
+		t.Fatalf("multibyte content must clip on rune boundaries, got %q", got[:20])
 	}
 }
 
