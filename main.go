@@ -27,6 +27,8 @@ Usage:
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
+  golem teach <cue> <command>     ground a cue to a command by hand; repeat
+                                  to strengthen toward graduation
   golem propose <cue>             weigh the actions grounded to a cue and
                                   propose one, or ask when it is ambiguous
   golem approve                   approve the pending proposal
@@ -124,6 +126,13 @@ func main() {
 			return
 		}
 		printFragments(resp.Fragments)
+
+	case "teach":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: golem teach <cue> <command>   (repeat to strengthen)"))
+		}
+		call(home, Request{Cmd: "teach", Content: args[1], Command: strings.Join(args[2:], " ")})
+		fmt.Printf("grounded %q -> %q\n", args[1], strings.Join(args[2:], " "))
 
 	case "propose":
 		if len(args) < 2 {

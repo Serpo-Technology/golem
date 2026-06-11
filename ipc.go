@@ -18,6 +18,7 @@ type Request struct {
 	Channel string `json:"channel,omitempty"`
 	Content string `json:"content,omitempty"`
 	Query   string `json:"query,omitempty"`
+	Command string `json:"command,omitempty"`
 }
 
 type Response struct {

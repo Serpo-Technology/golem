@@ -859,6 +859,13 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		}
 		return Response{OK: true, Fragments: infos}, false
 
+	case "teach":
+		if req.Content == "" || req.Command == "" {
+			return Response{Error: "teach needs a cue and a command"}, false
+		}
+		d.teach(req.Content, req.Command, time.Now())
+		return Response{OK: true}, false
+
 	case "propose":
 		if req.Content == "" {
 			return Response{Error: "propose needs a cue"}, false

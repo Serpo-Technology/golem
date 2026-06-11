@@ -254,9 +254,13 @@ func (d *Daemon) execute(cmd string) string {
 
 // teach grounds a cue to a command directly, the manual-grounding path:
 // both are force-encoded in one episode so the action binds to the cue
-// even on a cold channel. Repetition strengthens the bond.
+// even on a cold channel. Repetition strengthens the bond. The lesson is
+// its own episode and leaves the live binding window untouched, so manual
+// teaching cannot accidentally bind to whatever a sensor just saw.
 func (d *Daemon) teach(cue, command string, at time.Time) {
-	d.recent = nil // each lesson is its own episode
+	saved := d.recent
+	d.recent = nil
 	d.process(Observation{Channel: "tell", Content: cue, At: at}, true, true)
 	d.process(Observation{Channel: "shell", Content: actionPrefix + command, At: at.Add(2 * time.Second)}, true, true)
+	d.recent = saved
 }
