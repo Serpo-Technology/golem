@@ -523,7 +523,7 @@ second its concurrency refactor.
 
 Phase one, the inner loop (inline, the self-reference):
 
-- [ ] Think one step on idle ticks. When input is quiet and sleep pressure
+- [x] Think one step on idle ticks. When input is quiet and sleep pressure
       is building but sleep has not yet triggered (the brain's default-mode
       condition, mind-wandering when not task-engaged), take the warmest
       concepts in the workspace (internal/daemon/workspace.go), spread one
@@ -532,13 +532,13 @@ Phase one, the inner loop (inline, the self-reference):
       function returns; the chaining is thinking and the feedback is the
       self-reference. Bound it to one step per tick, and let workspace decay
       carry an unreinforced chain back to nothing.
-- [ ] Remember only surprising thoughts. Re-enter each thought as an
+- [x] Remember only surprising thoughts. Re-enter each thought as an
       internal observation on a thought channel through the same surprise
       gate perception uses, so a novel internal combination is encoded (an
       insight) and a routine spread stays transient. Memory does not flood,
       and GOLEM now perceives its own activity, which is the start of a
       self-model.
-- [ ] Keep it undirected at first. Free association along learned edge
+- [x] Keep it undirected at first. Free association along learned edge
       weights, since GOLEM has no explicit goal yet. Coherence comes from
       the spread following the strong paths, which are the regularities
       GOLEM actually lived, which is exactly why the naming graph must be
@@ -546,19 +546,19 @@ Phase one, the inner loop (inline, the self-reference):
 
 Phase two, thoughts as goroutines (the parallel specialists):
 
-- [ ] Move the specialists off the loop. Run the cognitive processes as
+- [x] Move the specialists off the loop. Run the cognitive processes as
       goroutines, a spreader, a predictor, a decider, a recaller, each
       reading a read-only snapshot of the workspace and posting a candidate
       back. The loop arbitrates which candidate ignites and broadcasts, the
       winner-take-all gate the basal ganglia already is here.
-- [ ] Preserve the single-threaded-memory invariant by construction.
+- [x] Preserve the single-threaded-memory invariant by construction.
       Specialists compute on snapshots and never touch the store; they post
       through one channel and the loop applies every mutation
       single-threaded, the snapshot-in, candidate-out, loop-commits pattern
       the execution layer already uses (the execDone path in
       internal/daemon/daemon.go). That is what keeps concurrent thought from
       racing the graph.
-- [ ] Gate and bound the thinking. Specialists run when perception is quiet
+- [x] Gate and bound the thinking. Specialists run when perception is quiet
       and yield under load, capped in flight, so the inner life never
       starves sensing or floods the loop.
 
@@ -574,6 +574,23 @@ thought only when it is surprising, and a later recall shows it remembers
 having thought it. Done when, phase two: the same chains are produced by
 specialist goroutines arbitrated on the loop, the store shows no race under
 concurrent thinking, and thinking yields to perception under load.
+
+Status: built through both phases and demonstrated (golem demo think).
+The default-mode condition gates rounds: calm, input-silent, sleep not
+yet fired, something warm. Association walks a concept's grounded
+episodes along temporal and successor edges to the concepts of what
+they kept company with; each committed step hands warmth on at a
+discount and fatigues the seed, so chains move and then damp. A step
+re-enters perception on the thought channel through the standard
+surprise gate; thoughts never reset the quiet timers, never cue
+habits, and never distil into concepts. Four specialists (spreader,
+predictor, recaller, decider) compute concurrently on an immutable
+loop-built snapshot and post candidates through one channel; the loop
+arbitrates winner-take-all and commits single-threaded. Rounds are
+single-flight, epoch-stamped so sleep invalidates in-flight thought,
+and discarded whole when perception turns busy. The decider only ever
+thinks a command runnable. Both done-when groups hold in tests, with
+the race detector refereeing thinking against live perception.
 
 ## Known limitations
 

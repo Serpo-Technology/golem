@@ -33,6 +33,8 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Spoken words become word nodes bound to the moments around them. The night's naming pass bonds each word to the concepts its moments ground by cross-situational reliability: the share of the word's lived company that lands on the concept, blended with the reverse share, so a word scattered across many concepts bonds weakly everywhere while a faithful one bonds firmly. Dopamine gates how readily words bond at all, a coincidental bond weakens the moment its word recurs amid other active concepts, and utterances count for nothing: a repeated question can never become a thing. Forms from any language converge on one concept once grounded alike, so "testler" recalls what "tests" recalls.
 - `golem recall` reads through the lexicon as well as by substring: query words name concepts, concepts ground moments, and paraphrases land together. The reply shows the concept the meaning walked through.
 - A workspace holds decaying activation over concepts across ticks and turns, so "do it again" resolves to the warmest verb-like concept. Sleep clears it.
+- When perception goes quiet and sleep pressure is building, GOLEM mind-wanders: the warmest concept associates one step through its lived edges and the result feeds back into the workspace, chaining across ticks until fatigue and decay still it. Each step re-enters perception on a thought channel through the same surprise gate the senses face, so a routine association passes unremembered while a novel one is encoded as an insight GOLEM can later recall having had. Thoughts never reset the quiet timers, never fire habits, and never become concepts.
+- Thinking is concurrent under a serial arbiter: four specialists (a spreader, a predictor, a recaller, a decider) compute on an immutable snapshot of what is warm and post candidates through one channel; the brain loop picks the winner and commits every mutation single-threaded. Rounds yield whole to fresh perception, and sleep invalidates in-flight thought. `golem demo think` walks the arc from lived day to remembered insight.
 - `golem tell` parses each utterance into a concept-frame with an innate grammar and reads its force. Questions are answered with constructed sentences ("After make test, make deploy usually follows."), unknowns are admitted ("I do not know flibber yet."), high dopamine asks back about new words, and low oxytocin hedges the claim ("may follow"). A command stages a proposal behind the same approve gate as always; speech never executes anything by itself.
 - English inflects, never bolts on: verbs conjugate from principal parts with agreement computed from person, number, and tense ("what happened after make test" gets "usually followed" back), nouns pluralize on a rule table with the irregulars, articles follow the sound ("an hour", "a user"), and negation takes do-support everywhere, so a denial can never realize as its opposite.
 - The interrogative routes the answer: what and which read order or definitions ("which commands follow make test" coordinates the field with plural agreement), when answers with the newest moment's time, where with its channel, how many with the tally, and who and why name gaps GOLEM genuinely has. "After X and before Y" parses as two clauses and the answer satisfies both.
@@ -247,6 +249,9 @@ go run ./cmd/golem demo language
 
 # Watch shell-free pipelines and parallel actions under the gates
 go run ./cmd/golem demo pipeline
+
+# Watch quiet mind-wandering keep one surprising thought
+go run ./cmd/golem demo think
 
 # Run the tests
 go test ./...

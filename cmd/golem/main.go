@@ -28,6 +28,7 @@ Usage:
   golem demo consolidate          one day, one night: merge and replay
   golem demo language             concepts, words, and built sentences
   golem demo pipeline             shell-free pipelines and parallel actions
+  golem demo think                quiet mind-wandering and a kept insight
   golem status                    show daemon status
   golem chem                      show current neurochemistry
   golem chem --watch              print it once a second until interrupted
@@ -90,6 +91,8 @@ func main() {
 			daemon.DemoLanguage()
 		case len(args) >= 2 && args[1] == "pipeline":
 			daemon.DemoPipeline()
+		case len(args) >= 2 && args[1] == "think":
+			daemon.DemoThink()
 		default:
 			runDemo()
 		}
