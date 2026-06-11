@@ -296,11 +296,67 @@ converging on one node; the workspace resolving "do it again"; and the
 grammar answering after, before, and what-is questions, hedging under low
 oxytocin, admitting ignorance, and asking about unknown words when
 dopamine is high. Both done-when criteria hold in tests. Naming is
-deliberately greedy at first (bystander words bond too) and relies on
-repetition against nightly decay to keep only the true names. A spoken
-command stages a proposal behind the usual approve gate and never runs
-by itself; golem propose remains the lever that can fire a graduated
-pair autonomously.
+deliberately greedy at first (bystander words bond too), so a word that
+kept a concept's company far less than its firmest name is spoken as a
+tentative pointer ("may name"), and repetition against nightly decay is
+what keeps only the true names over time. A spoken command stages a
+proposal behind the usual approve gate and never runs by itself; golem
+propose remains the lever that can fire a graduated pair autonomously.
+
+## Step 9: Full English and Turkish grammars
+
+Goal: grow the innate grammar from a working skeleton into grammars that
+cover GOLEM's own speech in full, English first and then Turkish, one
+shared frame read both directions.
+
+Today the realizer is a compositional clause builder over a handful of
+verb arms with no morphology underneath, and the parser collapses every
+wh-word onto two handlers. It says the shapes the demo walks and degrades
+outside them. This step closes that gap. The three correctness leaks found
+in review are already fixed (a denial no longer realizes as its opposite,
+"do it again" follows the latest mention, and a weakly-bonded name is
+spoken tentatively); what remains is coverage.
+
+Build, not buy: there is no pure-Go surface realizer to adopt, the mature
+ones (SimpleNLG, OpenCCG) are JVM and one ranks output with n-gram model
+weights, and none expose the limbic hedging that is GOLEM's point.
+Morphology stays hand-rolled with no external grammar or inflection
+dependency.
+
+English, the engine:
+
+- [ ] A tense and aspect feature on the frame, parsed and realized, so "X
+      followed Y" reads and speaks distinctly from "X follows Y".
+- [ ] Subject-verb agreement computed from person and number, not a blind
+      "-s"; a number feature on terms so a plural subject agrees.
+- [ ] Noun number on a rule table with the irregulars, so subjects and
+      counts inflect.
+- [ ] Article selection: a or an by the following sound, "the" for the
+      definite, none where bare is right.
+- [ ] General negation: do-support across verbs and parse-side detection
+      of not, never, and no, building on the denial fix already in place.
+- [ ] Wh-question typing: who, what, which, when, where, why, and how carry
+      distinct meanings and route to distinct answers, including a real
+      "which command follows X" that no longer falls back to a definition.
+- [ ] Constituent parsing past the single clause: a second temporal clause,
+      coordination, and modifier attachment, so extra relators stop folding
+      into the anchor span.
+
+Turkish, the second language:
+
+- [ ] Word order as a parameter (SOV), not an English SVO assumption baked
+      into the builder.
+- [ ] Agglutinative morphology: case, possessive, and tense suffixes
+      stacked on the stem.
+- [ ] Vowel harmony on the suffixes.
+- [ ] The pointer layer already lets Turkish words name concepts; this adds
+      the realizer that answers in Turkish, chosen by the language the
+      question arrived in.
+
+Done when: GOLEM inflects correctly across tense, number, and agreement in
+a constructed English answer, never asserts the opposite of a negated
+input, and answers a Turkish question in Turkish about the same concept an
+English question reaches.
 
 ## Known limitations
 
