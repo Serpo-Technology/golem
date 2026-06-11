@@ -64,6 +64,9 @@ Usage:
   golem deny                      reject the pending proposal
   golem habits                    list grounded cue-and-command pairs
   golem audit                     show the recent decision trail
+  golem voice [on|off|status]     control whether replies are spoken
+  golem voice use [NAME]          pick the speaking voice; omit NAME for
+                                  the system default (say -v ? lists them)
   golem dump                      list every fragment held in memory
   golem dump --dot                export the memory graph as graphviz dot
   golem stop                      ask the daemon to sleep once and shut down
@@ -265,6 +268,30 @@ func main() {
 				time.Unix(e.AtUnix, 0).Format("Jan 02 15:04:05"), e.Cue, e.Action, e.Outcome)
 		}
 
+	case "voice":
+		req := wire.Request{Cmd: "voice", Arg: "status"}
+		if len(args) > 1 {
+			switch args[1] {
+			case "on", "off", "status":
+				req.Arg = args[1]
+			case "use":
+				req.Arg = "use"
+				req.Content = strings.Join(args[2:], " ")
+			default:
+				fail(fmt.Errorf("usage: golem voice [on|off|status|use NAME]"))
+			}
+		}
+		resp := call(home, req)
+		name := "system default"
+		if resp.Voice != nil && resp.Voice.Name != "" {
+			name = resp.Voice.Name
+		}
+		state := "off"
+		if resp.Voice != nil && resp.Voice.Enabled {
+			state = "on"
+		}
+		fmt.Printf("voice: %s (%s)\n", state, name)
+
 	case "stop":
 		call(home, wire.Request{Cmd: "stop"})
 		fmt.Println("golem is sleeping once and shutting down.")
@@ -350,6 +377,15 @@ func printStatus(st *wire.StatusInfo) {
 		fmt.Printf("  execution: ON, %d command(s) allowlisted\n", st.AllowlistSize)
 	} else {
 		fmt.Println("  execution: off (dry-run); enable in config.json")
+	}
+	if st.VoiceEnabled {
+		name := st.VoiceName
+		if name == "" {
+			name = "system default"
+		}
+		fmt.Printf("  voice: on (%s)\n", name)
+	} else {
+		fmt.Println("  voice: off")
 	}
 	for _, cmd := range st.Running {
 		fmt.Printf("  running now: %q\n", cmd)

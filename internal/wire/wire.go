@@ -27,6 +27,7 @@ type Request struct {
 	Command string `json:"command,omitempty"`
 	Lang    string `json:"lang,omitempty"` // language tag for tell; empty means English
 	Mind    bool   `json:"mind,omitempty"` // teach: ground the word to a thought operation, not a command
+	Arg     string `json:"arg,omitempty"`  // voice subcommand: status, on, off, use (the name rides in Content)
 }
 
 type Response struct {
@@ -43,6 +44,15 @@ type Response struct {
 	Audit     []*AuditInfo    `json:"audit,omitempty"`
 	Concepts  []*ConceptInfo  `json:"concepts,omitempty"`
 	Say       string          `json:"say,omitempty"` // a sentence GOLEM built in reply
+	Voice     *VoiceInfo      `json:"voice,omitempty"`
+}
+
+// VoiceInfo is the wire form of the speech effector's state: whether
+// replies are spoken and which system voice speaks them (empty means
+// the system default).
+type VoiceInfo struct {
+	Enabled bool   `json:"enabled"`
+	Name    string `json:"name,omitempty"`
 }
 
 // ConceptInfo is the wire form of one concept node: its gloss, its lemma
@@ -122,6 +132,8 @@ type StatusInfo struct {
 	PromotionBar   int                     `json:"promotion_bar"`
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
+	VoiceEnabled   bool                    `json:"voice_enabled"`
+	VoiceName      string                  `json:"voice_name,omitempty"`
 	Running        []string                `json:"running,omitempty"` // in-flight actions, oldest first
 	Queued         int                     `json:"queued,omitempty"`  // actions waiting on claims or a slot
 	Warm           []*WarmInfo             `json:"warm,omitempty"`    // workspace concepts, hottest first

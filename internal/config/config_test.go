@@ -26,9 +26,10 @@ func TestExampleConfigMatchesDefaults(t *testing.T) {
 			fromExample, Default())
 	}
 
-	// The key sets must match too, or a renamed field would linger in
-	// the example as silently ignored noise.
-	var exampleKeys map[string]any
+	// The key sets must match too, at every nesting level, or a field
+	// added in code would be missing from the example and a renamed one
+	// would linger as silently ignored noise.
+	var exampleKeys, defaultKeys map[string]any
 	if err := json.Unmarshal(example, &exampleKeys); err != nil {
 		t.Fatal(err)
 	}
@@ -36,18 +37,29 @@ func TestExampleConfigMatchesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var defaultKeys map[string]any
 	if err := json.Unmarshal(defaults, &defaultKeys); err != nil {
 		t.Fatal(err)
 	}
-	for k := range defaultKeys {
-		if _, ok := exampleKeys[k]; !ok {
-			t.Errorf("config.example.json is missing %q", k)
+	compareKeys(t, "", defaultKeys, exampleKeys)
+}
+
+func compareKeys(t *testing.T, prefix string, want, got map[string]any) {
+	t.Helper()
+	for k, wv := range want {
+		gv, ok := got[k]
+		if !ok {
+			t.Errorf("config.example.json is missing %q", prefix+k)
+			continue
+		}
+		wm, wIsMap := wv.(map[string]any)
+		gm, gIsMap := gv.(map[string]any)
+		if wIsMap && gIsMap {
+			compareKeys(t, prefix+k+".", wm, gm)
 		}
 	}
-	for k := range exampleKeys {
-		if _, ok := defaultKeys[k]; !ok {
-			t.Errorf("config.example.json carries unknown field %q", k)
+	for k := range got {
+		if _, ok := want[k]; !ok {
+			t.Errorf("config.example.json carries unknown field %q", prefix+k)
 		}
 	}
 }

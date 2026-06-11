@@ -99,9 +99,9 @@ func TestUntrustedChannelEncodesLight(t *testing.T) {
 	}
 }
 
-// The voice is gated by config and never blocks: with the switch off
-// nothing is queued, with it on the reply drains through the speech
-// command.
+// The voice is gated by its runtime switch and never blocks: with the
+// switch off nothing is queued, with it on the reply drains through the
+// speech command.
 func TestVoiceSpeaksOnlyWhenConfigured(t *testing.T) {
 	d, _ := testDaemon(t)
 
@@ -112,13 +112,13 @@ func TestVoiceSpeaksOnlyWhenConfigured(t *testing.T) {
 
 	spoken := make(chan string, 4)
 	orig := sayCommand
-	sayCommand = func(text string) *exec.Cmd {
+	sayCommand = func(text, voice string) *exec.Cmd {
 		spoken <- text
 		return exec.Command("/usr/bin/true")
 	}
 	defer func() { sayCommand = orig }()
 
-	d.cfg.Channels.Voice = true
+	d.voiceOn = true
 	d.speak("After make test, make deploy usually follows.")
 	select {
 	case got := <-spoken:

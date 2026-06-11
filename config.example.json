@@ -22,7 +22,8 @@
     "tail_files": [],
     "watch_urls": [],
     "screen": false,
-    "voice": false
+    "voice": false,
+    "voice_name": ""
   },
   "graduation_approvals": 3,
   "conflict_margin": 0.15,
@@ -32,5 +33,7 @@
   "execute_parallel": 4,
   "auto_cue_cooldown_sec": 60,
   "web_poll_sec": 900,
-  "untrusted_channels": ["web"]
+  "untrusted_channels": [
+    "web"
+  ]
 }

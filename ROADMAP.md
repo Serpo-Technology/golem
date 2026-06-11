@@ -801,7 +801,9 @@ channel and named across several showings becomes a concept reachable by its
 word.
 
 Status: built. Voice out queues the realizer's sentences to the system
-text-to-speech, one at a time, off the loop, gated by config. The
+text-to-speech, one at a time, off the loop. Whether it speaks and in
+which system voice are runtime state under golem voice, persisted to
+config and recorded in the event trail. The
 reading channel tails configured files from their current end and emits
 appended lines named by file; the web channel fetches configured pages
 on a poll, strips them to text lines with a hand-rolled reducer, and

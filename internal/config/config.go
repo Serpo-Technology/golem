@@ -141,6 +141,9 @@ type ChannelsConfig struct {
 	Screen bool `json:"screen"`
 	// Voice renders spoken replies through the system text-to-speech.
 	Voice bool `json:"voice"`
+	// VoiceName picks which system voice speaks; empty means the system
+	// default. golem voice adjusts both voice fields at runtime.
+	VoiceName string `json:"voice_name"`
 }
 
 func Default() Config {
@@ -229,6 +232,23 @@ func Load(home string) (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// Save writes the configuration back to <home>/config.json atomically,
+// so a kill mid-write cannot leave the file torn. The daemon calls this
+// when an operator command (golem voice) changes a setting that should
+// survive a restart.
+func Save(home string, cfg Config) error {
+	pretty, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(home, "config.json")
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(pretty, '\n'), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // Denylisted reports whether a command contains one of the shapes GOLEM

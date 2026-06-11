@@ -120,9 +120,13 @@ type Daemon struct {
 	lastThought   string
 	ops           map[string]*memory.Fragment
 
-	// voice carries sentences to the text-to-speech effector, opened on
-	// first use when the voice channel is configured on.
-	voice chan string
+	// voice carries utterances to the text-to-speech effector, opened on
+	// first use when the voice is on. voiceOn and voiceName start from
+	// config and follow golem voice at runtime, owned by the brain loop
+	// like every other mutable state.
+	voice     chan utterance
+	voiceOn   bool
+	voiceName string
 
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
@@ -285,6 +289,8 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
+		voiceOn:      cfg.Channels.Voice,
+		voiceName:    cfg.Channels.VoiceName,
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -1249,6 +1255,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			PromotionBar:   d.promotionBar(),
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
+			VoiceEnabled:   d.voiceOn,
+			VoiceName:      d.voiceName,
 			Running:        d.runningCmds(),
 			Queued:         len(d.waiting),
 			Warm:           d.warmInfos(3),
@@ -1542,6 +1550,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			out = append(out, &wire.AuditInfo{AtUnix: e.At, Cue: e.Cue, Action: e.Action, Outcome: e.Outcome})
 		}
 		return wire.Response{OK: true, Audit: out}, false, false
+
+	case "voice":
+		return d.handleVoice(req), false, false
 
 	case "stop":
 		return wire.Response{OK: true}, false, true
