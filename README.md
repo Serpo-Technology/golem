@@ -20,8 +20,10 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - `golem tell` is the linguistic channel: your words always encode, bind to the moments around them, and the reply is what they bring to mind. Words are pointers to experience.
 - `golem recall` returns direct matches plus the context cloud reached through the link graph, ranked by activation. Recall strengthens every path it walks; sleep decays the paths nothing walks.
 - A cue can propose an action. `golem propose "run the tests"` weighs the commands that cue has been grounded to and proposes the strongest, or asks when two are too close to call. Approvals strengthen the grounding and, after a few consistent ones, graduate the pair to autonomous; a denial demotes it. Destructive commands (a denylist covering `rm -rf`, `shutdown`, force-pushes, and the like) can be proposed but never graduate, and every decision lands in an audit trail.
-- Commands run for real only when three gates all pass: execution is switched on, the command is not on the denylist, and it matches the operator's allowlist. All three ship closed (execution off, allowlist empty), so turning it on takes a deliberate edit to `config.json` and a restart. A graduated, allowed command runs autonomously when its cue is proposed; a run that fails demotes the pair, and every outcome feeds back into memory.
-- `golem demo decide` runs the whole loop on throwaway memory: grounding, graduation, the ambiguity veto, and the safety denylist, in about a second.
+- Commands run for real only when three gates all pass: execution is switched on, no part of the command is on the denylist, and every stage matches the operator's allowlist. All three ship closed (execution off, allowlist empty), so turning it on takes a deliberate edit to `config.json` and a restart. A graduated, allowed command runs autonomously when its cue is proposed; a run that fails demotes the pair, and every outcome feeds back into memory.
+- No shell sits behind execution. A command parses into a pipeline of argv stages with explicit pipe and redirect structure, or it is refused with the reason audited: substitution, subshells, chaining, globbing, and escapes are outside the modeled subset. Stages run wired together with real pipes, each stage authorized on its own, and the pipeline succeeds only when every stage exits zero.
+- Independent actions run at once, up to a configured cap, while decision stays serial on the brain loop. Each committed pipeline holds claims on the files it names; actions whose claims collide wait their turn in a bounded queue, so two writers of one file can never race. Every outcome returns through one channel, and stopping settles what is running before the final consolidation.
+- `golem demo decide` runs the whole loop on throwaway memory: grounding, graduation, the ambiguity veto, and the safety denylist, in about a second. `golem demo pipeline` shows the action layer: refusals, per-stage authorization, overlapping independent actions, and two writers of one file taking turns.
 - A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `tell`, `recall`, `concepts`, `teach`, `propose`, `approve`, `deny`, `habits`, `audit`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
 - Built-in senses, selected in config: file events in watched directories (bucketed to operation, extension, and parent directory), system vitals banded into words (cpu load, memory pressure, disk space), and the macOS unified log filtered to errors and faults. `golem shellhook` prints a zsh hook that feeds the shell channel with commands and their failures.
 - Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
@@ -200,6 +202,9 @@ go run . demo
 
 # Watch concepts, words, and built sentences emerge from one day
 go run . demo language
+
+# Watch shell-free pipelines and parallel actions under the gates
+go run . demo pipeline
 
 # Run the tests
 go test ./...

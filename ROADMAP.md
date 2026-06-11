@@ -218,30 +218,30 @@ is built: a parallel substrate with serial commitment.
 
 Structured pipelines, no shell:
 
-- [ ] Parse a command into a pipeline of argv stages with explicit pipe and
+- [x] Parse a command into a pipeline of argv stages with explicit pipe and
       redirect structure, never handing the string to a shell.
-- [ ] Run the stages with Go's own piping, one stage's output wired to the
+- [x] Run the stages with Go's own piping, one stage's output wired to the
       next stage's input.
-- [ ] Authorize each stage's program against the allowlist and denylist on
+- [x] Authorize each stage's program against the allowlist and denylist on
       its own, so a prefix match can no longer clear a compound program.
-- [ ] Refuse what the safe subset cannot model: command substitution,
+- [x] Refuse what the safe subset cannot model: command substitution,
       backticks, subshells, globbing, variable expansion. "Parse into the
       safe pipeline or refuse" replaces the shell-control ban.
-- [ ] Commands stay plain strings everywhere upstream (teach, grounding,
+- [x] Commands stay plain strings everywhere upstream (teach, grounding,
       proposals); only the executor changes.
 
 Parallel action, serial commitment:
 
-- [ ] Decision stays serial on the brain loop: the winner-take-all
+- [x] Decision stays serial on the brain loop: the winner-take-all
       selection never races, and only committed execution fans out.
-- [ ] Bounded concurrency: committed actions run as goroutines up to a cap;
+- [x] Bounded concurrency: committed actions run as goroutines up to a cap;
       every outcome still marshals back through one channel, so habit,
       audit, and feedback bookkeeping stay single-threaded.
-- [ ] Effector exclusion: two actions that touch the same resource (a file,
+- [x] Effector exclusion: two actions that touch the same resource (a file,
       a port, a working directory) serialize; independent ones run free.
       This is the brain's "one hand cannot grab two things," generalized
       from limbs to resources.
-- [ ] Stop settles every in-flight command before the final consolidation.
+- [x] Stop settles every in-flight command before the final consolidation.
 
 This is the parallel-processor, serial-arbiter, single-threaded-reabsorption
 pattern in miniature, the same shape the later thoughts-as-goroutines work
@@ -251,6 +251,20 @@ Done when: a grounded pipeline such as "make test | tee log" runs with each
 stage authorized and no shell involved, two independent allowlisted actions
 run at once while two that touch the same file serialize, and the audit
 trail stays coherent through both.
+
+Status: built and demonstrated end to end (golem demo pipeline). The
+modeled subset is words with literal quoting, pipes, one input redirect
+on the first stage, one output redirect on the last, and a leading ~/
+expanded to home; everything else is refused with the reason audited,
+and a pipeline succeeds only when every stage exits zero. Claims for
+exclusion are the redirect files plus every non-flag argument, string
+equality after path cleaning: deliberately conservative, since a false
+conflict only serializes. Approved and proposed actions queue behind a
+held claim (bounded, FIFO, dropped with an audit line if the daemon
+stops first); reflex cueing skips instead of queueing, so a stale
+observation can never fire a habit late. Both done-when criteria hold
+in tests, with overlap and serialization asserted by wall clock and by
+the run table.
 
 ## Step 9: The concept layer and grammar
 
@@ -408,18 +422,16 @@ English question reaches.
 
 ## Known limitations
 
-- One command runs at a time. Execution happens off the brain loop (the
-  command runs in a goroutine and its outcome marshals back into the loop
-  to finish habit, audit, and feedback bookkeeping single-threaded), so
-  the loop keeps sensing and answering during a run; but a second action
-  requested while one is in flight is refused with a clear error rather
-  than queued. Stop settles the in-flight command before the final
-  consolidation, bounded by the execution timeout.
-- Only simple commands execute. Anything with shell control characters
-  (chaining, pipes, redirects, substitution) is refused, because an
-  allowlist entry matches a command by prefix and a shell would otherwise
-  run the whole compound program. Pipelines that should run autonomously
-  would need to be wrapped in a script the allowlist names.
+- Commands execute within the modeled pipeline subset. Substitution,
+  subshells, chaining, globbing, escapes, and descriptor redirects are
+  refused by design; a job that needs them must live in a script the
+  allowlist names. Pipeline success is every-stage-zero, stricter than a
+  shell's last-stage-wins, so a head that exits nonzero when its reader
+  stops early (the head-closes-the-pipe case) reads as a failed run.
+- Effector exclusion matches claims by cleaned string equality. Two paths
+  naming one file differently can slip past it, and two unrelated commands
+  sharing an argument word serialize when they could overlap; the
+  conservative direction is the safe one, but it is a heuristic.
 
 ## Open questions
 

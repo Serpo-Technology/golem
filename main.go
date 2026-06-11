@@ -18,6 +18,7 @@ Usage:
   golem demo execute              real execution under its gates, throwaway
   golem demo consolidate          one day, one night: merge and replay
   golem demo language             concepts, words, and built sentences
+  golem demo pipeline             shell-free pipelines and parallel actions
   golem status                    show daemon status
   golem chem                      show current neurochemistry
   golem chem --watch              print it once a second until interrupted
@@ -78,6 +79,8 @@ func main() {
 			runConsolidationDemo()
 		case len(args) >= 2 && args[1] == "language":
 			runLanguageDemo()
+		case len(args) >= 2 && args[1] == "pipeline":
+			runPipelineDemo()
 		default:
 			runDemo()
 		}

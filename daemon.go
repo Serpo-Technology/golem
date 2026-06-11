@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -442,11 +443,9 @@ func claimsOf(cmd string) []string {
 // two things, so two actions touching the same resource never overlap.
 func (d *Daemon) claimConflict(claims []string) (string, bool) {
 	for _, run := range d.running {
-		for _, held := range run.claims {
-			for _, want := range claims {
-				if held == want {
-					return run.cmd, true
-				}
+		for _, want := range claims {
+			if slices.Contains(run.claims, want) {
+				return run.cmd, true
 			}
 		}
 	}
@@ -844,7 +843,7 @@ func (d *Daemon) runningCmds() []string {
 	for id := range d.running {
 		ids = append(ids, id)
 	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	slices.Sort(ids)
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
 		out = append(out, d.running[id].cmd)
