@@ -114,22 +114,33 @@ after make test" both answer by walking links.
 
 Goal: from memory to proposals, with a human gate.
 
-- [ ] Candidate actions surface from linked action fragments of the
+- [x] Candidate actions surface from linked action fragments of the
       current context; saliency is link weight modulated by chemistry.
-- [ ] Winner-take-all gate with the ACC margin veto: top two within the
+- [x] Winner-take-all gate with the ACC margin veto: top two within the
       margin means GOLEM asks instead of acting.
-- [ ] Proposal flow: every action starts confirm-to-execute. Approvals
+- [x] Proposal flow: every action starts confirm-to-execute. Approvals
       strengthen the link, denials weaken it. Every proposal and outcome
       lands in an audit log.
-- [ ] Graduation: a specific phrase-and-command pair is promoted to
+- [x] Graduation: a specific phrase-and-command pair is promoted to
       auto-run after N consistent approvals. Any denial, correction, or
       failed run demotes it. The destructive-pattern denylist is never
       promotable.
+- [x] Manual grounding: golem teach (used by the seeding demo) binds a cue
+      to a command directly, so the loop can be exercised without waiting
+      a week for organic shell data.
+- [ ] Real execution behind autonomy: graduated pairs actually run, gated
+      by an allowlist and an explicit opt-in. Execution is dry-run until
+      then.
 - [ ] Oxytocin as trust: frequent corrections lower it globally, which
       raises the promotion bar N everywhere.
 
 Done when: at least one boring real pair (for example a log rotation) has
 graduated and runs unattended with a full audit trail.
+
+Status: the loop is built and demonstrated end to end (golem demo decide):
+grounding, graduation, the ACC conflict veto, and the denylist that keeps
+destructive commands from ever graduating. Execution is dry-run; turning
+it real is the remaining opt-in.
 
 ## Step 6: Consolidation
 

@@ -27,6 +27,12 @@ Usage:
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
+  golem propose <cue>             weigh the actions grounded to a cue and
+                                  propose one, or ask when it is ambiguous
+  golem approve                   approve the pending proposal
+  golem deny                      reject the pending proposal
+  golem habits                    list grounded cue-and-command pairs
+  golem audit                     show the recent decision trail
   golem dump                      list every fragment held in memory
   golem stop                      ask the daemon to sleep once and shut down
   golem shellhook                 print the zsh hook that feeds the shell channel
@@ -49,7 +55,11 @@ func main() {
 
 	switch args[0] {
 	case "demo":
-		runDemo()
+		if len(args) >= 2 && args[1] == "decide" {
+			runDecisionDemo()
+		} else {
+			runDemo()
+		}
 
 	case "run":
 		cfg, err := LoadConfig(home)
@@ -114,6 +124,43 @@ func main() {
 			return
 		}
 		printFragments(resp.Fragments)
+
+	case "propose":
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: golem propose <cue>"))
+		}
+		resp := call(home, Request{Cmd: "propose", Content: strings.Join(args[1:], " ")})
+		printDecision(resp.Decision)
+
+	case "approve":
+		resp := call(home, Request{Cmd: "approve"})
+		printAction(resp.Action)
+
+	case "deny":
+		resp := call(home, Request{Cmd: "deny"})
+		printAction(resp.Action)
+
+	case "habits":
+		resp := call(home, Request{Cmd: "habits"})
+		if len(resp.Habits) == 0 {
+			fmt.Println("no grounded habits yet.")
+			return
+		}
+		for _, h := range resp.Habits {
+			fmt.Printf("  [%-9s] %q -> %q  (approvals %d, denials %d)\n",
+				h.Status, h.Cue, h.Action, h.Approvals, h.Denials)
+		}
+
+	case "audit":
+		resp := call(home, Request{Cmd: "audit"})
+		if len(resp.Audit) == 0 {
+			fmt.Println("no decisions recorded yet.")
+			return
+		}
+		for _, e := range resp.Audit {
+			fmt.Printf("  %s  %q -> %q  %s\n",
+				time.Unix(e.AtUnix, 0).Format("Jan 02 15:04:05"), e.Cue, e.Action, e.Outcome)
+		}
 
 	case "stop":
 		call(home, Request{Cmd: "stop"})
@@ -226,6 +273,42 @@ func tellSession(home string) {
 			fmt.Printf("golem>   ~%.2f #%d %s %q\n", f.Activation, f.ID, f.Channel, f.Content)
 		}
 	}
+}
+
+func printDecision(d *DecisionInfo) {
+	if d == nil || !d.Grounded {
+		fmt.Printf("nothing grounded for %q yet.\n", d.Cue)
+		return
+	}
+	if d.Conflict {
+		fmt.Printf("conflict: %s\n", d.Question)
+		fmt.Println("  resolve by proposing the specific cue, then approve.")
+		return
+	}
+	mark := ""
+	if d.Denylisted {
+		mark = "  (denylisted; always confirm)"
+	}
+	fmt.Printf("proposing: %s  [saliency %.2f, %s]%s\n", d.Proposed, d.Saliency, d.Status, mark)
+	if d.Status == "graduated" {
+		fmt.Println("  this pair has graduated; it would run autonomously.")
+	} else {
+		fmt.Println("  golem approve  to run and confirm, or  golem deny  to reject.")
+	}
+	if len(d.Alternatives) > 0 {
+		fmt.Printf("  also considered: %s\n", strings.Join(d.Alternatives, ", "))
+	}
+}
+
+func printAction(a *ActionResult) {
+	if a == nil {
+		return
+	}
+	if a.Outcome == "denied" {
+		fmt.Printf("denied %q (demoted; approvals %d, denials %d)\n", a.Command, a.Approvals, a.Denials)
+		return
+	}
+	fmt.Printf("%s\n  %q is now %q (approvals %d)\n", a.Outcome, a.Command, a.Status, a.Approvals)
 }
 
 func printFragments(frags []*FragmentInfo) {

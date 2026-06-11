@@ -27,6 +27,48 @@ type Response struct {
 	Chem      *LimbicState    `json:"chem,omitempty"`
 	Fragments []*FragmentInfo `json:"fragments,omitempty"`
 	Observe   *ObserveResult  `json:"observe,omitempty"`
+	Decision  *DecisionInfo   `json:"decision,omitempty"`
+	Action    *ActionResult   `json:"action,omitempty"`
+	Habits    []*HabitInfo    `json:"habits,omitempty"`
+	Audit     []*AuditInfo    `json:"audit,omitempty"`
+}
+
+// DecisionInfo is the wire form of a proposal: a winning command, or a
+// conflict to resolve, or nothing grounded.
+type DecisionInfo struct {
+	Cue          string   `json:"cue"`
+	Grounded     bool     `json:"grounded"`
+	Proposed     string   `json:"proposed,omitempty"`
+	Saliency     float64  `json:"saliency,omitempty"`
+	Status       string   `json:"status,omitempty"`
+	Denylisted   bool     `json:"denylisted,omitempty"`
+	Conflict     bool     `json:"conflict,omitempty"`
+	Question     string   `json:"question,omitempty"`
+	Alternatives []string `json:"alternatives,omitempty"`
+}
+
+// ActionResult is the wire form of an approve or deny outcome.
+type ActionResult struct {
+	Command   string `json:"command"`
+	Outcome   string `json:"outcome"`
+	Status    string `json:"status"`
+	Approvals int    `json:"approvals"`
+	Denials   int    `json:"denials"`
+}
+
+type HabitInfo struct {
+	Cue       string `json:"cue"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	Approvals int    `json:"approvals"`
+	Denials   int    `json:"denials"`
+}
+
+type AuditInfo struct {
+	AtUnix  int64  `json:"at_unix"`
+	Cue     string `json:"cue"`
+	Action  string `json:"action"`
+	Outcome string `json:"outcome"`
 }
 
 type StatusInfo struct {

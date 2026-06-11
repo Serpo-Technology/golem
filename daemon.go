@@ -53,6 +53,10 @@ type Daemon struct {
 	// summarized as one moment.
 	governors    map[string]*tokenBucket
 	pendingStorm map[string]int
+
+	// pending holds the last proposal awaiting the operator's approve or
+	// deny.
+	pending *Decision
 }
 
 // tokenBucket is the refractory on encoding: a burst allowance that
@@ -855,10 +859,98 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 		}
 		return Response{OK: true, Fragments: infos}, false
 
+	case "propose":
+		if req.Content == "" {
+			return Response{Error: "propose needs a cue"}, false
+		}
+		dec, err := d.decide(req.Content)
+		if err != nil {
+			return Response{Error: err.Error()}, false
+		}
+		d.pending = &dec
+		return Response{OK: true, Decision: decisionInfo(dec)}, false
+
+	case "approve":
+		if d.pending == nil || d.pending.Proposed == nil {
+			return Response{Error: "no proposal is pending"}, false
+		}
+		if d.pending.Conflict {
+			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false
+		}
+		dec := *d.pending
+		h, outcome, err := d.approve(dec, time.Now())
+		if err != nil {
+			return Response{Error: err.Error()}, false
+		}
+		d.pending = nil
+		return Response{OK: true, Action: &ActionResult{
+			Command: dec.Proposed.Command, Outcome: outcome,
+			Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
+		}}, false
+
+	case "deny":
+		if d.pending == nil || d.pending.Proposed == nil {
+			return Response{Error: "no proposal is pending"}, false
+		}
+		if d.pending.Conflict {
+			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false
+		}
+		dec := *d.pending
+		h, err := d.deny(dec, time.Now())
+		if err != nil {
+			return Response{Error: err.Error()}, false
+		}
+		d.pending = nil
+		return Response{OK: true, Action: &ActionResult{
+			Command: dec.Proposed.Command, Outcome: "denied",
+			Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
+		}}, false
+
+	case "habits":
+		habits, err := d.store.AllHabits()
+		if err != nil {
+			return Response{Error: err.Error()}, false
+		}
+		out := make([]*HabitInfo, 0, len(habits))
+		for _, h := range habits {
+			out = append(out, &HabitInfo{Cue: h.Cue, Action: h.Action,
+				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials})
+		}
+		return Response{OK: true, Habits: out}, false
+
+	case "audit":
+		entries, err := d.store.AuditTail(20)
+		if err != nil {
+			return Response{Error: err.Error()}, false
+		}
+		out := make([]*AuditInfo, 0, len(entries))
+		for _, e := range entries {
+			out = append(out, &AuditInfo{AtUnix: e.At, Cue: e.Cue, Action: e.Action, Outcome: e.Outcome})
+		}
+		return Response{OK: true, Audit: out}, false
+
 	case "stop":
 		return Response{OK: true}, true
 
 	default:
 		return Response{Error: "unknown command: " + req.Cmd}, false
 	}
+}
+
+func decisionInfo(dec Decision) *DecisionInfo {
+	di := &DecisionInfo{Cue: dec.Cue}
+	if dec.Proposed == nil {
+		return di
+	}
+	di.Grounded = true
+	di.Proposed = dec.Proposed.Command
+	di.Saliency = dec.Proposed.Saliency
+	di.Status = dec.Status
+	di.Denylisted = isDenylisted(dec.Proposed.Command)
+	di.Conflict = dec.Conflict
+	di.Question = dec.Question
+	for _, a := range dec.Alternatives {
+		di.Alternatives = append(di.Alternatives, a.Command)
+	}
+	return di
 }

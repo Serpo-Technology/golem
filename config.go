@@ -20,7 +20,19 @@ const (
 	defaultPruneFloor        = 0.10
 	defaultZGate             = 2.5
 	defaultCalibWarmup       = 30
+	defaultGraduation        = 3
+	defaultConflictMargin    = 0.15
 )
+
+// actionDenylist is the set of command substrings GOLEM will always
+// propose behind explicit confirmation and never graduate to autonomy, no
+// matter how often they are approved. The shapes that are unrecoverable
+// when wrong.
+var actionDenylist = []string{
+	"rm -rf", "rm -fr", "mkfs", "dd if=", "dd of=",
+	"shutdown", "reboot", "halt", ":(){", "sudo rm", "> /dev/",
+	"git push --force", "git push -f", "drop table", "drop database",
+}
 
 // Config is everything a running GOLEM can be tuned with. It lives at
 // <home>/config.json and is created with defaults on first run.
@@ -63,6 +75,14 @@ type Config struct {
 	// senses (the shell hook, scripts) need no entry here; anything can
 	// feed any channel through golem observe.
 	Channels ChannelsConfig `json:"channels"`
+	// GraduationApprovals is how many consistent approvals promote a
+	// cue-and-command pair from confirm-to-execute to autonomous. A single
+	// denial or failed run demotes it.
+	GraduationApprovals int `json:"graduation_approvals"`
+	// ConflictMargin is the ACC veto threshold: if the top two candidate
+	// actions sit within this fraction of each other, GOLEM asks instead
+	// of choosing.
+	ConflictMargin float64 `json:"conflict_margin"`
 }
 
 type ChannelsConfig struct {
@@ -80,19 +100,21 @@ type ChannelsConfig struct {
 
 func DefaultConfig() Config {
 	return Config{
-		SurpriseThreshold:  defaultSurpriseThreshold,
-		PredictorWindow:    defaultPredictorWindow,
-		SleepPressureGate:  defaultSleepPressureGate,
-		InputSilenceSec:    defaultInputSilenceSec,
-		CalmBeforeSleepSec: defaultCalmSec,
-		SleepIntervalSec:   defaultSleepIntervalSec,
-		NightlyDecay:       defaultNightlyDecay,
-		PruneFloor:         defaultPruneFloor,
-		ZGate:              defaultZGate,
-		CalibrationWarmup:  defaultCalibWarmup,
-		EncodeBurst:        6,
-		EncodeRefillSec:    2,
-		PredictorWindows:   map[string]float64{"syslog": 8192},
+		SurpriseThreshold:   defaultSurpriseThreshold,
+		PredictorWindow:     defaultPredictorWindow,
+		SleepPressureGate:   defaultSleepPressureGate,
+		InputSilenceSec:     defaultInputSilenceSec,
+		CalmBeforeSleepSec:  defaultCalmSec,
+		SleepIntervalSec:    defaultSleepIntervalSec,
+		NightlyDecay:        defaultNightlyDecay,
+		PruneFloor:          defaultPruneFloor,
+		ZGate:               defaultZGate,
+		CalibrationWarmup:   defaultCalibWarmup,
+		EncodeBurst:         6,
+		EncodeRefillSec:     2,
+		PredictorWindows:    map[string]float64{"syslog": 8192},
+		GraduationApprovals: defaultGraduation,
+		ConflictMargin:      defaultConflictMargin,
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,

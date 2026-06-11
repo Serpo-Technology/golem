@@ -64,6 +64,20 @@ CREATE TABLE IF NOT EXISTS calib (
 	n       INTEGER NOT NULL,
 	mean    REAL    NOT NULL,
 	vari    REAL    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habits (
+	cue       TEXT    NOT NULL,
+	action    TEXT    NOT NULL,
+	approvals INTEGER NOT NULL,
+	denials   INTEGER NOT NULL,
+	status    TEXT    NOT NULL,
+	PRIMARY KEY (cue, action)
+);
+CREATE TABLE IF NOT EXISTS audit (
+	at      INTEGER NOT NULL,
+	cue     TEXT    NOT NULL,
+	action  TEXT    NOT NULL,
+	outcome TEXT    NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -325,6 +339,19 @@ func (s *Store) StrengthenLinks(edges []LinkEdge, delta float64) error {
 	return nil
 }
 
+// NudgeLinks shifts a set of edges in both directions, clamped to [0, 1].
+// Approval strengthens the cue-to-action path; denial weakens it.
+func (s *Store) NudgeLinks(edges []LinkEdge, delta float64) error {
+	for _, e := range edges {
+		if _, err := s.db.Exec(`UPDATE links SET weight = max(0.0, min(1.0, weight + ?))
+			WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)`,
+			delta, e.From, e.To, e.To, e.From); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // BumpAssoc counts one more co-occurrence of a template pair, order
 // insensitive, and returns the running count. The count is how the system
 // notices that an association is being confirmed by repetition.
@@ -379,6 +406,97 @@ func (s *Store) LinkCounts() (map[uint64]int, error) {
 func (s *Store) Checkpoint() error {
 	_, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`)
 	return err
+}
+
+// Habit is the durable record of how a cue-and-command pair has been
+// judged: enough consistent approvals graduate it to autonomy, any denial
+// demotes it.
+type Habit struct {
+	Cue       string
+	Action    string
+	Approvals int
+	Denials   int
+	Status    string
+}
+
+const (
+	HabitProposing = "proposing"
+	HabitGraduated = "graduated"
+	HabitDemoted   = "demoted"
+)
+
+// LoadHabit returns the stored judgement for a pair, or a zero-value
+// proposing habit if the pair is new.
+func (s *Store) LoadHabit(cue, action string) (Habit, error) {
+	h := Habit{Cue: cue, Action: action, Status: HabitProposing}
+	err := s.db.QueryRow(`SELECT approvals, denials, status FROM habits WHERE cue = ? AND action = ?`,
+		cue, action).Scan(&h.Approvals, &h.Denials, &h.Status)
+	if err == sql.ErrNoRows {
+		return h, nil
+	}
+	return h, err
+}
+
+func (s *Store) SaveHabit(h Habit) error {
+	_, err := s.db.Exec(`INSERT INTO habits (cue, action, approvals, denials, status)
+		VALUES (?,?,?,?,?)
+		ON CONFLICT(cue, action) DO UPDATE SET
+			approvals = excluded.approvals, denials = excluded.denials, status = excluded.status`,
+		h.Cue, h.Action, h.Approvals, h.Denials, h.Status)
+	return err
+}
+
+// AllHabits returns every grounded pair, graduated first.
+func (s *Store) AllHabits() ([]Habit, error) {
+	rows, err := s.db.Query(`SELECT cue, action, approvals, denials, status FROM habits
+		ORDER BY status, approvals DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Habit
+	for rows.Next() {
+		var h Habit
+		if err := rows.Scan(&h.Cue, &h.Action, &h.Approvals, &h.Denials, &h.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// Audit appends one decision outcome to the durable trail.
+func (s *Store) Audit(at int64, cue, action, outcome string) error {
+	_, err := s.db.Exec(`INSERT INTO audit (at, cue, action, outcome) VALUES (?,?,?,?)`,
+		at, cue, action, outcome)
+	return err
+}
+
+// AuditEntry is one line of the decision trail.
+type AuditEntry struct {
+	At      int64
+	Cue     string
+	Action  string
+	Outcome string
+}
+
+func (s *Store) AuditTail(limit int) ([]AuditEntry, error) {
+	// rowid breaks same-second ties so the newest entry is always first.
+	rows, err := s.db.Query(`SELECT at, cue, action, outcome FROM audit
+		ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(&e.At, &e.Cue, &e.Action, &e.Outcome); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // CalibState is one channel's persisted saliency calibration.
