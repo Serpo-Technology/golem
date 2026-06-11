@@ -105,3 +105,18 @@ func TestSpeechWarmsNamedConcepts(t *testing.T) {
 		t.Fatalf("speaking a concept's name should warm it fully, got %.2f", h)
 	}
 }
+
+// Two concepts pinned at the ceiling are separated by recency, so "do it
+// again" follows the latest mention rather than the higher id.
+func TestWarmestBreaksTiesByRecency(t *testing.T) {
+	w := newWorkspace()
+	w.excite(10, 1.0) // higher id, mentioned first
+	w.excite(7, 1.0)  // lower id, mentioned later
+	if top := w.warmest(2); top[0].id != 7 {
+		t.Fatalf("the latest mention should rank first at equal heat, got %d", top[0].id)
+	}
+	w.excite(10, 1.0) // re-mentioning lifts it back to the front
+	if top := w.warmest(2); top[0].id != 10 {
+		t.Fatalf("a fresh mention should move to the front, got %d", top[0].id)
+	}
+}

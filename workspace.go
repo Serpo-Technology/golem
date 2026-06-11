@@ -24,11 +24,13 @@ const (
 )
 
 type workspace struct {
-	act map[uint64]float64
+	act   map[uint64]float64
+	touch map[uint64]uint64 // sequence of last excitation, for recency tie-breaks
+	seq   uint64
 }
 
 func newWorkspace() *workspace {
-	return &workspace{act: make(map[uint64]float64)}
+	return &workspace{act: make(map[uint64]float64), touch: make(map[uint64]uint64)}
 }
 
 // excite warms a concept, keeping whichever is higher: the new activation
@@ -44,6 +46,11 @@ func (w *workspace) excite(id uint64, amount float64) {
 	if amount > w.act[id] {
 		w.act[id] = amount
 	}
+	// Touching a concept refers to it now, even when it was already this
+	// warm. Recency is what separates two concepts pinned at the ceiling,
+	// so "do it again" follows the latest mention rather than the lowest id.
+	w.seq++
+	w.touch[id] = w.seq
 	if len(w.act) <= workspaceBudget {
 		return
 	}
@@ -55,6 +62,7 @@ func (w *workspace) excite(id uint64, amount float64) {
 		}
 	}
 	delete(w.act, coldest)
+	delete(w.touch, coldest)
 }
 
 // decay cools every activation a little and forgets what has faded below
@@ -64,6 +72,7 @@ func (w *workspace) decay() {
 		a *= workspaceDecayKeep
 		if a < workspaceFloor {
 			delete(w.act, id)
+			delete(w.touch, id)
 			continue
 		}
 		w.act[id] = a
@@ -72,6 +81,7 @@ func (w *workspace) decay() {
 
 func (w *workspace) clear() {
 	w.act = make(map[uint64]float64)
+	w.touch = make(map[uint64]uint64)
 }
 
 // heat reports a concept's current activation.
@@ -93,7 +103,7 @@ func (w *workspace) warmest(n int) []warmEntry {
 		if out[i].heat != out[j].heat {
 			return out[i].heat > out[j].heat
 		}
-		return out[i].id > out[j].id
+		return w.touch[out[i].id] > w.touch[out[j].id]
 	})
 	if len(out) > n {
 		out = out[:n]

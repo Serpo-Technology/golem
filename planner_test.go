@@ -280,3 +280,33 @@ func TestStatementCuriosity(t *testing.T) {
 		t.Fatalf("high dopamine should ask about the unknown: %q", resp.Say)
 	}
 }
+
+// Greedy naming bonds a once-said word too; a name that kept the concept's
+// company far less than its firmest is spoken as a tentative pointer, and
+// does not borrow the concept's tally as if it were the word's own.
+func TestWeakNamingIsTentative(t *testing.T) {
+	d, s := testDaemon(t)
+	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-2*time.Hour))
+	// "tests" keeps company every run; "green" only once.
+	d.mintWords("tests", "en", 0, anchors)
+	d.mintWords("green", "en", 0, anchors[:1])
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+
+	firm := say(t, d, "what is tests")
+	if !strings.HasPrefix(firm.Say, "Tests names go test ./...") {
+		t.Fatalf("a firm name should be asserted: %q", firm.Say)
+	}
+	if !strings.Contains(firm.Say, "seen it") {
+		t.Fatalf("a firm answer counts the experience: %q", firm.Say)
+	}
+	weak := say(t, d, "what is green")
+	if !strings.HasPrefix(weak.Say, "Green may name go test ./...") {
+		t.Fatalf("a weak name should be hedged: %q", weak.Say)
+	}
+	if strings.Contains(weak.Say, "seen it") {
+		t.Fatalf("a tentative pointer must not borrow the concept's tally: %q", weak.Say)
+	}
+}

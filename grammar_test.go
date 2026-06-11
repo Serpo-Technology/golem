@@ -161,3 +161,25 @@ func TestRealizeProposal(t *testing.T) {
 		t.Fatalf("no doubled terminal mark: %q", got)
 	}
 }
+
+// A negator denies the predicate rather than asserting its opposite: the
+// inversion where "never follows" used to read as "usually follows".
+func TestNegationDoesNotInvert(t *testing.T) {
+	calm := LimbicState{Oxytocin: oxytocinBaseline}
+	f := Parse("make deploy never follows make test", nil)
+	if !f.Negate {
+		t.Fatalf("a negator should deny the predicate: %+v", f)
+	}
+	if f.Habit {
+		t.Fatalf("'never' must not read as a habit adverb: %+v", f)
+	}
+	if got := Realize(f, calm); got != "Make deploy does not follow make test." {
+		t.Fatalf("a denial must not come out as its opposite: %q", got)
+	}
+	// Do-support negation parses the base verb too, so "does not follow"
+	// fills the action rather than scattering into the noun phrase.
+	g := Parse("make test does not follow make deploy", nil)
+	if !g.Negate || g.Action.Phrase != "follow" {
+		t.Fatalf("do-support negation should parse to a denied follow: %+v", g)
+	}
+}

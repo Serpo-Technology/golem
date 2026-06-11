@@ -57,6 +57,41 @@ func (d *Daemon) resolveConcept(phrase string) *Fragment {
 	return nil
 }
 
+// namingContrast measures how firmly a phrase names a concept against the
+// concept's firmest name. The repeat bonus is the only part of a naming
+// weight that varies per word; the dopamine that lifts every name the same
+// cancels in the gap, so a large gap means this word kept the concept's
+// company far less often than its best-established name and is a weak
+// pointer, not a settled one.
+func (d *Daemon) namingContrast(phrase string, conceptID uint64) (asked, top float64) {
+	if into, err := d.store.LinksToRel([]uint64{conceptID}, RelNames); err == nil {
+		for _, e := range into {
+			if e.Weight > top {
+				top = e.Weight
+			}
+		}
+	}
+	tokens, _ := tokenize(phrase)
+	words, err := d.store.WordNodesByForms(tokens)
+	if err != nil || len(words) == 0 {
+		return 0, top
+	}
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	names, err := d.store.LinksFromRel(ids, RelNames)
+	if err != nil {
+		return 0, top
+	}
+	for _, e := range names {
+		if e.To == conceptID && e.Weight > asked {
+			asked = e.Weight
+		}
+	}
+	return asked, top
+}
+
 // anchorEpisodes resolves a term to the moments it stands for and to the
 // face the answer should speak for them. An exact shape match outranks
 // the concept the term's words voted for: greedy naming can point a
@@ -373,18 +408,28 @@ func (d *Daemon) planQuestion(frame Frame) string {
 		if c.Category == "verb" {
 			kindWord = "an action"
 		}
+		tentative := false
 		var parts []string
 		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {
-			// The asked word and the concept differ: name the pointer.
+			// The asked word and the concept differ: name the pointer. Greedy
+			// early naming bonds bystander words too, so a word that names the
+			// concept far more weakly than its firmest name is spoken as a
+			// tentative pointer rather than asserted as fact.
+			asked, top := d.namingContrast(topic.Phrase, c.ID)
+			tentative = asked > 0 && top-asked > namesContrastGap
 			parts = append(parts, Realize(Frame{Force: ForceStatement,
 				Agent:  Term{Phrase: topic.Phrase},
-				Action: Term{Phrase: "name"}, Patient: Term{Phrase: c.Content}}, chem))
+				Action: Term{Phrase: "name"}, Patient: Term{Phrase: c.Content},
+				Hedge: tentative}, chem))
 		} else {
 			parts = append(parts, Realize(Frame{Force: ForceStatement,
 				Agent:  Term{Phrase: c.Content},
 				Action: Term{Phrase: "be"}, Patient: Term{Phrase: kindWord}}, chem))
 		}
-		if n := tally[c.ID]; n > 0 {
+		// A firm answer counts the experience behind the concept; a tentative
+		// pointer does not borrow that concept's tally as if it were the
+		// word's own.
+		if n := tally[c.ID]; n > 0 && !tentative {
 			parts = append(parts, Realize(Frame{Force: ForceStatement,
 				Action:  Term{Phrase: "see"},
 				Patient: Term{Phrase: "it"}, Times: n}, chem))

@@ -65,16 +65,22 @@ func runLanguageDemo() {
 	d.recent = nil
 
 	fmt.Println("\n2. WORDS KEEP COMPANY. While the tests run you speak, in two")
-	fmt.Println("   languages; the words bind to the moments around them:")
-	fmt.Println("      \"the tests are green\"        (en)")
-	fmt.Println("      \"testler temiz\"              (tr)")
+	fmt.Println("   languages. A word you use every run bonds firmly to the")
+	fmt.Println("   moment; a word said once in passing bonds weakly:")
+	fmt.Println("      \"the tests pass\" / \"testler temiz\"   every run")
+	fmt.Println("      \"looks green\"                       said once")
 	for i := range 3 {
 		at := day.Add(time.Duration(i)*90*time.Minute + 5*time.Second)
 		feed("shell", "run: make test", at)
-		speakAt("the tests are green", "en", at.Add(3*time.Second))
+		speakAt("the tests pass", "en", at.Add(3*time.Second))
 		speakAt("testler temiz", "tr", at.Add(6*time.Second))
 		d.recent = nil
 	}
+	// A single passing remark: the bystander adjective bonds only once.
+	oneOff := day.Add(3*90*time.Minute + 5*time.Second)
+	feed("shell", "run: make test", oneOff)
+	speakAt("looks green", "en", oneOff.Add(3*time.Second))
+	d.recent = nil
 
 	fmt.Println("\n3. SLEEP. The night merges repeats into prototypes, distils")
 	fmt.Println("   prototypes into concepts, and bonds the day's words to the")
@@ -93,14 +99,16 @@ func runLanguageDemo() {
 			fmt.Printf("           named by: %s\n", strings.Join(c.Names, ", "))
 		}
 	}
-	fmt.Println("   Early naming is greedy: bystander words like \"green\" bond too.")
-	fmt.Println("   Bonds that keep recurring strengthen; the rest decay away.")
+	fmt.Println("   Naming is greedy, so \"green\" bonds too, but only once: it")
+	fmt.Println("   keeps the concept's company far less than \"testler\", and that")
+	fmt.Println("   gap is what GOLEM hears as a weak, tentative pointer.")
 
 	fmt.Println("\n4. QUESTIONS. The answers are built by the grammar, never replayed")
 	fmt.Println("   from stored text; outside its grounding GOLEM says so.")
 	ask("what usually happens after make test")
 	ask("what comes before make deploy")
 	ask("what is testler")
+	ask("what is green")
 	ask("what usually happens after make deploy")
 
 	fmt.Println("\n5. THE OTHER LANGUAGE. \"testler\" shares no text with any shell")

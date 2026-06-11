@@ -26,6 +26,11 @@ const (
 	namesDopamineGain  = 0.5
 	namesRepeatBonus   = 0.08 // per co-occurring grounded episode beyond the first
 	namesMaxWeight     = 0.95
+	// A name at least two co-occurrences below the concept's firmest is a
+	// weak pointer, spoken tentatively. The gap reads the repeat-bonus
+	// spread, so it tracks how much less often a word kept the concept's
+	// company, not the shared dopamine that lifts every name alike.
+	namesContrastGap = 0.12
 )
 
 // lemmaCategory derives a concept's syntactic category from its grounding
@@ -209,6 +214,7 @@ type NamingPair struct {
 	Word     uint64
 	Concept  uint64
 	Episodes int
+	Affinity float64 // summed co-occurrence weight, firmer the more company kept
 	Existing float64
 }
 
@@ -217,7 +223,7 @@ type NamingPair struct {
 // word has bound to.
 func (s *Store) NamingPairs() ([]NamingPair, error) {
 	rows, err := s.db.Query(`
-		SELECT w.id, c.id, COUNT(DISTINCT l1.to_id),
+		SELECT w.id, c.id, COUNT(DISTINCT l1.to_id), SUM(l1.weight),
 		       COALESCE((SELECT weight FROM links
 		                 WHERE from_id = w.id AND to_id = c.id AND rel = ?), 0)
 		FROM fragments w
@@ -234,7 +240,7 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 	var out []NamingPair
 	for rows.Next() {
 		var p NamingPair
-		if err := rows.Scan(&p.Word, &p.Concept, &p.Episodes, &p.Existing); err != nil {
+		if err := rows.Scan(&p.Word, &p.Concept, &p.Episodes, &p.Affinity, &p.Existing); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -305,7 +311,16 @@ func (d *Daemon) growConcepts() (born, named int) {
 	}
 	da := d.chem.Snapshot().Dopamine
 	for _, p := range pairs {
-		w := namesBaseWeight + namesDopamineGain*da + namesRepeatBonus*float64(p.Episodes-1)
+		// Firmness is how heavily the word stayed bound to the concept's
+		// episodes. Sleep folds repeated co-occurrences into one prototype
+		// edge by summing their weights, so accumulated affinity, not the
+		// distinct episode count that merge collapses to one, carries how
+		// often the word kept the concept's company.
+		extra := p.Affinity/linkBaseWeight - 1
+		if extra < 0 {
+			extra = 0
+		}
+		w := namesBaseWeight + namesDopamineGain*da + namesRepeatBonus*extra
 		if w > namesMaxWeight {
 			w = namesMaxWeight
 		}

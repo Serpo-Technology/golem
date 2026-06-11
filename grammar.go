@@ -28,19 +28,21 @@ const (
 	catDet   = "det"   // determiners: skipped during resolution
 	catCop   = "cop"   // copulas: definition questions
 	catHap   = "hap"   // happen-verbs: event questions
+	catNeg   = "neg"   // negators: deny the predicate
 	catFn    = "fn"    // grammatical filler with no slot of its own
 )
 
 var innateCategory = map[string]string{
 	"what": catWh, "when": catWh, "which": catWh, "who": catWh, "why": catWh, "how": catWh,
 	"after": catRel, "before": catRel,
-	"usually": catAdv, "always": catAdv, "often": catAdv, "never": catAdv, "sometimes": catAdv,
+	"usually": catAdv, "always": catAdv, "often": catAdv, "sometimes": catAdv,
 	"again": catAgain,
 	"it":    catPro, "that": catPro, "this": catPro, "them": catPro, "one": catPro,
 	"do": catImp, "run": catImp, "execute": catImp, "show": catImp, "retry": catImp, "try": catImp,
 	"the": catDet, "a": catDet, "an": catDet, "my": catDet, "your": catDet,
 	"is": catCop, "are": catCop, "was": catCop, "were": catCop,
-	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap,
+	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap, "follow": catHap, "come": catHap, "happen": catHap,
+	"not": catNeg, "never": catNeg, "no": catNeg, "cannot": catNeg,
 	"i": catFn, "you": catFn, "we": catFn, "me": catFn, "us": catFn,
 	"to": catFn, "of": catFn, "in": catFn, "on": catFn, "at": catFn, "and": catFn, "or": catFn,
 	"does": catFn, "did": catFn, "next": catFn, "then": catFn, "now": catFn, "yet": catFn,
@@ -128,6 +130,7 @@ type Frame struct {
 	Rel     string // temporal qualifier on the clause: "", "after", "before"
 	Anchor  Term   // what the qualifier attaches to
 	Negate  bool   // the predicate is denied
+	Hedge   bool   // the claim is tentative ("may name")
 	Habit   bool   // the clause states a habit ("usually")
 	Times   int    // occurrence count, for "I have seen it N times"
 	Pro     bool   // the patient was a pro-form; resolve it from the workspace
@@ -193,6 +196,9 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 		case catAdv:
 			f.Habit = true
 			flush()
+		case catNeg:
+			f.Negate = true
+			flush()
 		case catWh, catRel, catImp, catDet, catFn:
 			flush()
 		default:
@@ -229,7 +235,7 @@ func contentSpan(tokens []string) string {
 	var out []string
 	for _, tok := range tokens {
 		switch innateCategory[tok] {
-		case catDet, catFn, catAdv:
+		case catDet, catFn, catAdv, catNeg:
 			continue
 		}
 		out = append(out, tok)
@@ -274,6 +280,10 @@ func Realize(f Frame, chem LimbicState) string {
 	case "follow", "precede":
 		verb := f.Action.Phrase
 		switch {
+		case f.Negate:
+			// A denial must never come out as its opposite.
+			b.WriteString(" does not ")
+			b.WriteString(verb)
 		case chem.Oxytocin < oxytocinBaseline:
 			// A recently corrected system hedges its inferences.
 			b.WriteString(" may ")
@@ -306,7 +316,11 @@ func Realize(f Frame, chem LimbicState) string {
 		b.WriteString(" is ")
 		b.WriteString(f.Patient.speak())
 	case "name":
-		b.WriteString(" names ")
+		if f.Hedge {
+			b.WriteString(" may name ")
+		} else {
+			b.WriteString(" names ")
+		}
 		b.WriteString(f.Patient.speak())
 	case "propose":
 		b.WriteString(" propose ")
