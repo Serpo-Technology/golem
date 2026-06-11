@@ -75,6 +75,7 @@ func TestObservationFiresGraduatedHabit(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "alert: disk pressure rising on volume 2", At: time.Now()}, false, true)
+	d.settleExecution()
 
 	entries, _ := d.store.AuditTail(5)
 	var hit *AuditEntry
@@ -107,6 +108,7 @@ func TestReflexNeedsGraduation(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "alert: disk pressure rising", At: time.Now()}, false, true)
+	d.settleExecution()
 
 	if n := autonomousRuns(t, d); n != 0 {
 		t.Fatalf("an ungraduated pair must not fire, got %d runs", n)
@@ -125,6 +127,7 @@ func TestReflexRespectsExecutionGates(t *testing.T) {
 	// Master switch off.
 	d.process(Observation{Channel: "syslog",
 		Content: "warning: disk pressure climbing", At: time.Now()}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 0 {
 		t.Fatalf("execution off must hold the reflex, got %d runs", n)
 	}
@@ -134,6 +137,7 @@ func TestReflexRespectsExecutionGates(t *testing.T) {
 	d.cfg.ExecuteAllowlist = []string{"ls"}
 	d.process(Observation{Channel: "syslog",
 		Content: "warning: disk pressure climbing again", At: time.Now().Add(2 * time.Minute)}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 0 {
 		t.Fatalf("the allowlist must hold the reflex, got %d runs", n)
 	}
@@ -154,6 +158,7 @@ func TestReflexCooldown(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		d.process(Observation{Channel: "syslog",
 			Content: "disk pressure spike", At: now.Add(time.Duration(i) * time.Second)}, false, true)
+		d.settleExecution()
 	}
 	if n := autonomousRuns(t, d); n != 1 {
 		t.Fatalf("five matches inside the cooldown should run once, got %d", n)
@@ -161,6 +166,7 @@ func TestReflexCooldown(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "disk pressure spike", At: now.Add(10 * time.Minute)}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 2 {
 		t.Fatalf("a match past the cooldown should run again, got %d", n)
 	}
@@ -177,14 +183,17 @@ func TestReflexIgnoresActionEchoes(t *testing.T) {
 
 	d.process(Observation{Channel: "action",
 		Content: "ran echo deep clean done -> ok", At: now}, false, true)
+	d.settleExecution()
 	d.process(Observation{Channel: "shell",
 		Content: "run: deep clean now", At: now.Add(2 * time.Minute)}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 0 {
 		t.Fatalf("echoes must not cue, got %d runs", n)
 	}
 
 	d.process(Observation{Channel: "syslog",
 		Content: "time for the deep clean cycle", At: now.Add(4 * time.Minute)}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 1 {
 		t.Fatalf("a sensory observation should still cue, got %d runs", n)
 	}
@@ -225,6 +234,7 @@ func TestReflexHonorsConflictVeto(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "scheduled tidy up window open", At: now}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 0 {
 		t.Fatalf("an ambiguous cue must not fire, got %d runs", n)
 	}
@@ -241,6 +251,7 @@ func TestDemotionStopsReflex(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "disk pressure high", At: now}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 1 {
 		t.Fatalf("the graduated pair should fire first, got %d", n)
 	}
@@ -255,6 +266,7 @@ func TestDemotionStopsReflex(t *testing.T) {
 
 	d.process(Observation{Channel: "syslog",
 		Content: "disk pressure high", At: now.Add(10 * time.Minute)}, false, true)
+	d.settleExecution()
 	if n := autonomousRuns(t, d); n != 1 {
 		t.Fatalf("a demoted pair must stop firing, got %d runs", n)
 	}

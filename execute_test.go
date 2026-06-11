@@ -195,7 +195,7 @@ func TestGraduatedButBlockedStaysPending(t *testing.T) {
 		}
 	}
 	// Execution is off (default): proposing must not autorun.
-	resp, _ := d.handle(Request{Cmd: "propose", Content: "greet"})
+	resp, _ := d.handleNow(Request{Cmd: "propose", Content: "greet"})
 	if resp.Decision.Autonomous {
 		t.Fatalf("a blocked graduated command must not report an autonomous run: %+v", resp.Decision)
 	}
@@ -246,7 +246,7 @@ func TestAutonomousRunOnPropose(t *testing.T) {
 	// Turn execution on and propose: it should run autonomously.
 	d.cfg.ExecuteEnabled = true
 	d.cfg.ExecuteAllowlist = []string{"echo"}
-	resp, _ := d.handle(Request{Cmd: "propose", Content: "greet"})
+	resp, _ := d.handleNow(Request{Cmd: "propose", Content: "greet"})
 	if resp.Decision == nil || !resp.Decision.Autonomous {
 		t.Fatalf("a graduated allowed command should run autonomously: %+v", resp.Decision)
 	}
@@ -276,7 +276,7 @@ func TestAutonomousFailureDemotes(t *testing.T) {
 	d.cfg.ExecuteEnabled = true
 	d.cfg.ExecuteAllowlist = []string{"false"}
 
-	resp, _ := d.handle(Request{Cmd: "propose", Content: "do it"})
+	resp, _ := d.handleNow(Request{Cmd: "propose", Content: "do it"})
 	if resp.Decision == nil || !resp.Decision.Autonomous || !resp.Decision.Demoted {
 		t.Fatalf("a failed autonomous run should demote: %+v", resp.Decision)
 	}

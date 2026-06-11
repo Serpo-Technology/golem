@@ -63,6 +63,22 @@ type Daemon struct {
 	gradCues       []string
 	gradCuesLoaded bool
 	lastAutoCue    map[string]time.Time
+
+	// Commands run off the loop, one at a time: running marks a command
+	// in flight, and execDone carries its result back into the loop where
+	// the bookkeeping finishes single-threaded.
+	running    bool
+	runningCmd string
+	execDone   chan execResult
+}
+
+// execResult is a finished command on its way back into the brain loop.
+// finish completes the habit, audit, feedback, and reply work that must
+// run single-threaded, so the loop calls it, never the exec goroutine.
+type execResult struct {
+	ran, ok bool
+	outcome string
+	finish  func(ran, ok bool, outcome string)
 }
 
 // tokenBucket is the refractory on encoding: a burst allowance that
@@ -156,6 +172,7 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		obs:          make(chan Observation, 256),
 		reqs:         make(chan ipcReq),
 		stop:         make(chan struct{}),
+		execDone:     make(chan execResult, 1),
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -300,12 +317,19 @@ func (d *Daemon) Run() error {
 			d.process(o, false, true)
 
 		case r := <-d.reqs:
-			resp, quit := d.handle(r.req)
-			r.reply <- resp
+			resp, deferred, quit := d.handle(r.req, r.reply)
+			if !deferred {
+				r.reply <- resp
+			}
 			if quit {
 				d.shutdown(listener, sock)
 				return nil
 			}
+
+		case res := <-d.execDone:
+			d.running = false
+			d.runningCmd = ""
+			res.finish(res.ran, res.ok, res.outcome)
 
 		case <-homeostasis.C:
 			d.chem.Decay()
@@ -323,6 +347,47 @@ func (d *Daemon) Run() error {
 			return nil
 		}
 	}
+}
+
+// startExec runs one command off the brain loop. The goroutine touches no
+// daemon state: it runs the command and posts the result to execDone,
+// where the loop calls finish single-threaded. While the command runs the
+// loop keeps sensing and answering; one command runs at a time, so callers
+// must check d.running first.
+func (d *Daemon) startExec(cmd string, finish func(ran, ok bool, outcome string)) {
+	d.running = true
+	d.runningCmd = cmd
+	timeout := d.execTimeout()
+	go func() {
+		ran, ok, outcome := runCommand(cmd, timeout)
+		d.execDone <- execResult{ran: ran, ok: ok, outcome: outcome, finish: finish}
+	}()
+}
+
+// settleExecution waits for the in-flight command, if any, and completes
+// it the way the Run loop would. Only loopless drivers need it: demos,
+// tests, and shutdown, where the loop has already stopped selecting.
+func (d *Daemon) settleExecution() {
+	if !d.running {
+		return
+	}
+	res := <-d.execDone
+	d.running = false
+	d.runningCmd = ""
+	res.finish(res.ran, res.ok, res.outcome)
+}
+
+// handleNow services one request synchronously, completing any execution
+// it starts before returning. It is the entry point for demos and tests
+// that drive the daemon without its Run loop.
+func (d *Daemon) handleNow(req Request) (Response, bool) {
+	reply := make(chan Response, 1)
+	resp, deferred, quit := d.handle(req, reply)
+	if !deferred {
+		return resp, quit
+	}
+	d.settleExecution()
+	return <-reply, quit
 }
 
 // startSensors launches the built-in senses the config asks for. Every
@@ -736,6 +801,11 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	close(d.stop)
 	listener.Close()
 
+	// An in-flight command finishes and its outcome is recorded before
+	// the final consolidation, so stopping cannot lose a result. The wait
+	// is bounded by the execution timeout.
+	d.settleExecution()
+
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err == nil {
 		d.sleeps++
@@ -783,9 +853,12 @@ func (d *Daemon) tellAbout(req Request) Response {
 	return resp
 }
 
-// handle services one CLI request inside the brain loop. The second return
-// value reports whether the daemon should shut down.
-func (d *Daemon) handle(req Request) (Response, bool) {
+// handle services one CLI request inside the brain loop. A deferred reply
+// means an execution was started: the reply channel is answered when the
+// command's result marshals back through execDone, and the loop must not
+// reply itself. The quit return reports whether the daemon should shut
+// down.
+func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferred, quit bool) {
 	switch req.Cmd {
 	case "status":
 		held, _ := d.store.Count()
@@ -803,29 +876,30 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 			PromotionBar:   d.promotionBar(),
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
-		}}, false
+			Running:        d.runningCmd,
+		}}, false, false
 
 	case "chem":
 		chem := d.chem.Snapshot()
-		return Response{OK: true, Chem: &chem}, false
+		return Response{OK: true, Chem: &chem}, false, false
 
 	case "observe":
 		if req.Channel == "" || req.Content == "" {
-			return Response{Error: "observe needs a channel and content"}, false
+			return Response{Error: "observe needs a channel and content"}, false, false
 		}
 		res := d.process(Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false, true)
-		return Response{OK: true, Observe: &res}, false
+		return Response{OK: true, Observe: &res}, false, false
 
 	case "tell":
 		if req.Content == "" {
-			return Response{Error: "tell needs words"}, false
+			return Response{Error: "tell needs words"}, false, false
 		}
 		if req.Query != "" {
-			return d.tellAbout(req), false
+			return d.tellAbout(req), false, false
 		}
 		res := d.process(Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
-			return Response{Error: "the words could not be stored; check the daemon log"}, false
+			return Response{Error: "the words could not be stored; check the daemon log"}, false, false
 		}
 		resp := Response{OK: true, Observe: &res}
 		// What do these words point at? The new fragment just bound to the
@@ -837,7 +911,7 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 				}
 			}
 		}
-		return resp, false
+		return resp, false, false
 
 	case "recall":
 		var seeds []*Fragment
@@ -852,7 +926,7 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 			seeds, err = d.store.Recall(req.Query, 3)
 		}
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		infos := make([]*FragmentInfo, 0, len(seeds))
 		for _, f := range seeds {
@@ -867,12 +941,12 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 				infos = append(infos, cloud...)
 			}
 		}
-		return Response{OK: true, Fragments: infos}, false
+		return Response{OK: true, Fragments: infos}, false, false
 
 	case "dump":
 		frags, err := d.store.Dump()
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		degrees, _ := d.store.LinkCounts()
 		infos := make([]*FragmentInfo, 0, len(frags))
@@ -881,103 +955,134 @@ func (d *Daemon) handle(req Request) (Response, bool) {
 			info.LinkCount = degrees[f.ID]
 			infos = append(infos, info)
 		}
-		return Response{OK: true, Fragments: infos}, false
+		return Response{OK: true, Fragments: infos}, false, false
 
 	case "teach":
 		if req.Content == "" || req.Command == "" {
-			return Response{Error: "teach needs a cue and a command"}, false
+			return Response{Error: "teach needs a cue and a command"}, false, false
 		}
 		d.teach(req.Content, req.Command, time.Now())
-		return Response{OK: true}, false
+		return Response{OK: true}, false, false
 
 	case "propose":
 		if req.Content == "" {
-			return Response{Error: "propose needs a cue"}, false
+			return Response{Error: "propose needs a cue"}, false, false
 		}
 		dec, err := d.decide(req.Content)
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		di := decisionInfo(dec)
 		// A graduated, allowed command is the payoff of graduation: it runs
 		// now, with no separate approval, and there is nothing left pending.
+		// The run happens off the loop; the reply waits for its outcome.
 		if dec.Proposed != nil && !dec.Conflict && dec.Status == HabitGraduated {
 			if allowed, _ := d.mayExecute(dec.Proposed.Command); allowed {
-				outcome, demoted := d.autorun(dec, "", time.Now())
-				di.Autonomous = true
-				di.Outcome = outcome
-				di.Demoted = demoted
+				if d.running {
+					return Response{Error: "an action is already running (" + d.runningCmd + "); propose again when it finishes"}, false, false
+				}
 				d.pending = nil
-				return Response{OK: true, Decision: di}, false
+				d.startExec(dec.Proposed.Command, func(ran, ok bool, outcome string) {
+					demoted := d.autorunFinish(dec, "", ran, ok, outcome, time.Now())
+					di.Autonomous = true
+					di.Outcome = outcome
+					di.Demoted = demoted
+					reply <- Response{OK: true, Decision: di}
+				})
+				return Response{}, true, false
 			}
 		}
 		d.pending = &dec
-		return Response{OK: true, Decision: di}, false
+		return Response{OK: true, Decision: di}, false, false
 
 	case "approve":
 		if d.pending == nil || d.pending.Proposed == nil {
-			return Response{Error: "no proposal is pending"}, false
+			return Response{Error: "no proposal is pending"}, false, false
 		}
 		if d.pending.Conflict {
-			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false
+			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false, false
 		}
 		dec := *d.pending
-		h, outcome, err := d.approve(dec, time.Now())
-		if err != nil {
-			return Response{Error: err.Error()}, false
+		cmd := dec.Proposed.Command
+		allowed, reason := d.mayExecute(cmd)
+		if allowed && d.running {
+			// The proposal stays pending, so the operator can just retry.
+			return Response{Error: "an action is already running (" + d.runningCmd + "); approve again when it finishes"}, false, false
+		}
+		if err := d.approveStart(dec); err != nil {
+			return Response{Error: err.Error()}, false, false
 		}
 		d.pending = nil
-		return Response{OK: true, Action: &ActionResult{
-			Command: dec.Proposed.Command, Outcome: outcome,
-			Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
-		}}, false
+		if !allowed {
+			outcome := dryRun(reason, cmd)
+			h, err := d.approveFinish(dec, false, true, outcome, time.Now())
+			if err != nil {
+				return Response{Error: err.Error()}, false, false
+			}
+			return Response{OK: true, Action: &ActionResult{
+				Command: cmd, Outcome: outcome,
+				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
+			}}, false, false
+		}
+		d.startExec(cmd, func(ran, ok bool, outcome string) {
+			h, err := d.approveFinish(dec, ran, ok, outcome, time.Now())
+			if err != nil {
+				reply <- Response{Error: err.Error()}
+				return
+			}
+			reply <- Response{OK: true, Action: &ActionResult{
+				Command: cmd, Outcome: outcome,
+				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
+			}}
+		})
+		return Response{}, true, false
 
 	case "deny":
 		if d.pending == nil || d.pending.Proposed == nil {
-			return Response{Error: "no proposal is pending"}, false
+			return Response{Error: "no proposal is pending"}, false, false
 		}
 		if d.pending.Conflict {
-			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false
+			return Response{Error: "the pending proposal is ambiguous; clarify and re-propose first"}, false, false
 		}
 		dec := *d.pending
 		h, err := d.deny(dec, time.Now())
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		d.pending = nil
 		return Response{OK: true, Action: &ActionResult{
 			Command: dec.Proposed.Command, Outcome: "denied",
 			Status: h.Status, Approvals: h.Approvals, Denials: h.Denials,
-		}}, false
+		}}, false, false
 
 	case "habits":
 		habits, err := d.store.AllHabits()
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		out := make([]*HabitInfo, 0, len(habits))
 		for _, h := range habits {
 			out = append(out, &HabitInfo{Cue: h.Cue, Action: h.Action,
 				Status: h.Status, Approvals: h.Approvals, Denials: h.Denials})
 		}
-		return Response{OK: true, Habits: out}, false
+		return Response{OK: true, Habits: out}, false, false
 
 	case "audit":
 		entries, err := d.store.AuditTail(20)
 		if err != nil {
-			return Response{Error: err.Error()}, false
+			return Response{Error: err.Error()}, false, false
 		}
 		out := make([]*AuditInfo, 0, len(entries))
 		for _, e := range entries {
 			out = append(out, &AuditInfo{AtUnix: e.At, Cue: e.Cue, Action: e.Action, Outcome: e.Outcome})
 		}
-		return Response{OK: true, Audit: out}, false
+		return Response{OK: true, Audit: out}, false, false
 
 	case "stop":
-		return Response{OK: true}, true
+		return Response{OK: true}, false, true
 
 	default:
-		return Response{Error: "unknown command: " + req.Cmd}, false
+		return Response{Error: "unknown command: " + req.Cmd}, false, false
 	}
 }
 

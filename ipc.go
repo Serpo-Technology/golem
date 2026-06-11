@@ -86,6 +86,7 @@ type StatusInfo struct {
 	PromotionBar   int                     `json:"promotion_bar"`
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
+	Running        string                  `json:"running,omitempty"`
 }
 
 type ChannelStat struct {

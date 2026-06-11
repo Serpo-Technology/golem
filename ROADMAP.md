@@ -176,12 +176,13 @@ Goal: see the graph before building the GUI that edits it.
 
 ## Known limitations
 
-- A command runs synchronously on the single brain loop, so while it runs
-  the loop is blocked: sensors back up on their bounded queues and other
-  CLI calls get "daemon busy". Connection deadlines are sized to outlast
-  the execution timeout so the triggering client still gets its result.
-  Moving execution off the loop (run in a goroutine, marshal the outcome
-  back) is the proper fix and is future work.
+- One command runs at a time. Execution happens off the brain loop (the
+  command runs in a goroutine and its outcome marshals back into the loop
+  to finish habit, audit, and feedback bookkeeping single-threaded), so
+  the loop keeps sensing and answering during a run; but a second action
+  requested while one is in flight is refused with a clear error rather
+  than queued. Stop settles the in-flight command before the final
+  consolidation, bounded by the execution timeout.
 - Only simple commands execute. Anything with shell control characters
   (chaining, pipes, redirects, substitution) is refused, because an
   allowlist entry matches a command by prefix and a shell would otherwise

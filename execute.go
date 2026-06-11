@@ -71,19 +71,37 @@ func allowlisted(cmd string, allow []string) bool {
 	return false
 }
 
+// execTimeout resolves the configured per-command bound.
+func (d *Daemon) execTimeout() time.Duration {
+	t := time.Duration(d.cfg.ExecuteTimeoutSec * float64(time.Second))
+	if t <= 0 {
+		t = defaultExecuteTimeoutSec * time.Second
+	}
+	return t
+}
+
+// dryRun describes a command that policy held back, in the form the audit
+// trail records.
+func dryRun(reason, cmd string) string {
+	return fmt.Sprintf("[dry-run: %s] %s", reason, cmd)
+}
+
 // execute runs a command if policy allows, or describes the dry run if not.
 // It reports whether the command actually ran and whether it succeeded
-// (exit zero); a dry run reports ran=false, ok=true.
+// (exit zero); a dry run reports ran=false, ok=true. This synchronous form
+// serves the demos and tests; the daemon's request path runs the same
+// runCommand off the brain loop.
 func (d *Daemon) execute(cmd string) (ran bool, ok bool, outcome string) {
 	allowed, reason := d.mayExecute(cmd)
 	if !allowed {
-		return false, true, fmt.Sprintf("[dry-run: %s] %s", reason, cmd)
+		return false, true, dryRun(reason, cmd)
 	}
+	return runCommand(cmd, d.execTimeout())
+}
 
-	timeout := time.Duration(d.cfg.ExecuteTimeoutSec * float64(time.Second))
-	if timeout <= 0 {
-		timeout = defaultExecuteTimeoutSec * time.Second
-	}
+// runCommand is the bare execution: no gates, no daemon state, safe to
+// call from any goroutine. The caller owns policy.
+func runCommand(cmd string, timeout time.Duration) (ran bool, ok bool, outcome string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

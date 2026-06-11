@@ -250,6 +250,9 @@ func printStatus(st *StatusInfo) {
 	} else {
 		fmt.Println("  execution: off (dry-run); enable in config.json")
 	}
+	if st.Running != "" {
+		fmt.Printf("  running now: %q\n", st.Running)
+	}
 }
 
 func tellOnce(home, words string) {

@@ -105,10 +105,19 @@ func (d *Daemon) autoCue(o Observation, tpl string) {
 				cue, dec.Proposed.Command, reason)
 			continue
 		}
-		outcome, demoted := d.autorun(dec, "observed", o.At)
-		fmt.Fprintf(d.out, "      > observed cue %q ran %q -> %s\n", cue, dec.Proposed.Command, outcome)
-		if demoted {
-			fmt.Fprintf(d.out, "        the run failed; the pair is demoted until reconfirmed.\n")
+		if d.running {
+			fmt.Fprintf(d.out, "      . observed cue %q matched while %q is still running; skipped\n",
+				cue, d.runningCmd)
+			continue
 		}
+		cmd := dec.Proposed.Command
+		at := o.At
+		d.startExec(cmd, func(ran, ok bool, outcome string) {
+			demoted := d.autorunFinish(dec, "observed", ran, ok, outcome, at)
+			fmt.Fprintf(d.out, "      > observed cue %q ran %q -> %s\n", cue, cmd, outcome)
+			if demoted {
+				fmt.Fprintf(d.out, "        the run failed; the pair is demoted until reconfirmed.\n")
+			}
+		})
 	}
 }

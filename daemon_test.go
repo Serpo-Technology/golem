@@ -15,16 +15,19 @@ import (
 
 func startTestDaemon(t *testing.T) (home string, done chan error) {
 	t.Helper()
-	home = t.TempDir()
 	cfg := DefaultConfig()
 	cfg.SleepIntervalSec = 3600     // keep autonomous sleep out of the test's way
 	cfg.Channels = ChannelsConfig{} // no built-in sensors; tests feed channels themselves
+	return startTestDaemonWith(t, t.TempDir(), cfg)
+}
 
+func startTestDaemonWith(t *testing.T, home string, cfg Config) (string, chan error) {
+	t.Helper()
 	d, err := NewDaemon(home, cfg, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
-	done = make(chan error, 1)
+	done := make(chan error, 1)
 	go func() { done <- d.Run() }()
 
 	deadline := time.Now().Add(3 * time.Second)
@@ -135,6 +138,7 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 		drops:        make(map[string]*atomic.Int64),
 		governors:    make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
+		execDone:     make(chan execResult, 1),
 	}, s
 }
 
@@ -553,7 +557,7 @@ func TestTellAboutBindsRetroactively(t *testing.T) {
 	anomalyID := res.FragmentID
 	d.recent = nil // the moment has left the binding window
 
-	resp, _ := d.handle(Request{Cmd: "tell", Query: "disk1s9",
+	resp, _ := d.handleNow(Request{Cmd: "tell", Query: "disk1s9",
 		Content: "that was the broken external drive"})
 	if !resp.OK {
 		t.Fatalf("annotation should succeed: %+v", resp)
@@ -576,7 +580,7 @@ func TestTellAboutBindsRetroactively(t *testing.T) {
 	}
 
 	before, _ := s.Count()
-	resp, _ = d.handle(Request{Cmd: "tell", Query: "matches nothing at all",
+	resp, _ = d.handleNow(Request{Cmd: "tell", Query: "matches nothing at all",
 		Content: "orphan words"})
 	if resp.OK || resp.Error == "" {
 		t.Fatalf("annotating nothing should refuse: %+v", resp)

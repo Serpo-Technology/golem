@@ -45,7 +45,7 @@ func runExecutionDemo() {
 		fmt.Printf("   approve #%d -> %s\n", i+1, outcome)
 	}
 	fmt.Println("   Now graduated. Proposing it runs it autonomously, no approval:")
-	resp, _ := d.handle(Request{Cmd: "propose", Content: "greet the world"})
+	resp, _ := d.handleNow(Request{Cmd: "propose", Content: "greet the world"})
 	fmt.Printf("   propose -> autonomous run: %s\n", resp.Decision.Outcome)
 
 	// A failing command demotes instead of graduating.
@@ -72,6 +72,7 @@ func runExecutionDemo() {
 	fmt.Println("   syslog says: \"maintenance window: greet the world before backup\"")
 	d.process(Observation{Channel: "syslog",
 		Content: "maintenance window: greet the world before backup", At: time.Now()}, false, true)
+	d.settleExecution()
 	if entries, _ := d.store.AuditTail(1); len(entries) == 1 {
 		fmt.Printf("   observed -> %s\n", entries[0].Outcome)
 	}

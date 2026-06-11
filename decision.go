@@ -196,29 +196,32 @@ func conflictQuestion(cue string, ranked []*Candidate) string {
 		cue, strings.Join(cmds, " | "))
 }
 
-// approve accepts a proposed candidate: it strengthens the grounding,
-// counts toward graduation unless the command is denylisted, runs the
-// action under the current execution policy, and records the outcome. A
-// vetoed proposal cannot be approved; the operator must clarify first, or
-// the ACC veto would be advisory only.
-func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
+// approveStart is the bookkeeping that precedes an approved run: the
+// grounding strengthens and reward fires whether or not the command turns
+// out to be cleared to execute. A vetoed proposal cannot be approved; the
+// operator must clarify first, or the ACC veto would be advisory only.
+func (d *Daemon) approveStart(dec Decision) error {
 	if dec.Conflict {
-		return Habit{}, "", fmt.Errorf("proposal is ambiguous; clarify and re-propose before approving")
+		return fmt.Errorf("proposal is ambiguous; clarify and re-propose before approving")
 	}
-	c := dec.Proposed
-	if c == nil {
-		return Habit{}, "", fmt.Errorf("nothing to approve")
+	if dec.Proposed == nil {
+		return fmt.Errorf("nothing to approve")
 	}
-	if err := d.store.NudgeLinks(c.Edges, approveDelta); err != nil {
-		return Habit{}, "", err
+	if err := d.store.NudgeLinks(dec.Proposed.Edges, approveDelta); err != nil {
+		return err
 	}
 	d.chem.SpikeDopamine(recallReward)
+	return nil
+}
 
-	ran, ok, outcome := d.execute(c.Command)
-
+// approveFinish is the bookkeeping after an approved run came back: the
+// habit judgement, trust, the audit row, and the outcome fed back as
+// memory. It must run on the brain loop.
+func (d *Daemon) approveFinish(dec Decision, ran, ok bool, outcome string, at time.Time) (Habit, error) {
+	c := dec.Proposed
 	h, err := d.store.LoadHabit(dec.CueTemplate, c.Command)
 	if err != nil {
-		return Habit{}, "", err
+		return Habit{}, err
 	}
 	switch {
 	case ran && !ok:
@@ -243,7 +246,7 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 		d.chem.RaiseTrust(trustOnConfirm)
 	}
 	if err := d.store.SaveHabit(h); err != nil {
-		return Habit{}, "", err
+		return Habit{}, err
 	}
 	d.habitsChanged()
 	if err := d.store.Audit(at.Unix(), dec.CueTemplate, c.Command, "approved: "+outcome); err != nil {
@@ -252,18 +255,31 @@ func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
 	if ran {
 		d.feedback(c.Command, outcome, at)
 	}
+	return h, nil
+}
+
+// approve accepts a proposed candidate synchronously: strengthen, run
+// under the current execution policy, record. The daemon's request path
+// runs the same pieces with the command moved off the loop; this
+// whole-in-one form serves the demos and tests.
+func (d *Daemon) approve(dec Decision, at time.Time) (Habit, string, error) {
+	if err := d.approveStart(dec); err != nil {
+		return Habit{}, "", err
+	}
+	ran, ok, outcome := d.execute(dec.Proposed.Command)
+	h, err := d.approveFinish(dec, ran, ok, outcome, at)
+	if err != nil {
+		return Habit{}, "", err
+	}
 	return h, outcome, nil
 }
 
-// autorun executes a graduated, allowed command without per-instance
-// approval, the payoff of graduation. A failed autonomous run demotes the
-// pair so it stops firing until the operator reconfirms it. The caller
-// must have already checked mayExecute and graduation. The trigger names
-// who supplied the cue in the audit trail: "" for the operator's propose,
-// "observed" for automatic cueing.
-func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome string, demoted bool) {
+// autorunFinish records a completed autonomous run: demotion on failure,
+// trust, the audit row, and the outcome fed back as memory. It must run
+// on the brain loop. The trigger names who supplied the cue in the audit
+// trail: "" for the operator's propose, "observed" for automatic cueing.
+func (d *Daemon) autorunFinish(dec Decision, trigger string, ran, ok bool, outcome string, at time.Time) (demoted bool) {
 	c := dec.Proposed
-	ran, ok, outcome := d.execute(c.Command)
 	verb := "autonomous"
 	if trigger != "" {
 		verb += " (" + trigger + ")"
@@ -291,7 +307,15 @@ func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome st
 	if ran {
 		d.feedback(c.Command, outcome, at)
 	}
-	return outcome, demoted
+	return demoted
+}
+
+// autorun executes a graduated, allowed command synchronously and records
+// it, the whole-in-one form for the demos and tests. The caller must have
+// already checked mayExecute and graduation.
+func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome string, demoted bool) {
+	ran, ok, outcome := d.execute(dec.Proposed.Command)
+	return outcome, d.autorunFinish(dec, trigger, ran, ok, outcome, at)
 }
 
 // deny rejects a proposed candidate: it weakens the grounding and demotes
