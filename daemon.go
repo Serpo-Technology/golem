@@ -48,6 +48,10 @@ type Daemon struct {
 	// It serves as the hippocampal present.
 	recent []recentMoment
 
+	// hot is the RAM working set in front of the sqlite archive: recent
+	// encodes and recalls answer from here, and archive hits promote.
+	hot *hotTier
+
 	// governors throttle memory formation per channel, and pendingStorm
 	// counts the surprises each throttle suppressed until they can be
 	// summarized as one moment.
@@ -173,6 +177,7 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		reqs:         make(chan ipcReq),
 		stop:         make(chan struct{}),
 		execDone:     make(chan execResult, 1),
+		hot:          newHotTier(),
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -533,6 +538,7 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 		return ObserveResult{Bits: bits}
 	}
 	st.Conscious++
+	d.hot.put(frag)
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
 		bits, o.Channel, clip(o.Content, 140), clip(tpl, 140), frag.Limbic.Noradrenaline, id)
 
@@ -699,7 +705,7 @@ func (d *Daemon) spread(seeds []*Fragment) ([]*FragmentInfo, error) {
 			ids = append(ids, id)
 		}
 	}
-	frags, err := d.store.FragmentsByIDs(ids)
+	frags, err := d.fragmentsByIDsTiered(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -776,6 +782,9 @@ func (d *Daemon) sleepCycle() {
 	if err != nil {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
+	// Consolidation rewrote weights, pruned, and merged underneath any
+	// cached copy; the working set rebuilds from what the morning uses.
+	d.hot.clear()
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
@@ -877,6 +886,7 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			PID:            os.Getpid(),
 			UptimeSec:      time.Since(d.started).Seconds(),
 			Fragments:      held,
+			HotFragments:   d.hot.len(),
 			Channels:       d.stats,
 			Sleeps:         d.sleeps,
 			LastSleepUnix:  d.lastSleep.Unix(),
@@ -929,9 +939,10 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			f, err = d.store.RecallByStress()
 			if f != nil {
 				seeds = []*Fragment{f}
+				d.hot.put(f)
 			}
 		} else {
-			seeds, err = d.store.Recall(req.Query, 3)
+			seeds, err = d.recallTiered(req.Query, 3)
 		}
 		if err != nil {
 			return Response{Error: err.Error()}, false, false

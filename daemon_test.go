@@ -139,6 +139,7 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 		governors:    make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
 		execDone:     make(chan execResult, 1),
+		hot:          newHotTier(),
 	}, s
 }
 

@@ -79,6 +79,7 @@ type StatusInfo struct {
 	PID            int                     `json:"pid"`
 	UptimeSec      float64                 `json:"uptime_sec"`
 	Fragments      int                     `json:"fragments"`
+	HotFragments   int                     `json:"hot_fragments"`
 	Channels       map[string]*ChannelStat `json:"channels"`
 	Sleeps         int                     `json:"sleeps"`
 	LastSleepUnix  int64                   `json:"last_sleep_unix"`

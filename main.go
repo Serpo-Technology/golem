@@ -227,7 +227,7 @@ func call(home string, req Request) Response {
 
 func printStatus(st *StatusInfo) {
 	fmt.Printf("golem daemon, pid %d, up %s\n", st.PID, time.Duration(st.UptimeSec*float64(time.Second)).Round(time.Second))
-	fmt.Printf("  fragments held: %d\n", st.Fragments)
+	fmt.Printf("  fragments held: %d (%d in the hot working set)\n", st.Fragments, st.HotFragments)
 	if len(st.Channels) == 0 {
 		fmt.Println("  channels: none observed yet")
 	}

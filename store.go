@@ -202,9 +202,11 @@ func (s *Store) query(q string, args ...any) ([]*Fragment, error) {
 	return out, rows.Err()
 }
 
-// refresh is retrieval practice: recalled memories get their weight
-// restored, so what gets used survives consolidation.
-func (s *Store) refresh(ids []uint64) error {
+// Refresh is retrieval practice: recalled memories get their weight
+// restored, so what gets used survives consolidation. The hot tier calls
+// it for its own hits, so practice reaches the archive no matter which
+// tier answered.
+func (s *Store) Refresh(ids []uint64) error {
 	for _, id := range ids {
 		if _, err := s.db.Exec(`UPDATE fragments SET weight = 1.0 WHERE id = ?`, id); err != nil {
 			return err
@@ -222,7 +224,7 @@ func (s *Store) RecallByStress() (*Fragment, error) {
 		return nil, err
 	}
 	f := frags[0]
-	if err := s.refresh([]uint64{f.ID}); err != nil {
+	if err := s.Refresh([]uint64{f.ID}); err != nil {
 		return nil, err
 	}
 	f.Weight = 1.0
@@ -245,7 +247,7 @@ func (s *Store) Recall(query string, limit int) ([]*Fragment, error) {
 		ids = append(ids, f.ID)
 		f.Weight = 1.0
 	}
-	if err := s.refresh(ids); err != nil {
+	if err := s.Refresh(ids); err != nil {
 		return nil, err
 	}
 	return frags, nil

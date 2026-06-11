@@ -159,8 +159,12 @@ Goal: sleep does more than decay.
       at sleep: the newest survives as the prototype with the group count,
       the sharpest stays as a linked exemplar, and absorbed edges fold
       onto the prototype with summed weights.
-- [ ] Hot and cold tiers: working set in RAM, archive in sqlite, promotion
-      back to hot on recall.
+- [x] Hot and cold tiers: working set in RAM, archive in sqlite, promotion
+      back to hot on recall. Encodes enter hot, recall answers hot first
+      and promotes archive hits, eviction is least-recently-touched under
+      a fixed budget, and sleep clears the set because consolidation
+      rewrites the archive underneath it. Retrieval practice still writes
+      through, and the decision loop stays on the archive path.
 - [ ] Replay: during sleep, re-fire the day's high-weight fragments
       through the linker to consolidate cross-channel links.
 
