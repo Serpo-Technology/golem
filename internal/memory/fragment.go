@@ -11,12 +11,17 @@ import (
 
 // A node's kind decides which life it lives in the one shared graph: an
 // episodic node is a moment and fades unless practiced, a word node is a
-// surface form in some language, and a concept node is the amodal hub
-// that words name and episodes instantiate.
+// surface form in some language, a concept node is the amodal hub that
+// words name and episodes instantiate, an operation node is one setting
+// of the think primitive whose weight is the learned preference for that
+// kind of thought, and a grammar node is one entrenched parameter of the
+// language faculty.
 const (
-	KindEpisodic = "episodic"
-	KindWord     = "word"
-	KindConcept  = "concept"
+	KindEpisodic  = "episodic"
+	KindWord      = "word"
+	KindConcept   = "concept"
+	KindOperation = "operation"
+	KindGrammar   = "grammar"
 )
 
 // An edge's relation types the association: temporal is co-occurrence

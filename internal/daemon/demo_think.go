@@ -4,19 +4,22 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
+	"golem/internal/attention"
 	"golem/internal/config"
+	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
 )
 
 // DemoThink shows the inner loop on a throwaway memory: a lived day
-// distils into concepts, quiet falls, and GOLEM's specialists wander
-// the graph in rounds, chaining warmth across ticks, letting routine
-// thoughts pass unremembered, and encoding the novel one as an insight
-// it can later recall having had.
+// distils into concepts, quiet falls, and GOLEM wanders the graph in
+// rounds of one primitive, walk(relation, signal), with mood selecting
+// the kind of thought, fruit teaching it which operations are worth
+// running, and a taught word leaning the mind toward the operation it
+// names.
 func DemoThink() {
 	home, err := os.MkdirTemp("", "golem-think-")
 	if err != nil {
@@ -66,13 +69,14 @@ func DemoThink() {
 	fmt.Println("\n3. QUIET FALLS. One last test run warms its concept, then nothing")
 	fmt.Println("   happens, and the default-mode condition holds: input silent,")
 	fmt.Println("   sleep pressure building, something still warm. GOLEM wanders,")
-	fmt.Println("   one specialist round per idle tick.")
+	fmt.Println("   every setting of walk(relation, signal) computing at once and")
+	fmt.Println("   the calm chemistry picking free association to ignite.")
 	d.process(senses.Observation{Channel: "shell", Content: "run: make test", At: time.Now()}, true, true)
 	d.recent = nil
+	settleAlarm(d)
 	d.lastObs = time.Now().Add(-time.Minute)
 	d.lastSurprise = time.Now().Add(-time.Minute)
 
-	thoughtsBefore := countThoughts(d)
 	for tick := 1; tick <= 8; tick++ {
 		d.startThinkRound()
 		d.settleThinking()
@@ -103,25 +107,62 @@ func DemoThink() {
 			fmt.Printf("   insight #%d  %q  (%.2f bits)\n", f.ID, f.Content, f.Surprise)
 		}
 	}
-	if encoded-thoughtsBefore == 0 {
+	if encoded == 0 {
 		fmt.Println("   (every thought this stretch was routine; nothing was kept)")
 	}
 
-	fmt.Println("\n5. REMEMBERING HAVING THOUGHT. Recall reaches the insight like any")
-	fmt.Println("   other moment:")
-	resp, _, _ := d.handle(wire.Request{Cmd: "recall", Query: "thought"}, nil)
-	shown := 0
-	for _, f := range resp.Fragments {
-		if f.Channel == thoughtChannel && shown < 2 {
-			fmt.Printf("   [moment] %q\n", f.Content)
-			shown++
-		}
+	fmt.Println("\n5. FRUIT. A remembered thought reinforced the operation that")
+	fmt.Println("   produced it; a routine one wore its operation a little. The")
+	fmt.Println("   learned worth lives on the operation nodes, in the open:")
+	printOps(d)
+
+	fmt.Println("\n6. NAMING A KIND OF THOUGHT. The mental-teach grounds a concept")
+	fmt.Println("   to walk(grounds, stress) and bonds the word \"worry\" to it, so")
+	fmt.Println("   a word now means a way of thinking. Saying it warms the")
+	fmt.Println("   concept, and an alarmed moment leans the same way:")
+	if err := d.teachThought("worry", "grounds", "stress", "en"); err != nil {
+		demoFail(err)
+	}
+	fmt.Println("      taught: \"worry\" -> walk(grounds,stress)")
+	d.chem.SpikeNoradrenaline(0.6)
+	tpl := attention.Normalize("Disk full on /dev/disk1s1")
+	if disk, err := d.store.ConceptByTemplate(tpl); err == nil && disk != nil {
+		d.ws.excite(disk.ID, 1.0)
+	}
+	d.lastObs = time.Now().Add(-time.Minute)
+	d.lastSurprise = time.Now().Add(-time.Minute)
+	d.startThinkRound()
+	d.settleThinking()
+	if d.lastThought != "" {
+		fmt.Printf("      the worried mind dwells: %q\n", d.lastThought)
 	}
 
 	fmt.Println("\n" + line)
-	fmt.Println("The loop closed: perception warmed a concept, thought chained it")
-	fmt.Println("through lived edges, the surprising step became memory, and memory")
-	fmt.Println("now holds a moment whose content is GOLEM's own thinking.")
+	fmt.Println("The loop closed: perception warmed a concept, one primitive walked")
+	fmt.Println("the lived graph with mood picking the setting, the surprising step")
+	fmt.Println("became memory and fed its operation, and a taught word now names a")
+	fmt.Println("kind of thinking.")
+}
+
+// settleAlarm drains the day's noradrenaline the way the homeostasis
+// tick does across a real calm stretch.
+func settleAlarm(d *Daemon) {
+	for range 200 {
+		d.chem.Decay()
+	}
+}
+
+// printOps lists the operation nodes the run has minted, worth first.
+func printOps(d *Daemon) {
+	ops, err := d.store.NodesByKind(memory.KindOperation)
+	if err != nil || len(ops) == 0 {
+		fmt.Println("   (no operation has committed a thought yet)")
+		return
+	}
+	sort.Slice(ops, func(i, j int) bool { return ops[i].Weight > ops[j].Weight })
+	for _, op := range ops {
+		fmt.Printf("   %-28s worth %.2f\n", op.Template, op.Weight)
+	}
 }
 
 // calmPressure builds the sleep pressure a real quiet evening would.
@@ -129,15 +170,4 @@ func calmPressure(d *Daemon) {
 	for range 20 {
 		d.chem.BuildSleepPressure()
 	}
-}
-
-func countThoughts(d *Daemon) int {
-	frags, _ := d.store.Dump()
-	n := 0
-	for _, f := range frags {
-		if f.Channel == thoughtChannel {
-			n++
-		}
-	}
-	return n
 }

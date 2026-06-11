@@ -51,6 +51,13 @@ Usage:
                                   concept, its words, and its grounding
   golem teach <cue> <command>     ground a cue to a command by hand; repeat
                                   to strengthen toward graduation
+  golem teach --mind <word> <relation> <signal>
+                                  name a kind of thinking: the word comes to
+                                  mean the walk(relation, signal) thought
+                                  operation, and saying it leans idle thought
+                                  that way (relations: temporal, successor,
+                                  grounds, names; signals: weight, stress,
+                                  saliency, recency)
   golem propose <cue>             weigh the actions grounded to a cue and
                                   propose one, or ask when it is ambiguous
   golem approve                   approve the pending proposal
@@ -180,6 +187,14 @@ func main() {
 		printFragments(resp.Fragments)
 
 	case "teach":
+		if len(args) >= 2 && args[1] == "--mind" {
+			if len(args) != 5 {
+				fail(fmt.Errorf("usage: golem teach --mind <word> <relation> <signal>"))
+			}
+			call(home, wire.Request{Cmd: "teach", Mind: true, Content: args[2], Command: args[3] + " " + args[4]})
+			fmt.Printf("named the thought operation walk(%s,%s) %q\n", args[3], args[4], args[2])
+			return
+		}
 		if len(args) < 3 {
 			fail(fmt.Errorf("usage: golem teach <cue> <command>   (repeat to strengthen)"))
 		}
@@ -472,6 +487,10 @@ func printFragments(frags []*wire.FragmentInfo) {
 			if f.Category != "" {
 				head = "concept(" + f.Category + ")"
 			}
+		case memory.KindOperation:
+			head = "operation"
+		case memory.KindGrammar:
+			head = "grammar"
 		}
 		fmt.Printf("#%-3d %s  %-12s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
 			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), head,

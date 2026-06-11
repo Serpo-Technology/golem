@@ -7,10 +7,21 @@ import (
 
 	"golem/internal/attention"
 	"golem/internal/config"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
 	"golem/internal/wire"
 )
+
+// settleChem drains the alarm a day of encodes leaves behind, the way
+// the homeostasis tick does across the calm stretch that gates
+// mind-wandering: by the time a round may start, noradrenaline has long
+// drifted home.
+func settleChem(d *Daemon) {
+	for range 200 {
+		d.chem.Decay()
+	}
+}
 
 // thinkingDay lays down a lived sequence A -> B -> C, distils the three
 // concepts, and returns them ready to think over.
@@ -32,6 +43,7 @@ func thinkingDay(t *testing.T, d *Daemon, s *memory.Store) (a, b, c *memory.Frag
 	}
 	calm(d)
 	d.growConcepts()
+	settleChem(d)
 	// The world has been quiet since: rounds may commit.
 	d.lastObs = time.Now().Add(-time.Minute)
 	d.lastSurprise = time.Now().Add(-time.Minute)
@@ -92,6 +104,7 @@ func TestRoutineThoughtsStayTransient(t *testing.T) {
 	a, _, _ := thinkingDay(t, d, s)
 
 	for range 30 {
+		settleChem(d)
 		d.ws.excite(a.ID, 1.0)
 		d.startThinkRound()
 		d.settleThinking()
@@ -382,4 +395,180 @@ func TestThinkingUnderLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-done
+}
+
+// newestThought returns the latest moment encoded on the thought
+// channel, nil when none has been.
+func newestThought(t *testing.T, s *memory.Store) *memory.Fragment {
+	t.Helper()
+	frags, err := s.Dump()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var newest *memory.Fragment
+	for _, f := range frags {
+		if f.Channel == thoughtChannel {
+			newest = f
+		}
+	}
+	return newest
+}
+
+// The kind of thought emerges from mood: the same warm seed that
+// associates forward when calm dwells on its most stressful grounding
+// when noradrenaline is high. No specialist is chosen anywhere; the
+// chemistry's appetite reweighs the one primitive's settings.
+func TestAlarmShiftsThoughtTowardStress(t *testing.T) {
+	d, s := testDaemon(t)
+	a, _, _ := thinkingDay(t, d, s)
+
+	// The thought channel knows enough shapes that a fresh one encodes.
+	for i := range 6 {
+		d.process(senses.Observation{Channel: thoughtChannel,
+			Content: "thought: filler shape " + string(rune('a'+i)), At: time.Now()}, true, true)
+	}
+	settleChem(d)
+	d.chem.SpikeNoradrenaline(0.8)
+	d.ws.excite(a.ID, 1.0)
+	d.startThinkRound()
+	d.settleThinking()
+
+	thought := newestThought(t, s)
+	if thought == nil || !strings.Contains(thought.Content, "that time:") {
+		t.Fatalf("an alarmed mind should dwell on a stressful grounding, got %+v", thought)
+	}
+}
+
+// Fruit grounds the thought-types: an operation whose thought was
+// surprising enough to remember gains worth and a provenance edge to the
+// insight, while a routine thought wears its operation down.
+func TestFruitReinforcesOperation(t *testing.T) {
+	d, s := testDaemon(t)
+	a, _, _ := thinkingDay(t, d, s)
+
+	// The thought channel knows enough shapes that a fresh one encodes.
+	for i := range 6 {
+		d.process(senses.Observation{Channel: thoughtChannel,
+			Content: "thought: filler shape " + string(rune('a'+i)), At: time.Now()}, true, true)
+	}
+	settleChem(d)
+	d.ws.excite(a.ID, 1.0)
+	d.startThinkRound()
+	d.settleThinking()
+
+	insight := newestThought(t, s)
+	if insight == nil {
+		t.Fatal("the first novel association should encode")
+	}
+	// The trail leads from the insight back to whichever operation
+	// produced it: the provenance edge is how the fruit is attributed.
+	into, err := s.LinksToRel([]uint64{insight.ID}, memory.RelGrounds)
+	if err != nil || len(into) != 1 {
+		t.Fatalf("the insight should be grounded by exactly its operation: %v %v", into, err)
+	}
+	producers, err := s.FragmentsByIDs([]uint64{into[0].From})
+	if err != nil || len(producers) != 1 || producers[0].Kind != memory.KindOperation {
+		t.Fatalf("the insight's grounding should come from an operation node: %+v", producers)
+	}
+	op := d.opNode(producers[0].Template)
+	if op == nil {
+		t.Fatal("the fruitful operation should have a node")
+	}
+	if op.Weight <= 1.0 {
+		t.Fatalf("fruit should raise the operation's worth, got %.2f", op.Weight)
+	}
+
+	// Thinking the same thought again soon habituates, and once the gate
+	// stops keeping it, the operation wears instead of growing.
+	peak := op.Weight
+	for range 4 {
+		settleChem(d)
+		d.ws.clear()
+		d.ws.excite(a.ID, 1.0)
+		d.startThinkRound()
+		d.settleThinking()
+		if op.Weight > peak {
+			peak = op.Weight
+		}
+	}
+	if op.Weight >= peak {
+		t.Fatalf("a routine thought should wear its operation: peak %.2f, now %.2f", peak, op.Weight)
+	}
+}
+
+// A thought-type that repeatedly bears fruit is preferred over one that
+// does not: learned worth multiplies into the arbitration priority.
+func TestFruitfulOperationIsPreferred(t *testing.T) {
+	sn := thoughtSnapshot{
+		chem:    limbic.New().Snapshot(),
+		opWorth: map[string]float64{},
+		opHeat:  map[string]float64{},
+	}
+	succ := thoughtOp{rel: memory.RelSuccessor, sig: sigWeight}
+	temp := thoughtOp{rel: memory.RelTemporal, sig: sigWeight}
+	if opPriority(sn, succ, 1.0) <= opPriority(sn, temp, 1.0) {
+		t.Fatal("at equal worth, order keeps its innate edge")
+	}
+	sn.opWorth[temp.template()] = 1.6 // temporal bore fruit, repeatedly
+	sn.opWorth[succ.template()] = 0.6 // successor kept thinking nothing worth keeping
+	if opPriority(sn, temp, 1.0) <= opPriority(sn, succ, 1.0) {
+		t.Fatal("a fruitful operation should outrank a barren one")
+	}
+}
+
+// The mental-teach: a word comes to name a thought operation through a
+// concept grounded to it, and saying the word leans the policy toward
+// that operation.
+func TestMentalTeachNamesOperation(t *testing.T) {
+	d, s := testDaemon(t)
+
+	if err := d.teachThought("worry", "grounds", "stress", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.teachThought("worry", "nonsense", "stress", ""); err == nil {
+		t.Fatal("an unknown relation must be refused")
+	}
+
+	c := d.resolveConcept("worry")
+	if c == nil {
+		t.Fatal("the word should name a concept")
+	}
+	if c.Content != "walk grounds by stress" {
+		t.Fatalf("the concept should gloss the operation, got %q", c.Content)
+	}
+	grounds, err := s.LinksFromRel([]uint64{c.ID}, memory.RelGrounds)
+	if err != nil || len(grounds) != 1 {
+		t.Fatalf("the concept should ground exactly the operation: %v %v", grounds, err)
+	}
+	ops, err := s.FragmentsByIDs([]uint64{grounds[0].To})
+	if err != nil || len(ops) != 1 || ops[0].Kind != memory.KindOperation {
+		t.Fatalf("the grounding should reach an operation node: %+v", ops)
+	}
+
+	// Teaching spoke about the operation, so its concept is warm, and the
+	// policy reads that warmth as a lean toward the operation.
+	_, heat := d.opPolicy()
+	if heat["walk(grounds,stress)"] == 0 {
+		t.Fatal("the taught operation should be warm in the policy")
+	}
+	sn := thoughtSnapshot{chem: d.chem.Snapshot(), opWorth: map[string]float64{},
+		opHeat: heat}
+	cold := thoughtSnapshot{chem: d.chem.Snapshot(), opWorth: map[string]float64{},
+		opHeat: map[string]float64{}}
+	op := thoughtOp{rel: memory.RelGrounds, sig: sigStress}
+	if opPriority(sn, op, 0.5) <= opPriority(cold, op, 0.5) {
+		t.Fatal("a warm name should lean thought toward its operation")
+	}
+
+	// Operation nodes and their naming survive a sleep that would prune
+	// ordinary memory: the mind's own faculties are not nightly news.
+	if _, err := s.Sleep(0.99, 0.99); err != nil {
+		t.Fatal(err)
+	}
+	if n := d.opNode("walk(grounds,stress)"); n == nil {
+		t.Fatal("the operation node should survive sleep")
+	}
+	if c := d.resolveConcept("worry"); c == nil {
+		t.Fatal("the operation's name should survive sleep")
+	}
 }

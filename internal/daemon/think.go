@@ -3,8 +3,11 @@ package daemon
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
+	"golem/internal/events"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
 	"golem/internal/wire"
@@ -13,39 +16,148 @@ import (
 // The inner loop is replay run while awake. When perception is quiet and
 // sleep pressure is building but sleep has not yet fired (the brain's
 // default-mode condition, mind-wandering when not task-engaged), the
-// warmest concept in the workspace associates one step through the lived
-// graph and the result feeds back into the workspace. Activation chains
-// across ticks instead of dying when a function returns; the chaining is
-// thinking and the feedback is the self-reference.
+// warmest concept in the workspace takes one thought-step through the
+// lived graph and the result feeds back into the workspace. Activation
+// chains across ticks instead of dying when a function returns; the
+// chaining is thinking and the feedback is the self-reference.
 //
-// Thought is free association at first: the spread follows the strong
-// edges, which are the regularities GOLEM actually lived. Each step
-// hands the seed's warmth on at a discount and fatigues the seed, so a
-// chain moves instead of circling and damps to nothing unless something
-// it touches is worth feeling again. A thought re-enters perception on
-// its own channel through the same surprise gate everything else faces:
-// a routine association passes unremembered, a novel combination is
-// encoded, and that encoding is an insight GOLEM can later recall having
-// had. Thoughts never reset the quiet timers and never cue habits: the
-// mind's own activity is not the world's.
+// Thought bottoms out in one executable operation, walk(R, S): traverse
+// relation R from the seed and rank the destinations by signal S. The
+// relations are the ones the graph holds (temporal, successor, grounds,
+// names) and the signals are the ones already tracked (weight, stress,
+// saliency, recency), so the space of thought-types is their cross
+// product and a new relation or signal yields a new kind of thought with
+// no new code. Free association is walk(temporal, weight), expectation
+// is walk(successor, weight), stress recollection is walk(grounds,
+// stress), deliberation is walk(grounds, saliency); nothing in the code
+// names those kinds, they are settings.
+//
+// Which setting fires is not fixed either. Every operation computes on
+// the same snapshot and the loop arbitrates winner-take-all, with each
+// candidate weighed by the chemistry's appetite for its signal, by the
+// learned worth of its operation, and by how warm any concept naming
+// that operation sits in the workspace. Mood, learning, and what was
+// just said about thinking are what select the kind of thought.
+//
+// Each committed step hands the seed's warmth on at a discount and
+// fatigues the seed, so a chain moves instead of circling and damps to
+// nothing unless something it touches is worth feeling again. A thought
+// re-enters perception on its own channel through the same surprise gate
+// everything else faces: a routine association passes unremembered, a
+// novel combination is encoded, and that encoding is an insight GOLEM
+// can later recall having had. A remembered thought is fruit: it
+// reinforces the operation that produced it, the operant loop turned
+// inward, so GOLEM learns which of its own operations are worth running.
+// Thoughts never reset the quiet timers and never cue habits: the mind's
+// own activity is not the world's.
 const (
-	thoughtChannel  = "thought"
-	thinkDamping    = 0.7  // warmth handed to an association, per step
-	thinkFatigue    = 0.4  // what remains on a seed after thinking from it
-	thinkSeedFloor  = 0.10 // embers below this do not seed a thought
-	thinkFanout     = 2    // associations fed back per step
-	thinkAssocFloor = 0.05 // edges weaker than this carry no association
+	thoughtChannel   = "thought"
+	utteranceChannel = "tell"
+	thinkDamping     = 0.7  // warmth handed to an association, per step
+	thinkFatigue     = 0.4  // what remains on a seed after thinking from it
+	thinkSeedFloor   = 0.10 // embers below this do not seed a thought
+	thinkFanout      = 2    // associations fed back per step
+	thinkAssocFloor  = 0.05 // edges weaker than this carry no association
 )
 
-// assocEdge is one association reachable from a concept in a single
-// thought-step: the concept it lands on, how strongly the lived graph
-// carries it, and whether order (a successor edge) rather than plain
-// co-occurrence carried it.
-type assocEdge struct {
-	concept  uint64
-	gloss    string
-	strength float64
-	ordered  bool
+// The signals a walk can rank by. Weight is the lived strength of the
+// path, stress is the noradrenaline the destination was encoded under,
+// saliency is the dopamine-scaled pull of an actionable grounding, and
+// recency is closeness in time.
+const (
+	sigWeight   = "weight"
+	sigStress   = "stress"
+	sigSaliency = "saliency"
+	sigRecency  = "recency"
+)
+
+// thoughtOp is one setting of the think primitive: traverse relation Rel
+// from the seed and rank the destinations by signal Sig.
+type thoughtOp struct {
+	rel string
+	sig string
+}
+
+// template is the operation's stable face in the graph and the trail.
+func (op thoughtOp) template() string { return "walk(" + op.rel + "," + op.sig + ")" }
+
+// gloss is the operation's speakable face.
+func (op thoughtOp) gloss() string { return "walk " + op.rel + " by " + op.sig }
+
+var thinkRels = []string{memory.RelTemporal, memory.RelSuccessor, memory.RelGrounds, memory.RelNames}
+var thinkSigs = []string{sigWeight, sigStress, sigSaliency, sigRecency}
+
+// thoughtOps is the whole operation space, the innate floor of thought:
+// every relation crossed with every signal, in a fixed order.
+func thoughtOps() []thoughtOp {
+	out := make([]thoughtOp, 0, len(thinkRels)*len(thinkSigs))
+	for _, rel := range thinkRels {
+		for _, sig := range thinkSigs {
+			out = append(out, thoughtOp{rel: rel, sig: sig})
+		}
+	}
+	return out
+}
+
+// opGains is the innate loudness prior: how strongly each (relation,
+// signal) pairing speaks when its signal is fully present. Association
+// and order carry the lived weights, order slightly preferred because
+// lived sequence is the brain's favored next step; dwelling on a
+// grounding and noticing an action are quieter than active association;
+// names are the quietest, a murmur about vocabulary.
+var opGains = map[string]map[string]float64{
+	memory.RelTemporal:  {sigWeight: 1.00, sigStress: 0.45, sigSaliency: 0, sigRecency: 0.50},
+	memory.RelSuccessor: {sigWeight: 1.05, sigStress: 0.45, sigSaliency: 0, sigRecency: 0.50},
+	memory.RelGrounds:   {sigWeight: 0.50, sigStress: 0.80, sigSaliency: 0.60, sigRecency: 0.55},
+	memory.RelNames:     {sigWeight: 0.50, sigStress: 0.30, sigSaliency: 0, sigRecency: 0.35},
+}
+
+// appetite is the chemistry's pull toward a signal, 1.0 at baseline so a
+// resting mind weighs the operations by their innate gains alone. Alarm
+// pulls thinking toward stressful memory and the just-now and away from
+// idle association; reward chemistry pulls it toward action.
+func appetite(chem limbic.State, sig string) float64 {
+	a := 1.0
+	switch sig {
+	case sigWeight:
+		a = 1.0 - 0.6*(chem.Noradrenaline-0.1)
+	case sigStress:
+		a = 1.0 + 1.6*(chem.Noradrenaline-0.1)
+	case sigSaliency:
+		a = 1.0 + 1.2*(chem.Dopamine-0.2)
+	case sigRecency:
+		a = 1.0 + 0.8*(chem.Noradrenaline-0.1)
+	}
+	if a < 0.1 {
+		a = 0.1
+	}
+	return a
+}
+
+// Operant learning over the operation space: a thought surprising enough
+// to be remembered reinforces the operation that produced it, a routine
+// one wears it slightly, and the learned worth lives as the operation
+// node's weight in the graph, bounded so no operation is ever lost or
+// runaway. A warm concept naming an operation biases selection toward
+// it, which is what lets a taught word like "worry" steer the mind.
+const (
+	opFruitDelta  = 0.15
+	opBarrenDelta = 0.02
+	opWeightCeil  = 2.0
+	opWeightFloor = 0.25
+	opHeatGain    = 2.0
+	opNameWeight  = 0.9 // word-to-concept and concept-to-operation bonds from an explicit mental-teach
+)
+
+// walkDest is one destination a walk can land on, with every signal
+// measured so any (relation, signal) setting can rank it.
+type walkDest struct {
+	id      uint64 // concept to warm; zero when the destination is not a workspace referent
+	gloss   string
+	kind    string
+	weight  float64
+	stress  float64
+	recency float64
 }
 
 // mindWandering reports the default-mode condition: nothing surprising
@@ -58,115 +170,38 @@ func (d *Daemon) mindWandering() bool {
 		len(d.ws.warmest(1)) > 0
 }
 
-// associations walks one thought-step from a seed concept: through the
-// episodes that ground it, along their temporal and successor edges, to
-// the concepts grounding what those episodes kept company with.
-// Strength aggregates edge weight scaled by the far episode's own
-// weight, so association follows what was lived and still matters.
-func (d *Daemon) associations(seed uint64) ([]assocEdge, error) {
-	grounds, err := d.store.LinksFromRel([]uint64{seed}, memory.RelGrounds)
-	if err != nil || len(grounds) == 0 {
-		return nil, err
-	}
-	eIDs := make([]uint64, 0, len(grounds))
-	for _, g := range grounds {
-		eIDs = append(eIDs, g.To)
-	}
-	edges, err := d.store.LinksFrom(eIDs)
-	if err != nil {
-		return nil, err
-	}
-	var farIDs []uint64
-	for _, e := range edges {
-		if e.Rel == memory.RelTemporal || e.Rel == memory.RelSuccessor {
-			farIDs = append(farIDs, e.To)
-		}
-	}
-	far, err := d.fragmentsByIDsTiered(farIDs)
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[uint64]*memory.Fragment, len(far))
-	for _, f := range far {
-		byID[f.ID] = f
-	}
-
-	concepts := map[string]*memory.Fragment{} // template -> concept, cached per walk
-	agg := map[uint64]*assocEdge{}
-	for _, e := range edges {
-		if e.Rel != memory.RelTemporal && e.Rel != memory.RelSuccessor {
-			continue
-		}
-		f := byID[e.To]
-		if f == nil || f.Kind != memory.KindEpisodic ||
-			f.Channel == "tell" || f.Channel == thoughtChannel {
-			continue
-		}
-		c, seen := concepts[f.Template]
-		if !seen {
-			c, err = d.store.ConceptByTemplate(f.Template)
-			if err != nil {
-				return nil, err
-			}
-			concepts[f.Template] = c
-		}
-		if c == nil || c.ID == seed {
-			continue
-		}
-		a := agg[c.ID]
-		if a == nil {
-			a = &assocEdge{concept: c.ID, gloss: c.Content}
-			agg[c.ID] = a
-		}
-		a.strength += e.Weight * f.Weight
-		if e.Rel == memory.RelSuccessor {
-			a.ordered = true
-		}
-	}
-
-	out := make([]assocEdge, 0, len(agg))
-	for _, a := range agg {
-		if a.strength >= thinkAssocFloor {
-			out = append(out, *a)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].strength != out[j].strength {
-			return out[i].strength > out[j].strength
-		}
-		return out[i].concept < out[j].concept
-	})
-	return out, nil
-}
-
-// A thought round is the parallel substrate under a serial arbiter:
-// the loop builds an immutable snapshot of what is warm, hand-coded
-// specialists (a spreader, a predictor, a recaller, a decider) compute
-// on it concurrently and post one candidate each through one channel,
-// and the loop arbitrates winner-take-all and commits every mutation
-// single-threaded: the snapshot-in, candidate-out, loop-commits pattern
-// the execution layer already proved. Specialists never touch the
+// A thought round is the parallel substrate under a serial arbiter: the
+// loop builds an immutable snapshot of what is warm, every operation in
+// the space computes on it concurrently and posts one candidate through
+// one channel, and the loop arbitrates winner-take-all and commits every
+// mutation single-threaded: the snapshot-in, candidate-out, loop-commits
+// pattern the execution layer already proved. Operations never touch the
 // store or the daemon, which is what keeps concurrent thought from
 // racing the graph.
 
-// thoughtSnapshot is everything a specialist may read: the warm seed
-// and its one-step neighborhood, prefetched on the loop.
+// thoughtSnapshot is everything an operation may read: the warm seed,
+// its prefetched neighborhood per relation, the chemistry, and the
+// policy state (learned worth and naming warmth per operation), all
+// gathered on the loop.
 type thoughtSnapshot struct {
 	epoch     uint64
 	seed      uint64
 	seedGloss string
 	seedHeat  float64
-	assoc     []assocEdge
-	sharp     sharpMemory
+	chem      limbic.State
+	dests     map[string][]walkDest
 	plan      deliberation
+	opWorth   map[string]float64
+	opHeat    map[string]float64
 }
 
-// sharpMemory is the seed's most stressful grounded moment, the
-// recaller's material.
-type sharpMemory struct {
-	content string
-	na      float64
-	ok      bool
+// worth reports the learned preference for an operation, 1.0 until
+// experience has moved it.
+func (sn thoughtSnapshot) worth(op thoughtOp) float64 {
+	if w, ok := sn.opWorth[op.template()]; ok {
+		return w
+	}
+	return 1.0
 }
 
 // deliberation is the seed's actionable face when it is verb-like: the
@@ -178,12 +213,12 @@ type deliberation struct {
 	ok       bool
 }
 
-// thoughtCandidate is one specialist's offer: a thought as perception
-// would see it, the workspace changes it implies, and the saliency the
+// thoughtCandidate is one operation's offer: a thought as perception
+// would see it, the workspace changes it implies, and the priority the
 // arbiter weighs.
 type thoughtCandidate struct {
 	epoch    uint64
-	source   string
+	op       string // the producing operation's template, for fruit and the trail
 	content  string
 	seed     uint64
 	seedHeat float64
@@ -192,9 +227,19 @@ type thoughtCandidate struct {
 	ok       bool
 }
 
-// startThinkRound snapshots the warm seed and fans the specialists out.
-// One round in flight at a time; the round is stamped with the current
-// epoch so sleep can invalidate it.
+// opPriority composes one candidate's claim on ignition: the measured
+// signal, scaled by the innate gain of the pairing, the chemistry's
+// appetite for the signal, the operation's learned worth, and the warmth
+// of any concept taught to name the operation. State selects the kind of
+// thought; no specialist is named anywhere.
+func opPriority(sn thoughtSnapshot, op thoughtOp, sig float64) float64 {
+	return sig * opGains[op.rel][op.sig] * appetite(sn.chem, op.sig) *
+		sn.worth(op) * (1 + opHeatGain*sn.opHeat[op.template()])
+}
+
+// startThinkRound snapshots the warm seed and fans the operation space
+// out. One round in flight at a time; the round is stamped with the
+// current epoch so sleep can invalidate it.
 func (d *Daemon) startThinkRound() {
 	if d.thinking > 0 {
 		return
@@ -213,12 +258,12 @@ func (d *Daemon) startThinkRound() {
 		seed:      seed.ID,
 		seedGloss: seed.Content,
 		seedHeat:  seeds[0].heat,
+		chem:      d.chem.Snapshot(),
 	}
-	if sn.assoc, err = d.associations(seed.ID); err != nil {
+	if sn.dests, err = d.walkableDests(seed.ID); err != nil {
 		fmt.Fprintf(d.out, "thinking error: %v\n", err)
 		return
 	}
-	sn.sharp = d.sharpestGrounding(seed.ID)
 	if seed.Category == "verb" {
 		if dec, err := d.conceptDecision(seed); err == nil && dec.Proposed != nil {
 			sn.plan = deliberation{
@@ -229,44 +274,273 @@ func (d *Daemon) startThinkRound() {
 			}
 		}
 	}
+	sn.opWorth, sn.opHeat = d.opPolicy()
 
 	d.thinkSeed, d.thinkSeedHeat = sn.seed, sn.seedHeat
-	specialists := []func(thoughtSnapshot) thoughtCandidate{
-		spreadThought, predictThought, recallThought, deliberateThought,
-	}
-	d.thinking = len(specialists)
-	for _, specialist := range specialists {
-		go func(think func(thoughtSnapshot) thoughtCandidate) {
-			d.thinkDone <- think(sn)
-		}(specialist)
+	panel := thoughtOps()
+	d.thinking = len(panel)
+	for _, op := range panel {
+		go func(op thoughtOp) {
+			d.thinkDone <- walkThought(sn, op)
+		}(op)
 	}
 }
 
-// sharpestGrounding returns the most stressful moment grounding a
-// concept, for the recaller.
-func (d *Daemon) sharpestGrounding(seed uint64) sharpMemory {
+// walkableDests prefetches the seed's one-step neighborhood per
+// relation, every signal measured, so the operations can run without
+// touching the store. Grounds destinations are the seed's own
+// instantiations: episodes to dwell on (and, for an abstract concept,
+// the concepts of its constellation, which the walk may warm). Temporal
+// and successor destinations are the concepts of what those episodes
+// kept company with, strength aggregated the way the lived graph carries
+// it. Names destinations are the words that name the seed.
+func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
+	now := time.Now()
+	dests := map[string][]walkDest{}
+
 	grounds, err := d.store.LinksFromRel([]uint64{seed}, memory.RelGrounds)
-	if err != nil || len(grounds) == 0 {
-		return sharpMemory{}
+	if err != nil {
+		return nil, err
 	}
-	ids := make([]uint64, 0, len(grounds))
+	eIDs := make([]uint64, 0, len(grounds))
+	gw := make(map[uint64]float64, len(grounds))
 	for _, g := range grounds {
-		ids = append(ids, g.To)
+		eIDs = append(eIDs, g.To)
+		gw[g.To] = g.Weight
 	}
-	frags, err := d.fragmentsByIDsTiered(ids)
-	if err != nil || len(frags) == 0 {
-		return sharpMemory{}
+	grounded, err := d.fragmentsByIDsTiered(eIDs)
+	if err != nil {
+		return nil, err
 	}
-	best := frags[0]
-	for _, f := range frags {
-		if f.Limbic.Noradrenaline > best.Limbic.Noradrenaline {
-			best = f
+	var episodeIDs []uint64
+	for _, f := range grounded {
+		if f.Channel == utteranceChannel || f.Channel == thoughtChannel {
+			continue
+		}
+		dst := walkDest{
+			gloss:   wire.Clip(f.Content, 80),
+			kind:    f.Kind,
+			weight:  gw[f.ID] * f.Weight,
+			stress:  f.Limbic.Noradrenaline,
+			recency: recencyOf(now, f.Time),
+		}
+		switch f.Kind {
+		case memory.KindEpisodic:
+			episodeIDs = append(episodeIDs, f.ID)
+		case memory.KindConcept:
+			// An abstract concept grounds in concepts; unfolding it is a
+			// step the chain can continue from.
+			dst.id = f.ID
+		default:
+			continue
+		}
+		dests[memory.RelGrounds] = append(dests[memory.RelGrounds], dst)
+	}
+
+	edges, err := d.store.LinksFrom(episodeIDs)
+	if err != nil {
+		return nil, err
+	}
+	var farIDs []uint64
+	for _, e := range edges {
+		if e.Rel == memory.RelTemporal || e.Rel == memory.RelSuccessor {
+			farIDs = append(farIDs, e.To)
 		}
 	}
-	return sharpMemory{content: wire.Clip(best.Content, 80), na: best.Limbic.Noradrenaline, ok: true}
+	far, err := d.fragmentsByIDsTiered(farIDs)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[uint64]*memory.Fragment, len(far))
+	for _, f := range far {
+		byID[f.ID] = f
+	}
+	concepts := map[string]*memory.Fragment{} // template -> concept, cached per walk
+	agg := map[string]map[uint64]*walkDest{
+		memory.RelTemporal:  {},
+		memory.RelSuccessor: {},
+	}
+	for _, e := range edges {
+		if e.Rel != memory.RelTemporal && e.Rel != memory.RelSuccessor {
+			continue
+		}
+		f := byID[e.To]
+		if f == nil || f.Kind != memory.KindEpisodic ||
+			f.Channel == utteranceChannel || f.Channel == thoughtChannel {
+			continue
+		}
+		c, seen := concepts[f.Template]
+		if !seen {
+			c, err = d.store.ConceptByTemplate(f.Template)
+			if err != nil {
+				return nil, err
+			}
+			concepts[f.Template] = c
+		}
+		if c == nil || c.ID == seed {
+			continue
+		}
+		a := agg[e.Rel][c.ID]
+		if a == nil {
+			a = &walkDest{id: c.ID, gloss: c.Content, kind: c.Kind}
+			agg[e.Rel][c.ID] = a
+		}
+		a.weight += e.Weight * f.Weight
+		if f.Limbic.Noradrenaline > a.stress {
+			a.stress = f.Limbic.Noradrenaline
+		}
+		if r := recencyOf(now, f.Time); r > a.recency {
+			a.recency = r
+		}
+	}
+	for rel, byConcept := range agg {
+		for _, a := range byConcept {
+			if a.weight >= thinkAssocFloor {
+				dests[rel] = append(dests[rel], *a)
+			}
+		}
+	}
+
+	names, err := d.store.LinksToRel([]uint64{seed}, memory.RelNames)
+	if err != nil {
+		return nil, err
+	}
+	wordIDs := make([]uint64, 0, len(names))
+	nw := make(map[uint64]float64, len(names))
+	for _, e := range names {
+		wordIDs = append(wordIDs, e.From)
+		nw[e.From] = e.Weight
+	}
+	words, err := d.fragmentsByIDsTiered(wordIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range words {
+		dests[memory.RelNames] = append(dests[memory.RelNames], walkDest{
+			gloss:   w.Content,
+			kind:    w.Kind,
+			weight:  nw[w.ID] * w.Weight,
+			stress:  w.Limbic.Noradrenaline,
+			recency: recencyOf(now, w.Time),
+		})
+	}
+
+	for rel := range dests {
+		list := dests[rel]
+		sort.Slice(list, func(i, j int) bool {
+			if list[i].weight != list[j].weight {
+				return list[i].weight > list[j].weight
+			}
+			return list[i].gloss < list[j].gloss
+		})
+	}
+	return dests, nil
 }
 
-// absorbThought reabsorbs one specialist's candidate; when the round is
+// recencyOf scores closeness in time into (0, 1]: the just-now is 1 and
+// an hour-old moment is half as near.
+func recencyOf(now, at time.Time) float64 {
+	age := now.Sub(at).Hours()
+	if age < 0 {
+		age = 0
+	}
+	return 1 / (1 + age)
+}
+
+// signalOf reads one signal off a destination.
+func signalOf(dst walkDest, sig string) float64 {
+	switch sig {
+	case sigStress:
+		return dst.stress
+	case sigRecency:
+		return dst.recency
+	case sigSaliency:
+		return 0 // saliency lives on deliberation, not on plain destinations
+	default:
+		return dst.weight
+	}
+}
+
+// walkThought is the think primitive: one operation applied to the
+// snapshot. It picks the destination its signal ranks highest, renders
+// the thought, and prices it for the arbiter. Deliberation, the
+// (grounds, saliency) setting, reads the prefetched plan instead of a
+// destination list and only ever thinks that something is runnable.
+func walkThought(sn thoughtSnapshot, op thoughtOp) thoughtCandidate {
+	none := thoughtCandidate{epoch: sn.epoch, op: op.template()}
+	if op.rel == memory.RelGrounds && op.sig == sigSaliency {
+		if !sn.plan.ok || sn.plan.conflict {
+			return none
+		}
+		saliency := sn.plan.saliency
+		if saliency > 1 {
+			saliency = 1
+		}
+		return thoughtCandidate{
+			epoch: sn.epoch, op: op.template(), ok: true,
+			content: fmt.Sprintf("thought: could run %s", sn.plan.command),
+			seed:    sn.seed, seedHeat: sn.seedHeat,
+			strength: opPriority(sn, op, saliency) * sn.seedHeat,
+		}
+	}
+
+	dests := sn.dests[op.rel]
+	best, bestSig := -1, 0.0
+	for i, dst := range dests {
+		if s := signalOf(dst, op.sig); s > bestSig {
+			best, bestSig = i, s
+		}
+	}
+	if best < 0 {
+		return none
+	}
+	top := dests[best]
+
+	var warm []uint64
+	switch op.rel {
+	case memory.RelTemporal:
+		// Free association fans out a little, so a chain can branch.
+		for _, dst := range dests {
+			if len(warm) == thinkFanout {
+				break
+			}
+			if dst.id != 0 {
+				warm = append(warm, dst.id)
+			}
+		}
+	default:
+		if top.id != 0 {
+			warm = append(warm, top.id)
+		}
+	}
+
+	return thoughtCandidate{
+		epoch: sn.epoch, op: op.template(), ok: true,
+		content: renderThought(op, sn.seedGloss, top),
+		seed:    sn.seed, seedHeat: sn.seedHeat, warm: warm,
+		strength: opPriority(sn, op, bestSig) * sn.seedHeat,
+	}
+}
+
+// renderThought is the thought's face in perception, shaped by the
+// relation that carried it: order speaks as expectation, co-occurrence
+// as association, a grounding as a remembered moment (or, for an
+// abstract concept's constellation, as association again), and a name
+// as vocabulary.
+func renderThought(op thoughtOp, seedGloss string, dst walkDest) string {
+	switch {
+	case op.rel == memory.RelSuccessor:
+		return fmt.Sprintf("thought: after %s, %s", seedGloss, dst.gloss)
+	case op.rel == memory.RelNames:
+		return fmt.Sprintf("thought: %s is called %s", seedGloss, dst.gloss)
+	case op.rel == memory.RelGrounds && dst.kind != memory.KindConcept:
+		return fmt.Sprintf("thought: that time: %s", dst.gloss)
+	default:
+		return fmt.Sprintf("thought: %s ~ %s", seedGloss, dst.gloss)
+	}
+}
+
+// absorbThought reabsorbs one operation's candidate; when the round is
 // complete the loop arbitrates and commits. A round that finishes into
 // a busy moment is discarded whole: thinking yields to perception.
 func (d *Daemon) absorbThought(cand thoughtCandidate) {
@@ -291,7 +565,7 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 	winner := round[0]
 	for _, c := range round[1:] {
 		if c.strength > winner.strength ||
-			(c.strength == winner.strength && c.source < winner.source) {
+			(c.strength == winner.strength && c.op < winner.op) {
 			winner = c
 		}
 	}
@@ -299,7 +573,202 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 	for _, id := range winner.warm {
 		d.ws.excite(id, winner.seedHeat*thinkDamping)
 	}
-	d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
+	d.lastThought = winner.content
+	res := d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
+	d.noteThoughtFruit(winner, res)
+}
+
+// noteThoughtFruit is the operant loop turned inward: a thought
+// surprising enough to be encoded is fruit and reinforces the operation
+// that produced it, with a grounds edge from the operation node to the
+// insight so the trail shows which operation produced which thought; a
+// routine thought wears the operation a little. The learned worth lives
+// as the operation node's weight, bounded on both sides.
+func (d *Daemon) noteThoughtFruit(winner thoughtCandidate, res wire.ObserveResult) {
+	node := d.opNode(winner.op)
+	if node == nil {
+		return
+	}
+	outcome := "routine"
+	if res.Conscious && res.FragmentID != 0 {
+		outcome = "insight"
+		node.Weight += opFruitDelta
+		if node.Weight > opWeightCeil {
+			node.Weight = opWeightCeil
+		}
+		if err := d.store.LinkRel(node.ID, res.FragmentID, memory.RelGrounds, groundsWeight); err != nil {
+			fmt.Fprintf(d.out, "thought grounding error: %v\n", err)
+		}
+		d.event(events.Event{Ev: "thought", Tpl: winner.op, ID: res.FragmentID,
+			Weight: node.Weight, Outcome: outcome})
+	} else {
+		node.Weight -= opBarrenDelta
+		if node.Weight < opWeightFloor {
+			node.Weight = opWeightFloor
+		}
+	}
+	if err := d.store.SetWeight(node.ID, node.Weight); err != nil {
+		fmt.Fprintf(d.out, "thought worth error: %v\n", err)
+	}
+}
+
+// opNodes lazily loads the operation nodes the graph holds, keyed by
+// template. Operations are minted on first use, so the map starts with
+// whatever earlier runs learned.
+func (d *Daemon) opNodes() map[string]*memory.Fragment {
+	if d.ops == nil {
+		d.ops = make(map[string]*memory.Fragment)
+		if nodes, err := d.store.NodesByKind(memory.KindOperation); err == nil {
+			for _, n := range nodes {
+				d.ops[n.Template] = n
+			}
+		} else {
+			fmt.Fprintf(d.out, "operation load error: %v\n", err)
+		}
+	}
+	return d.ops
+}
+
+// opNode resolves an operation's node, minting it at baseline worth on
+// first use. The operation space itself is innate; the node is where its
+// learned worth and its names live, inspectable like everything else.
+func (d *Daemon) opNode(tpl string) *memory.Fragment {
+	ops := d.opNodes()
+	if n, ok := ops[tpl]; ok {
+		return n
+	}
+	op, ok := opByTemplate(tpl)
+	if !ok {
+		return nil
+	}
+	n := &memory.Fragment{
+		Kind:     memory.KindOperation,
+		Channel:  "mind",
+		Content:  op.gloss(),
+		Template: tpl,
+		Category: "verb",
+		Limbic:   d.chem.Snapshot(),
+		Time:     time.Now(),
+	}
+	if _, err := d.store.Encode(n); err != nil {
+		fmt.Fprintf(d.out, "operation mint error: %v\n", err)
+		return nil
+	}
+	ops[tpl] = n
+	return n
+}
+
+// opByTemplate parses an operation template back into its setting,
+// refusing shapes outside the innate space.
+func opByTemplate(tpl string) (thoughtOp, bool) {
+	body, ok := strings.CutPrefix(tpl, "walk(")
+	if !ok || !strings.HasSuffix(body, ")") {
+		return thoughtOp{}, false
+	}
+	rel, sig, ok := strings.Cut(strings.TrimSuffix(body, ")"), ",")
+	if !ok {
+		return thoughtOp{}, false
+	}
+	gains, ok := opGains[rel]
+	if !ok {
+		return thoughtOp{}, false
+	}
+	if _, ok := gains[sig]; !ok {
+		return thoughtOp{}, false
+	}
+	return thoughtOp{rel: rel, sig: sig}, true
+}
+
+// opPolicy gathers the per-operation policy state for a round: learned
+// worth from the operation nodes, and the workspace warmth of every
+// concept taught to name an operation, so a spoken "worry" leans the
+// next thought toward the operation it names.
+func (d *Daemon) opPolicy() (worth, heat map[string]float64) {
+	ops := d.opNodes()
+	worth = make(map[string]float64, len(ops))
+	heat = make(map[string]float64, len(ops))
+	if len(ops) == 0 {
+		return worth, heat
+	}
+	ids := make([]uint64, 0, len(ops))
+	byID := make(map[uint64]string, len(ops))
+	for tpl, n := range ops {
+		worth[tpl] = n.Weight
+		ids = append(ids, n.ID)
+		byID[n.ID] = tpl
+	}
+	into, err := d.store.LinksToRel(ids, memory.RelGrounds)
+	if err != nil {
+		return worth, heat
+	}
+	for _, e := range into {
+		if h := d.ws.heat(e.From); h > heat[byID[e.To]] {
+			heat[byID[e.To]] = h
+		}
+	}
+	return worth, heat
+}
+
+// teachThought is the mental-teach: as teach grounds a cue to a command,
+// this grounds a concept to a thought operation and bonds the word to
+// that concept, so a word can name a kind of thinking ("worry" for
+// grounding by stress, "expect" for the successor walk) and saying it
+// leans the inner loop toward that operation.
+func (d *Daemon) teachThought(word, rel, sig, lang string) error {
+	op := thoughtOp{rel: rel, sig: sig}
+	if _, ok := opGains[rel]; !ok {
+		return fmt.Errorf("unknown relation %q (one of: %s)", rel, strings.Join(thinkRels, ", "))
+	}
+	validSig := false
+	for _, s := range thinkSigs {
+		validSig = validSig || s == sig
+	}
+	if !validSig {
+		return fmt.Errorf("unknown signal %q (one of: %s)", sig, strings.Join(thinkSigs, ", "))
+	}
+	node := d.opNode(op.template())
+	if node == nil {
+		return fmt.Errorf("the operation could not be minted; check the daemon log")
+	}
+
+	cTpl := "op:" + op.template()
+	c, err := d.store.ConceptByTemplate(cTpl)
+	if err != nil {
+		return err
+	}
+	if c == nil {
+		c = &memory.Fragment{
+			Kind:     memory.KindConcept,
+			Channel:  "concept",
+			Content:  op.gloss(),
+			Template: cTpl,
+			Category: "verb",
+			Limbic:   d.chem.Snapshot(),
+			Time:     time.Now(),
+		}
+		if _, err := d.store.Encode(c); err != nil {
+			return err
+		}
+		d.event(events.Event{Ev: "concept", ID: c.ID, Tpl: cTpl, Outcome: "operation"})
+	}
+	if err := d.store.LinkRel(c.ID, node.ID, memory.RelGrounds, opNameWeight); err != nil {
+		return err
+	}
+	if lang == "" {
+		lang = "en"
+	}
+	w, _, err := d.store.WordNode(strings.ToLower(word), lang, d.chem.Snapshot(), time.Now())
+	if err != nil {
+		return err
+	}
+	if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, opNameWeight); err != nil {
+		return err
+	}
+	d.event(events.Event{Ev: "name", From: w.ID, To: c.ID, Rel: memory.RelNames, Weight: opNameWeight})
+	// Naming a kind of thinking is talking about it: the concept warms,
+	// and the next quiet stretch leans its way.
+	d.ws.excite(c.ID, exciteSpeech)
+	return nil
 }
 
 // settleThinking completes the open think round the way the Run loop
@@ -307,78 +776,5 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 func (d *Daemon) settleThinking() {
 	for d.thinking > 0 {
 		d.absorbThought(<-d.thinkDone)
-	}
-}
-
-// spreadThought is free association: the strongest step away from the
-// seed, however the lived graph carries it.
-func spreadThought(sn thoughtSnapshot) thoughtCandidate {
-	if len(sn.assoc) == 0 {
-		return thoughtCandidate{epoch: sn.epoch, source: "spreader"}
-	}
-	top := sn.assoc[0]
-	warm := make([]uint64, 0, thinkFanout)
-	for i, a := range sn.assoc {
-		if i == thinkFanout {
-			break
-		}
-		warm = append(warm, a.concept)
-	}
-	return thoughtCandidate{
-		epoch: sn.epoch, source: "spreader", ok: true,
-		content: fmt.Sprintf("thought: %s ~ %s", sn.seedGloss, top.gloss),
-		seed:    sn.seed, seedHeat: sn.seedHeat, warm: warm,
-		strength: top.strength * sn.seedHeat,
-	}
-}
-
-// predictThought follows order: the strongest successor continuation,
-// preferred slightly over plain co-occurrence because lived sequence is
-// the brain's favored next step.
-func predictThought(sn thoughtSnapshot) thoughtCandidate {
-	for _, a := range sn.assoc {
-		if !a.ordered {
-			continue
-		}
-		return thoughtCandidate{
-			epoch: sn.epoch, source: "predictor", ok: true,
-			content: fmt.Sprintf("thought: after %s, %s", sn.seedGloss, a.gloss),
-			seed:    sn.seed, seedHeat: sn.seedHeat, warm: []uint64{a.concept},
-			strength: a.strength * sn.seedHeat * 1.05,
-		}
-	}
-	return thoughtCandidate{epoch: sn.epoch, source: "predictor"}
-}
-
-// recallThought dwells: the seed's sharpest grounded moment resurfaces,
-// quieter than an active association.
-func recallThought(sn thoughtSnapshot) thoughtCandidate {
-	if !sn.sharp.ok || sn.sharp.na == 0 {
-		return thoughtCandidate{epoch: sn.epoch, source: "recaller"}
-	}
-	return thoughtCandidate{
-		epoch: sn.epoch, source: "recaller", ok: true,
-		content: fmt.Sprintf("thought: that time: %s", sn.sharp.content),
-		seed:    sn.seed, seedHeat: sn.seedHeat,
-		strength: sn.sharp.na * sn.seedHeat * 0.8,
-	}
-}
-
-// deliberateThought notices that a warm verb concept is actionable. It
-// only ever thinks so: nothing is staged, nothing runs, and a thought
-// never cues a habit.
-func deliberateThought(sn thoughtSnapshot) thoughtCandidate {
-	if !sn.plan.ok || sn.plan.conflict {
-		return thoughtCandidate{epoch: sn.epoch, source: "decider"}
-	}
-	saliency := sn.plan.saliency
-	if saliency > 1 {
-		saliency = 1
-	}
-	return thoughtCandidate{
-		epoch: sn.epoch, source: "decider", ok: true,
-		content: fmt.Sprintf("thought: could run %s", sn.plan.command),
-		seed:    sn.seed, seedHeat: sn.seedHeat,
-		strength: saliency * sn.seedHeat * 0.6,
 	}
 }

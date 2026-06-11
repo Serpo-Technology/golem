@@ -637,7 +637,7 @@ innate-floor, emergent-above-it shape language and action already have.
 Thought has to bottom out in an executable operation, so the primitive is
 the floor and everything above it is open.
 
-- [ ] Collapse the specialists into one primitive, walk(R, S): traverse
+- [x] Collapse the specialists into one primitive, walk(R, S): traverse
       relation R from the seed and rank destinations by signal S. R ranges
       over the edge relations the graph holds (temporal, successor, names,
       grounds), S over the signals already tracked (weight, noradrenaline,
@@ -645,17 +645,17 @@ the floor and everything above it is open.
       thoughts become four (R, S) settings and the think demo still forms
       its insight. The thought-type set is now the cross-product, so a new
       relation or signal yields a new kind of thought with no new code.
-- [ ] Let state select the primitive instead of running a fixed panel.
+- [x] Let state select the primitive instead of running a fixed panel.
       Chemistry and the warm seed choose which (R, S) fires: high
       noradrenaline toward grounding-by-stress, high dopamine toward
       deliberation, calm toward free association. The kind of thought now
       emerges from mood and what is warm.
-- [ ] Ground thought-types by their fruit. An open operation space is
+- [x] Ground thought-types by their fruit. An open operation space is
       mostly noise, so turn the operant loop inward: a thought that lands
       somewhere surprising or rewarded reinforces the (R, S) that produced
       it, the way dopamine reinforces a useful action. GOLEM learns which
       of its own operations are worth running.
-- [ ] Name operations with concepts (the mental-teach). As teach grounds a
+- [x] Name operations with concepts (the mental-teach). As teach grounds a
       cue to a command, ground a concept to a (R, S) operation, so a word
       can name a kind of thinking ("worry" for grounding-by-stress,
       "expect" for successor), and the names become learnable and
@@ -677,6 +677,22 @@ Done when: the four named specialists are gone, replaced by walk(R, S)
 selected by state; the think demo still forms an insight; a thought-type
 that repeatedly bears fruit is preferred over one that does not; and a
 concept can be taught to name an operation.
+
+Status: built and demonstrated (golem demo think). The named specialists
+are gone; every setting of walk(R, S) computes each round on one
+snapshot and the arbiter weighs the candidates by the chemistry's
+appetite for the signal (alarm leans stress and recency, reward
+chemistry leans saliency, calm leans lived weight), by an innate
+loudness prior per pairing, and by learned worth. An encoded insight
+reinforces the operation that produced it and takes a grounds edge from
+the operation node, so the trail shows which operation produced which
+thought; a routine thought wears its operation a little; the worth lives
+as the operation node's weight, bounded on both sides and visible in
+golem dump. golem teach --mind worry grounds stress grounds a concept to
+an operation and bonds the word to it, and the policy reads the
+concept's workspace warmth as a lean toward its operation, so saying the
+word steers idle thought. All four done-when criteria hold in tests,
+with the race detector still refereeing rounds against live perception.
 
 ## Step 14: Grammar into memory
 

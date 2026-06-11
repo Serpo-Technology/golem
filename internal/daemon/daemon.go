@@ -99,17 +99,21 @@ type Daemon struct {
 	waiting   []*queuedAction
 	execDone  chan execResult
 
-	// Thinking fans out the way actions do: specialists compute on a
-	// snapshot and post through one channel, the loop arbitrates and
-	// commits. thinking counts the open round's in-flight specialists,
-	// thinkEpoch stamps rounds so sleep can invalidate stale ones, and
-	// thinkSeed remembers what the round was about.
+	// Thinking fans out the way actions do: every setting of the walk
+	// primitive computes on a snapshot and posts through one channel,
+	// the loop arbitrates and commits. thinking counts the open round's
+	// in-flight operations, thinkEpoch stamps rounds so sleep can
+	// invalidate stale ones, thinkSeed remembers what the round was
+	// about, and ops caches the operation nodes whose weights hold each
+	// operation's learned worth.
 	thinkDone     chan thoughtCandidate
 	thinking      int
 	thinkEpoch    uint64
 	thinkRound    []thoughtCandidate
 	thinkSeed     uint64
 	thinkSeedHeat float64
+	lastThought   string
+	ops           map[string]*memory.Fragment
 
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
@@ -1326,6 +1330,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 	case "teach":
 		if req.Content == "" || req.Command == "" {
 			return wire.Response{Error: "teach needs a cue and a command"}, false, false
+		}
+		if req.Mind {
+			parts := strings.Fields(req.Command)
+			if len(parts) != 2 {
+				return wire.Response{Error: "teach --mind needs a relation and a signal"}, false, false
+			}
+			if err := d.teachThought(req.Content, parts[0], parts[1], req.Lang); err != nil {
+				return wire.Response{Error: err.Error()}, false, false
+			}
+			return wire.Response{OK: true}, false, false
 		}
 		d.teach(req.Content, req.Command, time.Now())
 		return wire.Response{OK: true}, false, false

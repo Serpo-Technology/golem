@@ -296,6 +296,20 @@ func (s *Store) query(q string, args ...any) ([]*Fragment, error) {
 	return out, rows.Err()
 }
 
+// NodesByKind returns every node of one kind, oldest first. Operation
+// and grammar nodes are few, so callers load them whole.
+func (s *Store) NodesByKind(kind string) ([]*Fragment, error) {
+	return s.query(`SELECT `+fragmentCols+` FROM fragments WHERE kind = ? ORDER BY id`, kind)
+}
+
+// SetWeight writes one node's weight outright. Operation and grammar
+// nodes carry learned parameters in their weight, owned by the passes
+// that recompute them, so the write goes down as well as up.
+func (s *Store) SetWeight(id uint64, w float64) error {
+	_, err := s.db.Exec(`UPDATE fragments SET weight = ? WHERE id = ?`, w, id)
+	return err
+}
+
 // Refresh is retrieval practice: recalled memories get their weight
 // restored, so what gets used survives consolidation. The hot tier calls
 // it for its own hits, so practice reaches the archive no matter which

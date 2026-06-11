@@ -26,6 +26,7 @@ type Request struct {
 	Query   string `json:"query,omitempty"`
 	Command string `json:"command,omitempty"`
 	Lang    string `json:"lang,omitempty"` // language tag for tell; empty means English
+	Mind    bool   `json:"mind,omitempty"` // teach: ground the word to a thought operation, not a command
 }
 
 type Response struct {
