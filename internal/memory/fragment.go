@@ -1,6 +1,7 @@
 // Package memory is the hippocampus and the archive: moments, words,
-// and concepts as nodes of one typed graph, persisted in sqlite, with
-// a RAM working set in front and consolidation rewriting it at sleep.
+// concepts, thought operations, and grammar parameters as nodes of one
+// typed graph, persisted in sqlite, with a RAM working set in front and
+// consolidation rewriting it at sleep.
 package memory
 
 import (

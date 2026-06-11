@@ -1,6 +1,6 @@
 # GOLEM: General Observer Limbic Execution Model
 
-GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. Instead of guessing the next word, it seeks to minimize "Surprise" (Free Energy) in its environment. It is a concurrent, neuro-symbolic daemon built in Go — a **Self-Correcting, Grounded, and Metacognitive** system.
+GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. Instead of guessing the next word, it seeks to minimize "Surprise" (Free Energy) in its environment. It is a concurrent, neuro-symbolic daemon built in Go: a **Self-Correcting, Grounded, and Metacognitive** system.
 
 ---
 
@@ -29,7 +29,7 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Replies can be spoken: with voice on in config, every sentence the realizer builds is also rendered through the system text-to-speech, queued off the brain loop. Eyes and ears are external transducers by design, neural weights kept at the edge: pipe a captioner into `golem observe vision "a red door"` and a speech recognizer into `golem tell`, narrate while GOLEM perceives, and the night's naming pass grounds the words across showings.
 - Open-world perception is policed: channels marked untrusted (the web by default) encode at half weight, can never fire a graduated habit, and never anchor the grounding of an action, so an adversarial page can be remembered without ever moving the hands.
 - Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
-- Memory is one graph with three node kinds (episodic moments, language-tagged words, amodal concepts) under typed edges: temporal co-occurrence, directed order, names, and grounds.
+- Memory is one graph of typed nodes (episodic moments, language-tagged words, amodal concepts, thought operations, grammar parameters) under typed edges: temporal co-occurrence, directed order, names, and grounds.
 - Order is learned by spike timing: a moment binds forward to what followed it, and no edge is written backward. Sleep replay weaves the same directed edges along the day it re-fires, so "what usually happens after make test" is answered by reading edges.
 - Concepts are born during sleep from shapes that recurred into prototypes. Each carries a lemma category derived from its grounding role (a command shape is verb-like, a recurring sensory shape noun-like) and grounds out to the episodes that instantiate it. Serotonin paces how many concepts one night may mint.
 - Spoken words become word nodes bound to the moments around them. The night's naming pass bonds each word to the concepts its moments ground by cross-situational reliability: the share of the word's lived company that lands on the concept, blended with the reverse share, so a word scattered across many concepts bonds weakly everywhere while a faithful one bonds firmly. Dopamine gates how readily words bond at all, a coincidental bond weakens the moment its word recurs amid other active concepts, and utterances count for nothing: a repeated question can never become a thing. Forms from any language converge on one concept once grounded alike, so "testler" recalls what "tests" recalls.
@@ -64,7 +64,8 @@ GOLEM maps its components directly to biological structures, replacing LLM inter
 | **Association Map / Memory Hub** | **Hippocampus** | The "Librarian." Binds disparate sensory fragments into a single "Moment" or "Context." | Weighted Association Graph / Vector Knowledge Graph (SDRs) |
 | **Semantic Hub / Concept Store** | **Anterior Temporal Lobe** | The amodal meaning layer. Words and senses converge on one concept node, so synonyms and cross-language translations share a single pointer. | Word Embeddings / Shared Vector Space |
 | **Workspace / Global Broadcast** | **Dorsolateral PFC** | Sustained activation held across ticks. Carries dialogue reference and is the seat of the inner loop. | Attention Context Window |
-| **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways. | Transformer Decoder / Tokenizer |
+| **Inner Loop / Thought Operations** | **Default Mode Network** | Mind-wandering when perception goes quiet: one primitive, walk(relation, signal), applied to the warmest concept, with chemistry selecting the kind of thought and remembered insights reinforcing the operations that produce them. | Chain-of-Thought Sampling |
+| **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways over parameters held in memory. | Transformer Decoder / Tokenizer |
 
 ---
 
@@ -82,7 +83,7 @@ Unlike LLMs that wait for a prompt, GOLEM is a **General Observer**. It maintain
 GOLEM's behavior is modulated by a simulated **Neurochemical State** (Dopamine, Noradrenaline, Serotonin).
 
 - **Dopamine:** Drives curiosity and the weighting of new "Association Fragments."
-- **Noradrenaline:** Controls "sampling speed" — spiking during high-surprise events to increase system alertness.
+- **Noradrenaline:** Controls "sampling speed"; it spikes during high-surprise events to increase system alertness.
 - **Serotonin:** Regulates stability and triggers the "Sleep/Janitor" cycle.
 
 ### 3. Multimodal Association (The Memory)
@@ -102,7 +103,7 @@ In an LLM, the word "Apple" is a 1536-dimensional vector of probabilities. In GO
 
 ### 5. Metacognition: The Conflict Resolver (ACC Logic)
 
-To make GOLEM truly intelligent, it must possess **Metacognition** — the ability to monitor its own uncertainty. This is handled by the **Anterior Cingulate Cortex (ACC)**, which detects "Conflict" between competing pathways in the **Basal Ganglia**.
+To make GOLEM truly intelligent, it must possess **Metacognition**, which is the ability to monitor its own uncertainty. This is handled by the **Anterior Cingulate Cortex (ACC)**, which detects "Conflict" between competing pathways in the **Basal Ganglia**.
 
 If two pathways (e.g., "Mop the Floor" vs. "Clear the Logs") are both firing with similar strength, the ACC triggers a "Veto" and forces the system to ask for **Grounding**.
 
@@ -113,8 +114,8 @@ If two pathways (e.g., "Mop the Floor" vs. "Clear the Logs") are both firing wit
 A mind holds its active thoughts. The **Workspace** keeps a decaying activation pattern alive across ticks and turns, so the most active concepts stay warm between one utterance and the next.
 
 - **Dialogue memory:** "do it again" and "that one" resolve to whatever is still warm in the buffer.
-- **What warms it:** a moment of a known shape, words that name a concept, and every concept an answer walks through. Each homeostasis tick cools the pattern, and sleep clears it: working memory does not survive the night.
-- **The broadcast:** sustained, re-broadcast activation is the substrate the Global Workspace theory of consciousness points to, and the seat of a future inner loop where GOLEM perceives its own active concepts.
+- **What warms it:** a moment of a known shape, words that name a concept, every concept an answer walks through, and the associations each committed thought hands its warmth to. Each homeostasis tick cools the pattern, and sleep clears it: working memory does not survive the night.
+- **The broadcast:** sustained, re-broadcast activation is the substrate the Global Workspace theory of consciousness points to, and the seat of the inner loop: when perception goes quiet, the warmest concept seeds the next thought, and the thought's product feeds back into the same buffer.
 
 ### 7. Grammar and Speech (Broca & Wernicke)
 
@@ -123,7 +124,7 @@ GOLEM does not store sentences to repeat them. It builds them. Following Levelt'
 - **The Realizer (Broca):** the grammar runs as a generator, the way a compiler's code generator emits from a syntax tree. A concept-frame goes in and a grammatical sentence comes out, inflected and ordered for the active language. Ungrammatical strings are never built, so nothing needs correcting after the fact.
 - **The Parser (Wernicke):** the same grammar runs backward, turning an utterance into a concept-frame and reading its force (statement, question, command).
 - **What to Say:** a message planner above the grammar chooses the content. With nothing grounded for a query, GOLEM says it does not know; when curiosity is high, it asks.
-- **One Example is Enough:** the grammar is innate; only the lexicon (which words point to which concepts) is learned, and a word taught in a second language attaches to the same concept as its English synonym.
+- **One Example is Enough:** the engine is innate and its parameters are entrenched entries in memory; the lexicon (which words point to which concepts) is learned, and a word taught in a second language attaches to the same concept as its English synonym.
 
 ### 8. Action: Parallel Substrate, Serial Commitment
 
@@ -144,15 +145,15 @@ The brain is parallel underneath and serial only where it commits: billions of n
 3. **Thalamus (Relay):** Matches the input to the prediction.
 4. **Result:** Data is discarded. **CPU usage: ~0%.**
 5. **Observation:** A log file updates with "Connection Refused."
-6. **PFC:** "Unexpected!" → Triggers **Noradrenaline Spike**.
+6. **PFC:** "Unexpected!" This triggers a **Noradrenaline Spike**.
 7. **Execution:** GOLEM alerts the user and records the moment.
 
 ### B. Memory Formation & Retrieval
 
 - **Encoding:** While you work, the **Hippocampus** creates a "Moment Struct" containing: `[FileEdited, CurrentMood(Dopamine), UserTyped, Time]`.
-- **Retrieval:** When you say "Show me that error," GOLEM doesn't search for the text "error." It searches for the **Noradrenaline Spike** in its memory — finding the exact moment your system felt "stressed."
+- **Retrieval:** When you say "Show me that error," GOLEM doesn't search for the text "error." It searches for the **Noradrenaline Spike** in its memory and finds the exact moment your system felt "stressed."
 
-### C. The Full Interaction Loop — Conflict Resolution
+### C. The Full Interaction Loop: Conflict Resolution
 
 **User Input:** *"Clean it up."*
 
@@ -169,7 +170,7 @@ The brain is parallel underneath and serial only where it commits: billions of n
 
 GOLEM uses **Synaptic Scaling** during its "Sleep Cycle" to decide what stays.
 
-**Importance Scaling** — A memory is "Important" if:
+**Importance Scaling.** A memory is "Important" if:
 
 1. It had a **High Limbic Weight** (Happened during high Dopamine/Noradrenaline).
 2. It has **High Connectivity** (It is linked to many other fragments).
@@ -180,6 +181,7 @@ GOLEM uses **Synaptic Scaling** during its "Sleep Cycle" to decide what stays.
 - If a fragment's weight ≤ a threshold (e.g., 0.1), it is **permanently deleted**.
 - **Result:** Repetitive, boring data fades away. Rare, high-impact events (like a system crash) stay forever.
 - Word and concept nodes sit outside the nightly fade. They die by disconnection instead: a word vanishes when its last edge does, and a concept vanishes when nothing grounds it anymore.
+- Thought-operation and grammar nodes never fade at all. An operation's weight is its learned worth, moved only by the fruit of its own thoughts, and a grammar parameter's weight is its entrenchment, moved only by competition with the lexicon.
 
 ---
 
@@ -189,14 +191,15 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 
 1. **Replay:** The system reactivates the day's "surprising" fragments in order, weaving cross-channel links and directed successor edges the waking window missed.
 2. **Synaptic Downscaling:** Global weight reduction of all memories. Weak/noisy fragments are pruned (deleted).
-3. **Abstraction:** Recurring shapes merge into prototype fragments, prototypes distil into concept nodes, and the day's words bond to the concepts their moments ground.
+3. **Abstraction:** Recurring shapes merge into prototype fragments, prototypes distil into concept nodes, the day's words bond to the concepts their moments ground, and a word whose company is a stable cloud of concepts distils into an abstraction grounded in that constellation.
+4. **The Grammar's Night:** seeded parameters and lived usage settle their competition, and the working grammar recompiles from the surviving weights.
 
 ---
 
 ## Technical Specifications
 
 - **Language:** Go (1.25+)
-- **Concurrency:** parallel substrate, serial commitment. Sensory channels run as `goroutines` and committed execution runs off the loop; the `select` loop is the single serial thread that decides and writes memory, the Global Workspace and the action gate at once.
+- **Concurrency:** parallel substrate, serial commitment. Sensory channels, committed execution, and the thought operations all run as `goroutines` off the loop; the `select` loop is the single serial thread that decides and writes memory, the Global Workspace and the action gate at once.
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
 - **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org, fsnotify); no model weights, no frameworks, no cgo.
 
@@ -218,24 +221,28 @@ internal/
   attention/        normalizer, surprise predictor, per-channel calibrator
                     (thalamus and prefrontal cortex: what reaches awareness)
   senses/           the observation packet and the built-in sensors: files,
-                    vitals, syslog, the synthetic channel, the shell contract
-  memory/           fragments, words, and concepts as one typed graph in
-                    sqlite, the in-RAM hippocampus, the hot working set, and
+                    file tails, vitals, syslog, web pages, the frontmost
+                    app, the synthetic channel, and the shell contract
+  memory/           moments, words, concepts, thought operations, and
+                    grammar parameters as one typed graph in sqlite, the
+                    in-RAM hippocampus, the hot working set, and
                     consolidation (hippocampus and cortex)
-  grammar/          the innate language faculty: one concept-frame, English
-                    and Turkish parsers and realizers, hand-rolled morphology
-                    (Broca and Wernicke)
+  grammar/          the innate language engine and its curriculum: one
+                    concept-frame, English and Turkish parsers and
+                    realizers, hand-rolled morphology, and the parameters
+                    compiled from memory (Broca and Wernicke)
   pipeline/         shell-free execution: parse commands into argv stages or
                     refuse, run them over real pipes, derive resource claims
   events/           the structured trail, one JSON object per line, rotated
   wire/             the socket protocol: requests, responses, display forms,
                     and the client side of one round trip
-  config/           tuning, the config file, and the destructive-pattern
-                    denylist with its matchers
+  config/           tuning, the config file, channel trust, and the
+                    destructive-pattern denylist with its matchers
   daemon/           the brain loop that owns all mutable state: encoding,
                     association, sleep, the decision loop and its gates, the
                     parallel action arbiter, the message planner, the
-                    workspace, and the demos that drive it all on throwaway
+                    workspace, the inner loop and its walk operations, the
+                    voice, and the demos that drive it all on throwaway
                     homes (basal ganglia, ACC, and the global workspace)
 ```
 
@@ -273,6 +280,7 @@ go build -o golem ./cmd/golem
 ./golem tell "what usually happens after make test"
 ./golem tell --lang tr "testler temiz"
 ./golem concepts
+./golem teach --mind worry grounds stress
 ./golem stop
 
 # Optional: feed your shell into GOLEM (open a new shell afterward)
@@ -287,7 +295,7 @@ go build -o golem ./cmd/golem
 
 ### Memory Editor Tool (GME)
 
-The next major phase is the **GOLEM Memory Editor** — a specialized interface for the "Ghost in the Machine," providing GUI-based "Neurosurgery" on your GOLEM model.
+The **GOLEM Memory Editor** is the part still ahead of the code. It is a specialized interface for the "Ghost in the Machine," providing GUI-based "Neurosurgery" on your GOLEM model.
 
 **Features:**
 
@@ -305,7 +313,7 @@ While the initial system uses Dopamine, Noradrenaline, and Serotonin, the **GOLE
 | Neurochemical | Biological Role | GOLEM Behavior |
 | --- | --- | --- |
 | **Acetylcholine** | Focus / Precision | Controls "Learning Rate." High Acetylcholine creates "Hard" symbolic links immediately; low creates "Soft" probabilistic links. |
-| **GABA** | Inhibition | Sensory inhibition — focusing the system on one task. |
+| **GABA** | Inhibition | Sensory inhibition that focuses the system on one task. |
 | **Adenosine** | Sleep Pressure | Triggers the Consolidation/Batching cycle. |
 | **Oxytocin** (built) | Alignment / Bond | Measures user trust. Denials and failed runs lower it, which raises the graduation bar everywhere, so a corrected GOLEM graduates habits more slowly and stays in confirm-first mode longer. |
 | **Cortisol** | System Stress / Resource Strain | Measures CPU/RAM/Heat levels. High Cortisol triggers "Avoidance" behaviors, like shutting down non-essential sensory channels to save the core. |

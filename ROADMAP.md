@@ -230,7 +230,9 @@ Goal: see the graph before building the GUI that edits it.
       survived a few weeks without changing. The concept layer changed it
       on 2026-06-11 (fragments gained kind, lang, and category; links
       gained a rel column and a wider primary key), which restarts that
-      clock.
+      clock. The thought operations, grammar parameters, and abstractions
+      that followed ride the same columns (new kind values and template
+      conventions, no schema change), so the clock stands.
 
 ## Step 8: The action layer: pipelines and parallel execution
 

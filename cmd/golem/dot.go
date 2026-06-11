@@ -11,9 +11,10 @@ import (
 // renderDOT lays the memory graph out for graphviz: one node per fragment
 // labeled with its id, channel, and content, sized by weight; one edge
 // per link, weighted by strength. Node shape marks the kind (moments are
-// boxes, words ellipses, concepts double octagons) and edge style marks
-// the relation (successor bold, names dashed, grounds dotted). Render
-// with, for example:
+// boxes, words ellipses, concepts double octagons, thought operations
+// diamonds, grammar parameters plain text) and edge style marks the
+// relation (successor bold, names dashed, grounds dotted). Render with,
+// for example:
 //
 //	golem dump --dot | dot -Tsvg -o memory.svg
 func renderDOT(frags []*wire.FragmentInfo, links []*wire.LinkInfo) string {
@@ -35,6 +36,12 @@ func renderDOT(frags []*wire.FragmentInfo, links []*wire.LinkInfo) string {
 			if f.Category != "" {
 				head = "concept " + dotEscape(f.Category)
 			}
+		case memory.KindOperation:
+			shape = ", shape=diamond"
+			head = "operation"
+		case memory.KindGrammar:
+			shape = ", shape=plaintext"
+			head = "grammar " + dotEscape(f.Lang)
 		}
 		label := fmt.Sprintf("#%d %s\\n%s", f.ID, head, dotEscape(wire.Clip(f.Content, 60)))
 		if f.Count > 1 {
