@@ -92,6 +92,12 @@ func (d *Daemon) decide(cue string) (Decision, error) {
 	}
 	ids := make([]uint64, 0, len(anchors))
 	for _, a := range anchors {
+		// Untrusted perception never anchors the grounding of an
+		// action: a fetched page that mentions the cue must not lend
+		// its neighborhood to the decision.
+		if d.cfg.Untrusted(a.Channel) {
+			continue
+		}
 		ids = append(ids, a.ID)
 	}
 	// Grounding is co-occurrence. The successor edge a cue also earns by

@@ -120,6 +120,10 @@ type Daemon struct {
 	lastThought   string
 	ops           map[string]*memory.Fragment
 
+	// voice carries sentences to the text-to-speech effector, opened on
+	// first use when the voice channel is configured on.
+	voice chan string
+
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
 	events *events.Log
@@ -213,6 +217,10 @@ type recentMoment struct {
 	template string
 	at       time.Time
 }
+
+// untrustedWeight is the starting weight of a moment from an untrusted
+// channel: half a memory, gone in half the nights.
+const untrustedWeight = 0.5
 
 // Association tuning. Link strength rides on dopamine, repetition of a
 // template pair earns a bonus and a reward spike, and recall both rewards
@@ -634,6 +642,21 @@ func (d *Daemon) startSensors() {
 		go senses.SyslogSensor(d.obs, d.stop, d.dropCounter("syslog"))
 		active = append(active, "syslog")
 	}
+	if len(ch.TailFiles) > 0 {
+		senses.TailSensor(ch.TailFiles, d.obs, d.stop, d.dropCounter("reading"))
+		active = append(active, fmt.Sprintf("reading(%d files)", len(ch.TailFiles)))
+	}
+	if len(ch.WatchURLs) > 0 {
+		go senses.WebSensor(ch.WatchURLs, d.cfg.WebPoll(), d.obs, d.stop, d.dropCounter("web"))
+		active = append(active, fmt.Sprintf("web(%d urls, untrusted)", len(ch.WatchURLs)))
+	}
+	if ch.Screen {
+		go senses.ScreenSensor(d.obs, d.stop, d.dropCounter("screen"))
+		active = append(active, "screen")
+	}
+	if ch.Voice {
+		active = append(active, "voice(out)")
+	}
 	if len(active) == 0 {
 		fmt.Fprintln(d.out, "senses: none built in; feed channels with golem observe or the shell hook.")
 		return
@@ -716,9 +739,12 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	// The reflex arc runs before the gate: a graduated habit must fire on
 	// its cue even when the cue has become too routine to reach
 	// consciousness. Speech is excluded (the operator has golem propose),
-	// and so are action echoes: the feedback channel and shell lines that
-	// are themselves commands, or an outcome could re-cue its own habit.
+	// so are action echoes: the feedback channel and shell lines that
+	// are themselves commands, or an outcome could re-cue its own habit,
+	// and so is every untrusted channel, because a fetched page that
+	// happens to contain a cue must never move the hands.
 	if !forced && o.Channel != "action" && o.Channel != thoughtChannel &&
+		!d.cfg.Untrusted(o.Channel) &&
 		!strings.HasPrefix(o.Content, senses.ActionPrefix) {
 		d.autoCue(o, tpl)
 	}
@@ -752,6 +778,12 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		Surprise: bits,
 		Limbic:   d.chem.Snapshot(),
 		Time:     o.At,
+	}
+	if d.cfg.Untrusted(o.Channel) {
+		// Open-world perception is remembered lightly: it fades in
+		// fewer nights and never carries the authority of lived
+		// experience.
+		frag.Weight = untrustedWeight
 	}
 	id, err := d.store.Encode(frag)
 	if err != nil {
@@ -1264,6 +1296,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			frame.Lang = req.Lang
 		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content)
+		// A reply that was built is also spoken when the voice is on.
+		d.speak(resp.Say)
 		// What do these words point at? The new fragment just bound to the
 		// recent past, so a spread from it is GOLEM's side of the exchange.
 		if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {

@@ -71,7 +71,16 @@ Usage:
   golem launchd                   print a launchd plist for start-at-login
 
 The daemon keeps its memory, config, and socket in ~/.golem (override with
-GOLEM_HOME). Edit ~/.golem/config.json to tune thresholds and sleep timing.`
+GOLEM_HOME). Edit ~/.golem/config.json to tune thresholds and sleep timing.
+
+Senses are selected in config.json under "channels": vitals and syslog
+ship on; "watch_dirs" adds file events, "tail_files" reads appended lines
+as the reading channel, "watch_urls" fetches pages onto the untrusted web
+channel, "screen" reports the frontmost app, and "voice" speaks replies
+aloud. Neural transducers stay outside the binary by design: pipe a
+captioner into  golem observe vision "<caption>"  and a speech recognizer
+into  golem tell  to give GOLEM eyes and ears; narrate while it perceives
+and the night's naming pass grounds the words.`
 
 func main() {
 	args := os.Args[1:]

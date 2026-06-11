@@ -158,10 +158,14 @@ func migrate(db *sql.DB) error {
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// Encode stores a new node with full starting weight and stamps its ID.
-// Most encodes are moments; word and concept nodes pass their kind in.
+// Encode stores a new node and stamps its ID. The starting weight is
+// full unless the caller pre-set a reduced one (untrusted channels
+// remember lightly); most encodes are moments, and word and concept
+// nodes pass their kind in.
 func (s *Store) Encode(f *Fragment) (uint64, error) {
-	f.Weight = 1.0
+	if f.Weight <= 0 || f.Weight > 1 {
+		f.Weight = 1.0
+	}
 	if f.Count < 1 {
 		f.Count = 1
 	}

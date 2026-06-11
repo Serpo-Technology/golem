@@ -28,6 +28,7 @@ const (
 	defaultExecuteTimeoutSec = 30
 	defaultExecuteParallel   = 4
 	defaultAutoCueCooldown   = 60
+	defaultWebPollSec        = 900
 )
 
 // actionDenylist is the set of command substrings GOLEM will always
@@ -109,6 +110,13 @@ type Config struct {
 	// the same graduated cue, so a storm of matching observations cannot
 	// run one habit over and over.
 	AutoCueCooldownSec float64 `json:"auto_cue_cooldown_sec"`
+	// WebPollSec is how often each watched URL is fetched.
+	WebPollSec float64 `json:"web_poll_sec"`
+	// UntrustedChannels lists open-world senses whose content may be
+	// adversarial: their moments encode at reduced weight and can never
+	// cue a habit or anchor the grounding of an action. Omitted, the
+	// list is the web channel.
+	UntrustedChannels []string `json:"untrusted_channels"`
 }
 
 type ChannelsConfig struct {
@@ -122,6 +130,17 @@ type ChannelsConfig struct {
 	Syslog bool `json:"syslog"`
 	// WatchDirs lists directories (not recursive) for file events.
 	WatchDirs []string `json:"watch_dirs"`
+	// TailFiles lists files whose appended lines arrive as observations
+	// on the reading channel, distinct from the file-event sense.
+	TailFiles []string `json:"tail_files"`
+	// WatchURLs lists pages fetched periodically; their stripped text
+	// arrives on the web channel, which is untrusted by default.
+	WatchURLs []string `json:"watch_urls"`
+	// Screen reports the frontmost application as a symbolic stream on
+	// the screen channel.
+	Screen bool `json:"screen"`
+	// Voice renders spoken replies through the system text-to-speech.
+	Voice bool `json:"voice"`
 }
 
 func Default() Config {
@@ -146,10 +165,14 @@ func Default() Config {
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
 		ExecuteParallel:     defaultExecuteParallel,
 		AutoCueCooldownSec:  defaultAutoCueCooldown,
+		WebPollSec:          defaultWebPollSec,
+		UntrustedChannels:   []string{"web"},
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,
 			WatchDirs: []string{},
+			TailFiles: []string{},
+			WatchURLs: []string{},
 		},
 	}
 }
@@ -246,4 +269,30 @@ func (c Config) ExecTimeout() time.Duration {
 		t = defaultExecuteTimeoutSec * time.Second
 	}
 	return t
+}
+
+// WebPoll resolves the fetch interval for watched pages.
+func (c Config) WebPoll() time.Duration {
+	t := time.Duration(c.WebPollSec * float64(time.Second))
+	if t <= 0 {
+		t = defaultWebPollSec * time.Second
+	}
+	return t
+}
+
+// Untrusted reports whether a channel carries open-world perception
+// that may be adversarial. An untrusted moment encodes at reduced
+// weight and is barred from cueing habits and from anchoring the
+// grounding of an action; a missing list defaults to the web channel.
+func (c Config) Untrusted(channel string) bool {
+	list := c.UntrustedChannels
+	if list == nil {
+		list = []string{"web"}
+	}
+	for _, ch := range list {
+		if ch == channel {
+			return true
+		}
+	}
+	return false
 }

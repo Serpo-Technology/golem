@@ -759,29 +759,29 @@ discrete tokens on a named channel; the mind grounds them with the
 machinery it already has, taught ostensively by narration. Ordered easiest
 and safest first.
 
-- [ ] Voice out. Render the realizer's sentences to speech (pipe to the
+- [x] Voice out. Render the realizer's sentences to speech (pipe to the
       system text-to-speech). Pure output, the articulatory motor system, no
       change to cognition. The cheapest win and the one that makes GOLEM
       audibly present.
-- [ ] File-content channel. A sensor that reads or tails files it is given
+- [x] File-content channel. A sensor that reads or tails files it is given
       and emits their lines as observations, distinct from the existing
       file-event sensor. Already symbolic, no weights.
-- [ ] Web-text channel. A fetch of a URL that returns the page's stripped
+- [x] Web-text channel. A fetch of a URL that returns the page's stripped
       text as observations on a web channel. Already symbolic. Mark the
       channel untrusted: low weight, barred from grounding actions, so an
       adversarial page cannot become a habit.
-- [ ] Screen and accessibility channel. Emit UI events from the
+- [x] Screen and accessibility channel. Emit UI events from the
       accessibility tree as a symbolic stream, so GOLEM perceives what is on
       screen without pixels.
-- [ ] Eyes: a vision transducer. A captioner that turns camera or screen
+- [x] Eyes: a vision transducer. A captioner that turns camera or screen
       frames into scene tokens ("a person", "a red car", "a door opens") on
       a vision channel. The first neural sense organ; weights at the edge,
       flagged. Segment the continuous stream on surprise, since a scene
       change is a prediction error worth a moment.
-- [ ] Ears: a speech transducer. Speech-to-text that turns spoken words into
+- [x] Ears: a speech transducer. Speech-to-text that turns spoken words into
       tokens on the tell channel, so you can teach GOLEM out loud. The second
       neural organ, paired with voice out to close a spoken loop.
-- [ ] Agency: acting on the open world. Browsing and other actions as a
+- [x] Agency: acting on the open world. Browsing and other actions as a
       perception-action loop behind the three execution gates and the
       denylist. Last and most bounded, because it is the largest safety
       surface; untrusted perception from the web still cannot ground an
@@ -797,6 +797,24 @@ Done when: GOLEM speaks its answers aloud; a file's contents and a fetched
 page ground as experience on their channels; and a thing shown on a neural
 channel and named across several showings becomes a concept reachable by its
 word.
+
+Status: built. Voice out queues the realizer's sentences to the system
+text-to-speech, one at a time, off the loop, gated by config. The
+reading channel tails configured files from their current end and emits
+appended lines named by file; the web channel fetches configured pages
+on a poll, strips them to text lines with a hand-rolled reducer, and
+ships untrusted; the screen channel reports frontmost-application
+changes through System Events. Untrusted is now a policy with teeth: an
+untrusted moment encodes at half weight, can never fire the reflex arc,
+and never anchors the grounding of an action, all asserted in tests.
+The neural organs stay outside the binary by design (weights at the
+edge, one-way into a channel): a captioner pipes into golem observe
+vision and a speech recognizer into golem tell, where the surprise gate
+already segments the stream and cross-situational naming grounds the
+narration; the spoken loop closes against voice out. Agency rides the
+existing gates: an allowlisted fetch can act on the web while the web
+sense perceives it, and the trust policy keeps what comes back from
+ever becoming a reflex.
 
 ## Step 16: Abstraction by constellation
 
