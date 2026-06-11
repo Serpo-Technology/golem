@@ -22,12 +22,12 @@ type EventLog struct {
 // kind; the flat shape keeps the file greppable.
 type Event struct {
 	At      int64   `json:"at"` // unix milliseconds
-	Ev      string  `json:"ev"` // encode, link, replay, prune, merge, sleep, proposal, approval, denial, autonomous
+	Ev      string  `json:"ev"` // encode, link, replay, prune, merge, sleep, proposal, approval, denial, autonomous, word, concept, name
 	Channel string  `json:"channel,omitempty"`
 	ID      uint64  `json:"id,omitempty"`
 	From    uint64  `json:"from,omitempty"`
 	To      uint64  `json:"to,omitempty"`
-	Rel     string  `json:"rel,omitempty"` // on link events: the edge relation; empty means temporal
+	Rel     string  `json:"rel,omitempty"` // on link events: successor, names, grounds; empty means temporal
 	Bits    float64 `json:"bits,omitempty"`
 	Weight  float64 `json:"weight,omitempty"`
 	Count   int     `json:"count,omitempty"`

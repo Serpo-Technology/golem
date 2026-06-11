@@ -19,6 +19,7 @@ type Request struct {
 	Content string `json:"content,omitempty"`
 	Query   string `json:"query,omitempty"`
 	Command string `json:"command,omitempty"`
+	Lang    string `json:"lang,omitempty"` // language tag for tell; empty means English
 }
 
 type Response struct {
@@ -33,6 +34,21 @@ type Response struct {
 	Action    *ActionResult   `json:"action,omitempty"`
 	Habits    []*HabitInfo    `json:"habits,omitempty"`
 	Audit     []*AuditInfo    `json:"audit,omitempty"`
+	Concepts  []*ConceptInfo  `json:"concepts,omitempty"`
+	Say       string          `json:"say,omitempty"` // a sentence GOLEM built in reply
+}
+
+// ConceptInfo is the wire form of one concept node: its gloss, its lemma
+// category, the words that name it tagged by language, how much
+// experience grounds it, and how warm it currently sits in the
+// workspace.
+type ConceptInfo struct {
+	ID       uint64   `json:"id"`
+	Gloss    string   `json:"gloss"`
+	Category string   `json:"category"`
+	Names    []string `json:"names,omitempty"`
+	Grounded int      `json:"grounded"`
+	Heat     float64  `json:"heat,omitempty"`
 }
 
 // LinkInfo is the wire form of one association edge, set on dump so the
@@ -90,6 +106,8 @@ type StatusInfo struct {
 	UptimeSec      float64                 `json:"uptime_sec"`
 	Fragments      int                     `json:"fragments"`
 	HotFragments   int                     `json:"hot_fragments"`
+	Concepts       int                     `json:"concepts"`
+	Words          int                     `json:"words"`
 	Channels       map[string]*ChannelStat `json:"channels"`
 	Sleeps         int                     `json:"sleeps"`
 	LastSleepUnix  int64                   `json:"last_sleep_unix"`
@@ -98,6 +116,13 @@ type StatusInfo struct {
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
 	Running        string                  `json:"running,omitempty"`
+	Warm           []*WarmInfo             `json:"warm,omitempty"` // workspace concepts, hottest first
+}
+
+// WarmInfo is one workspace entry: a concept gloss and its activation.
+type WarmInfo struct {
+	Gloss string  `json:"gloss"`
+	Heat  float64 `json:"heat"`
 }
 
 type ChannelStat struct {

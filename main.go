@@ -17,20 +17,27 @@ Usage:
   golem demo decide               walk the decision loop on throwaway memory
   golem demo execute              real execution under its gates, throwaway
   golem demo consolidate          one day, one night: merge and replay
+  golem demo language             concepts, words, and built sentences
   golem status                    show daemon status
   golem chem                      show current neurochemistry
   golem chem --watch              print it once a second until interrupted
   golem observe <channel> <text>  feed one observation to the daemon
   golem tell <words>              speak to GOLEM; the words become a memory
-                                  bound to the moments around them, and the
-                                  reply is what they bring to mind
+                                  bound to the moments around them, a
+                                  question is answered from what is
+                                  grounded, and a command becomes a proposal
   golem tell                      the same, as an interactive session
+  golem tell --lang <tag> <words> tag the words' language ("tr", "de");
+                                  words in any language converge on the
+                                  same concepts once grounded alike
   golem tell --about <query> <words>
                                   bind the words to remembered moments that
                                   match the query instead of to the present
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
+  golem concepts                  list what GOLEM has abstracted: each
+                                  concept, its words, and its grounding
   golem teach <cue> <command>     ground a cue to a command by hand; repeat
                                   to strengthen toward graduation
   golem propose <cue>             weigh the actions grounded to a cue and
@@ -69,6 +76,8 @@ func main() {
 			runExecutionDemo()
 		case len(args) >= 2 && args[1] == "consolidate":
 			runConsolidationDemo()
+		case len(args) >= 2 && args[1] == "language":
+			runLanguageDemo()
 		default:
 			runDemo()
 		}
@@ -119,13 +128,18 @@ func main() {
 
 	case "tell":
 		rest := args[1:]
+		lang := ""
+		if len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
+		}
 		switch {
 		case len(rest) >= 3 && rest[0] == "--about":
-			tellAboutOnce(home, rest[1], strings.Join(rest[2:], " "))
+			tellAboutOnce(home, lang, rest[1], strings.Join(rest[2:], " "))
 		case len(rest) >= 1 && rest[0] == "--about":
-			fail(fmt.Errorf("usage: golem tell --about <query> <words>"))
+			fail(fmt.Errorf("usage: golem tell [--lang <tag>] --about <query> <words>"))
 		case len(rest) >= 1:
-			tellOnce(home, strings.Join(rest, " "))
+			tellOnce(home, lang, strings.Join(rest, " "))
 		default:
 			tellSession(home)
 		}
@@ -171,6 +185,24 @@ func main() {
 	case "deny":
 		resp := call(home, Request{Cmd: "deny"})
 		printAction(resp.Action)
+
+	case "concepts":
+		resp := call(home, Request{Cmd: "concepts"})
+		if len(resp.Concepts) == 0 {
+			fmt.Println("no concepts born yet; they distil from recurring shapes during sleep.")
+			return
+		}
+		for _, c := range resp.Concepts {
+			warmth := ""
+			if c.Heat > 0 {
+				warmth = fmt.Sprintf("  warm %.2f", c.Heat)
+			}
+			fmt.Printf("#%-3d [%-4s] %q  grounded in %d occurrence(s)%s\n",
+				c.ID, c.Category, c.Gloss, c.Grounded, warmth)
+			if len(c.Names) > 0 {
+				fmt.Printf("     named by: %s\n", strings.Join(c.Names, ", "))
+			}
+		}
 
 	case "habits":
 		resp := call(home, Request{Cmd: "habits"})
@@ -248,6 +280,16 @@ func call(home string, req Request) Response {
 func printStatus(st *StatusInfo) {
 	fmt.Printf("golem daemon, pid %d, up %s\n", st.PID, time.Duration(st.UptimeSec*float64(time.Second)).Round(time.Second))
 	fmt.Printf("  fragments held: %d (%d in the hot working set)\n", st.Fragments, st.HotFragments)
+	if st.Concepts > 0 || st.Words > 0 {
+		fmt.Printf("  semantic memory: %d concept(s), %d word(s)\n", st.Concepts, st.Words)
+	}
+	if len(st.Warm) > 0 {
+		parts := make([]string, 0, len(st.Warm))
+		for _, w := range st.Warm {
+			parts = append(parts, fmt.Sprintf("%q %.2f", w.Gloss, w.Heat))
+		}
+		fmt.Printf("  workspace: %s\n", strings.Join(parts, ", "))
+	}
 	if len(st.Channels) == 0 {
 		fmt.Println("  channels: none observed yet")
 	}
@@ -275,17 +317,34 @@ func printStatus(st *StatusInfo) {
 	}
 }
 
-func tellOnce(home, words string) {
-	resp := call(home, Request{Cmd: "tell", Content: words})
+func tellOnce(home, lang, words string) {
+	resp := call(home, Request{Cmd: "tell", Content: words, Lang: lang})
 	fmt.Printf("remembered as #%d (%.2f bits)\n", resp.Observe.FragmentID, resp.Observe.Bits)
+	if resp.Say != "" {
+		fmt.Printf("golem> %s\n", resp.Say)
+	}
+	printTellProposalHint(resp.Decision)
 	if len(resp.Fragments) > 0 {
 		fmt.Println("it brings to mind:")
 		printFragments(resp.Fragments)
 	}
 }
 
-func tellAboutOnce(home, query, words string) {
-	resp := call(home, Request{Cmd: "tell", Query: query, Content: words})
+// printTellProposalHint follows a spoken proposal with the lever names,
+// since a tell-staged proposal waits on the same approve and deny.
+func printTellProposalHint(di *DecisionInfo) {
+	if di == nil || !di.Grounded {
+		return
+	}
+	if di.Conflict {
+		fmt.Println("  resolve by proposing the specific cue, then approve.")
+		return
+	}
+	fmt.Println("  golem approve  to run it, or  golem deny  to reject.")
+}
+
+func tellAboutOnce(home, lang, query, words string) {
+	resp := call(home, Request{Cmd: "tell", Query: query, Content: words, Lang: lang})
 	fmt.Printf("remembered as #%d, bound to moments matching %q\n", resp.Observe.FragmentID, query)
 	if len(resp.Fragments) > 0 {
 		fmt.Println("it brings to mind:")
@@ -307,8 +366,14 @@ func tellSession(home string) {
 			return
 		}
 		resp := call(home, Request{Cmd: "tell", Content: line})
+		if resp.Say != "" {
+			fmt.Printf("golem> %s\n", resp.Say)
+		}
+		printTellProposalHint(resp.Decision)
 		if len(resp.Fragments) == 0 {
-			fmt.Printf("golem> remembered #%d; nothing comes to mind yet.\n", resp.Observe.FragmentID)
+			if resp.Say == "" {
+				fmt.Printf("golem> remembered #%d; nothing comes to mind yet.\n", resp.Observe.FragmentID)
+			}
 			continue
 		}
 		fmt.Printf("golem> remembered #%d; it brings to mind:\n", resp.Observe.FragmentID)
@@ -374,8 +439,21 @@ func printFragments(frags []*FragmentInfo) {
 		if f.LinkCount > 0 {
 			extra += fmt.Sprintf("  links %d", f.LinkCount)
 		}
-		fmt.Printf("#%-3d %s  %-8s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
-			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), f.Channel,
+		head := f.Channel
+		switch f.Kind {
+		case KindWord:
+			head = "word"
+			if f.Lang != "" {
+				head = "word(" + f.Lang + ")"
+			}
+		case KindConcept:
+			head = "concept"
+			if f.Category != "" {
+				head = "concept(" + f.Category + ")"
+			}
+		}
+		fmt.Printf("#%-3d %s  %-12s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
+			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), head,
 			f.Surprise, f.Limbic.Noradrenaline, f.Weight, extra, f.Content)
 	}
 }

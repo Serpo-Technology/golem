@@ -52,6 +52,10 @@ type Daemon struct {
 	// encodes and recalls answer from here, and archive hits promote.
 	hot *hotTier
 
+	// ws is working memory: decaying activation over concepts, the
+	// referent pool for "that one" and "do it again."
+	ws *workspace
+
 	// governors throttle memory formation per channel, and pendingStorm
 	// counts the surprises each throttle suppressed until they can be
 	// summarized as one moment.
@@ -206,6 +210,7 @@ func NewDaemon(home string, cfg Config, out io.Writer) (*Daemon, error) {
 		stop:         make(chan struct{}),
 		execDone:     make(chan execResult, 1),
 		hot:          newHotTier(),
+		ws:           newWorkspace(),
 	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
@@ -371,6 +376,7 @@ func (d *Daemon) Run() error {
 
 		case <-homeostasis.C:
 			d.chem.Decay()
+			d.ws.decay()
 			d.flushStorms(time.Now())
 			if time.Since(d.lastSurprise) > d.cfg.CalmBeforeSleep() {
 				d.chem.BuildSleepPressure()
@@ -572,6 +578,11 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 	}
 	st.Conscious++
 	d.hot.put(frag)
+	// A moment whose shape has a concept warms that concept: experience
+	// keeps working memory pointed at what is happening.
+	if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
+		d.ws.excite(c.ID, exciteEncode)
+	}
 	d.event(Event{Ev: "encode", Channel: o.Channel, ID: id, Bits: bits, Tpl: clip(tpl, 120)})
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
 		bits, o.Channel, clip(o.Content, 140), clip(tpl, 140), frag.Limbic.Noradrenaline, id)
@@ -592,15 +603,25 @@ func (d *Daemon) process(o Observation, forced, bind bool) ObserveResult {
 // encoded within linkWindow gets a bidirectional edge, capped at the most
 // recent maxLinkFanout moments.
 func (d *Daemon) linkMoment(f *Fragment) []uint64 {
+	return d.bindTo(f, d.recentWithin(f.Time, f.ID))
+}
+
+// recentWithin returns the moments of the live binding window as of a
+// time, newest first, capped at the link fanout. The excluded id lets a
+// caller leave a fragment already in the window out of its own targets.
+func (d *Daemon) recentWithin(at time.Time, exclude uint64) []recentMoment {
 	var targets []recentMoment
 	for i := len(d.recent) - 1; i >= 0 && len(targets) < maxLinkFanout; i-- {
 		r := d.recent[i]
-		if f.Time.Sub(r.at) > linkWindow {
+		if at.Sub(r.at) > linkWindow {
 			break
+		}
+		if r.id == exclude {
+			continue
 		}
 		targets = append(targets, r)
 	}
-	return d.bindTo(f, targets)
+	return targets
 }
 
 // bindTo writes the bidirectional edges between a fragment and its
@@ -677,6 +698,22 @@ func (d *Daemon) bindSuccessor(earlier recentMoment, f *Fragment) {
 		return
 	}
 	d.event(Event{Ev: "link", From: earlier.id, To: f.ID, Rel: RelSuccessor, Weight: w})
+}
+
+// dedupeInfos keeps the first appearance of each fragment in a reply, so
+// a node reached as seed, mediator, and cloud member shows up once, in
+// its strongest role.
+func dedupeInfos(infos []*FragmentInfo) []*FragmentInfo {
+	seen := make(map[uint64]bool, len(infos))
+	out := infos[:0]
+	for _, info := range infos {
+		if seen[info.ID] {
+			continue
+		}
+		seen[info.ID] = true
+		out = append(out, info)
+	}
+	return out
 }
 
 func fmtIDs(ids []uint64) string {
@@ -835,8 +872,9 @@ func (d *Daemon) readyToSleep() bool {
 }
 
 // sleepCycle is one consolidation night: replay the day to weave
-// cross-channel links, decay and prune in the store, merge recurring
-// shapes into prototypes, flush predictor state, wake with reset sleep
+// cross-channel links and order, decay and prune in the store, merge
+// recurring shapes into prototypes, distil prototypes into concepts and
+// bond words to them, flush predictor state, wake with reset sleep
 // pressure.
 func (d *Daemon) sleepCycle() {
 	_, woven := d.replay(d.lastSleep)
@@ -849,9 +887,11 @@ func (d *Daemon) sleepCycle() {
 	if err != nil {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
+	born, named := d.growConcepts()
 	// Consolidation rewrote weights, pruned, and merged underneath any
 	// cached copy; the working set rebuilds from what the morning uses.
 	d.hot.clear()
+	d.ws.clear()
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
@@ -864,8 +904,8 @@ func (d *Daemon) sleepCycle() {
 	d.event(Event{Ev: "prune", Count: pruned})
 	d.event(Event{Ev: "merge", Count: merged})
 	d.event(Event{Ev: "sleep", Count: held})
-	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d held.\n",
-		d.sleeps, woven, pruned, merged, held)
+	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d concept(s) born, %d word(s) bonded, %d held.\n",
+		d.sleeps, woven, pruned, merged, born, named, held)
 }
 
 func (d *Daemon) flushModels() {
@@ -900,6 +940,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	if _, err := d.store.MergeDuplicates(); err != nil {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
+	d.growConcepts()
 	d.flushModels()
 	d.store.Checkpoint()
 	d.event(Event{Ev: "prune", Count: pruned})
@@ -935,6 +976,10 @@ func (d *Daemon) tellAbout(req Request) Response {
 	if linked := d.bindTo(f, targets); len(linked) > 0 {
 		fmt.Fprintf(d.out, "      ~ #%d annotates %s\n", f.ID, fmtIDs(linked))
 	}
+	// Annotation words enter the lexicon bound to the annotated moments,
+	// so a label given after the fact can still come to name them.
+	words := d.mintWords(req.Content, req.Lang, f.ID, targets)
+	d.warmConcepts(words, exciteSpeech)
 
 	resp := Response{OK: true, Observe: &res}
 	if seeds, err := d.store.FragmentsByIDs([]uint64{f.ID}); err == nil && len(seeds) == 1 {
@@ -954,6 +999,8 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 	switch req.Cmd {
 	case "status":
 		held, _ := d.store.Count()
+		concepts, _ := d.store.CountKind(KindConcept)
+		words, _ := d.store.CountKind(KindWord)
 		for name, ctr := range d.drops {
 			d.stat(name).Dropped = ctr.Load()
 		}
@@ -962,6 +1009,8 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			UptimeSec:      time.Since(d.started).Seconds(),
 			Fragments:      held,
 			HotFragments:   d.hot.len(),
+			Concepts:       concepts,
+			Words:          words,
 			Channels:       d.stats,
 			Sleeps:         d.sleeps,
 			LastSleepUnix:  d.lastSleep.Unix(),
@@ -970,7 +1019,15 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
 			Running:        d.runningCmd,
+			Warm:           d.warmInfos(3),
 		}}, false, false
+
+	case "concepts":
+		infos, err := d.conceptInfos()
+		if err != nil {
+			return Response{Error: err.Error()}, false, false
+		}
+		return Response{OK: true, Concepts: infos}, false, false
 
 	case "chem":
 		chem := d.chem.Snapshot()
@@ -994,20 +1051,30 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 		if res.FragmentID == 0 {
 			return Response{Error: "the words could not be stored; check the daemon log"}, false, false
 		}
+		// The words themselves enter the lexicon and keep company with
+		// the moments the utterance bound to; speaking warms what the
+		// words already name.
+		anchors := d.recentWithin(time.Now(), res.FragmentID)
+		words := d.mintWords(req.Content, req.Lang, res.FragmentID, anchors)
+		d.warmConcepts(words, exciteSpeech)
 		resp := Response{OK: true, Observe: &res}
+		// The grammar reads the utterance's force and the planner
+		// decides the reply: an answer, an admission, or a staged
+		// proposal. Verbatim memory above is untouched by any of it.
+		frame := Parse(req.Content, d.resolveConcept)
+		resp.Say, resp.Decision = d.plan(frame, req.Content)
 		// What do these words point at? The new fragment just bound to the
 		// recent past, so a spread from it is GOLEM's side of the exchange.
-		if res.FragmentID != 0 {
-			if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {
-				if cloud, err := d.spread(seeds); err == nil {
-					resp.Fragments = cloud
-				}
+		if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {
+			if cloud, err := d.spread(seeds); err == nil {
+				resp.Fragments = cloud
 			}
 		}
 		return resp, false, false
 
 	case "recall":
 		var seeds []*Fragment
+		var mediators []*FragmentInfo
 		var err error
 		if req.Query == "" {
 			var f *Fragment
@@ -1018,16 +1085,34 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 			}
 		} else {
 			seeds, err = d.recallTiered(req.Query, 3)
+			if err == nil {
+				// Meaning widens the literal match: words of the query
+				// name concepts, and what those concepts ground joins
+				// the seeds even with no substring in common.
+				grounded, meds := d.semanticSeeds(req.Query)
+				mediators = meds
+				seen := make(map[uint64]bool, len(seeds))
+				for _, f := range seeds {
+					seen[f.ID] = true
+				}
+				for _, f := range grounded {
+					if !seen[f.ID] {
+						seen[f.ID] = true
+						seeds = append(seeds, f)
+					}
+				}
+			}
 		}
 		if err != nil {
 			return Response{Error: err.Error()}, false, false
 		}
-		infos := make([]*FragmentInfo, 0, len(seeds))
+		infos := make([]*FragmentInfo, 0, len(seeds)+len(mediators))
 		for _, f := range seeds {
 			info := fragmentInfo(f)
 			info.Activation = 1.0
 			infos = append(infos, info)
 		}
+		infos = append(infos, mediators...)
 		if len(seeds) > 0 {
 			// Memory served its keeper; that is what reward means here.
 			d.chem.SpikeDopamine(recallReward)
@@ -1035,7 +1120,7 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 				infos = append(infos, cloud...)
 			}
 		}
-		return Response{OK: true, Fragments: infos}, false, false
+		return Response{OK: true, Fragments: dedupeInfos(infos)}, false, false
 
 	case "dump":
 		frags, err := d.store.Dump()
@@ -1052,7 +1137,7 @@ func (d *Daemon) handle(req Request, reply chan Response) (resp Response, deferr
 		edges, _ := d.store.AllLinks()
 		links := make([]*LinkInfo, 0, len(edges))
 		for _, e := range edges {
-			links = append(links, &LinkInfo{From: e.From, To: e.To, Weight: e.Weight})
+			links = append(links, &LinkInfo{From: e.From, To: e.To, Rel: e.Rel, Weight: e.Weight})
 		}
 		return Response{OK: true, Fragments: infos, Links: links}, false, false
 

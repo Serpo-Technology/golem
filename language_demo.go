@@ -1,0 +1,143 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"time"
+)
+
+// runLanguageDemo plays one synthetic day into a throwaway memory and
+// holds a conversation about it: sequences bind in order, sleep distils
+// recurring shapes into concepts and bonds the day's words to them, and
+// then GOLEM answers questions with sentences it builds, admits what it
+// does not know, and turns spoken commands into staged proposals.
+func runLanguageDemo() {
+	home, err := os.MkdirTemp("", "golem-language-")
+	if err != nil {
+		fail(err)
+	}
+	defer os.RemoveAll(home)
+
+	cfg := DefaultConfig()
+	cfg.Channels = ChannelsConfig{}
+	d, err := NewDaemon(home, cfg, io.Discard)
+	if err != nil {
+		fail(err)
+	}
+	defer d.store.Close()
+
+	line := "--------------------------------------------------------------------"
+	day := time.Now().Add(-6 * time.Hour)
+
+	feed := func(channel, content string, at time.Time) {
+		d.process(Observation{Channel: channel, Content: content, At: at}, true, true)
+	}
+	speakAt := func(words, lang string, at time.Time) {
+		res := d.process(Observation{Channel: "tell", Content: words, At: at}, true, true)
+		anchors := d.recentWithin(at, res.FragmentID)
+		minted := d.mintWords(words, lang, res.FragmentID, anchors)
+		d.warmConcepts(minted, exciteSpeech)
+	}
+	ask := func(words string) {
+		fmt.Printf("   you>   %s\n", words)
+		resp, _ := d.handleNow(Request{Cmd: "tell", Content: words})
+		if resp.Say != "" {
+			fmt.Printf("   golem> %s\n", resp.Say)
+		}
+	}
+
+	fmt.Println("GOLEM language demo. One synthetic day, one night of sleep, then a")
+	fmt.Println("conversation. Memory is throwaway; commands are proposed, never run.")
+	fmt.Println(line)
+
+	fmt.Println("\n1. A ROUTINE. The shell sees the same sequence four times across")
+	fmt.Println("   the day:  make test  ->  make deploy --staging")
+	fmt.Println("   Binding is asymmetric: each earlier moment points at what")
+	fmt.Println("   followed it, and nothing points backward.")
+	for i := 0; i < 4; i++ {
+		at := day.Add(time.Duration(i) * 80 * time.Minute)
+		d.recent = nil
+		feed("shell", "run: make test", at)
+		feed("shell", "run: make deploy --staging", at.Add(20*time.Second))
+	}
+	d.recent = nil
+
+	fmt.Println("\n2. WORDS KEEP COMPANY. While the tests run you speak, in two")
+	fmt.Println("   languages; the words bind to the moments around them:")
+	fmt.Println("      \"the tests are green\"        (en)")
+	fmt.Println("      \"testler temiz\"              (tr)")
+	for i := 0; i < 3; i++ {
+		at := day.Add(time.Duration(i)*90*time.Minute + 5*time.Second)
+		feed("shell", "run: make test", at)
+		speakAt("the tests are green", "en", at.Add(3*time.Second))
+		speakAt("testler temiz", "tr", at.Add(6*time.Second))
+		d.recent = nil
+	}
+
+	fmt.Println("\n3. SLEEP. The night merges repeats into prototypes, distils")
+	fmt.Println("   prototypes into concepts, and bonds the day's words to the")
+	fmt.Println("   concepts their moments ground.")
+	for i := 0; i < 20; i++ {
+		d.chem.BuildSleepPressure()
+	}
+	d.sleepCycle()
+	concepts, err := d.conceptInfos()
+	if err != nil {
+		fail(err)
+	}
+	for _, c := range concepts {
+		fmt.Printf("   concept [%-4s] %q  grounded in %d occurrence(s)\n", c.Category, c.Gloss, c.Grounded)
+		if len(c.Names) > 0 {
+			fmt.Printf("           named by: %s\n", joinNames(c.Names))
+		}
+	}
+	fmt.Println("   Early naming is greedy: bystander words like \"green\" bond too.")
+	fmt.Println("   Bonds that keep recurring strengthen; the rest decay away.")
+
+	fmt.Println("\n4. QUESTIONS. The answers are built by the grammar, never replayed")
+	fmt.Println("   from stored text; outside its grounding GOLEM says so.")
+	ask("what usually happens after make test")
+	ask("what comes before make deploy")
+	ask("what is testler")
+	ask("what usually happens after make deploy")
+
+	fmt.Println("\n5. THE OTHER LANGUAGE. \"testler\" shares no text with any shell")
+	fmt.Println("   moment; recall reaches the experience through the concept:")
+	resp, _ := d.handleNow(Request{Cmd: "recall", Query: "testler"})
+	shown := 0
+	for _, f := range resp.Fragments {
+		if f.Kind == KindConcept {
+			fmt.Printf("   [concept] %q\n", f.Content)
+			continue
+		}
+		if f.Kind == "" && f.Channel == "shell" && shown < 2 {
+			count := ""
+			if f.Count > 1 {
+				count = fmt.Sprintf("  x%d", f.Count)
+			}
+			fmt.Printf("   [moment]  %q%s\n", f.Content, count)
+			shown++
+		}
+	}
+
+	fmt.Println("\n6. SPEECH MOVES THE HANDS, BEHIND THE SAME GATES. A spoken command")
+	fmt.Println("   becomes a proposal; nothing runs without approval.")
+	ask("run the tests")
+	ask("do it again")
+
+	fmt.Println("\n" + line)
+	fmt.Println("The pointer chain under every answer: word -> concept -> moments,")
+	fmt.Println("with order carried on directed edges laid down by lived sequence.")
+}
+
+func joinNames(names []string) string {
+	out := ""
+	for i, n := range names {
+		if i > 0 {
+			out += ", "
+		}
+		out += n
+	}
+	return out
+}

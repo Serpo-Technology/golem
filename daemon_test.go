@@ -140,6 +140,7 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 		pendingStorm: make(map[string]int),
 		execDone:     make(chan execResult, 1),
 		hot:          newHotTier(),
+		ws:           newWorkspace(),
 	}, s
 }
 
