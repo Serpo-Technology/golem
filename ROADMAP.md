@@ -28,7 +28,7 @@ change itself.
   (after or before) with its anchor, and the list of words that resolved
   to nothing, which is what the planner turns into admitted ignorance.
   Each role term carries a concept when grounding found one and the bare
-  surface phrase when it did not. The shape lives in grammar.go.
+  surface phrase when it did not. The shape lives in internal/grammar.
 
 ## Step 1: Core hardening
 

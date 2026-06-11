@@ -194,6 +194,45 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 
 ---
 
+## Repository Layout
+
+One binary, one brain-loop package, and the organs it wires together.
+Packages live under `internal/` because GOLEM is a daemon, not a library;
+the bio-mapping column says which part of the architecture table each
+package carries.
+
+```
+cmd/golem/          the CLI: dispatch, printing, the DOT export, and the
+                    in-RAM synthetic demo
+internal/
+  limbic/           the neurochemical state and its homeostasis (the limbic
+                    system: dopamine, noradrenaline, serotonin, oxytocin)
+  attention/        normalizer, surprise predictor, per-channel calibrator
+                    (thalamus and prefrontal cortex: what reaches awareness)
+  senses/           the observation packet and the built-in sensors: files,
+                    vitals, syslog, the synthetic channel, the shell contract
+  memory/           fragments, words, and concepts as one typed graph in
+                    sqlite, the in-RAM hippocampus, the hot working set, and
+                    consolidation (hippocampus and cortex)
+  grammar/          the innate language faculty: one concept-frame, English
+                    and Turkish parsers and realizers, hand-rolled morphology
+                    (Broca and Wernicke)
+  pipeline/         shell-free execution: parse commands into argv stages or
+                    refuse, run them over real pipes, derive resource claims
+  events/           the structured trail, one JSON object per line, rotated
+  wire/             the socket protocol: requests, responses, display forms,
+                    and the client side of one round trip
+  config/           tuning, the config file, and the destructive-pattern
+                    denylist with its matchers
+  daemon/           the brain loop that owns all mutable state: encoding,
+                    association, sleep, the decision loop and its gates, the
+                    parallel action arbiter, the message planner, the
+                    workspace, and the demos that drive it all on throwaway
+                    homes (basal ganglia, ACC, and the global workspace)
+```
+
+---
+
 ## Getting Started
 
 ```bash
@@ -201,19 +240,19 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 git clone https://github.com/user/golem.git
 
 # Run the synthetic demo (it observes, sleeps, and exits on its own)
-go run . demo
+go run ./cmd/golem demo
 
 # Watch concepts, words, and built sentences emerge from one day
-go run . demo language
+go run ./cmd/golem demo language
 
 # Watch shell-free pipelines and parallel actions under the gates
-go run . demo pipeline
+go run ./cmd/golem demo pipeline
 
 # Run the tests
 go test ./...
 
 # Build and start the daemon
-go build -o golem .
+go build -o golem ./cmd/golem
 ./golem run
 
 # Talk to it from another terminal
