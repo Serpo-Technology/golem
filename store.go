@@ -257,6 +257,16 @@ func (s *Store) Dump() ([]*Fragment, error) {
 	return s.query(`SELECT ` + fragmentCols + ` FROM fragments ORDER BY id`)
 }
 
+// StrongSince returns the strongest fragments encoded since a moment, for
+// sleep replay. Same-day fragments mostly share full weight, so ties
+// break toward the sharpest surprise.
+func (s *Store) StrongSince(since time.Time, floor float64, limit int) ([]*Fragment, error) {
+	return s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE at >= ? AND weight >= ?
+		ORDER BY weight DESC, surprise DESC, id DESC LIMIT ?`,
+		since.UnixNano(), floor, limit)
+}
+
 func (s *Store) Count() (int, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM fragments`).Scan(&n)

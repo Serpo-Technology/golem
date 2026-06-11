@@ -769,10 +769,12 @@ func (d *Daemon) readyToSleep() bool {
 		time.Since(d.lastSleep) >= d.cfg.SleepInterval()
 }
 
-// sleepCycle is one consolidation night: decay and prune in the store,
-// merge recurring shapes into prototypes, flush predictor state, wake
-// with reset sleep pressure.
+// sleepCycle is one consolidation night: replay the day to weave
+// cross-channel links, decay and prune in the store, merge recurring
+// shapes into prototypes, flush predictor state, wake with reset sleep
+// pressure.
 func (d *Daemon) sleepCycle() {
+	_, woven := d.replay(d.lastSleep)
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err != nil {
 		fmt.Fprintf(d.out, "sleep error: %v\n", err)
@@ -793,8 +795,8 @@ func (d *Daemon) sleepCycle() {
 	d.sleeps++
 	d.lastSleep = time.Now()
 	held, _ := d.store.Count()
-	fmt.Fprintf(d.out, "zzz night %d: pruned %d faded fragment(s), merged %d into prototypes, %d held.\n",
-		d.sleeps, pruned, merged, held)
+	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d held.\n",
+		d.sleeps, woven, pruned, merged, held)
 }
 
 func (d *Daemon) flushModels() {
@@ -820,6 +822,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	// is bounded by the execution timeout.
 	d.settleExecution()
 
+	d.replay(d.lastSleep)
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err == nil {
 		d.sleeps++

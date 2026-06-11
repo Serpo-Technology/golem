@@ -14,6 +14,9 @@ forgets what stops mattering.
 Usage:
   golem run                       start the daemon (foreground)
   golem demo                      run the synthetic one-channel demo and exit
+  golem demo decide               walk the decision loop on throwaway memory
+  golem demo execute              real execution under its gates, throwaway
+  golem demo consolidate          one day, one night: merge and replay
   golem status                    show daemon status
   golem chem                      show current neurochemistry
   golem observe <channel> <text>  feed one observation to the daemon
@@ -62,6 +65,8 @@ func main() {
 			runDecisionDemo()
 		case len(args) >= 2 && args[1] == "execute":
 			runExecutionDemo()
+		case len(args) >= 2 && args[1] == "consolidate":
+			runConsolidationDemo()
 		default:
 			runDemo()
 		}

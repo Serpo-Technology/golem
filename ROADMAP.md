@@ -165,8 +165,11 @@ Goal: sleep does more than decay.
       a fixed budget, and sleep clears the set because consolidation
       rewrites the archive underneath it. Retrieval practice still writes
       through, and the decision loop stays on the archive path.
-- [ ] Replay: during sleep, re-fire the day's high-weight fragments
-      through the linker to consolidate cross-channel links.
+- [x] Replay: during sleep, re-fire the day's high-weight fragments
+      through the linker to consolidate cross-channel links. The day's
+      strongest moments re-fire chronologically; cross-channel pairs
+      within a five-minute window bind, and existing stronger edges are
+      kept. golem demo consolidate shows one day merging and weaving.
 
 Done when: a week of operation produces a memory smaller than its raw
 event stream that still answers the same recall queries.
