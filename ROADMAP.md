@@ -592,6 +592,64 @@ and discarded whole when perception turns busy. The decider only ever
 thinks a command runnable. Both done-when groups hold in tests, with
 the race detector refereeing thinking against live perception.
 
+## Step 13: Emergent thought-types
+
+Goal: stop naming the kinds of thought in code. Hand-code the ability to
+think, and let which kind of thought GOLEM spawns emerge from its own
+graph, chemistry, and concepts.
+
+Context: the inner loop runs four hand-named specialists in
+internal/daemon/think.go, but all four are one primitive at four settings.
+Spread walks association edges by weight, predict walks successor edges by
+weight, recall walks grounding edges by noradrenaline, deliberate walks
+grounding-to-command edges by saliency: every one is "walk relation R from
+the seed, rank the destinations by signal S." Collapsing them turns a fixed
+name set into thought-types drawn from the graph's own structure, the same
+innate-floor, emergent-above-it shape language and action already have.
+Thought has to bottom out in an executable operation, so the primitive is
+the floor and everything above it is open.
+
+- [ ] Collapse the specialists into one primitive, walk(R, S): traverse
+      relation R from the seed and rank destinations by signal S. R ranges
+      over the edge relations the graph holds (temporal, successor, names,
+      grounds), S over the signals already tracked (weight, noradrenaline,
+      recency, dopamine-saliency). Behaviour-preserving: the four current
+      thoughts become four (R, S) settings and the think demo still forms
+      its insight. The thought-type set is now the cross-product, so a new
+      relation or signal yields a new kind of thought with no new code.
+- [ ] Let state select the primitive instead of running a fixed panel.
+      Chemistry and the warm seed choose which (R, S) fires: high
+      noradrenaline toward grounding-by-stress, high dopamine toward
+      deliberation, calm toward free association. The kind of thought now
+      emerges from mood and what is warm.
+- [ ] Ground thought-types by their fruit. An open operation space is
+      mostly noise, so turn the operant loop inward: a thought that lands
+      somewhere surprising or rewarded reinforces the (R, S) that produced
+      it, the way dopamine reinforces a useful action. GOLEM learns which
+      of its own operations are worth running.
+- [ ] Name operations with concepts (the mental-teach). As teach grounds a
+      cue to a command, ground a concept to a (R, S) operation, so a word
+      can name a kind of thinking ("worry" for grounding-by-stress,
+      "expect" for successor), and the names become learnable and
+      composable.
+
+Hard parts, flagged: composition (a plan is predict-then-deliberate, a
+chain of primitives, harder to learn than a single operation) and the
+selection pressure above, without which open thinking is noise. Forced
+deviation: the primitive and the signals are the innate floor, the same
+innate-machinery, learned-content stance as the grammar and the action
+layer.
+
+Horizon: GOLEM already perceives its thoughts on the thought channel. Once
+thought-types are concepts, it can learn words for its own operations by
+watching which (R, S) produced which thought-moment, a vocabulary of its
+own mind and the start of real metacognition.
+
+Done when: the four named specialists are gone, replaced by walk(R, S)
+selected by state; the think demo still forms an insight; a thought-type
+that repeatedly bears fruit is preferred over one that does not; and a
+concept can be taught to name an operation.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
