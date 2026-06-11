@@ -18,10 +18,16 @@ func TestBindWritesSuccessorForwardOnly(t *testing.T) {
 	d.process(senses.Observation{Channel: "shell", Content: "run: make deploy", At: base.Add(5 * time.Second)}, true, true)
 
 	frags, _ := s.Dump()
-	if len(frags) != 2 {
-		t.Fatalf("expected two moments, got %d", len(frags))
+	var moments []*memory.Fragment
+	for _, f := range frags {
+		if f.Kind == memory.KindEpisodic {
+			moments = append(moments, f)
+		}
 	}
-	test, deploy := frags[0], frags[1]
+	if len(moments) != 2 {
+		t.Fatalf("expected two moments, got %d", len(moments))
+	}
+	test, deploy := moments[0], moments[1]
 
 	if edgeWeightRel(t, s, test.ID, deploy.ID, memory.RelSuccessor) == 0 {
 		t.Fatal("the earlier moment should point at what followed it")

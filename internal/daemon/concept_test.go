@@ -99,7 +99,7 @@ func TestNamingBondsWordsToConcepts(t *testing.T) {
 	base := time.Now().Add(-2 * time.Hour)
 
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, base)
-	words := d.mintWords("the tests are running", "en", 0, anchors)
+	words := d.mintWords("the tests are running", "en", 0, anchors, false)
 	if len(words) != 2 { // "tests", "running"; the rest is closed class
 		t.Fatalf("content words should mint word nodes, got %v", words)
 	}
@@ -131,8 +131,8 @@ func TestCrossLanguageSynonymsShareOneConcept(t *testing.T) {
 	base := time.Now().Add(-2 * time.Hour)
 
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, base)
-	en := d.mintWords("tests", "en", 0, anchors)
-	tr := d.mintWords("testler", "tr", 0, anchors)
+	en := d.mintWords("tests", "en", 0, anchors, false)
+	tr := d.mintWords("testler", "tr", 0, anchors, false)
 	if len(en) != 1 || len(tr) != 1 {
 		t.Fatalf("both forms should mint: %v %v", en, tr)
 	}
@@ -170,7 +170,7 @@ func TestRecallReadsThroughConcepts(t *testing.T) {
 	base := time.Now().Add(-2 * time.Hour)
 
 	anchors := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
-	d.mintWords("depolama", "tr", 0, anchors) // no substring overlap with the moments
+	d.mintWords("depolama", "tr", 0, anchors, false) // no substring overlap with the moments
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestRecallReadsThroughConcepts(t *testing.T) {
 func TestWordAndConceptNodesStayOutOfPlainRecall(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, time.Now().Add(-time.Hour))
-	d.mintWords("disk", "en", 0, anchors)
+	d.mintWords("disk", "en", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestDisconnectedSemanticNodesPrune(t *testing.T) {
 func TestConnectedSemanticNodesSurviveSleep(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, time.Now().Add(-time.Hour))
-	d.mintWords("disk", "en", 0, anchors)
+	d.mintWords("disk", "en", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -267,8 +267,8 @@ func TestConnectedSemanticNodesSurviveSleep(t *testing.T) {
 func TestConceptInfosListing(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-time.Hour))
-	d.mintWords("tests", "en", 0, anchors)
-	d.mintWords("testler", "tr", 0, anchors)
+	d.mintWords("tests", "en", 0, anchors, false)
+	d.mintWords("testler", "tr", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -333,9 +333,9 @@ func TestPromiscuousWordBondsWeakly(t *testing.T) {
 
 	// "disk" keeps company only with the disk shape; "low" is said once
 	// into each of the three.
-	d.mintWords("disk", "en", 0, disk)
+	d.mintWords("disk", "en", 0, disk, false)
 	scattered := []recentMoment{disk[0], cpu[0], net[0]}
-	d.mintWords("low", "en", 0, scattered)
+	d.mintWords("low", "en", 0, scattered, false)
 
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
@@ -370,7 +370,7 @@ func TestBondLoosensWhenMassShifts(t *testing.T) {
 	base := time.Now().Add(-4 * time.Hour)
 
 	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
-	d.mintWords("blinker", "en", 0, disk[:1])
+	d.mintWords("blinker", "en", 0, disk[:1], false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestBondLoosensWhenMassShifts(t *testing.T) {
 	// The word then keeps company with a different recurring shape.
 	cpu := feedShape(t, s, "vitals", "cpu load went high", 4, base.Add(time.Hour))
 	for range 3 {
-		d.mintWords("blinker", "en", 0, cpu[:1])
+		d.mintWords("blinker", "en", 0, cpu[:1], false)
 	}
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
@@ -407,7 +407,7 @@ func TestCoincidenceFadesOnNegativeEvidence(t *testing.T) {
 
 	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
 	cpu := feedShape(t, s, "vitals", "cpu load went high", 4, base.Add(time.Minute))
-	d.mintWords("blinker", "en", 0, disk[:1]) // one coincidental pairing
+	d.mintWords("blinker", "en", 0, disk[:1], false) // one coincidental pairing
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestCoincidenceFadesOnNegativeEvidence(t *testing.T) {
 	}
 
 	// The word recurs while the cpu shape is what is happening.
-	d.mintWords("blinker", "en", 0, cpu[:1])
+	d.mintWords("blinker", "en", 0, cpu[:1], false)
 	after := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
 	if after >= before {
 		t.Fatalf("negative evidence should weaken the bond at once: before %.2f, after %.2f",
@@ -442,7 +442,7 @@ func TestSilenceDoesNotDisconfirm(t *testing.T) {
 	base := time.Now().Add(-3 * time.Hour)
 
 	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
-	d.mintWords("blinker", "en", 0, disk[:1])
+	d.mintWords("blinker", "en", 0, disk[:1], false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -453,10 +453,10 @@ func TestSilenceDoesNotDisconfirm(t *testing.T) {
 	before := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
 
 	// Spoken into an empty room: no anchors at all.
-	d.mintWords("blinker", "en", 0, nil)
+	d.mintWords("blinker", "en", 0, nil, false)
 	// Spoken near a one-off moment whose shape has no concept.
 	stray := encodeAt(t, s, "syslog", "a shape seen once only", 3.0, base.Add(2*time.Hour))
-	d.mintWords("blinker", "en", 0, []recentMoment{{id: stray.ID, template: stray.Template, at: stray.Time}})
+	d.mintWords("blinker", "en", 0, []recentMoment{{id: stray.ID, template: stray.Template, at: stray.Time}}, false)
 
 	after := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
 	if after != before {

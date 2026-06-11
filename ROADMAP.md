@@ -706,23 +706,23 @@ morphology rules, the word-order setting, and the verbs' principal parts.
 The engine is the innate floor and stays. The data should be learned
 parameters in memory, following the principle above.
 
-- [ ] Represent grammar parameters as memory nodes and edges: a function
+- [x] Represent grammar parameters as memory nodes and edges: a function
       word and its category, a suffix and its rule, the word-order setting
       for a language, a verb and its principal parts. Each is a fragment or
       edge in the same store as everything else, readable by dump and recall.
-- [ ] Read the engine from memory instead of from constants: the parser
+- [x] Read the engine from memory instead of from constants: the parser
       looks up a token's category in the graph, the realizer reads
       morphology and order from the graph. Cache into the hot tier so
       per-parse lookups stay cheap.
-- [ ] Entrench against forgetting: seed grammar nodes at maximal weight with
+- [x] Entrench against forgetting: seed grammar nodes at maximal weight with
       a forgetting floor far below normal, reusing the semantic-node
       forgetting law (words and concepts already die only by disconnection,
       not by nightly decay). Native grammar should be the hardest thing to
       lose.
-- [ ] Resolve conflict by weighted competition: when learned usage disagrees
+- [x] Resolve conflict by weighted competition: when learned usage disagrees
       with a seeded parameter, the stronger wins, the same mechanism naming
       already uses, so grammar bends to real usage without a special case.
-- [ ] Seed the parameters through the trainer, not by hand-writing the
+- [x] Seed the parameters through the trainer, not by hand-writing the
       database: the grammar seed is the first curriculum, written into the
       starter memory, so the seeding path is the one all bootstrapping uses.
 
@@ -734,6 +734,23 @@ Done when: a function word's category and a verb's principal parts can be
 read from golem dump, the realizer and parser run from those memory entries
 with no behaviour change, grammar survives a sleep that would prune ordinary
 memory, and a sustained contrary usage can re-weight a seeded parameter.
+
+Status: built. First boot trains the curriculum into starter memory
+through the standard encode path: every closed-class form with its
+category, every event-verb form with its predicate and tense, the
+verbs' principal parts and Turkish form sets, the word-order setting
+per language, and the Turkish suffix recipes (DAn, (y)I, DIr, DA) that
+an innate interpreter realizes under harmony and assimilation. The
+engine compiles those nodes into a RAM working copy at boot and again
+at each wake, so per-parse lookups stay map hits. Grammar nodes are a
+kind of their own that nightly decay never touches; the only force on
+them is the competition: a form deliberately labeled (tell --about
+mints closed-class words too) accrues naming mass, the seed erodes a
+step per contested night and heals when the usage fades, and the
+compile drops a parameter the lexicon has out-weighed, so the form
+parses as content from then on. English plural irregulars, article
+sound rules, and number words stay in the engine as its innate floor.
+All four done-when criteria hold in tests.
 
 ## Step 15: Senses and embodiment
 

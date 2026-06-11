@@ -94,7 +94,7 @@ func TestEncodeWarmsConceptAndSleepClears(t *testing.T) {
 func TestSpeechWarmsNamedConcepts(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-time.Hour))
-	d.mintWords("tests", "en", 0, anchors)
+	d.mintWords("tests", "en", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}

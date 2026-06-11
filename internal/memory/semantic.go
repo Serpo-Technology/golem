@@ -234,6 +234,32 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 	return out, rows.Err()
 }
 
+// NamesMassByForm sums each word form's naming mass per language: the
+// total weight of the names edges its word nodes carry, keyed
+// "lang:form". The grammar competition reads it as the strength of
+// lived usage standing against a seeded parameter.
+func (s *Store) NamesMassByForm() (map[string]float64, error) {
+	rows, err := s.db.Query(`SELECT w.lang, w.content, SUM(l.weight)
+		FROM fragments w
+		JOIN links l ON l.from_id = w.id AND l.rel = ?
+		WHERE w.kind = ?
+		GROUP BY w.lang, w.content`, RelNames, KindWord)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]float64)
+	for rows.Next() {
+		var lang, form string
+		var mass float64
+		if err := rows.Scan(&lang, &form, &mass); err != nil {
+			return nil, err
+		}
+		out[lang+":"+form] = mass
+	}
+	return out, rows.Err()
+}
+
 // GroundingTally returns, per concept, the total occurrences its grounded
 // episodes stand for, prototype counts included.
 func (s *Store) GroundingTally() (map[uint64]int, error) {

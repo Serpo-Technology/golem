@@ -28,9 +28,8 @@ const (
 
 // sortalNouns restrict what kind of thing a question wants back, the
 // "command" of "which command follows X". They are meta-vocabulary
-// about GOLEM's own ontology, so they ship with the grammar instead of
-// competing with content words for grounding. Plural forms invite more
-// than one answer.
+// about GOLEM's own ontology. Plural forms invite more than one answer.
+// This table is curriculum: the engine reads the memory copy.
 var sortalNouns = map[string]string{
 	"command": "command", "commands": "command",
 	"action": "action", "actions": "action",
@@ -39,6 +38,9 @@ var sortalNouns = map[string]string{
 	"step": "step", "steps": "step",
 }
 
+// innateCategory is the English closed class, the curriculum source for
+// the fw:en grammar nodes. Event-verb forms (catHap) seed separately as
+// hap:en nodes carrying their predicate and tense.
 var innateCategory = map[string]string{
 	"what": catWh, "when": catWh, "which": catWh, "where": catWh, "who": catWh, "why": catWh, "how": catWh,
 	"after": catRel, "before": catRel,
@@ -60,48 +62,49 @@ var innateCategory = map[string]string{
 	"times": catFn, "time": catFn,
 }
 
-func isFunctionWord(w string) bool {
-	_, ok := innateCategory[w]
-	return ok
-}
-
 // happenVerbs maps each event-verb surface form to the predicate it
 // fills and the tense it carries, so "followed" and "follows" land in
 // one concept with the time told apart. Succession verbs collapse onto
-// "follow"; precedence verbs onto its inverse.
-var happenVerbs = map[string]struct {
-	base string
-	past bool
-}{
+// "follow"; precedence verbs onto its inverse. Curriculum for the
+// hap:en nodes.
+var happenVerbs = map[string]hapEntry{
 	"happens": {"follow", false}, "happen": {"follow", false}, "happened": {"follow", true},
 	"follows": {"follow", false}, "follow": {"follow", false}, "followed": {"follow", true},
 	"comes": {"follow", false}, "come": {"follow", false}, "came": {"follow", true},
 	"precedes": {"precede", false}, "precede": {"precede", false}, "preceded": {"precede", true},
 }
 
+// Parse runs the innate grammar backward with the built-in parameter
+// seed, for callers without a memory-backed grammar.
+func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
+	return Builtin().Parse(utterance, resolve)
+}
+
 // Parse runs the innate grammar backward: an utterance becomes a frame.
-// The resolver is the learned half, mapping a surface phrase to its
-// concept; everything else here is wired in. The grammar is small on
-// purpose: force and interrogative from the opening word, temporal
+// The resolver is one learned half, mapping a surface phrase to its
+// concept; the closed class, the event verbs, and the sortals are the
+// other, read from the compiled parameters. The procedure alone is
+// wired in: force and interrogative from the opening word, temporal
 // qualifiers each owning their anchor, and content spans into thematic
 // roles by their position against the verb.
-// Parse runs the innate grammar backward: an utterance becomes a frame.
-func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
+func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
+	p = p.get()
 	tokens, question := Tokenize(utterance)
 	f := Frame{Force: ForceStatement}
 	if len(tokens) == 0 {
 		return f
 	}
 	// The closed classes share no forms, so one hit decides the grammar
-	// the utterance is read with.
-	if detectTurkish(tokens) {
-		return parseTurkish(tokens, question, resolve)
+	// the utterance is read with. Word order is a parameter too: only a
+	// verb-final setting engages the SOV parse.
+	if p.detectTurkish(tokens) && p.verbFinal("tr") {
+		return p.parseTurkish(tokens, question, resolve)
 	}
 	switch {
-	case innateCategory[tokens[0]] == catWh:
+	case p.category("en", tokens[0]) == catWh:
 		f.Force = ForceQuestion
 		f.Wh = tokens[0]
-	case innateCategory[tokens[0]] == catImp:
+	case p.category("en", tokens[0]) == catImp:
 		f.Force = ForceCommand
 	case question:
 		f.Force = ForceQuestion
@@ -112,17 +115,17 @@ func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
 	// instead of folding the second relator into the first anchor.
 	main := tokens
 	for i, tok := range tokens {
-		if innateCategory[tok] != catRel {
+		if p.category("en", tok) != catRel {
 			continue
 		}
 		main = tokens[:i]
 		for i < len(tokens) {
 			rel := tokens[i]
 			j := i + 1
-			for j < len(tokens) && innateCategory[tokens[j]] != catRel {
+			for j < len(tokens) && p.category("en", tokens[j]) != catRel {
 				j++
 			}
-			anchor := contentSpan(tokens[i+1 : j])
+			anchor := p.contentSpan(tokens[i+1 : j])
 			q := Qualifier{Rel: rel, Anchor: resolveTerm(anchor, resolve)}
 			if anchor != "" {
 				f.Quals = append(f.Quals, q)
@@ -154,18 +157,18 @@ func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
 			flush()
 			continue
 		}
-		if base, ok := sortalNouns[tok]; ok {
+		if base, ok := p.sortal("en", tok); ok {
 			f.Sort = base
 			f.SortPl = tok != base
 			flush()
 			continue
 		}
-		switch innateCategory[tok] {
+		switch p.category("en", tok) {
 		case catHap:
 			// The span before the verb closes as the subject before the
 			// flag flips; what follows is the object.
 			flush()
-			v := happenVerbs[tok]
+			v, _ := p.hap("en", tok)
 			f.Action = Term{Phrase: v.base}
 			if v.past {
 				f.Past = true
@@ -238,10 +241,10 @@ func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
 
 // contentSpan joins a token run's open-class words, dropping the
 // grammatical filler, so "the make test" and "make test" are one anchor.
-func contentSpan(tokens []string) string {
+func (p *Params) contentSpan(tokens []string) string {
 	var out []string
 	for _, tok := range tokens {
-		switch innateCategory[tok] {
+		switch p.category("en", tok) {
 		case catDet, catFn, catAdv, catNeg:
 			continue
 		}
@@ -260,6 +263,12 @@ func resolveTerm(phrase string, resolve func(string) *memory.Fragment) Term {
 	return Term{Concept: resolve(phrase), Phrase: phrase}
 }
 
+// Realize runs the innate grammar forward with the built-in parameter
+// seed, for callers without a memory-backed grammar.
+func Realize(f Frame, chem limbic.State) string {
+	return Builtin().Realize(f, chem)
+}
+
 // Realize runs the innate grammar forward: a frame becomes a sentence,
 // assembled as adjunct, subject, predicate, complement, never as a
 // stored string. The frame's language picks the parameter setting; the
@@ -267,9 +276,10 @@ func resolveTerm(phrase string, resolve func(string) *memory.Fragment) Term {
 // inferential claim asserts ("usually follows") or hedges ("may
 // follow"): a system whose judgement was recently corrected should
 // sound like it.
-func Realize(f Frame, chem limbic.State) string {
-	if f.Lang == "tr" {
-		return realizeTurkish(f, chem)
+func (p *Params) Realize(f Frame, chem limbic.State) string {
+	p = p.get()
+	if f.Lang == "tr" && p.verbFinal("tr") {
+		return p.realizeTurkish(f, chem)
 	}
 	var b strings.Builder
 	// Temporal adjuncts front the clause only when the predicate is the
@@ -306,18 +316,18 @@ func Realize(f Frame, chem limbic.State) string {
 			// A denial must never come out as its opposite. The
 			// auxiliary carries agreement and tense; do-support works
 			// the same for every verb here.
-			b.WriteString(negatedVerb(verb, firstPerson, plural, f.Past))
+			b.WriteString(negatedVerb(p, verb, firstPerson, plural, f.Past))
 		case chem.Oxytocin < limbic.OxytocinBaseline || f.Hedge:
 			// A recently corrected system hedges its inferences.
-			b.WriteString(hedgedVerb(verb, f.Past))
+			b.WriteString(hedgedVerb(p, verb, f.Past))
 		case f.Habit:
 			b.WriteString("usually ")
-			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
+			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
 		case f.Last:
 			b.WriteString("last ")
-			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
+			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
 		default:
-			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
+			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
 		}
 		if !f.Patient.Empty() {
 			b.WriteString(" ")
@@ -333,12 +343,12 @@ func Realize(f Frame, chem limbic.State) string {
 		// tense lives in the embedded clause alone.
 		b.WriteString(" ")
 		if f.Negate {
-			b.WriteString(negatedVerb("know", firstPerson, plural, false))
+			b.WriteString(negatedVerb(p, "know", firstPerson, plural, false))
 		} else {
-			b.WriteString(finiteVerb("know", firstPerson, plural, false))
+			b.WriteString(finiteVerb(p, "know", firstPerson, plural, false))
 		}
 		b.WriteString(" ")
-		b.WriteString(embeddedClause(f))
+		b.WriteString(embeddedClause(p, f))
 		b.WriteString(" yet")
 	case "be":
 		if f.Force == ForceQuestion {
@@ -355,21 +365,21 @@ func Realize(f Frame, chem limbic.State) string {
 	case "name":
 		b.WriteString(" ")
 		if f.Hedge {
-			b.WriteString(hedgedVerb("name", f.Past))
+			b.WriteString(hedgedVerb(p, "name", f.Past))
 		} else {
-			b.WriteString(finiteVerb("name", firstPerson, plural, f.Past))
+			b.WriteString(finiteVerb(p, "name", firstPerson, plural, f.Past))
 		}
 		b.WriteString(" ")
 		b.WriteString(f.Patient.Speak())
 	case "propose":
 		b.WriteString(" ")
-		b.WriteString(finiteVerb("propose", firstPerson, plural, f.Past))
+		b.WriteString(finiteVerb(p, "propose", firstPerson, plural, f.Past))
 		b.WriteString(" ")
 		b.WriteString(f.Patient.Speak())
 	case "see":
 		// The experiential perfect: what the count of moments amounts to.
 		b.WriteString(" have ")
-		b.WriteString(pastPart("see"))
+		b.WriteString(pastPart(p, "see"))
 		b.WriteString(" ")
 		b.WriteString(f.Patient.Speak())
 		b.WriteString(" ")
@@ -386,7 +396,7 @@ func Realize(f Frame, chem limbic.State) string {
 // embeddedClause renders the thing not known: a patient phrase, or the
 // wh-clauses the temporal qualifiers asked about, inflected for the
 // tense the question carried and coordinated when there are two.
-func embeddedClause(f Frame) string {
+func embeddedClause(p *Params, f Frame) string {
 	if !f.Patient.Empty() {
 		return f.Patient.Speak()
 	}
@@ -399,7 +409,7 @@ func embeddedClause(f Frame) string {
 		if q.Rel == "before" {
 			verb = "precede"
 		}
-		parts = append(parts, "what "+finiteVerb(verb, false, false, f.Past)+" "+q.Anchor.Speak())
+		parts = append(parts, "what "+finiteVerb(p, verb, false, false, f.Past)+" "+q.Anchor.Speak())
 	}
 	if len(parts) > 0 {
 		return strings.Join(parts, " and ")

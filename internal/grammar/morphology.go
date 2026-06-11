@@ -17,6 +17,8 @@ type verbEN struct {
 	base, third, past, part string
 }
 
+// verbsEN is the curriculum source for the verb:en grammar nodes; the
+// engine conjugates from the memory copy.
 var verbsEN = map[string]verbEN{
 	"follow":  {"follow", "follows", "followed", "followed"},
 	"precede": {"precede", "precedes", "preceded", "preceded"},
@@ -29,20 +31,11 @@ var verbsEN = map[string]verbEN{
 	"run":     {"run", "runs", "ran", "run"},
 }
 
-// verbTable returns a verb's principal parts, regular by rule when the
-// table has no entry.
-func verbTable(base string) verbEN {
-	if v, ok := verbsEN[base]; ok {
-		return v
-	}
-	return verbEN{base, base + "s", base + "ed", base + "ed"}
-}
-
 // finiteVerb conjugates a verb for its subject: third person singular
 // present takes the -s form, everything else in the present takes the
 // base, and the past ignores person the way English does.
-func finiteVerb(base string, firstPerson, plural, past bool) string {
-	v := verbTable(base)
+func finiteVerb(p *Params, base string, firstPerson, plural, past bool) string {
+	v := p.verb(base)
 	if past {
 		return v.past
 	}
@@ -54,7 +47,7 @@ func finiteVerb(base string, firstPerson, plural, past bool) string {
 
 // negatedVerb denies a predicate with do-support, agreement carried by
 // the auxiliary: "does not follow", "do not know", "did not follow".
-func negatedVerb(base string, firstPerson, plural, past bool) string {
+func negatedVerb(p *Params, base string, firstPerson, plural, past bool) string {
 	aux := "does"
 	switch {
 	case past:
@@ -62,25 +55,25 @@ func negatedVerb(base string, firstPerson, plural, past bool) string {
 	case firstPerson || plural:
 		aux = "do"
 	}
-	return aux + " not " + verbBase(base)
+	return aux + " not " + verbBase(p, base)
 }
 
 // hedgedVerb keeps a tentative claim tentative in both tenses: "may
 // follow" for the open present, "may have followed" for the settled
 // past.
-func hedgedVerb(base string, past bool) string {
+func hedgedVerb(p *Params, base string, past bool) string {
 	if past {
-		return "may have " + pastPart(base)
+		return "may have " + pastPart(p, base)
 	}
-	return "may " + verbBase(base)
+	return "may " + verbBase(p, base)
 }
 
-func verbBase(base string) string {
-	return verbTable(base).base
+func verbBase(p *Params, base string) string {
+	return p.verb(base).base
 }
 
-func pastPart(base string) string {
-	return verbTable(base).part
+func pastPart(p *Params, base string) string {
+	return p.verb(base).part
 }
 
 // beForm is the copula, the one verb whose agreement survives the past.

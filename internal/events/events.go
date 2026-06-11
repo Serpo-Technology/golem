@@ -24,7 +24,7 @@ type Log struct {
 // kind; the flat shape keeps the file greppable.
 type Event struct {
 	At      int64   `json:"at"` // unix milliseconds
-	Ev      string  `json:"ev"` // encode, link, replay, prune, merge, sleep, proposal, approval, denial, autonomous, word, concept, name, thought, say
+	Ev      string  `json:"ev"` // encode, link, replay, prune, merge, sleep, proposal, approval, denial, autonomous, word, concept, name, thought, grammar, say
 	Channel string  `json:"channel,omitempty"`
 	ID      uint64  `json:"id,omitempty"`
 	From    uint64  `json:"from,omitempty"`

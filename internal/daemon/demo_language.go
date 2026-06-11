@@ -42,7 +42,7 @@ func DemoLanguage() {
 	speakAt := func(words, lang string, at time.Time) {
 		res := d.process(senses.Observation{Channel: "tell", Content: words, At: at}, true, true)
 		anchors := d.recentWithin(at, res.FragmentID)
-		minted := d.mintWords(words, lang, res.FragmentID, anchors)
+		minted := d.mintWords(words, lang, res.FragmentID, anchors, false)
 		d.warmConcepts(minted, exciteSpeech)
 	}
 	ask := func(words string) {

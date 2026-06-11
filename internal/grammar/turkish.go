@@ -20,8 +20,9 @@ import (
 // case suffixes attach with an apostrophe the way Turkish writes
 // suffixed proper names: "make test'ten sonra", "make deploy'dan once".
 
-// The Turkish closed class. Categories reuse the innate set; the SOV
-// parser reads them with the anchor on the other side of the relator.
+// The Turkish closed class, curriculum source for the fw:tr nodes.
+// Categories reuse the innate set; the SOV parser reads them with the
+// anchor on the other side of the relator.
 var turkishCategory = map[string]string{
 	"ne": catWh, "hangi": catWh, "kim": catWh, "neden": catWh, "niye": catWh,
 	"nerede": catWh, "nasıl": catWh, "nedir": catWh,
@@ -37,7 +38,7 @@ var turkishCategory = map[string]string{
 }
 
 // Turkish sortals, the "komut" of "hangi komut": the same ontology
-// vocabulary as the English set.
+// vocabulary as the English set, curriculum for the sortal:tr nodes.
 var turkishSortals = map[string]string{
 	"komut": "command", "komutlar": "command",
 	"eylem": "action", "eylemler": "action",
@@ -45,23 +46,20 @@ var turkishSortals = map[string]string{
 }
 
 // turkishHappenVerbs carry the predicate and the tense, like their
-// English counterparts.
-var turkishHappenVerbs = map[string]struct {
-	base string
-	past bool
-}{
+// English counterparts: curriculum for the hap:tr nodes.
+var turkishHappenVerbs = map[string]hapEntry{
 	"olur": {"follow", false}, "oluyor": {"follow", false}, "oldu": {"follow", true},
 	"gelir": {"follow", false}, "geliyor": {"follow", false}, "geldi": {"follow", true},
 }
 
 // detectTurkish reports whether an utterance is Turkish: any closed-class
 // or sortal hit decides, since the two vocabularies share no forms.
-func detectTurkish(tokens []string) bool {
+func (p *Params) detectTurkish(tokens []string) bool {
 	for _, tok := range tokens {
-		if _, ok := turkishCategory[tok]; ok {
+		if p.category("tr", tok) != "" {
 			return true
 		}
-		if _, ok := turkishSortals[tok]; ok {
+		if _, ok := p.sortal("tr", tok); ok {
 			return true
 		}
 	}
@@ -85,7 +83,7 @@ func stripCaseTR(w string) string {
 
 // parseTurkish reads a Turkish utterance into the shared frame. SOV
 // reverses the qualifier: the anchor span comes before its relator.
-func parseTurkish(tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {
+func (p *Params) parseTurkish(tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {
 	f := Frame{Force: ForceStatement, Lang: "tr"}
 	if question {
 		f.Force = ForceQuestion
@@ -107,13 +105,13 @@ func parseTurkish(tokens []string, question bool, resolve func(string) *memory.F
 
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
-		if base, ok := turkishSortals[tok]; ok {
+		if base, ok := p.sortal("tr", tok); ok {
 			f.Sort = base
 			f.SortPl = tok != base
 			flush()
 			continue
 		}
-		if v, ok := turkishHappenVerbs[tok]; ok {
+		if v, ok := p.hap("tr", tok); ok {
 			flush()
 			f.Action = Term{Phrase: v.base}
 			if v.past {
@@ -122,7 +120,7 @@ func parseTurkish(tokens []string, question bool, resolve func(string) *memory.F
 			verbSeen = true
 			continue
 		}
-		switch turkishCategory[tok] {
+		switch p.category("tr", tok) {
 		case catRel:
 			// The span just gathered is this relator's anchor, its case
 			// suffix stripped from the final word.
@@ -285,25 +283,51 @@ func dOrT(w string) string {
 	return "d"
 }
 
+// applySuffixTR realizes a suffix recipe against a stem. The recipe is
+// the parameter; this interpreter is the innate floor: D assimilates to
+// d or t by the stem's final voicing, A takes twofold vowel harmony, I
+// fourfold, a leading (y) is the buffer consonant after a vowel, and
+// any other letter is literal.
+func applySuffixTR(w, recipe string) string {
+	var b strings.Builder
+	rest := recipe
+	if cut, ok := strings.CutPrefix(rest, "(y)"); ok {
+		if endsVowelTR(w) {
+			b.WriteString("y")
+		}
+		rest = cut
+	}
+	for _, r := range rest {
+		switch r {
+		case 'D':
+			b.WriteString(dOrT(w))
+		case 'A':
+			b.WriteString(harmony2(w))
+		case 'I':
+			b.WriteString(harmony4(w))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // ablativeTR builds "from X". Foreign names take the apostrophe Turkish
 // writes before suffixes on proper nouns: "make test'ten".
-func ablativeTR(w string) string {
-	return w + "'" + dOrT(w) + harmony2(w) + "n"
+func ablativeTR(p *Params, w string) string {
+	return w + "'" + applySuffixTR(w, p.get().suffix("ablative", "DAn"))
 }
 
 // accusativeTR builds the definite object, buffer y after a vowel:
 // "make test'i", "elma'yı".
-func accusativeTR(w string) string {
-	if endsVowelTR(w) {
-		return w + "'y" + harmony4(w)
-	}
-	return w + "'" + harmony4(w)
+func accusativeTR(p *Params, w string) string {
+	return w + "'" + applySuffixTR(w, p.get().suffix("accusative", "(y)I"))
 }
 
 // copulaTR attaches -DIr to a (Turkish) predicate noun: "eylemdir",
 // "şeydir". No apostrophe: these are GOLEM's own words.
-func copulaTR(w string) string {
-	return w + dOrT(w) + harmony4(w) + "r"
+func copulaTR(p *Params, w string) string {
+	return w + applySuffixTR(w, p.get().suffix("copula", "DIr"))
 }
 
 // The digits as spoken, for harmonizing a suffix onto a clock time:
@@ -312,18 +336,19 @@ var digitWordTR = [10]string{"sıfır", "bir", "iki", "üç", "dört", "beş", "
 
 // timeLocativeTR suffixes "at" onto a digit-final time by the spoken
 // form of its last digit.
-func timeLocativeTR(formatted string) string {
+func timeLocativeTR(p *Params, formatted string) string {
 	r := []rune(formatted)
 	last := r[len(r)-1]
 	if last < '0' || last > '9' {
 		return formatted + "'de"
 	}
 	spoken := digitWordTR[last-'0']
-	return formatted + "'" + dOrT(spoken) + harmony2(spoken)
+	return formatted + "'" + applySuffixTR(spoken, p.get().suffix("locative", "DA"))
 }
 
 // The Turkish verb forms GOLEM speaks: aorist for habits, its negative,
-// the simple past, and the potential for hedging.
+// the simple past, and the potential for hedging. Curriculum for the
+// verb:tr nodes.
 type verbTR struct {
 	aorist, aoristNeg, past, pastNeg, potential, hedgedPast string
 }
@@ -334,11 +359,8 @@ var verbsTR = map[string]verbTR{
 	"happen":  {"olur", "olmaz", "oldu", "olmadı", "olabilir", "olmuş olabilir"},
 }
 
-func finiteVerbTR(base string, past, negate, hedge bool) string {
-	v, ok := verbsTR[base]
-	if !ok {
-		v = verbsTR["happen"]
-	}
+func finiteVerbTR(p *Params, base string, past, negate, hedge bool) string {
+	v := p.verbTurkish(base)
 	switch {
 	case hedge && past:
 		return v.hedgedPast
@@ -366,18 +388,18 @@ func numberWordTR(n int) string {
 
 // qualPhraseTR renders one temporal adjunct, anchor first: "make
 // test'ten sonra".
-func qualPhraseTR(q Qualifier) string {
+func qualPhraseTR(p *Params, q Qualifier) string {
 	rel := "sonra"
 	if q.Rel == "before" {
 		rel = "önce"
 	}
-	return ablativeTR(q.Anchor.Speak()) + " " + rel
+	return ablativeTR(p, q.Anchor.Speak()) + " " + rel
 }
 
 // realizeTurkish runs the grammar forward under the Turkish parameters:
 // adjuncts front, the verb closes the clause, and morphology carries
 // what English carries with word order and auxiliaries.
-func realizeTurkish(f Frame, chem limbic.State) string {
+func (p *Params) realizeTurkish(f Frame, chem limbic.State) string {
 	var b strings.Builder
 	hedge := chem.Oxytocin < limbic.OxytocinBaseline || f.Hedge
 
@@ -386,7 +408,7 @@ func realizeTurkish(f Frame, chem limbic.State) string {
 		var parts []string
 		for _, q := range f.Quals {
 			if !q.Anchor.Empty() {
-				parts = append(parts, qualPhraseTR(q))
+				parts = append(parts, qualPhraseTR(p, q))
 			}
 		}
 		if len(parts) > 0 {
@@ -407,13 +429,13 @@ func realizeTurkish(f Frame, chem limbic.State) string {
 			b.WriteString(f.At)
 			b.WriteString(" ")
 		}
-		b.WriteString(finiteVerbTR(f.Action.Phrase, f.Past, f.Negate, hedge))
+		b.WriteString(finiteVerbTR(p, f.Action.Phrase, f.Past, f.Negate, hedge))
 	case "know":
 		// "Make test'ten sonra ne gelir, henüz bilmiyorum."
 		var gap []string
 		for _, q := range f.Quals {
 			if !q.Anchor.Empty() {
-				gap = append(gap, qualPhraseTR(q)+" ne gelir")
+				gap = append(gap, qualPhraseTR(p, q)+" ne gelir")
 			}
 		}
 		switch {
@@ -421,7 +443,7 @@ func realizeTurkish(f Frame, chem limbic.State) string {
 			b.WriteString(strings.Join(gap, " ve "))
 			b.WriteString(", henüz bilmiyorum")
 		case !f.Patient.Empty() && f.Patient.Speak() != "why" && f.Patient.Speak() != "who":
-			b.WriteString(accusativeTR(f.Patient.Speak()))
+			b.WriteString(accusativeTR(p, f.Patient.Speak()))
 			b.WriteString(" henüz bilmiyorum")
 		default:
 			b.WriteString("henüz bilmiyorum")
@@ -434,7 +456,7 @@ func realizeTurkish(f Frame, chem limbic.State) string {
 		b.WriteString(" ")
 		words := strings.Fields(f.Patient.Speak())
 		if len(words) > 0 {
-			words[len(words)-1] = copulaTR(words[len(words)-1])
+			words[len(words)-1] = copulaTR(p, words[len(words)-1])
 		}
 		b.WriteString(strings.Join(words, " "))
 	case "name":
@@ -447,7 +469,7 @@ func realizeTurkish(f Frame, chem limbic.State) string {
 			b.WriteString(" olabilir")
 		}
 	case "see":
-		object := accusativeTR(f.Patient.Speak())
+		object := accusativeTR(p, f.Patient.Speak())
 		if f.Patient.Speak() == "it" {
 			object = "onu"
 		}

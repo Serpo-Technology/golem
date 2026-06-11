@@ -346,7 +346,7 @@ func (d *Daemon) conceptDecision(c *memory.Fragment) (Decision, error) {
 // frame's language is the one knob the planner sets on every reply.
 func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) string {
 	f.Lang = lang
-	return grammar.Realize(f, chem)
+	return d.gram.Realize(f, chem)
 }
 
 // plan acts on one parsed frame. It returns the sentence GOLEM says

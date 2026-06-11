@@ -148,12 +148,18 @@ func (d *Daemon) growConcepts() (born, named int) {
 // mintWords stores or refreshes word nodes for the content words of an
 // utterance and binds each to the tell moment and to the moments the
 // utterance bound to, so the night's naming pass can see which
-// experiences the words kept company with.
-func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []recentMoment) []*memory.Fragment {
+// experiences the words kept company with. A deliberate labeling (tell
+// --about) mints every word, closed class included: an explicit label
+// may claim a form the grammar holds, and sustained usage of that kind
+// is what can out-weigh a seeded parameter.
+func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []recentMoment, deliberate bool) []*memory.Fragment {
 	if lang == "" {
 		lang = "en"
 	}
-	forms := grammar.ContentTokens(utterance)
+	forms := d.gram.ContentTokens(utterance)
+	if deliberate {
+		forms = grammar.AllTokens(utterance)
+	}
 	if len(forms) == 0 {
 		return nil
 	}

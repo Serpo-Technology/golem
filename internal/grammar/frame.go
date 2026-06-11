@@ -102,14 +102,23 @@ func Tokenize(s string) (tokens []string, question bool) {
 	return tokens, question
 }
 
-// ContentTokens returns the distinct open-class words of an utterance,
-// the ones eligible to become word nodes and point at concepts.
+// ContentTokens returns the distinct open-class words of an utterance
+// under the built-in closed class, for callers without a memory-backed
+// grammar.
 func ContentTokens(s string) []string {
+	return Builtin().ContentTokens(s)
+}
+
+// AllTokens returns the distinct word tokens of an utterance, closed
+// class included. Deliberate labeling (tell --about) uses it, so a
+// label can teach even a form the grammar claims, and sustained usage
+// can out-weigh the seeded parameter.
+func AllTokens(s string) []string {
 	tokens, _ := Tokenize(s)
 	seen := map[string]bool{}
 	var out []string
 	for _, tok := range tokens {
-		if len(tok) < 2 || isFunctionWord(tok) || seen[tok] {
+		if len(tok) < 2 || seen[tok] {
 			continue
 		}
 		seen[tok] = true

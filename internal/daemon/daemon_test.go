@@ -139,7 +139,7 @@ func testDaemon(t *testing.T) (*Daemon, *memory.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return &Daemon{
+	d := &Daemon{
 		store:        s,
 		chem:         limbic.New(),
 		out:          io.Discard,
@@ -155,7 +155,13 @@ func testDaemon(t *testing.T) (*Daemon, *memory.Store) {
 		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
-	}, s
+	}
+	// The grammar trains into the test store and compiles from it, the
+	// same path a real first boot takes.
+	if err := d.loadGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	return d, s
 }
 
 // encodeAt stores one moment with a chosen surprise and time.
@@ -393,7 +399,7 @@ func TestEncodeRefractoryAndStormSummary(t *testing.T) {
 		content := fmt.Sprintf("new shape %c appeared", rune('a'+i))
 		d.process(senses.Observation{Channel: "stormy", Content: content, At: now}, false, true)
 	}
-	held, _ := s.Count()
+	held, _ := s.CountKind(memory.KindEpisodic)
 	if held != 3 {
 		t.Fatalf("the burst allowance should cap formation at 3, got %d", held)
 	}
@@ -405,14 +411,14 @@ func TestEncodeRefractoryAndStormSummary(t *testing.T) {
 
 	// Mid-storm, no summary forms.
 	d.flushStorms(now)
-	if held, _ = s.Count(); held != 3 {
+	if held, _ = s.CountKind(memory.KindEpisodic); held != 3 {
 		t.Fatalf("no summary while the storm rages, got %d held", held)
 	}
 
 	// A partial recovery is still not a lull: one refilled token must not
 	// trigger a fragmentary summary.
 	d.flushStorms(now.Add(3 * time.Second))
-	if held, _ = s.Count(); held != 3 {
+	if held, _ = s.CountKind(memory.KindEpisodic); held != 3 {
 		t.Fatalf("no summary before the burst allowance fully recovers, got %d held", held)
 	}
 
@@ -447,7 +453,7 @@ func TestForcedBypassesRefractory(t *testing.T) {
 			t.Fatalf("forced words must always encode, attempt %d", i)
 		}
 	}
-	if held, _ := s.Count(); held != 4 {
+	if held, _ := s.CountKind(memory.KindEpisodic); held != 4 {
 		t.Fatal("forced observations should never be suppressed")
 	}
 }

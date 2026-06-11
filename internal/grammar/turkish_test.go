@@ -18,7 +18,7 @@ func TestTurkishSuffixHarmony(t *testing.T) {
 		"log":         "log'dan",
 	}
 	for w, want := range ablatives {
-		if got := ablativeTR(w); got != want {
+		if got := ablativeTR(Builtin(), w); got != want {
 			t.Fatalf("ablative of %q = %q, want %q", w, got, want)
 		}
 	}
@@ -30,7 +30,7 @@ func TestTurkishSuffixHarmony(t *testing.T) {
 		"ütü":         "ütü'yü",
 	}
 	for w, want := range accusatives {
-		if got := accusativeTR(w); got != want {
+		if got := accusativeTR(Builtin(), w); got != want {
 			t.Fatalf("accusative of %q = %q, want %q", w, got, want)
 		}
 	}
@@ -40,7 +40,7 @@ func TestTurkishSuffixHarmony(t *testing.T) {
 		"şey":   "şeydir",
 	}
 	for w, want := range copulas {
-		if got := copulaTR(w); got != want {
+		if got := copulaTR(Builtin(), w); got != want {
 			t.Fatalf("copula on %q = %q, want %q", w, got, want)
 		}
 	}
@@ -53,7 +53,7 @@ func TestTurkishSuffixHarmony(t *testing.T) {
 		"09:13": "09:13'te", // üç: voiceless, front
 	}
 	for w, want := range times {
-		if got := timeLocativeTR(w); got != want {
+		if got := timeLocativeTR(Builtin(), w); got != want {
 			t.Fatalf("time locative of %q = %q, want %q", w, got, want)
 		}
 	}

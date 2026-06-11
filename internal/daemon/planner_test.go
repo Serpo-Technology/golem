@@ -152,7 +152,7 @@ func TestAnchorPrefersExactShapeOverWordVotes(t *testing.T) {
 	for _, f := range memEpisodes {
 		anchors = append(anchors, recentMoment{id: f.ID, template: f.Template, at: f.Time})
 	}
-	d.mintWords("disk space low", "en", 0, anchors)
+	d.mintWords("disk space low", "en", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestSingleOccurrenceIsNotAHabit(t *testing.T) {
 func TestAnswersDefinitionQuestion(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-2*time.Hour))
-	d.mintWords("testler", "tr", 0, anchors)
+	d.mintWords("testler", "tr", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestUngroundedCommandAdmitted(t *testing.T) {
 func TestDoItAgainResolvesFromWorkspace(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-2*time.Hour))
-	d.mintWords("tests", "en", 0, anchors)
+	d.mintWords("tests", "en", 0, anchors, false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -291,8 +291,8 @@ func TestWeakNamingIsTentative(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-2*time.Hour))
 	// "tests" keeps company every run; "green" only once.
-	d.mintWords("tests", "en", 0, anchors)
-	d.mintWords("green", "en", 0, anchors[:1])
+	d.mintWords("tests", "en", 0, anchors, false)
+	d.mintWords("green", "en", 0, anchors[:1], false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}

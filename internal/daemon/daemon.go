@@ -72,6 +72,11 @@ type Daemon struct {
 	// referent pool for "that one" and "do it again."
 	ws *workspace
 
+	// gram is the language faculty's working copy: grammar parameters
+	// read out of the graph and compiled for the engine, rebuilt at
+	// wake after the nightly competition with the lexicon.
+	gram *grammar.Params
+
 	// governors throttle memory formation per channel, and pendingStorm
 	// counts the surprises each throttle suppressed until they can be
 	// summarized as one moment.
@@ -274,6 +279,10 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		ws:           newWorkspace(),
 	}
 	if err := d.loadModels(); err != nil {
+		store.Close()
+		return nil, err
+	}
+	if err := d.loadGrammar(); err != nil {
 		store.Close()
 		return nil, err
 	}
@@ -1063,6 +1072,9 @@ func (d *Daemon) sleepCycle() {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	born, named := d.growConcepts()
+	// Usage and seed settle their nightly contest, and the working
+	// grammar recompiles from the surviving weights.
+	d.grammarCompetition()
 	// Consolidation rewrote weights, pruned, and merged underneath any
 	// cached copy; the working set rebuilds from what the morning uses.
 	d.hot.Clear()
@@ -1121,6 +1133,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	d.growConcepts()
+	d.grammarCompetition()
 	d.flushModels()
 	d.store.Checkpoint()
 	d.event(events.Event{Ev: "prune", Count: pruned})
@@ -1157,8 +1170,10 @@ func (d *Daemon) tellAbout(req wire.Request) wire.Response {
 		fmt.Fprintf(d.out, "      ~ #%d annotates %s\n", f.ID, fmtIDs(linked))
 	}
 	// Annotation words enter the lexicon bound to the annotated moments,
-	// so a label given after the fact can still come to name them.
-	words := d.mintWords(req.Content, req.Lang, f.ID, targets)
+	// so a label given after the fact can still come to name them. The
+	// labeling is deliberate, so even closed-class forms mint: this is
+	// the usage that can come to outweigh a seeded grammar parameter.
+	words := d.mintWords(req.Content, req.Lang, f.ID, targets, true)
 	d.warmConcepts(words, exciteSpeech)
 
 	resp := wire.Response{OK: true, Observe: &res}
@@ -1236,7 +1251,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// the moments the utterance bound to; speaking warms what the
 		// words already name.
 		anchors := d.recentWithin(time.Now(), res.FragmentID)
-		words := d.mintWords(req.Content, req.Lang, res.FragmentID, anchors)
+		words := d.mintWords(req.Content, req.Lang, res.FragmentID, anchors, false)
 		d.warmConcepts(words, exciteSpeech)
 		resp := wire.Response{OK: true, Observe: &res}
 		// The grammar reads the utterance's force and the planner
@@ -1244,7 +1259,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// proposal. Verbatim memory above is untouched by any of it.
 		// The answer language follows the question's: detected from
 		// the closed class, with the spoken --lang tag as fallback.
-		frame := grammar.Parse(req.Content, d.resolveConcept)
+		frame := d.gram.Parse(req.Content, d.resolveConcept)
 		if frame.Lang == "" && req.Lang != "" {
 			frame.Lang = req.Lang
 		}

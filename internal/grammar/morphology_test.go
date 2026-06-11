@@ -21,32 +21,32 @@ func TestVerbAgreement(t *testing.T) {
 		{false, true, true, "followed"},
 	}
 	for _, c := range cases {
-		if got := finiteVerb("follow", c.first, c.plural, c.past); got != c.want {
+		if got := finiteVerb(Builtin(), "follow", c.first, c.plural, c.past); got != c.want {
 			t.Fatalf("follow(first=%v plural=%v past=%v) = %q, want %q",
 				c.first, c.plural, c.past, got, c.want)
 		}
 	}
 	// Irregular principal parts come from the table.
-	if finiteVerb("see", false, false, true) != "saw" || pastPart("see") != "seen" {
+	if finiteVerb(Builtin(), "see", false, false, true) != "saw" || pastPart(Builtin(), "see") != "seen" {
 		t.Fatal("see should inflect irregularly")
 	}
-	if finiteVerb("know", true, false, true) != "knew" {
+	if finiteVerb(Builtin(), "know", true, false, true) != "knew" {
 		t.Fatal("know should inflect irregularly")
 	}
 }
 
 // Do-support carries agreement and tense on the auxiliary.
 func TestNegationDoSupport(t *testing.T) {
-	if got := negatedVerb("follow", false, false, false); got != "does not follow" {
+	if got := negatedVerb(Builtin(), "follow", false, false, false); got != "does not follow" {
 		t.Fatalf("3sg present: %q", got)
 	}
-	if got := negatedVerb("follow", false, true, false); got != "do not follow" {
+	if got := negatedVerb(Builtin(), "follow", false, true, false); got != "do not follow" {
 		t.Fatalf("plural present: %q", got)
 	}
-	if got := negatedVerb("follow", false, false, true); got != "did not follow" {
+	if got := negatedVerb(Builtin(), "follow", false, false, true); got != "did not follow" {
 		t.Fatalf("past: %q", got)
 	}
-	if got := negatedVerb("know", true, false, false); got != "do not know" {
+	if got := negatedVerb(Builtin(), "know", true, false, false); got != "do not know" {
 		t.Fatalf("1sg present: %q", got)
 	}
 }
