@@ -5,6 +5,24 @@ in-RAM memory, six-second window) to the daemon the README describes.
 Step labels and status checkboxes live in this file; commits describe the
 change itself.
 
+## Principles
+
+Two commitments govern every decision below.
+
+- The glass box. GOLEM has weights, the way a brain has synaptic strengths,
+  learned by local rules. The protection is not weightlessness. It is
+  legibility: every weight sits on a named edge between interpretable nodes,
+  set by a local rule and traceable to the experience that set it, and the
+  concept layer never holds a gradient-trained distributed vector.
+  Auditability is the line that separates GOLEM from an LLM, and the test
+  every other choice answers to.
+- Innate engine in code, learned parameters in the graph. Each faculty is a
+  fixed procedure on the floor with data that is learned, entrenched, and
+  inspectable in memory above it. The grammar engine parses and realizes
+  while its closed class lives in memory; the think primitive walks the
+  graph while which walk to take is learned. Shrinking the code floor and
+  moving the parameters into the weighted graph is the same move repeated.
+
 ## Decisions
 
 - Form factor: background daemon plus a `golem` CLI over a local unix socket.
@@ -15,7 +33,11 @@ change itself.
 - Sensors, in build order: shell commands, project file events, system
   vitals, macOS system log.
 - Dependencies: small curated pure-Go libraries are allowed (fsnotify,
-  modernc.org/sqlite). No model weights, no frameworks.
+  modernc.org/sqlite). The cognitive core carries no frameworks and no
+  gradient-trained model; neural models are permitted only as sensory
+  transducers at the input boundary (a vision captioner, a speech
+  recognizer), labelled as such and kept one-way into a channel, so weights
+  never reach the audit trail of cognition.
 - Language: an innate grammar with a learned, grounded lexicon. Words are
   pointers to amodal concepts, so forms in different languages converge on
   one concept once grounded to the same experience. GOLEM speaks about
@@ -29,6 +51,12 @@ change itself.
   to nothing, which is what the planner turns into admitted ignorance.
   Each role term carries a concept when grounding found one and the bare
   surface phrase when it did not. The shape lives in internal/grammar.
+- Senses: every modality reaches the mind through a transducer that emits
+  discrete tokens on a named channel, taught ostensively by narrating with
+  `tell` while it perceives. Neural transducers are allowed as sense organs
+  at the edge under the glass box; agency (acting on the world) rides the
+  execution gates and comes last, with untrusted channels barred from
+  grounding actions.
 
 ## Step 1: Core hardening
 
@@ -650,6 +678,133 @@ selected by state; the think demo still forms an insight; a thought-type
 that repeatedly bears fruit is preferred over one that does not; and a
 concept can be taught to name an operation.
 
+## Step 14: Grammar into memory
+
+Goal: move the grammar's parameters out of code and into the weighted,
+auditable graph, so the grammar is inspectable, learnable, and entrenched
+rather than frozen.
+
+Today the engine and its data both live in code: internal/grammar holds the
+parser and realizer procedures and also the closed-class category table, the
+morphology rules, the word-order setting, and the verbs' principal parts.
+The engine is the innate floor and stays. The data should be learned
+parameters in memory, following the principle above.
+
+- [ ] Represent grammar parameters as memory nodes and edges: a function
+      word and its category, a suffix and its rule, the word-order setting
+      for a language, a verb and its principal parts. Each is a fragment or
+      edge in the same store as everything else, readable by dump and recall.
+- [ ] Read the engine from memory instead of from constants: the parser
+      looks up a token's category in the graph, the realizer reads
+      morphology and order from the graph. Cache into the hot tier so
+      per-parse lookups stay cheap.
+- [ ] Entrench against forgetting: seed grammar nodes at maximal weight with
+      a forgetting floor far below normal, reusing the semantic-node
+      forgetting law (words and concepts already die only by disconnection,
+      not by nightly decay). Native grammar should be the hardest thing to
+      lose.
+- [ ] Resolve conflict by weighted competition: when learned usage disagrees
+      with a seeded parameter, the stronger wins, the same mechanism naming
+      already uses, so grammar bends to real usage without a special case.
+- [ ] Seed the parameters through the trainer, not by hand-writing the
+      database: the grammar seed is the first curriculum, written into the
+      starter memory, so the seeding path is the one all bootstrapping uses.
+
+Forced deviation, flagged: the seed is strong innate priors in a learnable
+substrate, which shifts the stance from frozen Universal Grammar toward
+entrenched, usage-based grammar; the engine stays the innate floor.
+
+Done when: a function word's category and a verb's principal parts can be
+read from golem dump, the realizer and parser run from those memory entries
+with no behaviour change, grammar survives a sleep that would prune ordinary
+memory, and a sustained contrary usage can re-weight a seeded parameter.
+
+## Step 15: Senses and embodiment
+
+Goal: give GOLEM more bodies. Each new sense is a transducer that emits
+discrete tokens on a named channel; the mind grounds them with the
+machinery it already has, taught ostensively by narration. Ordered easiest
+and safest first.
+
+- [ ] Voice out. Render the realizer's sentences to speech (pipe to the
+      system text-to-speech). Pure output, the articulatory motor system, no
+      change to cognition. The cheapest win and the one that makes GOLEM
+      audibly present.
+- [ ] File-content channel. A sensor that reads or tails files it is given
+      and emits their lines as observations, distinct from the existing
+      file-event sensor. Already symbolic, no weights.
+- [ ] Web-text channel. A fetch of a URL that returns the page's stripped
+      text as observations on a web channel. Already symbolic. Mark the
+      channel untrusted: low weight, barred from grounding actions, so an
+      adversarial page cannot become a habit.
+- [ ] Screen and accessibility channel. Emit UI events from the
+      accessibility tree as a symbolic stream, so GOLEM perceives what is on
+      screen without pixels.
+- [ ] Eyes: a vision transducer. A captioner that turns camera or screen
+      frames into scene tokens ("a person", "a red car", "a door opens") on
+      a vision channel. The first neural sense organ; weights at the edge,
+      flagged. Segment the continuous stream on surprise, since a scene
+      change is a prediction error worth a moment.
+- [ ] Ears: a speech transducer. Speech-to-text that turns spoken words into
+      tokens on the tell channel, so you can teach GOLEM out loud. The second
+      neural organ, paired with voice out to close a spoken loop.
+- [ ] Agency: acting on the open world. Browsing and other actions as a
+      perception-action loop behind the three execution gates and the
+      denylist. Last and most bounded, because it is the largest safety
+      surface; untrusted perception from the web still cannot ground an
+      action.
+
+Ostensive teaching, flagged: a word taught against a rich channel binds by
+cross-situational reference, so a thing cannot be named in one showing;
+narration across many situations is what fixes meaning, and Step 11 is what
+makes it converge. Forced deviation: the vision and speech transducers carry
+model weights, permitted as sense organs at the boundary under the glass box.
+
+Done when: GOLEM speaks its answers aloud; a file's contents and a fetched
+page ground as experience on their channels; and a thing shown on a neural
+channel and named across several showings becomes a concept reachable by its
+word.
+
+## Step 16: Abstraction by constellation
+
+Goal: let abstract concepts form by the same machinery as concrete ones, by
+distilling a recurring constellation of concepts instead of only a recurring
+sensory shape.
+
+A concept is born today from a sensory shape that recurred. That can never
+mint "inflation" or "capital", because an abstraction has no recurring
+sensory shape; it is grounded instead in the stable cloud of concepts a word
+keeps company with. Extend genesis to that case; the cloud still bottoms out
+in concrete primitives, so the grounding chain stays intact.
+
+- [ ] Detect a stable conceptual constellation: a word or context whose
+      co-activated concepts recur across situations with the same core, the
+      semantic analogue of a recurring template. Reuse the cross-situational
+      reliability from Step 11 to find the consistent core and discount the
+      drift.
+- [ ] Mint an abstract concept grounded in that constellation: a concept
+      node whose grounding edges point at the concepts of its constellation,
+      the way a concrete concept's point at episodes, so recall and the
+      inner loop reach it the same way.
+- [ ] Keep the chain auditable: every abstract concept traces, through its
+      constellation, to the concrete primitives underneath, so "inflation"
+      can be unfolded to the experiences it stands on.
+
+Dependency, flagged: the full payoff needs deeper language comprehension
+than the answer-shaped realizer has today, because receiving an abstraction
+and parsing the company it keeps is the larger half of the work (tracked as
+a known limitation). The genesis mechanism is buildable now and grows more
+powerful as comprehension deepens.
+
+Out of scope here: relational abstraction (capital-of, cause-of) needs
+reifying a relation into a concept by structure-mapping, a further mechanism
+left to its own step (tracked as a known limitation).
+
+Done when: a word used across many situations with a consistent conceptual
+neighbourhood, and never tied to a single sensory shape, distils into a
+concept that recall reaches through its constellation, and that concept
+unfolds to the concrete concepts it was built from.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -662,6 +817,22 @@ concept can be taught to name an operation.
   naming one file differently can slip past it, and two unrelated commands
   sharing an argument word serialize when they could overlap; the
   conservative direction is the safe one, but it is a heuristic.
+- Relational abstraction has no mechanism. GOLEM can form a concept from a
+  recurring constellation of concepts (Step 16), but it cannot yet reify a
+  relation itself: "capital of" or "causes", the shared structure across
+  Paris-France and Tokyo-Japan, needs the analogy and structure-mapping the
+  graph does not do.
+- Language comprehension is answer-shaped. The realizer and parser cover the
+  sentence shapes GOLEM speaks and the questions it answers; open
+  comprehension is beyond them. Receiving a stated abstraction, following a
+  definition, or parsing arbitrary prose is well past today's grammar, and
+  it is the larger half of the abstraction work.
+- Untrusted perception is a standing hazard for agency. Web and other
+  open-world channels carry adversarial content. The gates and denylist stop
+  it from triggering execution, but the hygiene that keeps it from polluting
+  memory or grounding an action (marking channels untrusted, weighting them
+  low, barring them from action grounding) is a policy to get right as the
+  agency work lands.
 
 ## Open questions
 
