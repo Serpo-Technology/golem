@@ -45,6 +45,11 @@ const (
 	// how much less faithfully a word kept the concept's company, not
 	// the shared dopamine gain that lifts every name alike.
 	namesContrastGap = 0.12
+	// The anti-Hebbian step: how much a bond weakens each time its word
+	// recurs in a window whose active concepts exclude it. A firm bond
+	// takes several misses to fall, the way one coincidence took only a
+	// share of a night to form.
+	namesDepression = 0.08
 )
 
 // lemmaCategory derives a concept's syntactic category from its grounding
@@ -163,6 +168,8 @@ func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []rece
 		}
 		if minted {
 			d.event(events.Event{Ev: "word", ID: word.ID, Channel: lang, Tpl: form})
+		} else {
+			d.depressStaleNames(word, anchors)
 		}
 		targets := make([]uint64, 0, len(anchors)+1)
 		if tellID != 0 {
@@ -183,6 +190,43 @@ func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []rece
 		words = append(words, word)
 	}
 	return words
+}
+
+// depressStaleNames is heterosynaptic depression, the negative half of
+// cross-situational learning: a word that recurs in a window whose
+// active concepts do not include one it is bonded to was paired with
+// that concept by coincidence, and the bond weakens at once instead of
+// waiting for the night's recount. A window with no active concepts is
+// no evidence either way: silence does not disconfirm.
+func (d *Daemon) depressStaleNames(word *memory.Fragment, anchors []recentMoment) {
+	if len(anchors) == 0 {
+		return
+	}
+	active := map[uint64]bool{}
+	for _, a := range anchors {
+		if c, err := d.store.ConceptByTemplate(a.template); err == nil && c != nil {
+			active[c.ID] = true
+		}
+	}
+	if len(active) == 0 {
+		return
+	}
+	names, err := d.store.LinksFromRel([]uint64{word.ID}, memory.RelNames)
+	if err != nil {
+		return
+	}
+	var stale []memory.LinkEdge
+	for _, e := range names {
+		if !active[e.To] {
+			stale = append(stale, e)
+		}
+	}
+	if len(stale) == 0 {
+		return
+	}
+	if err := d.store.NudgeLinks(stale, -namesDepression); err != nil {
+		fmt.Fprintf(d.out, "naming depression error: %v\n", err)
+	}
 }
 
 // conceptInfos assembles the wire view of the concept layer: every

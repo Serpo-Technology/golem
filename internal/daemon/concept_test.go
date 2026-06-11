@@ -397,3 +397,70 @@ func TestBondLoosensWhenMassShifts(t *testing.T) {
 		t.Fatalf("drifting company should loosen the old bond: before %.2f, after %.2f", before, after)
 	}
 }
+
+// A bond formed by a one-off coincidence weakens each time its word
+// recurs while other concepts are the active ones, without waiting for
+// the night's recount.
+func TestCoincidenceFadesOnNegativeEvidence(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+
+	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
+	cpu := feedShape(t, s, "vitals", "cpu load went high", 4, base.Add(time.Minute))
+	d.mintWords("blinker", "en", 0, disk[:1]) // one coincidental pairing
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+
+	diskConcept, _ := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	words, _ := s.WordNodesByForms([]string{"blinker"})
+	before := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+	if before == 0 {
+		t.Fatal("the coincidence should have bonded, weakly")
+	}
+
+	// The word recurs while the cpu shape is what is happening.
+	d.mintWords("blinker", "en", 0, cpu[:1])
+	after := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+	if after >= before {
+		t.Fatalf("negative evidence should weaken the bond at once: before %.2f, after %.2f",
+			before, after)
+	}
+	cpuConcept, _ := s.ConceptByTemplate(attention.Normalize("cpu load went high"))
+	if cpuConcept != nil {
+		if w := edgeWeightRel(t, s, words[0].ID, cpuConcept.ID, memory.RelNames); w != 0 {
+			t.Fatalf("depression must not mint a bond to the active concept early: %.2f", w)
+		}
+	}
+}
+
+// Silence is not disconfirmation: a recurrence with no anchors, or with
+// anchors whose shapes have no concepts, leaves every bond untouched.
+func TestSilenceDoesNotDisconfirm(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+
+	disk := feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, base)
+	d.mintWords("blinker", "en", 0, disk[:1])
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+
+	diskConcept, _ := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	words, _ := s.WordNodesByForms([]string{"blinker"})
+	before := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+
+	// Spoken into an empty room: no anchors at all.
+	d.mintWords("blinker", "en", 0, nil)
+	// Spoken near a one-off moment whose shape has no concept.
+	stray := encodeAt(t, s, "syslog", "a shape seen once only", 3.0, base.Add(2*time.Hour))
+	d.mintWords("blinker", "en", 0, []recentMoment{{id: stray.ID, template: stray.Template, at: stray.Time}})
+
+	after := edgeWeightRel(t, s, words[0].ID, diskConcept.ID, memory.RelNames)
+	if after != before {
+		t.Fatalf("a window with no active concepts is no evidence: before %.2f, after %.2f",
+			before, after)
+	}
+}
