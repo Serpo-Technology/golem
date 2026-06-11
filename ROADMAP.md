@@ -439,6 +439,130 @@ clause embedding beyond the known-gap idiom stay out of scope, and the
 Turkish surface is the answer shapes GOLEM speaks rather than open
 conversation.
 
+## Step 11: Cross-situational naming
+
+Goal: stop greedy naming from bonding a word to everything it once kept
+company with, so the lexicon points where experience actually points.
+
+On real noisy channels the naming layer drifts. A word said once into a
+busy stretch ("disk space low" spoken amid a flurry of vitals) bonds to
+every concept in the window, so "disk", "low", and "space" each end up
+naming half a dozen unrelated concepts; and a question asked often enough
+("what usually happens after disk space low") recurs into a concept of its
+own. Three fixes, smallest first.
+
+- [ ] Keep utterances out of concept genesis. A tell is language about the
+      world, so its shape should mint words that name world-concepts and
+      never become a concept itself. Exclude the tell channel (and any
+      channel that is not lived experience) from ConceptCandidates in
+      internal/memory/semantic.go, the same exclusion the planner already
+      applies when it answers. A question can then no longer distil into a
+      thing.
+- [ ] Weigh a name by reliability. The weight in growConcepts
+      (internal/daemon/concept.go), namesBaseWeight + namesDopamineGain *
+      dopamine + namesRepeatBonus * (episodes - 1), rewards how often a word
+      and concept co-occurred, so a word present once near six concepts
+      earns a real bond to each. Replace it with a cross-situational
+      measure: roughly P(concept | word), the share of the word's
+      co-occurrences that land on this concept, optionally blended with
+      P(word | concept) for the other direction. A promiscuous word splits
+      its mass across its targets and bonds weakly to each, while a word
+      paired with one concept nearly every time keeps almost all its mass
+      there. Extend NamingPairs (internal/memory/semantic.go) to return the
+      per-word and per-concept co-occurrence totals the ratio needs; the
+      inputs are counts already in the graph, so it stays weight-free. This
+      is the textbook cross-situational word-learning result, and it makes
+      the tentative-speech hedge fire on real contrast.
+- [ ] Weaken a bond on negative evidence. A reliability weight computed at
+      consolidation still only grows or decays uniformly. Add the
+      anti-Hebbian half: when a word recurs and its concept is not active in
+      the window, weaken that word-to-concept bond, since the pairing was a
+      coincidence. This is heterosynaptic depression, the negative side of
+      the same cross-situational learning, and the most invasive of the
+      three, so it lands last.
+
+Forced deviation, flagged: reliability is computed from co-occurrence counts
+at consolidation rather than learned online by a model, the same
+counts-over-weights stance the rest of memory takes.
+
+Done when: on the live syslog and vitals channels a word that kept company
+with one shape names that concept firmly while a word scattered across many
+names each weakly or not at all, "what is disk" no longer answers with a
+question that became a concept, and a bond formed by a one-off coincidence
+fades as the word recurs elsewhere.
+
+## Step 12: The inner loop, then thoughts as goroutines
+
+Goal: close the self-referential loop so GOLEM perceives its own active
+thoughts, then make thinking concurrent. This is the frontier the rest of
+the system was built toward, the parallel-substrate and serial-commitment
+pattern the action layer proved, now applied to cognition.
+
+Today every cognitive act (encode, spread, decide, plan, recall, sleep)
+runs synchronously on the brain loop, and workspace activation is seeded by
+perception and decays without ever feeding back. GOLEM thinks one thought
+at a time, in lockstep with perception, and never about itself. The reframe
+that makes this tractable: the inner loop is replay run while awake. The
+replay engine (internal/daemon/replay.go) already walks remembered moments
+and weaves links during sleep; the inner loop is that same engine gated by
+quiet wakefulness, with its product fed back into the workspace instead of
+only strengthening edges. Two phases, the first inline and low-risk, the
+second its concurrency refactor.
+
+Phase one, the inner loop (inline, the self-reference):
+
+- [ ] Think one step on idle ticks. When input is quiet and sleep pressure
+      is building but sleep has not yet triggered (the brain's default-mode
+      condition, mind-wandering when not task-engaged), take the warmest
+      concepts in the workspace (internal/daemon/workspace.go), spread one
+      hop through the link graph, and feed the result back into the
+      workspace. Activation chains across ticks instead of dying when a
+      function returns; the chaining is thinking and the feedback is the
+      self-reference. Bound it to one step per tick, and let workspace decay
+      carry an unreinforced chain back to nothing.
+- [ ] Remember only surprising thoughts. Re-enter each thought as an
+      internal observation on a thought channel through the same surprise
+      gate perception uses, so a novel internal combination is encoded (an
+      insight) and a routine spread stays transient. Memory does not flood,
+      and GOLEM now perceives its own activity, which is the start of a
+      self-model.
+- [ ] Keep it undirected at first. Free association along learned edge
+      weights, since GOLEM has no explicit goal yet. Coherence comes from
+      the spread following the strong paths, which are the regularities
+      GOLEM actually lived, which is exactly why the naming graph must be
+      cleaned (Step 11) before the loop runs over it.
+
+Phase two, thoughts as goroutines (the parallel specialists):
+
+- [ ] Move the specialists off the loop. Run the cognitive processes as
+      goroutines, a spreader, a predictor, a decider, a recaller, each
+      reading a read-only snapshot of the workspace and posting a candidate
+      back. The loop arbitrates which candidate ignites and broadcasts, the
+      winner-take-all gate the basal ganglia already is here.
+- [ ] Preserve the single-threaded-memory invariant by construction.
+      Specialists compute on snapshots and never touch the store; they post
+      through one channel and the loop applies every mutation
+      single-threaded, the snapshot-in, candidate-out, loop-commits pattern
+      the execution layer already uses (the execDone path in
+      internal/daemon/daemon.go). That is what keeps concurrent thought from
+      racing the graph.
+- [ ] Gate and bound the thinking. Specialists run when perception is quiet
+      and yield under load, capped in flight, so the inner life never
+      starves sensing or floods the loop.
+
+Forced deviations, flagged: the specialists are hand-coded modules rather
+than emergent ones, the same innate-machinery, learned-content stance the
+grammar takes; and concurrent thought is nondeterministic, so tests assert
+invariants (memory never races, every chain damps, a surprising thought is
+encoded) rather than exact transcripts.
+
+Done when, phase one: with input quiet, GOLEM extends a warm concept into a
+short chain of associated concepts across successive ticks, encodes a
+thought only when it is surprising, and a later recall shows it remembers
+having thought it. Done when, phase two: the same chains are produced by
+specialist goroutines arbitrated on the loop, the store shows no race under
+concurrent thinking, and thinking yields to perception under load.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -464,8 +588,3 @@ conversation.
 - Cross-channel calibration windows: tuned per channel class or shared.
 - Whether serotonin should also gate sensor sampling rates (the GABA idea
   from the v2 table).
-- Naming noise: early word-concept bonds are greedy by design. A bond far
-  weaker than a concept's firmest name is now spoken tentatively, and decay
-  against repetition still removes the bond over time. Whether a bond should
-  also weaken actively when a word recurs without its concept (the mismatch
-  signal) is open.
