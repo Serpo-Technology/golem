@@ -52,6 +52,117 @@ const (
 	namesDepression = 0.08
 )
 
+// Abstraction by constellation: a word that never settles on one
+// sensory shape but keeps stable company with the same small cloud of
+// concepts across situations is naming something those concepts only
+// jointly carry. Genesis extends to that case: an abstract concept is
+// born grounded in its constellation (grounds edges to concepts rather
+// than to episodes), so recall and the inner loop reach it the same way
+// and the chain still bottoms out in concrete experience underneath.
+const (
+	absMinSituations = 3   // a constellation takes several showings to trust
+	absCoreShare     = 0.2 // a concept this reliable in the word's company is core
+	absConcentration = 0.5 // a word this faithful to one concept is a name, an abstraction is not
+	absPerNight      = 4   // abstractions mintable in one night
+	absNameWeight    = 0.8 // the word's bond to its own abstraction
+	absRefreshFloor  = 2   // a core smaller than this has dissolved; stop refreshing and let decay take it
+)
+
+// growAbstractions runs after naming in the same consolidation pass:
+// for each word whose lived company shows a stable conceptual core with
+// no single dominant shape, mint (or refresh) an abstract concept whose
+// grounds edges carry the reliability shares of its constellation. A
+// constellation that dissolves stops being refreshed, its grounds edges
+// decay with the nightly link fade, and the concept dies of
+// disconnection like anything else no longer lived.
+func (d *Daemon) growAbstractions() (born int) {
+	pairs, err := d.store.NamingPairs()
+	if err != nil {
+		fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+		return 0
+	}
+	byWord := map[uint64][]memory.NamingPair{}
+	wordIDs := make([]uint64, 0, len(pairs))
+	for _, p := range pairs {
+		if len(byWord[p.Word]) == 0 {
+			wordIDs = append(wordIDs, p.Word)
+		}
+		byWord[p.Word] = append(byWord[p.Word], p)
+	}
+	words, err := d.store.FragmentsByIDs(wordIDs)
+	if err != nil {
+		fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+		return 0
+	}
+	sort.Slice(words, func(i, j int) bool { return words[i].ID < words[j].ID })
+
+	for _, w := range words {
+		type coreShare struct {
+			concept uint64
+			share   float64
+		}
+		var core []coreShare
+		maxShare := 0.0
+		for _, p := range byWord[w.ID] {
+			share := p.Cooc / (p.WordTotal + namesSmoothing)
+			if share > maxShare {
+				maxShare = share
+			}
+			if share >= absCoreShare {
+				core = append(core, coreShare{concept: p.Concept, share: share})
+			}
+		}
+		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })
+
+		tpl := "abs:" + w.Lang + ":" + w.Content
+		c, err := d.store.ConceptByTemplate(tpl)
+		if err != nil {
+			fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+			return born
+		}
+		// The full conditions gate a mint; an existing abstraction keeps
+		// refreshing while its core stands, however the drift around it
+		// moves.
+		healthy := w.Count >= absMinSituations && len(core) >= absRefreshFloor && maxShare < absConcentration
+		switch {
+		case c == nil:
+			if !healthy || born >= absPerNight {
+				continue
+			}
+			c = &memory.Fragment{
+				Kind:     memory.KindConcept,
+				Channel:  "concept",
+				Content:  w.Content,
+				Template: tpl,
+				Category: "noun",
+				Limbic:   d.chem.Snapshot(),
+				Time:     time.Now(),
+			}
+			if _, err := d.store.Encode(c); err != nil {
+				fmt.Fprintf(d.out, "abstraction mint error: %v\n", err)
+				continue
+			}
+			born++
+			d.event(events.Event{Ev: "concept", ID: c.ID, Tpl: wire.Clip(tpl, 120), Outcome: "abstract"})
+		case len(core) < absRefreshFloor:
+			continue // dissolved: decay carries the grounding away
+		}
+		// The constellation is the grounding: each edge's weight is the
+		// concept's reliability share in the word's company, written
+		// fresh each night, so the chain to concrete experience stays
+		// auditable and current.
+		for _, cs := range core {
+			if err := d.store.SetLinkRel(c.ID, cs.concept, memory.RelGrounds, cs.share); err != nil {
+				fmt.Fprintf(d.out, "abstraction grounding error: %v\n", err)
+			}
+		}
+		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, absNameWeight); err != nil {
+			fmt.Fprintf(d.out, "abstraction naming error: %v\n", err)
+		}
+	}
+	return born
+}
+
 // lemmaCategory derives a concept's syntactic category from its grounding
 // role: a shape in command position is verb-like, a recurring sensory
 // object is noun-like.
@@ -203,7 +314,11 @@ func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []rece
 // active concepts do not include one it is bonded to was paired with
 // that concept by coincidence, and the bond weakens at once instead of
 // waiting for the night's recount. A window with no active concepts is
-// no evidence either way: silence does not disconfirm.
+// no evidence either way: silence does not disconfirm. Bonds to
+// abstractions and to mental operations are exempt: their referents are
+// never directly in a sensory window (only their constellations are),
+// so window-based disconfirmation does not apply; what dissolves them
+// is the nightly share recount and link decay.
 func (d *Daemon) depressStaleNames(word *memory.Fragment, anchors []recentMoment) {
 	if len(anchors) == 0 {
 		return
@@ -222,17 +337,62 @@ func (d *Daemon) depressStaleNames(word *memory.Fragment, anchors []recentMoment
 		return
 	}
 	var stale []memory.LinkEdge
+	staleIDs := make([]uint64, 0, len(names))
 	for _, e := range names {
 		if !active[e.To] {
 			stale = append(stale, e)
+			staleIDs = append(staleIDs, e.To)
 		}
 	}
 	if len(stale) == 0 {
 		return
 	}
-	if err := d.store.NudgeLinks(stale, -namesDepression); err != nil {
+	exempt, err := d.conceptsGroundedBeyondEpisodes(staleIDs)
+	if err != nil {
+		fmt.Fprintf(d.out, "naming depression error: %v\n", err)
+		return
+	}
+	kept := stale[:0]
+	for _, e := range stale {
+		if !exempt[e.To] {
+			kept = append(kept, e)
+		}
+	}
+	if len(kept) == 0 {
+		return
+	}
+	if err := d.store.NudgeLinks(kept, -namesDepression); err != nil {
 		fmt.Fprintf(d.out, "naming depression error: %v\n", err)
 	}
+}
+
+// conceptsGroundedBeyondEpisodes reports which of the given concepts
+// ground in something other than episodes: an abstraction's
+// constellation or an operation node.
+func (d *Daemon) conceptsGroundedBeyondEpisodes(ids []uint64) (map[uint64]bool, error) {
+	grounds, err := d.store.LinksFromRel(ids, memory.RelGrounds)
+	if err != nil {
+		return nil, err
+	}
+	targetIDs := make([]uint64, 0, len(grounds))
+	for _, g := range grounds {
+		targetIDs = append(targetIDs, g.To)
+	}
+	targets, err := d.store.FragmentsByIDs(targetIDs)
+	if err != nil {
+		return nil, err
+	}
+	kind := make(map[uint64]string, len(targets))
+	for _, f := range targets {
+		kind[f.ID] = f.Kind
+	}
+	out := map[uint64]bool{}
+	for _, g := range grounds {
+		if k, ok := kind[g.To]; ok && k != memory.KindEpisodic {
+			out[g.From] = true
+		}
+	}
+	return out, nil
 }
 
 // conceptInfos assembles the wire view of the concept layer: every

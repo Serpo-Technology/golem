@@ -828,16 +828,16 @@ sensory shape; it is grounded instead in the stable cloud of concepts a word
 keeps company with. Extend genesis to that case; the cloud still bottoms out
 in concrete primitives, so the grounding chain stays intact.
 
-- [ ] Detect a stable conceptual constellation: a word or context whose
+- [x] Detect a stable conceptual constellation: a word or context whose
       co-activated concepts recur across situations with the same core, the
       semantic analogue of a recurring template. Reuse the cross-situational
       reliability from Step 11 to find the consistent core and discount the
       drift.
-- [ ] Mint an abstract concept grounded in that constellation: a concept
+- [x] Mint an abstract concept grounded in that constellation: a concept
       node whose grounding edges point at the concepts of its constellation,
       the way a concrete concept's point at episodes, so recall and the
       inner loop reach it the same way.
-- [ ] Keep the chain auditable: every abstract concept traces, through its
+- [x] Keep the chain auditable: every abstract concept traces, through its
       constellation, to the concrete primitives underneath, so "inflation"
       can be unfolded to the experiences it stands on.
 
@@ -855,6 +855,21 @@ Done when: a word used across many situations with a consistent conceptual
 neighbourhood, and never tied to a single sensory shape, distils into a
 concept that recall reaches through its constellation, and that concept
 unfolds to the concrete concepts it was built from.
+
+Status: built. Genesis runs right after the naming pass on the same
+cross-situational shares: a word spoken across enough situations whose
+company holds two or more concepts above the core share, none of them
+dominant, distils into an abstract concept that speaks as the word,
+grounds each core concept at its reliability share, and is named by the
+word at a firm bond. The shares rewrite each night while the
+constellation stands, so the grounding stays current and auditable down
+to the episodes underneath; a dissolved constellation stops being
+refreshed and the concept dies of disconnection as its edges fade.
+Recall reads straight through it (word to abstraction to constellation
+to moments), the inner loop walks its grounds onto warm concepts, and
+window-based naming depression exempts it, since an abstraction's
+referent is never directly in a sensory window. The done-when holds in
+tests, with the dominance and recurrence refusals asserted alongside.
 
 ## Known limitations
 

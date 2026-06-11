@@ -1104,6 +1104,9 @@ func (d *Daemon) sleepCycle() {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	born, named := d.growConcepts()
+	// Words whose company is a stable cloud rather than one shape
+	// distil into abstractions grounded in their constellations.
+	born += d.growAbstractions()
 	// Usage and seed settle their nightly contest, and the working
 	// grammar recompiles from the surviving weights.
 	d.grammarCompetition()
@@ -1165,6 +1168,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
 	d.growConcepts()
+	d.growAbstractions()
 	d.grammarCompetition()
 	d.flushModels()
 	d.store.Checkpoint()
