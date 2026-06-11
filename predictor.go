@@ -41,7 +41,11 @@ func (p *Predictor) Surprise(tpl string) float64 {
 	}
 	// Laplace smoothing: unseen templates get high-but-finite surprise.
 	prob := (p.counts[tpl] + 1) / (p.total + 1)
-	return -math.Log2(prob)
+	bits := -math.Log2(prob)
+	if bits <= 0 {
+		return 0 // a certainty is zero bits, never negative zero
+	}
+	return bits
 }
 
 // Learn folds reality into the model. Because the model moves toward what it
