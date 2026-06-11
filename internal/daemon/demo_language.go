@@ -104,9 +104,10 @@ func DemoLanguage() {
 			fmt.Printf("           named by: %s\n", strings.Join(c.Names, ", "))
 		}
 	}
-	fmt.Println("   Naming is greedy, so \"green\" bonds too, but only once: it")
-	fmt.Println("   keeps the concept's company far less than \"testler\", and that")
-	fmt.Println("   gap is what GOLEM hears as a weak, tentative pointer.")
+	fmt.Println("   Naming is cross-situational: a word's bond carries the share of")
+	fmt.Println("   its lived company that lands on the concept, so \"green\", said")
+	fmt.Println("   once in passing, bonds far below \"testler\", and that contrast")
+	fmt.Println("   is what GOLEM hears as a weak, tentative pointer.")
 
 	fmt.Println("\n4. QUESTIONS. The answers are built by the grammar, never replayed")
 	fmt.Println("   from stored text; outside its grounding GOLEM says so. The")

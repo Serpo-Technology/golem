@@ -357,11 +357,11 @@ concepts at a dopamine-gated rate, with English and Turkish forms
 converging on one node; the workspace resolving "do it again"; and the
 grammar answering after, before, and what-is questions, hedging under low
 oxytocin, admitting ignorance, and asking about unknown words when
-dopamine is high. Both done-when criteria hold in tests. Naming is
-deliberately greedy at first (bystander words bond too), so a word that
-kept a concept's company far less than its firmest name is spoken as a
-tentative pointer ("may name"), and repetition against nightly decay is
-what keeps only the true names over time. A spoken command stages a
+dopamine is high. Both done-when criteria hold in tests. Naming was
+deliberately greedy at first (bystander words bonded too), with the gap
+to a concept's firmest name spoken as a tentative pointer ("may name");
+cross-situational naming later replaced the greed with reliability
+ratios. A spoken command stages a
 proposal behind the usual approve gate and never runs by itself; golem
 propose remains the lever that can fire a graduated pair autonomously.
 
@@ -451,14 +451,14 @@ naming half a dozen unrelated concepts; and a question asked often enough
 ("what usually happens after disk space low") recurs into a concept of its
 own. Three fixes, smallest first.
 
-- [ ] Keep utterances out of concept genesis. A tell is language about the
+- [x] Keep utterances out of concept genesis. A tell is language about the
       world, so its shape should mint words that name world-concepts and
       never become a concept itself. Exclude the tell channel (and any
       channel that is not lived experience) from ConceptCandidates in
       internal/memory/semantic.go, the same exclusion the planner already
       applies when it answers. A question can then no longer distil into a
       thing.
-- [ ] Weigh a name by reliability. The weight in growConcepts
+- [x] Weigh a name by reliability. The weight in growConcepts
       (internal/daemon/concept.go), namesBaseWeight + namesDopamineGain *
       dopamine + namesRepeatBonus * (episodes - 1), rewards how often a word
       and concept co-occurred, so a word present once near six concepts
@@ -473,7 +473,7 @@ own. Three fixes, smallest first.
       inputs are counts already in the graph, so it stays weight-free. This
       is the textbook cross-situational word-learning result, and it makes
       the tentative-speech hedge fire on real contrast.
-- [ ] Weaken a bond on negative evidence. A reliability weight computed at
+- [x] Weaken a bond on negative evidence. A reliability weight computed at
       consolidation still only grows or decays uniformly. Add the
       anti-Hebbian half: when a word recurs and its concept is not active in
       the window, weaken that word-to-concept bond, since the pairing was a
@@ -490,6 +490,18 @@ with one shape names that concept firmly while a word scattered across many
 names each weakly or not at all, "what is disk" no longer answers with a
 question that became a concept, and a bond formed by a one-off coincidence
 fades as the word recurs elsewhere.
+
+Status: built, all three fixes. Genesis, reground, and the naming ratio
+all exclude the tell channel, and sleep drops any leftover grounds edge
+into an utterance, so question-concepts already in a live memory die of
+disconnection on the next night. A bond's weight is the smoothed share
+of the word's lived company that lands on the concept, blended with the
+share of the concept's company that is the word, scaled by dopamine and
+set at each consolidation in both directions. Negative evidence acts
+between nights too: a recurring word whose window holds active concepts
+that exclude a bonded one loses a step of that bond, while a window
+with no active concepts is treated as no evidence at all. The
+tentative-speech hedge now fires on real reliability contrast.
 
 ## Step 12: The inner loop, then thoughts as goroutines
 
