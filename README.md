@@ -41,6 +41,9 @@ GOLEM maps its components directly to biological structures, replacing LLM inter
 | **Conflict Monitor** | **Anterior Cingulate Cortex (ACC)** | Detects "Conflict" between competing pathways in the Basal Ganglia. Detecting ambiguity/uncertainty. | Saliency Delta Logic |
 | **Action Selector / Action Gate** | **Basal Ganglia** | The "Gatekeeper." Chooses which "Thought" or "Action" to execute based on current Neurochemistry. Selecting the "Winner" action. | Winner-Take-All Gating |
 | **Association Map / Memory Hub** | **Hippocampus** | The "Librarian." Binds disparate sensory fragments into a single "Moment" or "Context." | Weighted Association Graph / Vector Knowledge Graph (SDRs) |
+| **Semantic Hub / Concept Store** | **Anterior Temporal Lobe** | The amodal meaning layer. Words and senses converge on one concept node, so synonyms and cross-language translations share a single pointer. | Word Embeddings / Shared Vector Space |
+| **Workspace / Global Broadcast** | **Dorsolateral PFC** | Sustained activation held across ticks. Carries dialogue reference and is the seat of the inner loop. | Attention Context Window |
+| **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways. | Transformer Decoder / Tokenizer |
 
 ---
 
@@ -74,6 +77,7 @@ In an LLM, the word "Apple" is a 1536-dimensional vector of probabilities. In GO
 
 - **How it Learns:** If you type "Cleanup" and then run `rm -rf ./tmp`, GOLEM's **Basal Ganglia** logic notices the temporal proximity. It creates a **Synaptic Link** (a Go pointer) in the **Hippocampus** between the string "Cleanup" and the execution of that command.
 - **Why it's Better:** It doesn't need 1 trillion tokens to know what "Cleanup" means. It needs **one** grounded example. Language becomes a "Remote Control" for the system's internal functions.
+- **The Concept Layer:** "Cleanup," the Turkish "Temizle," and the act of clearing a directory are three handles on one **amodal concept** node. Word fragments *name* the concept; the concept *grounds* out to the experiences that instantiate it. Because many words can name one concept, synonyms within a language and translations across languages converge on the same node the moment they are grounded to the same experience, with no shared vector space and no special cross-lingual machinery. This is the semantic hub the brain keeps in its anterior temporal lobe.
 
 ### 5. Metacognition: The Conflict Resolver (ACC Logic)
 
@@ -82,6 +86,22 @@ To make GOLEM truly intelligent, it must possess **Metacognition** — the abili
 If two pathways (e.g., "Mop the Floor" vs. "Clear the Logs") are both firing with similar strength, the ACC triggers a "Veto" and forces the system to ask for **Grounding**.
 
 **The Threshold:** If the difference in saliency between the top two choices is less than a specific margin (e.g., 15%), the **Basal Ganglia** inhibits both actions and triggers a "Linguistic Request" to the user.
+
+### 6. The Workspace (Sustained Activation)
+
+Today GOLEM's activation is momentary: a cue spreads two hops through the link graph and the pattern dies when the query returns. A mind holds its active thoughts. The **Workspace** keeps a decaying activation pattern alive across ticks and turns, so the most active concepts stay warm between one utterance and the next.
+
+- **Dialogue memory:** "do it again" and "that one" resolve to whatever is still warm in the buffer.
+- **The broadcast:** sustained, re-broadcast activation is the substrate the Global Workspace theory of consciousness points to, and the seat of a future inner loop where GOLEM perceives its own active concepts.
+
+### 7. Grammar and Speech (Broca & Wernicke)
+
+GOLEM does not store sentences to repeat them. It builds them. Following Levelt's model of speech production, a message starts as a small structure of concepts and roles (who did what to what), and a single innate grammar renders that structure into a sentence.
+
+- **The Realizer (Broca):** the grammar runs as a generator, the way a compiler's code generator emits from a syntax tree. A concept-frame goes in and a grammatical sentence comes out, inflected and ordered for the active language. Ungrammatical strings are never built, so nothing needs correcting after the fact.
+- **The Parser (Wernicke):** the same grammar runs backward, turning an utterance into a concept-frame and reading its force (statement, question, command).
+- **What to Say:** a message planner above the grammar chooses the content. With nothing grounded for a query, GOLEM says it does not know; when curiosity is high, it asks.
+- **One Example is Enough:** the grammar is innate; only the lexicon (which words point to which concepts) is learned, and a word taught in a second language attaches to the same concept as its English synonym.
 
 ---
 
@@ -205,6 +225,6 @@ While the initial system uses Dopamine, Noradrenaline, and Serotonin, the **GOLE
 | **Acetylcholine** | Focus / Precision | Controls "Learning Rate." High Acetylcholine creates "Hard" symbolic links immediately; low creates "Soft" probabilistic links. |
 | **GABA** | Inhibition | Sensory inhibition — focusing the system on one task. |
 | **Adenosine** | Sleep Pressure | Triggers the Consolidation/Batching cycle. |
-| **Oxytocin** | Alignment / Bond | Measures "User Trust." If the user frequently corrects GOLEM, Oxytocin drops, causing the system to become "Hesitant" — asking for permission before executing commands. |
+| **Oxytocin** (built) | Alignment / Bond | Measures user trust. Denials and failed runs lower it, which raises the graduation bar everywhere, so a corrected GOLEM graduates habits more slowly and stays in confirm-first mode longer. |
 | **Cortisol** | System Stress / Resource Strain | Measures CPU/RAM/Heat levels. High Cortisol triggers "Avoidance" behaviors, like shutting down non-essential sensory channels to save the core. |
 

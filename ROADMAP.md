@@ -16,6 +16,12 @@ itself.
   vitals, macOS system log.
 - Dependencies: small curated pure-Go libraries are allowed (fsnotify,
   modernc.org/sqlite). No model weights, no frameworks.
+- Language: an innate grammar with a learned, grounded lexicon. Words are
+  pointers to amodal concepts, so forms in different languages converge on
+  one concept once grounded to the same experience. GOLEM speaks about
+  what it has grounded and admits ignorance otherwise. The English
+  realizer comes first; the concept layer is language-agnostic from the
+  start.
 
 ## Step 1: Core hardening
 
@@ -189,6 +195,87 @@ Goal: see the graph before building the GUI that edits it.
       survived a few weeks without changing. The fragments table gained
       its count column on 2026-06-11, which restarts that clock.
 
+## Step 8: The concept layer and grammar
+
+Goal: GOLEM understands and speaks about its own experience, grounded, and
+without learned weights.
+
+Words today are whole-sentence blobs matched by substring. This step adds
+the layer the brain has and GOLEM lacks: an amodal concept that sits
+between the word and the experience, so meaning accrues per concept across
+episodes and across languages. The existing episodic memory, decision
+loop, execution, chemistry, tiers, replay, and observability all keep
+running; the language layer is a new region wired into them, and `tell`
+is extended rather than replaced, so verbatim recall survives.
+
+Architecture: one graph, three node kinds and typed edges.
+
+- A node gains a kind: episodic (a moment, what exists now), word (a
+  surface form, language-tagged), concept (an amodal hub, no language).
+- An edge gains a relation: temporal (co-occurrence, existing), successor
+  (directed order), names (word -> concept, the pointer), grounds
+  (concept -> episodic, what instantiates it).
+- Many words name one concept, so "apple" and the Turkish "elma" converge
+  on the same node once both ground to the same experience. Cross-lingual
+  synonymy falls out with no special machinery.
+
+The organs, each mapped to a brain region:
+
+- [ ] Concept layer: concept nodes plus names and grounds edges. Recall
+      and grounding read through it, so paraphrases that share content
+      concepts land together (the semantic hub, anterior temporal lobe).
+- [ ] Directed successor edges: asymmetric binding by spike timing, so A
+      before B strengthens A -> B more than the reverse. This gives order
+      to both "what follows make test" and word order (hippocampal
+      sequence; the replay pass already walks the day in order).
+- [ ] Persistent workspace: a decaying activation pattern held across
+      ticks and turns, so dialogue reference ("that one", "do it again")
+      resolves to the warmest concept (working memory, dlPFC). It is also
+      the Global Workspace substrate and the seat of a future inner loop,
+      so it pays off more than once.
+- [ ] Lemma category: each concept carries a syntactic category, derived
+      from its grounding role where possible (a concept in command
+      position is verb-like, a recurring sensory object is noun-like),
+      with a tiny innate seed for function words.
+- [ ] Realizer and parser: one innate grammar run both directions.
+      Forward renders a concept-frame into a sentence (Broca, the compiler
+      back end). Backward parses a tell into a concept-frame and reads its
+      force as statement, question, or command (Wernicke, the front end).
+      A message planner above the grammar chooses what to say, and is
+      where GOLEM admits it does not know, or asks when curious.
+
+Concept genesis: concepts are born during consolidation. That is the same
+sleep pass that already merges prototypes, and the place episodic memory
+distils into semantic memory (complementary learning systems). A tiny
+innate seed bootstraps the first concepts (core knowledge).
+
+Chemistry keeps all of its existing roles and gains new ones: dopamine
+gates how readily a word bonds to a concept, serotonin paces concept
+formation at sleep, oxytocin shapes whether speech asserts or hedges, and
+a future acetylcholine knob decides whether a naming bond is hard or soft.
+New chemicals can be added later and each finds a behavior to bend.
+
+Forced deviations from biology, each flagged:
+
+- Innate grammar, learned lexicon. The grammar ships built in; only which
+  words point to which concepts is learned. Forced by no weights and no
+  corpus; the brain-faithful cover is nativism (universal grammar, core
+  knowledge). This is the load-bearing bet of the step.
+- A tiny concept seed, because the first concepts cannot bootstrap from
+  nothing.
+- Role-derived syntactic category, because part of speech cannot be
+  induced from a handful of examples (syntactic bootstrapping).
+- No phonology; straight to orthographic word forms, since input is text.
+
+Scope and order: GOLEM speaks about what it has grounded, and outside that
+it says it does not know and may ask. The English realizer comes first;
+the pointer layer is language-agnostic from day one, so Turkish word forms
+can attach to concepts before a Turkish realizer exists.
+
+Done when: GOLEM answers "what usually happens after make test" with a
+constructed sentence that names the successor command, and a word taught
+in a second language recalls the same concept as its English synonym.
+
 ## Known limitations
 
 - One command runs at a time. Execution happens off the brain loop (the
@@ -216,3 +303,7 @@ Goal: see the graph before building the GUI that edits it.
 - Cross-channel calibration windows: tuned per channel class or shared.
 - Whether serotonin should also gate sensor sampling rates (the GABA idea
   from the v2 table).
+- The concept-frame: the small typed structure the parser fills and the
+  realizer reads (thematic roles such as agent, action, and patient, plus
+  illocutionary force). Its shape is the interface both halves of the
+  grammar share, and the next thing to settle before building Step 8.
