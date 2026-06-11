@@ -29,14 +29,20 @@ var verbsEN = map[string]verbEN{
 	"run":     {"run", "runs", "ran", "run"},
 }
 
+// verbTable returns a verb's principal parts, regular by rule when the
+// table has no entry.
+func verbTable(base string) verbEN {
+	if v, ok := verbsEN[base]; ok {
+		return v
+	}
+	return verbEN{base, base + "s", base + "ed", base + "ed"}
+}
+
 // finiteVerb conjugates a verb for its subject: third person singular
 // present takes the -s form, everything else in the present takes the
 // base, and the past ignores person the way English does.
 func finiteVerb(base string, firstPerson, plural, past bool) string {
-	v, ok := verbsEN[base]
-	if !ok {
-		v = verbEN{base, base + "s", base + "ed", base + "ed"}
-	}
+	v := verbTable(base)
 	if past {
 		return v.past
 	}
@@ -70,17 +76,11 @@ func hedgedVerb(base string, past bool) string {
 }
 
 func verbBase(base string) string {
-	if v, ok := verbsEN[base]; ok {
-		return v.base
-	}
-	return base
+	return verbTable(base).base
 }
 
 func pastPart(base string) string {
-	if v, ok := verbsEN[base]; ok {
-		return v.part
-	}
-	return base + "ed"
+	return verbTable(base).part
 }
 
 // beForm is the copula, the one verb whose agreement survives the past.

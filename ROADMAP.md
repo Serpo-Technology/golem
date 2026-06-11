@@ -387,31 +387,31 @@ dependency.
 
 English, the engine:
 
-- [ ] A tense and aspect feature on the frame, parsed and realized, so "X
+- [x] A tense and aspect feature on the frame, parsed and realized, so "X
       followed Y" reads and speaks distinctly from "X follows Y".
-- [ ] Subject-verb agreement computed from person and number, not a blind
+- [x] Subject-verb agreement computed from person and number, not a blind
       "-s"; a number feature on terms so a plural subject agrees.
-- [ ] Noun number on a rule table with the irregulars, so subjects and
+- [x] Noun number on a rule table with the irregulars, so subjects and
       counts inflect.
-- [ ] Article selection: a or an by the following sound, "the" for the
+- [x] Article selection: a or an by the following sound, "the" for the
       definite, none where bare is right.
-- [ ] General negation: do-support across verbs and parse-side detection
+- [x] General negation: do-support across verbs and parse-side detection
       of not, never, and no, building on the denial fix already in place.
-- [ ] Wh-question typing: who, what, which, when, where, why, and how carry
+- [x] Wh-question typing: who, what, which, when, where, why, and how carry
       distinct meanings and route to distinct answers, including a real
       "which command follows X" that no longer falls back to a definition.
-- [ ] Constituent parsing past the single clause: a second temporal clause,
+- [x] Constituent parsing past the single clause: a second temporal clause,
       coordination, and modifier attachment, so extra relators stop folding
       into the anchor span.
 
 Turkish, the second language:
 
-- [ ] Word order as a parameter (SOV), not an English SVO assumption baked
+- [x] Word order as a parameter (SOV), not an English SVO assumption baked
       into the builder.
-- [ ] Agglutinative morphology: case, possessive, and tense suffixes
+- [x] Agglutinative morphology: case, possessive, and tense suffixes
       stacked on the stem.
-- [ ] Vowel harmony on the suffixes.
-- [ ] The pointer layer already lets Turkish words name concepts; this adds
+- [x] Vowel harmony on the suffixes.
+- [x] The pointer layer already lets Turkish words name concepts; this adds
       the realizer that answers in Turkish, chosen by the language the
       question arrived in.
 
@@ -419,6 +419,25 @@ Done when: GOLEM inflects correctly across tense, number, and agreement in
 a constructed English answer, never asserts the opposite of a negated
 input, and answers a Turkish question in Turkish about the same concept an
 English question reaches.
+
+Status: built and demonstrated end to end (golem demo language). English
+conjugates from a table of principal parts with agreement computed from
+person, number, and tense; nouns pluralize on a rule table with the
+irregulars; articles follow the sound; negation takes do-support
+everywhere; the interrogatives route to distinct answers (order,
+definition, time, channel, count, and honestly admitted gaps for who and
+why); and "after X and before Y" parses as two qualifiers the planner
+intersects. Turkish detects from its closed class, parses SOV with case
+suffixes stripped from anchors, and realizes with suffix morphology
+under twofold and fourfold vowel harmony with voicing assimilation,
+apostrophes on foreign anchors, and a clock time harmonized by the
+spoken form of its last digit. Harmony runs on spelling, the same
+no-phonology deviation flagged for English. All three done-when criteria
+hold in tests. Constituency covers a second temporal clause and
+coordination in qualifiers and answer subjects; relative clauses and
+clause embedding beyond the known-gap idiom stay out of scope, and the
+Turkish surface is the answer shapes GOLEM speaks rather than open
+conversation.
 
 ## Known limitations
 
