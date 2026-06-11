@@ -166,6 +166,16 @@ const (
 	spreadBudget      = 10
 )
 
+// Successor tuning. Binding is asymmetric by spike timing: the moment
+// that fired first strengthens its edge toward what followed, and no
+// reverse edge is written at all. Repetition of the same ordered template
+// pair earns a growing bonus, the directional twin of assocRepeatBonus.
+const (
+	successorBaseWeight  = 0.25
+	successorRepeatBonus = 0.1
+	successorMaxWeight   = 0.95
+)
+
 type ipcReq struct {
 	req   Request
 	reply chan Response
@@ -601,6 +611,11 @@ func (d *Daemon) linkMoment(f *Fragment) []uint64 {
 // binds as episode adjacency but never counts as confirmation, because an
 // event repeating itself says nothing about two different things belonging
 // together.
+//
+// Order is bound alongside co-occurrence: each target fired before f, so
+// a directed successor edge runs from the target toward f and nothing
+// runs back. That timing asymmetry is what lets "what follows X" have a
+// different answer than "what precedes X."
 func (d *Daemon) bindTo(f *Fragment, targets []recentMoment) []uint64 {
 	var linked []uint64
 	confirmed := false
@@ -632,11 +647,36 @@ func (d *Daemon) bindTo(f *Fragment, targets []recentMoment) []uint64 {
 		d.store.Link(r.id, f.ID, w)
 		d.event(Event{Ev: "link", From: f.ID, To: r.id, Weight: w})
 		linked = append(linked, r.id)
+		d.bindSuccessor(r, f)
 	}
 	if confirmed {
 		d.chem.SpikeDopamine(confirmReward)
 	}
 	return linked
+}
+
+// bindSuccessor writes the directed order edge from an earlier moment to
+// the one that just followed it. Identical templates are skipped: an
+// event following itself is repetition, and repetition is the merge
+// pass's business.
+func (d *Daemon) bindSuccessor(earlier recentMoment, f *Fragment) {
+	if earlier.template == f.Template {
+		return
+	}
+	count, err := d.store.BumpSucc(earlier.template, f.Template)
+	if err != nil {
+		fmt.Fprintf(d.out, "succ error: %v\n", err)
+		return
+	}
+	w := successorBaseWeight + float64(count-1)*successorRepeatBonus
+	if w > successorMaxWeight {
+		w = successorMaxWeight
+	}
+	if err := d.store.LinkRel(earlier.id, f.ID, RelSuccessor, w); err != nil {
+		fmt.Fprintf(d.out, "successor link error: %v\n", err)
+		return
+	}
+	d.event(Event{Ev: "link", From: earlier.id, To: f.ID, Rel: RelSuccessor, Weight: w})
 }
 
 func fmtIDs(ids []uint64) string {

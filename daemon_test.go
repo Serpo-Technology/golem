@@ -145,7 +145,12 @@ func testDaemon(t *testing.T) (*Daemon, *Store) {
 
 func edgeWeight(t *testing.T, s *Store, from, to uint64) float64 {
 	t.Helper()
-	edges, err := s.LinksFrom([]uint64{from})
+	return edgeWeightRel(t, s, from, to, RelTemporal)
+}
+
+func edgeWeightRel(t *testing.T, s *Store, from, to uint64, rel string) float64 {
+	t.Helper()
+	edges, err := s.LinksFromRel([]uint64{from}, rel)
 	if err != nil {
 		t.Fatal(err)
 	}

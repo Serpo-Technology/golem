@@ -27,6 +27,7 @@ type Event struct {
 	ID      uint64  `json:"id,omitempty"`
 	From    uint64  `json:"from,omitempty"`
 	To      uint64  `json:"to,omitempty"`
+	Rel     string  `json:"rel,omitempty"` // on link events: the edge relation; empty means temporal
 	Bits    float64 `json:"bits,omitempty"`
 	Weight  float64 `json:"weight,omitempty"`
 	Count   int     `json:"count,omitempty"`
