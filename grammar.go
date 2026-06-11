@@ -59,7 +59,7 @@ func isFunctionWord(w string) bool {
 // separately because it carries force, not content.
 func tokenize(s string) (tokens []string, question bool) {
 	question = strings.Contains(s, "?")
-	for _, field := range strings.Fields(strings.ToLower(s)) {
+	for field := range strings.FieldsSeq(strings.ToLower(s)) {
 		tok := strings.TrimFunc(field, func(r rune) bool {
 			return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127)
 		})
@@ -276,14 +276,20 @@ func Realize(f Frame, chem LimbicState) string {
 		switch {
 		case chem.Oxytocin < oxytocinBaseline:
 			// A recently corrected system hedges its inferences.
-			b.WriteString(" may " + verb)
+			b.WriteString(" may ")
+			b.WriteString(verb)
 		case f.Habit:
-			b.WriteString(" usually " + verb + "s")
+			b.WriteString(" usually ")
+			b.WriteString(verb)
+			b.WriteString("s")
 		default:
-			b.WriteString(" " + verb + "s")
+			b.WriteString(" ")
+			b.WriteString(verb)
+			b.WriteString("s")
 		}
 		if !f.Patient.empty() {
-			b.WriteString(" " + f.Patient.speak())
+			b.WriteString(" ")
+			b.WriteString(f.Patient.speak())
 		}
 	case "know":
 		if f.Negate {

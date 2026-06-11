@@ -107,7 +107,7 @@ func demoSleepAndRecall(cfg Config, hippo *Hippocampus, chem *Neurochemistry, qu
 	pruned := hippo.Sleep(cfg.NightlyDecay, cfg.PruneFloor)
 	fmt.Printf("Night 1: weights decayed, surprising memories resisting; %d pruned.\n", pruned)
 
-	for night := 0; night < fastForwardNights; night++ {
+	for range fastForwardNights {
 		pruned += hippo.Sleep(cfg.NightlyDecay, cfg.PruneFloor)
 	}
 	fmt.Printf("Fast-forward %d more nights: %d pruned in total, %d remain.\n",

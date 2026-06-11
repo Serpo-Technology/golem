@@ -40,7 +40,7 @@ func TestLoopAnswersMidRun(t *testing.T) {
 	seedGraduatedHabit(t, home, "take a nap", "sleep 1")
 	home, done := startTestDaemonWith(t, home, execTestConfig())
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		if _, err := ipcCall(home, Request{Cmd: "teach", Content: "take a nap", Command: "sleep 1"}); err != nil {
 			t.Fatal(err)
 		}
@@ -105,7 +105,7 @@ func TestStopSettlesInFlightRun(t *testing.T) {
 	seedGraduatedHabit(t, home, "quick nap", "sleep 0.4")
 	home, done := startTestDaemonWith(t, home, execTestConfig())
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		if _, err := ipcCall(home, Request{Cmd: "teach", Content: "quick nap", Command: "sleep 0.4"}); err != nil {
 			t.Fatal(err)
 		}

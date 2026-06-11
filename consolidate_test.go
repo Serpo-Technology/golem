@@ -27,7 +27,7 @@ func TestMergeDuplicates(t *testing.T) {
 	now := time.Now()
 
 	var group []*Fragment
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		f := encodeAt(t, s, "syslog", fmt.Sprintf("Disk full on /dev/disk1s%d", i+1),
 			3.0, now.Add(time.Duration(i)*time.Minute))
 		group = append(group, f)
@@ -100,7 +100,7 @@ func TestMergeSumsEdgeWeights(t *testing.T) {
 
 	target := encodeAt(t, s, "tell", "the anchor", 4.0, now)
 	var ids []uint64
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		f := encodeAt(t, s, "shell", "run: make build", 3.0, now.Add(time.Duration(i)*time.Minute))
 		s.Link(target.ID, f.ID, 0.3)
 		ids = append(ids, f.ID)
@@ -220,7 +220,7 @@ func TestStrongSince(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE fragments SET weight = 0.5 WHERE id = ?`, faded.ID); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		encodeAt(t, s, "syslog", fmt.Sprintf("fresh moment %c", rune('a'+i)), 4.0,
 			now.Add(time.Duration(-40+i)*time.Minute))
 	}
@@ -249,7 +249,7 @@ func TestSleepCycleConsolidates(t *testing.T) {
 	d, s := testDaemon(t)
 	base := time.Now().Add(-3 * time.Hour)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		encodeAt(t, s, "syslog", fmt.Sprintf("Disk full on /dev/disk1s%d", i+1), 3.0,
 			base.Add(time.Duration(i)*12*time.Minute))
 	}
@@ -324,7 +324,7 @@ func TestMergeFoldsEdgesPerRelation(t *testing.T) {
 
 	target := encodeAt(t, s, "tell", "the anchor", 4.0, now)
 	var ids []uint64
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		f := encodeAt(t, s, "shell", "run: make build", 3.0, now.Add(time.Duration(i)*time.Minute))
 		if err := s.Link(target.ID, f.ID, 0.3); err != nil {
 			t.Fatal(err)

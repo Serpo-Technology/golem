@@ -1,6 +1,9 @@
 package main
 
-import "math"
+import (
+	"maps"
+	"math"
+)
 
 // Predictor is the PFC stand-in for one channel. It keeps a decaying
 // frequency model of the templates it has seen and scores each new one by
@@ -62,9 +65,7 @@ func (p *Predictor) Learn(tpl string) {
 // Export returns a copy of the model's counts, for persistence.
 func (p *Predictor) Export() map[string]float64 {
 	out := make(map[string]float64, len(p.counts))
-	for tpl, c := range p.counts {
-		out[tpl] = c
-	}
+	maps.Copy(out, p.counts)
 	return out
 }
 

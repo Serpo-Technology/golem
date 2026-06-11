@@ -155,7 +155,7 @@ func TestReflexCooldown(t *testing.T) {
 	d.cfg.ExecuteAllowlist = []string{"echo"}
 	now := time.Now()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		d.process(Observation{Channel: "syslog",
 			Content: "disk pressure spike", At: now.Add(time.Duration(i) * time.Second)}, false, true)
 		d.settleExecution()

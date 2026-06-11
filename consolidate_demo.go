@@ -38,7 +38,7 @@ func runConsolidationDemo() {
 
 	fmt.Println("\n1. REPEATS. The same disk-full shape arrives six times across the")
 	fmt.Println("   day, hours apart, each with a different volume number.")
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		feed("syslog", fmt.Sprintf("Disk full on /dev/disk1s%d", i+1), day.Add(time.Duration(i)*70*time.Minute))
 	}
 

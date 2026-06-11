@@ -12,7 +12,7 @@ const (
 // below the absolute floor ever is.
 func TestCalibratorQuietChannel(t *testing.T) {
 	c := &Calibrator{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		c.Gate(0.1, testFloor, testZ, testWarmup)
 	}
 	if !c.Gate(5.0, testFloor, testZ, testWarmup) {
@@ -28,7 +28,7 @@ func TestCalibratorQuietChannel(t *testing.T) {
 // This is the cross-channel fairness the fixed threshold could not give.
 func TestCalibratorChattyChannel(t *testing.T) {
 	c := &Calibrator{}
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		c.Gate(4.5+float64(i%2), testFloor, testZ, testWarmup)
 	}
 	if c.Gate(5.5, testFloor, testZ, testWarmup) {
@@ -44,14 +44,14 @@ func TestCalibratorChattyChannel(t *testing.T) {
 // predictor habituates at the template level.
 func TestCalibratorHabituatesToNewRegime(t *testing.T) {
 	c := &Calibrator{}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		c.Gate(0.1, testFloor, testZ, testWarmup)
 	}
 	if !c.Gate(6.0, testFloor, testZ, testWarmup) {
 		t.Fatal("the first 6-bit event should alarm")
 	}
 	alarms := 0
-	for i := 0; i < 300; i++ {
+	for range 300 {
 		if c.Gate(6.0, testFloor, testZ, testWarmup) {
 			alarms++
 		}

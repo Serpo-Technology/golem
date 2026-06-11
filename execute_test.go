@@ -137,7 +137,7 @@ func TestApproveFailedRunDemotes(t *testing.T) {
 	d.cfg.ExecuteAllowlist = []string{"false"}
 	ground(t, d, "do the thing", "false", 4)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		dec, _ := d.decide("do the thing")
 		h, _, err := d.approve(dec, time.Now())
 		if err != nil {
@@ -162,7 +162,7 @@ func TestDemotionResetsApprovals(t *testing.T) {
 	ground(t, d, "do x", "false", 6)
 
 	// Build approvals while execution is off, so they accrue as dry runs.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		dec, _ := d.decide("do x")
 		if _, _, err := d.approve(dec, time.Now()); err != nil {
 			t.Fatal(err)

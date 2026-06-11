@@ -29,7 +29,7 @@ func TestTrustMovesOnJudgement(t *testing.T) {
 		t.Fatalf("a clean approval should raise trust: %.2f then %.2f", low, got)
 	}
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		d.chem.RaiseTrust(trustOnConfirm)
 	}
 	if got := d.chem.Snapshot().Oxytocin; got > 1.0 {
@@ -67,7 +67,7 @@ func TestPromotionBarTracksTrust(t *testing.T) {
 	if bar := d.promotionBar(); bar != n {
 		t.Fatalf("high trust must not lower the bar below N, got %d", bar)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		d.chem.LowerTrust(trustOnCorrection)
 	}
 	// Trust is floored at 0.05, so the bar tops out at ten times N.
@@ -83,7 +83,7 @@ func TestLowTrustDelaysGraduation(t *testing.T) {
 	ground(t, d, "build it", "make build", 4)
 	now := time.Now()
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		d.chem.LowerTrust(trustOnCorrection)
 	}
 

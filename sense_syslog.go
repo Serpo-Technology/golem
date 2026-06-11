@@ -58,6 +58,13 @@ func runLogStream(out chan Observation, stop <-chan struct{}, dropped *atomic.In
 		}
 		emit(out, dropped, Observation{Channel: "syslog", Content: line, At: time.Now()})
 	}
+	// A scan error (an overlong line past the buffer, a broken pipe)
+	// ends the sense; report it as an observation rather than going
+	// silently dark, so the failure itself can reach consciousness.
+	if err := scanner.Err(); err != nil {
+		emit(out, dropped, Observation{Channel: "syslog",
+			Content: "syslog sense failed: " + err.Error(), At: time.Now()})
+	}
 	cmd.Wait()
 	close(procDone)
 }

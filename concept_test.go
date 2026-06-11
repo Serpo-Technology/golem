@@ -12,7 +12,7 @@ import (
 func feedShape(t *testing.T, s *Store, channel, content string, n int, base time.Time) []recentMoment {
 	t.Helper()
 	var anchors []recentMoment
-	for i := 0; i < n; i++ {
+	for i := range n {
 		f := encodeAt(t, s, channel, content, 3.0, base.Add(time.Duration(i)*10*time.Minute))
 		anchors = append(anchors, recentMoment{id: f.ID, template: f.Template, at: f.Time})
 	}

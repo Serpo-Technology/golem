@@ -37,8 +37,8 @@ func renderDOT(frags []*FragmentInfo, links []*LinkInfo) string {
 		if f.Count > 1 {
 			label += fmt.Sprintf("\\nx%d", f.Count)
 		}
-		b.WriteString(fmt.Sprintf("  f%d [label=\"%s\", penwidth=%.2f%s];\n",
-			f.ID, label, 0.5+2*f.Weight, shape))
+		fmt.Fprintf(&b, "  f%d [label=\"%s\", penwidth=%.2f%s];\n",
+			f.ID, label, 0.5+2*f.Weight, shape)
 	}
 	for _, e := range links {
 		style := ""
@@ -50,8 +50,8 @@ func renderDOT(frags []*FragmentInfo, links []*LinkInfo) string {
 		case RelGrounds:
 			style = ", style=dotted"
 		}
-		b.WriteString(fmt.Sprintf("  f%d -> f%d [penwidth=%.2f%s];\n",
-			e.From, e.To, 0.3+2*e.Weight, style))
+		fmt.Fprintf(&b, "  f%d -> f%d [penwidth=%.2f%s];\n",
+			e.From, e.To, 0.3+2*e.Weight, style)
 	}
 	b.WriteString("}\n")
 	return b.String()

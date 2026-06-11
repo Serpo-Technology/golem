@@ -9,7 +9,7 @@ import (
 // drag it back below the gate on the window's timescale.
 func TestHabituation(t *testing.T) {
 	p := NewPredictor(100)
-	for i := 0; i < 60; i++ {
+	for range 60 {
 		p.Learn("Ping seq=<n> latency=<n>ms")
 	}
 
@@ -18,7 +18,7 @@ func TestHabituation(t *testing.T) {
 		t.Fatalf("fresh anomaly should clear the gate, got %.2f bits", first)
 	}
 
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		p.Learn("Disk full on <path>")
 	}
 	after := p.Surprise("Disk full on <path>")
@@ -34,14 +34,14 @@ func TestHabituation(t *testing.T) {
 // from the model and become surprising again.
 func TestForgettingDrift(t *testing.T) {
 	p := NewPredictor(100)
-	for i := 0; i < 300; i++ {
+	for range 300 {
 		p.Learn("old normal")
 	}
 	if s := p.Surprise("old normal"); s > 0.5 {
 		t.Fatalf("the current regime should be unsurprising, got %.2f bits", s)
 	}
 
-	for i := 0; i < 400; i++ {
+	for range 400 {
 		p.Learn("new normal")
 	}
 	if s := p.Surprise("old normal"); s < defaultSurpriseThreshold {
@@ -53,7 +53,7 @@ func TestForgettingDrift(t *testing.T) {
 // without bound. This is the difference between a demo and a daemon.
 func TestBoundedMemory(t *testing.T) {
 	p := NewPredictor(100)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		p.Learn(fmt.Sprintf("unique line %d", i))
 	}
 	if len(p.counts) > 600 {

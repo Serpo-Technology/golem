@@ -10,13 +10,13 @@ import (
 func TestWorkspaceDecays(t *testing.T) {
 	w := newWorkspace()
 	w.excite(7, 1.0)
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		w.decay()
 	}
 	if h := w.heat(7); h >= 1.0 || h <= workspaceFloor {
 		t.Fatalf("activation should have cooled without dying yet: %.3f", h)
 	}
-	for i := 0; i < 2000; i++ {
+	for range 2000 {
 		w.decay()
 	}
 	if h := w.heat(7); h != 0 {

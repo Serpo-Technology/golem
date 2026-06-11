@@ -9,7 +9,7 @@ import (
 func ground(t *testing.T, d *Daemon, cue, command string, times int) {
 	t.Helper()
 	base := time.Now().Add(-200 * time.Hour)
-	for i := 0; i < times; i++ {
+	for i := range times {
 		d.teach(cue, command, base.Add(time.Duration(i)*time.Hour))
 	}
 }
@@ -128,7 +128,7 @@ func TestDenylistNeverGraduates(t *testing.T) {
 func TestConflictVetoAndResolution(t *testing.T) {
 	d, _ := testDaemon(t)
 	base := time.Now().Add(-200 * time.Hour)
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		d.teach("clean up", "git clean -fd", base.Add(time.Duration(i)*time.Hour))
 		d.teach("clean up", "docker system prune", base.Add(time.Duration(10+i)*time.Hour))
 	}
@@ -205,7 +205,7 @@ func TestDecideIsReadOnly(t *testing.T) {
 	auditBefore, _ := s.AuditTail(1000)
 	fragsBefore, _ := s.Count()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if _, err := d.decide("run the tests"); err != nil {
 			t.Fatal(err)
 		}

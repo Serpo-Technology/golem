@@ -186,12 +186,9 @@ func (d *Daemon) decide(cue string) (Decision, error) {
 }
 
 func conflictQuestion(cue string, ranked []*Candidate) string {
-	n := clarifyTopCount
-	if n > len(ranked) {
-		n = len(ranked)
-	}
+	n := min(clarifyTopCount, len(ranked))
 	cmds := make([]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		cmds[i] = ranked[i].Command
 	}
 	return fmt.Sprintf("%q is ambiguous between: %s. Which did you mean?",
@@ -312,14 +309,6 @@ func (d *Daemon) autorunFinish(dec Decision, trigger string, ran, ok bool, outco
 		d.feedback(c.Command, outcome, at)
 	}
 	return demoted
-}
-
-// autorun executes a graduated, allowed command synchronously and records
-// it, the whole-in-one form for the demos and tests. The caller must have
-// already checked mayExecute and graduation.
-func (d *Daemon) autorun(dec Decision, trigger string, at time.Time) (outcome string, demoted bool) {
-	ran, ok, outcome := d.execute(dec.Proposed.Command)
-	return outcome, d.autorunFinish(dec, trigger, ran, ok, outcome, at)
 }
 
 // deny rejects a proposed candidate: it weakens the grounding and demotes

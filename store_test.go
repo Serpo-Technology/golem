@@ -66,7 +66,7 @@ func TestRecallRefreshPersists(t *testing.T) {
 	if _, err := s.Encode(&Fragment{Content: "x", Surprise: 4, Time: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		if _, err := s.Sleep(0.10, 0.10); err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +238,7 @@ func TestLinkFloorPrunesFadedEdges(t *testing.T) {
 // checkpoint or an ignored misspelled pragma would leave bytes behind.
 func TestCheckpointTruncatesWAL(t *testing.T) {
 	s, path := tempStore(t)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		if _, err := s.Encode(&Fragment{Content: fmt.Sprintf("filler %d", i),
 			Surprise: 4, Time: time.Now()}); err != nil {
 			t.Fatal(err)

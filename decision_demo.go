@@ -37,7 +37,7 @@ func runDecisionDemo() {
 	// Act 1: ground a cue to a command, then propose.
 	fmt.Println("\n1. GROUNDING. Teaching \"run the tests\" -> \"go test ./...\" four times,")
 	fmt.Println("   the way the shell hook would see you say it and then run it.")
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		d.teach("run the tests", "go test ./...", base.Add(time.Duration(i)*time.Hour))
 	}
 	dec, _ := d.decide("run the tests")
@@ -61,7 +61,7 @@ func runDecisionDemo() {
 	// Act 3: an ambiguous cue the ACC vetoes.
 	fmt.Println("\n3. CONFLICT. Teaching \"clean up the project\" to mean two different")
 	fmt.Println("   things, equally often, so neither clearly wins.")
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		d.teach("clean up the project", "git clean -fd", base.Add(time.Duration(30+i)*time.Hour))
 		d.teach("clean up the project", "docker system prune -f", base.Add(time.Duration(40+i)*time.Hour))
 	}
@@ -77,7 +77,7 @@ func runDecisionDemo() {
 	// Act 4: a denylisted command can be proposed but never graduate.
 	fmt.Println("\n4. SAFETY. Teaching \"wipe the temp dir\" -> \"rm -rf ./tmp\" and")
 	fmt.Printf("   approving it %d times anyway.\n", cfg.GraduationApprovals+1)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		d.teach("wipe the temp dir", "rm -rf ./tmp", base.Add(time.Duration(60+i)*time.Hour))
 	}
 	var lastStatus string

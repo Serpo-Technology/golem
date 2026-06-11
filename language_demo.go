@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func runLanguageDemo() {
 	fmt.Println("   the day:  make test  ->  make deploy --staging")
 	fmt.Println("   Binding is asymmetric: each earlier moment points at what")
 	fmt.Println("   followed it, and nothing points backward.")
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		at := day.Add(time.Duration(i) * 80 * time.Minute)
 		d.recent = nil
 		feed("shell", "run: make test", at)
@@ -67,7 +68,7 @@ func runLanguageDemo() {
 	fmt.Println("   languages; the words bind to the moments around them:")
 	fmt.Println("      \"the tests are green\"        (en)")
 	fmt.Println("      \"testler temiz\"              (tr)")
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		at := day.Add(time.Duration(i)*90*time.Minute + 5*time.Second)
 		feed("shell", "run: make test", at)
 		speakAt("the tests are green", "en", at.Add(3*time.Second))
@@ -78,7 +79,7 @@ func runLanguageDemo() {
 	fmt.Println("\n3. SLEEP. The night merges repeats into prototypes, distils")
 	fmt.Println("   prototypes into concepts, and bonds the day's words to the")
 	fmt.Println("   concepts their moments ground.")
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		d.chem.BuildSleepPressure()
 	}
 	d.sleepCycle()
@@ -89,7 +90,7 @@ func runLanguageDemo() {
 	for _, c := range concepts {
 		fmt.Printf("   concept [%-4s] %q  grounded in %d occurrence(s)\n", c.Category, c.Gloss, c.Grounded)
 		if len(c.Names) > 0 {
-			fmt.Printf("           named by: %s\n", joinNames(c.Names))
+			fmt.Printf("           named by: %s\n", strings.Join(c.Names, ", "))
 		}
 	}
 	fmt.Println("   Early naming is greedy: bystander words like \"green\" bond too.")
@@ -129,15 +130,4 @@ func runLanguageDemo() {
 	fmt.Println("\n" + line)
 	fmt.Println("The pointer chain under every answer: word -> concept -> moments,")
 	fmt.Println("with order carried on directed edges laid down by lived sequence.")
-}
-
-func joinNames(names []string) string {
-	out := ""
-	for i, n := range names {
-		if i > 0 {
-			out += ", "
-		}
-		out += n
-	}
-	return out
 }

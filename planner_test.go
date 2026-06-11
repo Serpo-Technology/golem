@@ -10,7 +10,7 @@ import (
 // round its own episode, so successor edges accumulate.
 func feedSequence(t *testing.T, d *Daemon, first, second string, n int, base time.Time) {
 	t.Helper()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		at := base.Add(time.Duration(i) * 10 * time.Minute)
 		d.recent = nil
 		d.process(Observation{Channel: "shell", Content: first, At: at}, true, true)
@@ -31,7 +31,7 @@ func say(t *testing.T, d *Daemon, words string) Response {
 // calm builds the sleep pressure a real night would have: genesis is
 // serotonin-paced, and a day of surprises leaves serotonin floored.
 func calm(d *Daemon) {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		d.chem.BuildSleepPressure()
 	}
 }
@@ -135,7 +135,7 @@ func TestAnchorPrefersExactShapeOverWordVotes(t *testing.T) {
 
 	// "disk space low" is always followed by a cleanup; "memory pressure
 	// warning" keeps it company so both shapes earn concepts.
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		at := base.Add(time.Duration(i) * 30 * time.Minute)
 		d.recent = nil
 		d.process(Observation{Channel: "vitals", Content: "memory pressure warning", At: at}, true, true)

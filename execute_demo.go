@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func runExecutionDemo() {
 
 	// A succeeding command graduates, then runs autonomously.
 	fmt.Println("\n1. A real, allowed command. Teaching \"greet\" -> echo, then approving.")
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		d.teach("greet the world", "echo hello-from-golem", base.Add(time.Duration(i)*time.Hour))
 	}
 	for i := 0; i < cfg.GraduationApprovals; i++ {
@@ -50,7 +51,7 @@ func runExecutionDemo() {
 
 	// A failing command demotes instead of graduating.
 	fmt.Println("\n2. A command that fails. Teaching \"do the thing\" -> false, then approving.")
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		d.teach("do the thing", "false", base.Add(time.Duration(30+i)*time.Hour))
 	}
 	dec, _ := d.decide("do the thing")
@@ -59,7 +60,7 @@ func runExecutionDemo() {
 
 	// A denylisted command stays a dry run even though allowlisted.
 	fmt.Println("\n3. A denylisted command, allowlisted anyway. Teaching \"wipe\" -> rm -rf.")
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		d.teach("wipe the scratch dir", "rm -rf ./scratch", base.Add(time.Duration(60+i)*time.Hour))
 	}
 	dec, _ = d.decide("wipe the scratch dir")
@@ -81,7 +82,7 @@ func runExecutionDemo() {
 	fmt.Println("\n" + line)
 	fmt.Println("Decision trail:")
 	entries, _ := d.store.AuditTail(8)
-	for i := len(entries) - 1; i >= 0; i-- {
-		fmt.Printf("  %q -> %q  %s\n", entries[i].Cue, entries[i].Action, entries[i].Outcome)
+	for _, entrie := range slices.Backward(entries) {
+		fmt.Printf("  %q -> %q  %s\n", entrie.Cue, entrie.Action, entrie.Outcome)
 	}
 }

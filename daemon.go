@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
@@ -780,9 +781,7 @@ func (d *Daemon) spread(seeds []*Fragment) ([]*FragmentInfo, error) {
 		// so the outcome cannot depend on the order edges come back from
 		// the store.
 		base := make(map[uint64]float64, len(act))
-		for id, a := range act {
-			base[id] = a
-		}
+		maps.Copy(base, act)
 		var next []uint64
 		for _, e := range edges {
 			a := base[e.From] * e.Weight * spreadDamping

@@ -358,6 +358,9 @@ func tellSession(home string) {
 	for {
 		fmt.Print("you> ")
 		if !sc.Scan() {
+			if err := sc.Err(); err != nil {
+				fmt.Fprintln(os.Stderr, "golem: input error:", err)
+			}
 			fmt.Println()
 			return
 		}

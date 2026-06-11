@@ -53,7 +53,7 @@ func TestSurpriseOrdersLifetime(t *testing.T) {
 func TestRecallRefreshesWeight(t *testing.T) {
 	h := NewHippocampus()
 	h.Encode(&Fragment{Content: "x", Surprise: 4, Limbic: LimbicState{Noradrenaline: 0.9}})
-	for night := 0; night < 40; night++ {
+	for range 40 {
 		h.Sleep(0.10, 0.10)
 	}
 	f := h.RecallByStress()

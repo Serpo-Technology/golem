@@ -46,7 +46,7 @@ func TestDaemonEndToEnd(t *testing.T) {
 	home, done := startTestDaemon(t)
 
 	// Teach the daemon what routine looks like.
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		req := Request{Cmd: "observe", Channel: "testlog",
 			Content: fmt.Sprintf("Ping seq=%d latency=%dms", i, 10+i%7)}
 		if _, err := ipcCall(home, req); err != nil {
@@ -88,7 +88,7 @@ func TestDaemonEndToEnd(t *testing.T) {
 
 	// Push the channel past its burst allowance and confirm the
 	// suppressed count survives onto the wire.
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		req := Request{Cmd: "observe", Channel: "testlog",
 			Content: fmt.Sprintf("burst shape %c happened", rune('a'+i))}
 		if _, err := ipcCall(home, req); err != nil {
@@ -216,7 +216,7 @@ func TestSpreadBudgetKeepsStrongest(t *testing.T) {
 		t.Fatal(err)
 	}
 	var weakest1, weakest2 uint64
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		f := &Fragment{Content: fmt.Sprintf("n%d", i), Surprise: 4, Time: time.Now()}
 		if _, err := s.Encode(f); err != nil {
 			t.Fatal(err)
@@ -286,7 +286,7 @@ func TestLinkConfirmationRewardAndCap(t *testing.T) {
 	}
 
 	var w float64
-	for i := uint64(0); i < 20; i++ {
+	for i := range uint64(20) {
 		d.recent = []recentMoment{{id: 1, template: "beta", at: now}}
 		d.linkMoment(&Fragment{ID: 100 + i, Template: "alpha", Time: now})
 		w = edgeWeight(t, s, 100+i, 1)
@@ -364,7 +364,7 @@ func TestEncodeRefractoryAndStormSummary(t *testing.T) {
 	d.cfg.CalibrationWarmup = 100 // keep the whole storm on the absolute floor
 	now := time.Now()
 
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		content := fmt.Sprintf("new shape %c appeared", rune('a'+i))
 		d.process(Observation{Channel: "stormy", Content: content, At: now}, false, true)
 	}
@@ -415,7 +415,7 @@ func TestForcedBypassesRefractory(t *testing.T) {
 	d.cfg.EncodeRefillSec = 60
 	now := time.Now()
 
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		content := fmt.Sprintf("note number %c", rune('a'+i))
 		res := d.process(Observation{Channel: "tell", Content: content, At: now}, true, true)
 		if !res.Conscious {
@@ -449,7 +449,7 @@ func TestPerChannelWindowSurvivesReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	counts := make(map[string]float64, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		counts[fmt.Sprintf("tail shape number %c%c", rune('a'+i/10), rune('a'+i%10))] = 4
 	}
 	if err := s.SaveModel("syslog", counts); err != nil {
@@ -470,7 +470,7 @@ func TestPerChannelWindowSurvivesReload(t *testing.T) {
 	if p == nil || p.window != 8192 {
 		t.Fatalf("the restored model should carry its configured window, got %+v", p)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		p.Learn("a fresh shape")
 	}
 	if len(p.counts) < 100 {
@@ -517,14 +517,14 @@ func TestIdleDoesNotBankTokens(t *testing.T) {
 	d.cfg.CalibrationWarmup = 100
 	now := time.Now()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		content := fmt.Sprintf("early shape %c", rune('a'+i))
 		d.process(Observation{Channel: "idle", Content: content, At: now}, false, true)
 	}
 	before, _ := s.Count()
 
 	later := now.Add(time.Hour)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		content := fmt.Sprintf("later shape %c", rune('a'+i))
 		d.process(Observation{Channel: "idle", Content: content, At: later}, false, true)
 	}
@@ -602,7 +602,7 @@ func TestTellAboutBindsRetroactively(t *testing.T) {
 func TestTellBindsAndRecallSpreads(t *testing.T) {
 	home, done := startTestDaemon(t)
 
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		req := Request{Cmd: "observe", Channel: "testlog",
 			Content: fmt.Sprintf("Ping seq=%d latency=%dms", i, 10+i%7)}
 		if _, err := ipcCall(home, req); err != nil {
@@ -689,7 +689,7 @@ func TestTellBindsAndRecallSpreads(t *testing.T) {
 func TestDaemonMemoryAcrossRestart(t *testing.T) {
 	home, done := startTestDaemon(t)
 
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		req := Request{Cmd: "observe", Channel: "testlog",
 			Content: fmt.Sprintf("Ping seq=%d latency=%dms", i, 10+i%7)}
 		if _, err := ipcCall(home, req); err != nil {

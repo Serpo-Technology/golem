@@ -26,6 +26,9 @@ func readEvents(t *testing.T, home string) []Event {
 		}
 		out = append(out, ev)
 	}
+	if err := sc.Err(); err != nil {
+		t.Fatal(err)
+	}
 	return out
 }
 
@@ -62,7 +65,7 @@ func TestEventLogRotates(t *testing.T) {
 	}
 	l.maxBytes = 512
 	l.checkEvery = 8
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		if err := l.Append(Event{At: int64(i), Ev: "encode", Channel: "testlog",
 			Tpl: "some shape that takes a little room"}); err != nil {
 			t.Fatal(err)
@@ -87,7 +90,7 @@ func TestEventLogRotates(t *testing.T) {
 func TestDaemonWritesTrail(t *testing.T) {
 	home, done := startTestDaemon(t)
 
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		req := Request{Cmd: "observe", Channel: "testlog",
 			Content: fmt.Sprintf("Ping seq=%d latency=%dms", i, 10+i%7)}
 		if _, err := ipcCall(home, req); err != nil {
