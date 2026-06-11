@@ -378,22 +378,25 @@ func (d *Daemon) planQuestion(frame Frame) string {
 						Agent:   Term{Phrase: ranked[0].speak},
 						Action:  Term{Phrase: "precede"},
 						Habit:   true,
+						Past:    frame.Past,
 						Patient: anchorTerm,
 					}, chem)
 				}
-				// "After make test, make deploy usually follows."
+				// "After make test, make deploy usually follows." A past
+				// question gets a past answer.
 				return Realize(Frame{
 					Force:  ForceStatement,
 					Agent:  Term{Phrase: ranked[0].speak},
 					Action: Term{Phrase: "follow"},
 					Habit:  true,
+					Past:   frame.Past,
 					Rel:    frame.Rel,
 					Anchor: anchorTerm,
 				}, chem)
 			}
 		}
 		return Realize(Frame{Force: ForceStatement, Action: Term{Phrase: "know"},
-			Negate: true, Rel: frame.Rel, Anchor: anchorTerm}, chem)
+			Negate: true, Past: frame.Past, Rel: frame.Rel, Anchor: anchorTerm}, chem)
 	}
 
 	// "What is X": definitions read the concept layer.
@@ -404,10 +407,11 @@ func (d *Daemon) planQuestion(frame Frame) string {
 	if topic.Concept != nil {
 		c := topic.Concept
 		tally, _ := d.store.GroundingTally()
-		kindWord := "a thing"
+		kind := "thing"
 		if c.Category == "verb" {
-			kindWord = "an action"
+			kind = "action"
 		}
+		kindWord := indefinite(kind)
 		tentative := false
 		var parts []string
 		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {

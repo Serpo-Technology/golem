@@ -41,7 +41,9 @@ var innateCategory = map[string]string{
 	"do": catImp, "run": catImp, "execute": catImp, "show": catImp, "retry": catImp, "try": catImp,
 	"the": catDet, "a": catDet, "an": catDet, "my": catDet, "your": catDet,
 	"is": catCop, "are": catCop, "was": catCop, "were": catCop,
-	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap, "follow": catHap, "come": catHap, "happen": catHap,
+	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap, "came": catHap,
+	"follow": catHap, "come": catHap, "happen": catHap,
+	"precedes": catHap, "preceded": catHap, "precede": catHap,
 	"not": catNeg, "never": catNeg, "no": catNeg, "cannot": catNeg,
 	"i": catFn, "you": catFn, "we": catFn, "me": catFn, "us": catFn,
 	"to": catFn, "of": catFn, "in": catFn, "on": catFn, "at": catFn, "and": catFn, "or": catFn,
@@ -52,6 +54,20 @@ var innateCategory = map[string]string{
 func isFunctionWord(w string) bool {
 	_, ok := innateCategory[w]
 	return ok
+}
+
+// happenVerbs maps each event-verb surface form to the predicate it
+// fills and the tense it carries, so "followed" and "follows" land in
+// one concept with the time told apart. Succession verbs collapse onto
+// "follow"; precedence verbs onto its inverse.
+var happenVerbs = map[string]struct {
+	base string
+	past bool
+}{
+	"happens": {"follow", false}, "happen": {"follow", false}, "happened": {"follow", true},
+	"follows": {"follow", false}, "follow": {"follow", false}, "followed": {"follow", true},
+	"comes": {"follow", false}, "come": {"follow", false}, "came": {"follow", true},
+	"precedes": {"precede", false}, "precede": {"precede", false}, "preceded": {"precede", true},
 }
 
 // tokenize lowercases an utterance and splits it into word tokens,
@@ -100,10 +116,12 @@ const (
 
 // Term is one filled thematic role: a concept when the phrase grounded
 // to one, otherwise just the surface phrase, which is what lets the
-// planner admit it does not know.
+// planner admit it does not know. Number lives on the term so the verb
+// can agree with its subject instead of guessing.
 type Term struct {
 	Concept *Fragment // nil when nothing grounds the phrase
 	Phrase  string
+	Plural  bool
 }
 
 func (t Term) empty() bool { return t.Concept == nil && t.Phrase == "" }
@@ -129,9 +147,10 @@ type Frame struct {
 	Patient Term   // what is acted on or asked about
 	Rel     string // temporal qualifier on the clause: "", "after", "before"
 	Anchor  Term   // what the qualifier attaches to
+	Past    bool   // tense: the clause is about a settled moment, "followed" against "follows"
 	Negate  bool   // the predicate is denied
 	Hedge   bool   // the claim is tentative ("may name")
-	Habit   bool   // the clause states a habit ("usually")
+	Habit   bool   // habitual aspect: the clause states a regularity ("usually")
 	Times   int    // occurrence count, for "I have seen it N times"
 	Pro     bool   // the patient was a pro-form; resolve it from the workspace
 	Again   bool   // repetition was requested
@@ -180,12 +199,27 @@ func Parse(utterance string, resolve func(string) *Fragment) Frame {
 		}
 	}
 	for _, tok := range main {
+		// The do-auxiliary carries tense for the clause; "was" and
+		// "were" carry it for the copula. Both leave the predicate to
+		// the verb that follows.
+		if tok == "did" {
+			f.Past = true
+			flush()
+			continue
+		}
 		switch innateCategory[tok] {
 		case catHap:
-			f.Action = Term{Phrase: "follow"}
+			v := happenVerbs[tok]
+			f.Action = Term{Phrase: v.base}
+			if v.past {
+				f.Past = true
+			}
 			flush()
 		case catCop:
 			f.Action = Term{Phrase: "be"}
+			if tok == "was" || tok == "were" {
+				f.Past = true
+			}
 			flush()
 		case catPro:
 			f.Pro = true
@@ -274,59 +308,77 @@ func Realize(f Frame, chem LimbicState) string {
 	if subject == "" {
 		subject = "I"
 	}
+	firstPerson := subject == "I"
+	plural := f.Agent.Plural
 	b.WriteString(subject)
 
 	switch f.Action.Phrase {
-	case "follow", "precede":
+	case "follow", "precede", "happen", "fail", "run":
 		verb := f.Action.Phrase
+		b.WriteString(" ")
 		switch {
 		case f.Negate:
-			// A denial must never come out as its opposite.
-			b.WriteString(" does not ")
-			b.WriteString(verb)
-		case chem.Oxytocin < oxytocinBaseline:
+			// A denial must never come out as its opposite. The
+			// auxiliary carries agreement and tense; do-support works
+			// the same for every verb here.
+			b.WriteString(negatedVerb(verb, firstPerson, plural, f.Past))
+		case chem.Oxytocin < oxytocinBaseline || f.Hedge:
 			// A recently corrected system hedges its inferences.
-			b.WriteString(" may ")
-			b.WriteString(verb)
+			b.WriteString(hedgedVerb(verb, f.Past))
 		case f.Habit:
-			b.WriteString(" usually ")
-			b.WriteString(verb)
-			b.WriteString("s")
+			b.WriteString("usually ")
+			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
 		default:
-			b.WriteString(" ")
-			b.WriteString(verb)
-			b.WriteString("s")
+			b.WriteString(finiteVerb(verb, firstPerson, plural, f.Past))
 		}
 		if !f.Patient.empty() {
 			b.WriteString(" ")
 			b.WriteString(f.Patient.speak())
 		}
 	case "know":
+		// A knowledge claim is about now even when the gap it names is
+		// about then: "I do not know what followed make test yet." The
+		// tense lives in the embedded clause alone.
+		b.WriteString(" ")
 		if f.Negate {
-			b.WriteString(" do not know ")
+			b.WriteString(negatedVerb("know", firstPerson, plural, false))
 		} else {
-			b.WriteString(" know ")
+			b.WriteString(finiteVerb("know", firstPerson, plural, false))
 		}
+		b.WriteString(" ")
 		b.WriteString(embeddedClause(f))
 		b.WriteString(" yet")
 	case "be":
 		if f.Force == ForceQuestion {
 			return sentence("what is "+f.Patient.speak(), "?")
 		}
-		b.WriteString(" is ")
+		b.WriteString(" ")
+		be := beForm(firstPerson, plural, f.Past)
+		if f.Negate {
+			be += " not"
+		}
+		b.WriteString(be)
+		b.WriteString(" ")
 		b.WriteString(f.Patient.speak())
 	case "name":
+		b.WriteString(" ")
 		if f.Hedge {
-			b.WriteString(" may name ")
+			b.WriteString(hedgedVerb("name", f.Past))
 		} else {
-			b.WriteString(" names ")
+			b.WriteString(finiteVerb("name", firstPerson, plural, f.Past))
 		}
+		b.WriteString(" ")
 		b.WriteString(f.Patient.speak())
 	case "propose":
-		b.WriteString(" propose ")
+		b.WriteString(" ")
+		b.WriteString(finiteVerb("propose", firstPerson, plural, f.Past))
+		b.WriteString(" ")
 		b.WriteString(f.Patient.speak())
 	case "see":
-		b.WriteString(" have seen ")
+		// The experiential perfect: what the count of moments amounts to.
+		b.WriteString(" have ")
+		b.WriteString(pastPart("see"))
+		b.WriteString(" ")
 		b.WriteString(f.Patient.speak())
 		b.WriteString(" ")
 		b.WriteString(timesWord(f))
@@ -340,16 +392,17 @@ func Realize(f Frame, chem LimbicState) string {
 }
 
 // embeddedClause renders the thing not known: a patient phrase, or the
-// wh-clause a temporal question asked about.
+// wh-clause a temporal question asked about, inflected for the tense
+// the question carried.
 func embeddedClause(f Frame) string {
 	if !f.Patient.empty() {
 		return f.Patient.speak()
 	}
 	if f.Rel == "before" {
-		return "what precedes " + f.Anchor.speak()
+		return "what " + finiteVerb("precede", false, false, f.Past) + " " + f.Anchor.speak()
 	}
 	if f.Rel == "after" {
-		return "what follows " + f.Anchor.speak()
+		return "what " + finiteVerb("follow", false, false, f.Past) + " " + f.Anchor.speak()
 	}
 	return "that"
 }
