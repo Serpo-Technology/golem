@@ -6,7 +6,7 @@ GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. 
 
 ## What Runs Today
 
-The current build is the observation half of the design, on one synthetic log channel:
+The build covers the whole loop the design describes: observation, memory, association, language, and gated action. In detail:
 
 - A normalizer collapses the variable parts of each line (numbers, hex, UUIDs, timestamps, IPs, paths) so prediction runs on line shapes.
 - A forgetting frequency model scores Shannon surprise per shape. It habituates to repeated anomalies, adapts when the channel's normal drifts, and stays bounded no matter how long it runs.
@@ -22,11 +22,19 @@ The current build is the observation half of the design, on one synthetic log ch
 - A cue can propose an action. `golem propose "run the tests"` weighs the commands that cue has been grounded to and proposes the strongest, or asks when two are too close to call. Approvals strengthen the grounding and, after a few consistent ones, graduate the pair to autonomous; a denial demotes it. Destructive commands (a denylist covering `rm -rf`, `shutdown`, force-pushes, and the like) can be proposed but never graduate, and every decision lands in an audit trail.
 - Commands run for real only when three gates all pass: execution is switched on, the command is not on the denylist, and it matches the operator's allowlist. All three ship closed (execution off, allowlist empty), so turning it on takes a deliberate edit to `config.json` and a restart. A graduated, allowed command runs autonomously when its cue is proposed; a run that fails demotes the pair, and every outcome feeds back into memory.
 - `golem demo decide` runs the whole loop on throwaway memory: grounding, graduation, the ambiguity veto, and the safety denylist, in about a second.
-- A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `tell`, `recall`, `propose`, `approve`, `deny`, `habits`, `audit`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
+- A CLI talks to the running daemon over a local socket: `status`, `chem`, `observe`, `tell`, `recall`, `concepts`, `teach`, `propose`, `approve`, `deny`, `habits`, `audit`, `dump`, `stop`, plus `launchd` to print a start-at-login plist.
 - Built-in senses, selected in config: file events in watched directories (bucketed to operation, extension, and parent directory), system vitals banded into words (cpu load, memory pressure, disk space), and the macOS unified log filtered to errors and faults. `golem shellhook` prints a zsh hook that feeds the shell channel with commands and their failures.
 - Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
+- Memory is one graph with three node kinds (episodic moments, language-tagged words, amodal concepts) under typed edges: temporal co-occurrence, directed order, names, and grounds.
+- Order is learned by spike timing: a moment binds forward to what followed it, and no edge is written backward. Sleep replay weaves the same directed edges along the day it re-fires, so "what usually happens after make test" is answered by reading edges.
+- Concepts are born during sleep from shapes that recurred into prototypes. Each carries a lemma category derived from its grounding role (a command shape is verb-like, a recurring sensory shape noun-like) and grounds out to the episodes that instantiate it. Serotonin paces how many concepts one night may mint.
+- Spoken words become word nodes bound to the moments around them. The night's naming pass bonds each word to the concepts its moments ground, at a dopamine-gated rate; bonds that stop recurring decay. Forms from any language converge on one concept once grounded alike, so "testler" recalls what "tests" recalls.
+- `golem recall` reads through the lexicon as well as by substring: query words name concepts, concepts ground moments, and paraphrases land together. The reply shows the concept the meaning walked through.
+- A workspace holds decaying activation over concepts across ticks and turns, so "do it again" resolves to the warmest verb-like concept. Sleep clears it.
+- `golem tell` parses each utterance into a concept-frame with an innate grammar and reads its force. Questions are answered with constructed sentences ("After make test, make deploy usually follows."), unknowns are admitted ("I do not know flibber yet."), high dopamine asks back about new words, and low oxytocin hedges the claim ("may follow"). A command stages a proposal behind the same approve gate as always; speech never executes anything by itself.
+- `golem concepts` lists the abstraction layer: each concept, the words that name it per language, its grounding tally, and its current workspace warmth.
 
-Everything below describes the design target. [ROADMAP.md](ROADMAP.md) tracks the path from here to there.
+[ROADMAP.md](ROADMAP.md) tracks how the build got here and what stays open; the GUI memory editor below is the part still ahead of the code.
 
 ---
 
@@ -89,9 +97,10 @@ If two pathways (e.g., "Mop the Floor" vs. "Clear the Logs") are both firing wit
 
 ### 6. The Workspace (Sustained Activation)
 
-Today GOLEM's activation is momentary: a cue spreads two hops through the link graph and the pattern dies when the query returns. A mind holds its active thoughts. The **Workspace** keeps a decaying activation pattern alive across ticks and turns, so the most active concepts stay warm between one utterance and the next.
+A mind holds its active thoughts. The **Workspace** keeps a decaying activation pattern alive across ticks and turns, so the most active concepts stay warm between one utterance and the next.
 
 - **Dialogue memory:** "do it again" and "that one" resolve to whatever is still warm in the buffer.
+- **What warms it:** a moment of a known shape, words that name a concept, and every concept an answer walks through. Each homeostasis tick cools the pattern, and sleep clears it: working memory does not survive the night.
 - **The broadcast:** sustained, re-broadcast activation is the substrate the Global Workspace theory of consciousness points to, and the seat of a future inner loop where GOLEM perceives its own active concepts.
 
 ### 7. Grammar and Speech (Broca & Wernicke)
@@ -149,6 +158,7 @@ GOLEM uses **Synaptic Scaling** during its "Sleep Cycle" to decide what stays.
 - Every "Night," GOLEM reduces the weight of all fragments by 10%.
 - If a fragment's weight ≤ a threshold (e.g., 0.1), it is **permanently deleted**.
 - **Result:** Repetitive, boring data fades away. Rare, high-impact events (like a system crash) stay forever.
+- Word and concept nodes sit outside the nightly fade. They die by disconnection instead: a word vanishes when its last edge does, and a concept vanishes when nothing grounds it anymore.
 
 ---
 
@@ -156,9 +166,9 @@ GOLEM uses **Synaptic Scaling** during its "Sleep Cycle" to decide what stays.
 
 GOLEM features an automated "Sleep" phase triggered by high Serotonin and low input.
 
-1. **Replay:** The system reactivates the day's "surprising" fragments.
+1. **Replay:** The system reactivates the day's "surprising" fragments in order, weaving cross-channel links and directed successor edges the waking window missed.
 2. **Synaptic Downscaling:** Global weight reduction of all memories. Weak/noisy fragments are pruned (deleted).
-3. **Abstraction:** Multiple specific fragments are compressed into "General Rules."
+3. **Abstraction:** Recurring shapes merge into prototype fragments, prototypes distil into concept nodes, and the day's words bond to the concepts their moments ground.
 
 ---
 
@@ -180,6 +190,9 @@ git clone https://github.com/user/golem.git
 # Run the synthetic demo (it observes, sleeps, and exits on its own)
 go run . demo
 
+# Watch concepts, words, and built sentences emerge from one day
+go run . demo language
+
 # Run the tests
 go test ./...
 
@@ -191,6 +204,9 @@ go build -o golem .
 ./golem observe shell "run: make test"
 ./golem status
 ./golem recall disk
+./golem tell "what usually happens after make test"
+./golem tell --lang tr "testler temiz"
+./golem concepts
 ./golem stop
 
 # Optional: feed your shell into GOLEM (open a new shell afterward)
