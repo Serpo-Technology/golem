@@ -385,10 +385,8 @@ English question reaches.
 - Cross-channel calibration windows: tuned per channel class or shared.
 - Whether serotonin should also gate sensor sampling rates (the GABA idea
   from the v2 table).
-- Naming noise: early word-concept bonds are greedy by design, and decay
-  against repetition is the only cleaner. Whether bonds should also
-  weaken actively when a word recurs without its concept (the mismatch
+- Naming noise: early word-concept bonds are greedy by design. A bond far
+  weaker than a concept's firmest name is now spoken tentatively, and decay
+  against repetition still removes the bond over time. Whether a bond should
+  also weaken actively when a word recurs without its concept (the mismatch
   signal) is open.
-- A second realizer (Turkish first) to prove the grammar's
-  language-independence claim end to end; word forms already attach to
-  concepts in any language.
