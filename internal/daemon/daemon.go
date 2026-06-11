@@ -99,6 +99,18 @@ type Daemon struct {
 	waiting   []*queuedAction
 	execDone  chan execResult
 
+	// Thinking fans out the way actions do: specialists compute on a
+	// snapshot and post through one channel, the loop arbitrates and
+	// commits. thinking counts the open round's in-flight specialists,
+	// thinkEpoch stamps rounds so sleep can invalidate stale ones, and
+	// thinkSeed remembers what the round was about.
+	thinkDone     chan thoughtCandidate
+	thinking      int
+	thinkEpoch    uint64
+	thinkRound    []thoughtCandidate
+	thinkSeed     uint64
+	thinkSeedHeat float64
+
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
 	events *events.Log
@@ -253,6 +265,7 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		stop:         make(chan struct{}),
 		running:      make(map[uint64]*actionRun),
 		execDone:     make(chan execResult, 16),
+		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
 	}
@@ -416,6 +429,9 @@ func (d *Daemon) Run() error {
 		case res := <-d.execDone:
 			d.finishRun(res)
 
+		case cand := <-d.thinkDone:
+			d.absorbThought(cand)
+
 		case <-homeostasis.C:
 			d.chem.Decay()
 			d.ws.decay()
@@ -425,10 +441,10 @@ func (d *Daemon) Run() error {
 			}
 			if d.readyToSleep() {
 				d.sleepCycle()
-			} else if d.mindWandering() {
-				// One step of the inner loop per idle tick: replay run
-				// awake, bounded so the inner life never crowds sensing.
-				d.thinkStep()
+			} else if d.thinking == 0 && d.mindWandering() {
+				// One think round at a time: replay run awake, bounded
+				// so the inner life never crowds sensing.
+				d.startThinkRound()
 			}
 
 		case <-sigc:
@@ -575,6 +591,9 @@ func (d *Daemon) handleNow(req wire.Request) (wire.Response, bool) {
 			return resp, quit
 		case res := <-d.execDone:
 			d.finishRun(res)
+
+		case cand := <-d.thinkDone:
+			d.absorbThought(cand)
 		}
 	}
 }
@@ -1049,6 +1068,9 @@ func (d *Daemon) sleepCycle() {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
 	}
 	d.chem.WakeRested()
+	// Consolidation rewrote the graph a thought round may be reading;
+	// candidates from before this moment are stale on arrival.
+	d.thinkEpoch++
 	d.sleeps++
 	d.lastSleep = time.Now()
 	held, _ := d.store.Count()

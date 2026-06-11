@@ -152,6 +152,7 @@ func testDaemon(t *testing.T) (*Daemon, *memory.Store) {
 		pendingStorm: make(map[string]int),
 		running:      make(map[uint64]*actionRun),
 		execDone:     make(chan execResult, 16),
+		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
 	}, s

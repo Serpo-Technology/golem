@@ -7,6 +7,7 @@ import (
 
 	"golem/internal/memory"
 	"golem/internal/senses"
+	"golem/internal/wire"
 )
 
 // The inner loop is replay run while awake. When perception is quiet and
@@ -138,44 +139,246 @@ func (d *Daemon) associations(seed uint64) ([]assocEdge, error) {
 	return out, nil
 }
 
-// thinkStep is one step of the inner loop: the warmest concept hands a
-// share of its warmth to its strongest associations, steps back, and
-// the transition re-enters perception as a thought.
-func (d *Daemon) thinkStep() {
+// A thought round is the parallel substrate under a serial arbiter:
+// the loop builds an immutable snapshot of what is warm, hand-coded
+// specialists (a spreader, a predictor, a recaller, a decider) compute
+// on it concurrently and post one candidate each through one channel,
+// and the loop arbitrates winner-take-all and commits every mutation
+// single-threaded: the snapshot-in, candidate-out, loop-commits pattern
+// the execution layer already proved. Specialists never touch the
+// store or the daemon, which is what keeps concurrent thought from
+// racing the graph.
+
+// thoughtSnapshot is everything a specialist may read: the warm seed
+// and its one-step neighborhood, prefetched on the loop.
+type thoughtSnapshot struct {
+	epoch     uint64
+	seed      uint64
+	seedGloss string
+	seedHeat  float64
+	assoc     []assocEdge
+	sharp     sharpMemory
+	plan      deliberation
+}
+
+// sharpMemory is the seed's most stressful grounded moment, the
+// recaller's material.
+type sharpMemory struct {
+	content string
+	na      float64
+	ok      bool
+}
+
+// deliberation is the seed's actionable face when it is verb-like: the
+// command its groundings would propose, never staged and never run.
+type deliberation struct {
+	command  string
+	saliency float64
+	conflict bool
+	ok       bool
+}
+
+// thoughtCandidate is one specialist's offer: a thought as perception
+// would see it, the workspace changes it implies, and the saliency the
+// arbiter weighs.
+type thoughtCandidate struct {
+	epoch    uint64
+	source   string
+	content  string
+	seed     uint64
+	seedHeat float64
+	warm     []uint64
+	strength float64
+	ok       bool
+}
+
+// startThinkRound snapshots the warm seed and fans the specialists out.
+// One round in flight at a time; the round is stamped with the current
+// epoch so sleep can invalidate it.
+func (d *Daemon) startThinkRound() {
+	if d.thinking > 0 {
+		return
+	}
 	seeds := d.ws.warmest(1)
 	if len(seeds) == 0 || seeds[0].heat < thinkSeedFloor {
 		return
 	}
-	seed := seeds[0]
-	seedFrags, err := d.store.FragmentsByIDs([]uint64{seed.id})
+	seedFrags, err := d.store.FragmentsByIDs([]uint64{seeds[0].id})
 	if err != nil || len(seedFrags) != 1 {
 		return
 	}
-	assoc, err := d.associations(seed.id)
-	if err != nil {
+	seed := seedFrags[0]
+	sn := thoughtSnapshot{
+		epoch:     d.thinkEpoch,
+		seed:      seed.ID,
+		seedGloss: seed.Content,
+		seedHeat:  seeds[0].heat,
+	}
+	if sn.assoc, err = d.associations(seed.ID); err != nil {
 		fmt.Fprintf(d.out, "thinking error: %v\n", err)
 		return
 	}
-	// A seed with nowhere to go cools without a thought, so the
-	// workspace cannot ruminate on a dead end forever.
-	d.ws.cool(seed.id, thinkFatigue)
-	if len(assoc) == 0 {
-		return
+	sn.sharp = d.sharpestGrounding(seed.ID)
+	if seed.Category == "verb" {
+		if dec, err := d.conceptDecision(seed); err == nil && dec.Proposed != nil {
+			sn.plan = deliberation{
+				command:  dec.Proposed.Command,
+				saliency: dec.Proposed.Saliency,
+				conflict: dec.Conflict,
+				ok:       true,
+			}
+		}
 	}
 
-	for i, a := range assoc {
+	d.thinkSeed, d.thinkSeedHeat = sn.seed, sn.seedHeat
+	specialists := []func(thoughtSnapshot) thoughtCandidate{
+		spreadThought, predictThought, recallThought, deliberateThought,
+	}
+	d.thinking = len(specialists)
+	for _, specialist := range specialists {
+		go func(think func(thoughtSnapshot) thoughtCandidate) {
+			d.thinkDone <- think(sn)
+		}(specialist)
+	}
+}
+
+// sharpestGrounding returns the most stressful moment grounding a
+// concept, for the recaller.
+func (d *Daemon) sharpestGrounding(seed uint64) sharpMemory {
+	grounds, err := d.store.LinksFromRel([]uint64{seed}, memory.RelGrounds)
+	if err != nil || len(grounds) == 0 {
+		return sharpMemory{}
+	}
+	ids := make([]uint64, 0, len(grounds))
+	for _, g := range grounds {
+		ids = append(ids, g.To)
+	}
+	frags, err := d.fragmentsByIDsTiered(ids)
+	if err != nil || len(frags) == 0 {
+		return sharpMemory{}
+	}
+	best := frags[0]
+	for _, f := range frags {
+		if f.Limbic.Noradrenaline > best.Limbic.Noradrenaline {
+			best = f
+		}
+	}
+	return sharpMemory{content: wire.Clip(best.Content, 80), na: best.Limbic.Noradrenaline, ok: true}
+}
+
+// absorbThought reabsorbs one specialist's candidate; when the round is
+// complete the loop arbitrates and commits. A round that finishes into
+// a busy moment is discarded whole: thinking yields to perception.
+func (d *Daemon) absorbThought(cand thoughtCandidate) {
+	d.thinking--
+	if cand.ok && cand.epoch == d.thinkEpoch {
+		d.thinkRound = append(d.thinkRound, cand)
+	}
+	if d.thinking > 0 {
+		return
+	}
+	round := d.thinkRound
+	d.thinkRound = nil
+	if time.Since(d.lastObs) < d.cfg.InputSilence() {
+		return
+	}
+	if len(round) == 0 {
+		// A seed with nowhere to go cools without a thought, so the
+		// workspace cannot ruminate on a dead end forever.
+		d.ws.cool(d.thinkSeed, thinkFatigue)
+		return
+	}
+	winner := round[0]
+	for _, c := range round[1:] {
+		if c.strength > winner.strength ||
+			(c.strength == winner.strength && c.source < winner.source) {
+			winner = c
+		}
+	}
+	d.ws.cool(winner.seed, thinkFatigue)
+	for _, id := range winner.warm {
+		d.ws.excite(id, winner.seedHeat*thinkDamping)
+	}
+	d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
+}
+
+// settleThinking completes the open think round the way the Run loop
+// would, for loopless drivers: demos and tests.
+func (d *Daemon) settleThinking() {
+	for d.thinking > 0 {
+		d.absorbThought(<-d.thinkDone)
+	}
+}
+
+// spreadThought is free association: the strongest step away from the
+// seed, however the lived graph carries it.
+func spreadThought(sn thoughtSnapshot) thoughtCandidate {
+	if len(sn.assoc) == 0 {
+		return thoughtCandidate{epoch: sn.epoch, source: "spreader"}
+	}
+	top := sn.assoc[0]
+	warm := make([]uint64, 0, thinkFanout)
+	for i, a := range sn.assoc {
 		if i == thinkFanout {
 			break
 		}
-		d.ws.excite(a.concept, seed.heat*thinkDamping)
+		warm = append(warm, a.concept)
 	}
+	return thoughtCandidate{
+		epoch: sn.epoch, source: "spreader", ok: true,
+		content: fmt.Sprintf("thought: %s ~ %s", sn.seedGloss, top.gloss),
+		seed:    sn.seed, seedHeat: sn.seedHeat, warm: warm,
+		strength: top.strength * sn.seedHeat,
+	}
+}
 
-	// The step itself is a perceivable event: the strongest transition,
-	// phrased by order when order carried it. The surprise gate decides
-	// whether it is worth remembering.
-	content := fmt.Sprintf("thought: %s ~ %s", seedFrags[0].Content, assoc[0].gloss)
-	if assoc[0].ordered {
-		content = fmt.Sprintf("thought: after %s, %s", seedFrags[0].Content, assoc[0].gloss)
+// predictThought follows order: the strongest successor continuation,
+// preferred slightly over plain co-occurrence because lived sequence is
+// the brain's favored next step.
+func predictThought(sn thoughtSnapshot) thoughtCandidate {
+	for _, a := range sn.assoc {
+		if !a.ordered {
+			continue
+		}
+		return thoughtCandidate{
+			epoch: sn.epoch, source: "predictor", ok: true,
+			content: fmt.Sprintf("thought: after %s, %s", sn.seedGloss, a.gloss),
+			seed:    sn.seed, seedHeat: sn.seedHeat, warm: []uint64{a.concept},
+			strength: a.strength * sn.seedHeat * 1.05,
+		}
 	}
-	d.process(senses.Observation{Channel: thoughtChannel, Content: content, At: time.Now()}, false, true)
+	return thoughtCandidate{epoch: sn.epoch, source: "predictor"}
+}
+
+// recallThought dwells: the seed's sharpest grounded moment resurfaces,
+// quieter than an active association.
+func recallThought(sn thoughtSnapshot) thoughtCandidate {
+	if !sn.sharp.ok || sn.sharp.na == 0 {
+		return thoughtCandidate{epoch: sn.epoch, source: "recaller"}
+	}
+	return thoughtCandidate{
+		epoch: sn.epoch, source: "recaller", ok: true,
+		content: fmt.Sprintf("thought: that time: %s", sn.sharp.content),
+		seed:    sn.seed, seedHeat: sn.seedHeat,
+		strength: sn.sharp.na * sn.seedHeat * 0.8,
+	}
+}
+
+// deliberateThought notices that a warm verb concept is actionable. It
+// only ever thinks so: nothing is staged, nothing runs, and a thought
+// never cues a habit.
+func deliberateThought(sn thoughtSnapshot) thoughtCandidate {
+	if !sn.plan.ok || sn.plan.conflict {
+		return thoughtCandidate{epoch: sn.epoch, source: "decider"}
+	}
+	saliency := sn.plan.saliency
+	if saliency > 1 {
+		saliency = 1
+	}
+	return thoughtCandidate{
+		epoch: sn.epoch, source: "decider", ok: true,
+		content: fmt.Sprintf("thought: could run %s", sn.plan.command),
+		seed:    sn.seed, seedHeat: sn.seedHeat,
+		strength: saliency * sn.seedHeat * 0.6,
+	}
 }
