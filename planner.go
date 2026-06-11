@@ -11,8 +11,15 @@ import (
 // into a staged proposal under the same gates every proposal faces.
 // Speech never executes anything by itself.
 const (
-	curiosityGate  = 0.5 // dopamine above this makes GOLEM ask about unknowns
-	successorFloor = 0.1 // weaker aggregate order than this is noise
+	curiosityGate = 0.5 // dopamine above this makes GOLEM ask about unknowns
+	// One co-occurrence is an anecdote. A single fresh successor edge
+	// weighs successorBaseWeight, so the floor sits above it: claiming
+	// "usually follows" takes either repetition or a practiced edge.
+	successorFloor = 0.3
+	// spokenPhraseCap keeps a raw one-off line from swallowing the
+	// sentence built around it; concepts and templates stay short on
+	// their own.
+	spokenPhraseCap = 100
 )
 
 // resolveConcept maps a surface phrase to its strongest concept: first
@@ -158,13 +165,13 @@ func (d *Daemon) successorsOf(ids []uint64, rel string) []successorRank {
 
 // speakFor is a fragment's face in a sentence: its concept's gloss when
 // the shape has one, otherwise the raw content with the command marker
-// stripped.
+// stripped, clipped so one long log line cannot swallow the sentence.
 func (d *Daemon) speakFor(f *Fragment) string {
 	if c, err := d.store.ConceptByTemplate(f.Template); err == nil && c != nil {
 		d.ws.excite(c.ID, exciteRecall)
-		return c.Content
+		return clip(c.Content, spokenPhraseCap)
 	}
-	return strings.TrimSpace(strings.TrimPrefix(f.Content, actionPrefix))
+	return clip(strings.TrimSpace(strings.TrimPrefix(f.Content, actionPrefix)), spokenPhraseCap)
 }
 
 // warmestVerb returns the hottest verb-like concept in working memory,

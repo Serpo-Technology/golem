@@ -126,6 +126,24 @@ func TestAdmitsIgnorance(t *testing.T) {
 	}
 }
 
+// One co-occurrence is an anecdote: a pair seen a single time is not
+// spoken as a habit, and repetition is what lifts it past the floor.
+func TestSingleOccurrenceIsNotAHabit(t *testing.T) {
+	d, _ := testDaemon(t)
+	feedSequence(t, d, "run: make test", "run: make deploy", 1, time.Now().Add(-time.Hour))
+
+	resp := say(t, d, "what usually happens after make test")
+	if resp.Say != "I do not know what follows make test yet." {
+		t.Fatalf("one episode must not be asserted as a habit: %q", resp.Say)
+	}
+
+	feedSequence(t, d, "run: make test", "run: make deploy", 1, time.Now().Add(-30*time.Minute))
+	resp = say(t, d, "what usually happens after make test")
+	if resp.Say != "After make test, make deploy usually follows." {
+		t.Fatalf("a repeated pair is a habit: %q", resp.Say)
+	}
+}
+
 // A definition question reads the lexicon: the word names its concept,
 // and the grounding tally counts the experience behind it.
 func TestAnswersDefinitionQuestion(t *testing.T) {
