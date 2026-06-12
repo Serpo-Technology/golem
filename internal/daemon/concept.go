@@ -433,9 +433,32 @@ func (d *Daemon) conceptInfos() ([]*wire.ConceptInfo, error) {
 			namesOf[e.To] = append(namesOf[e.To], fmt.Sprintf("%s(%s)", w.Content, w.Lang))
 		}
 	}
+	featEdges, err := d.store.LinksFromRel(ids, memory.RelFeature)
+	if err != nil {
+		return nil, err
+	}
+	featIDs := make([]uint64, 0, len(featEdges))
+	for _, e := range featEdges {
+		featIDs = append(featIDs, e.To)
+	}
+	feats, err := d.store.FragmentsByIDs(featIDs)
+	if err != nil {
+		return nil, err
+	}
+	featByID := make(map[uint64]string, len(feats))
+	for _, f := range feats {
+		featByID[f.ID] = f.Content
+	}
+	featuresOf := make(map[uint64][]string)
+	for _, e := range featEdges {
+		if name, ok := featByID[e.To]; ok {
+			featuresOf[e.From] = append(featuresOf[e.From], name)
+		}
+	}
 	infos := make([]*wire.ConceptInfo, 0, len(concepts))
 	for _, c := range concepts {
 		sort.Strings(namesOf[c.ID])
+		sort.Strings(featuresOf[c.ID])
 		infos = append(infos, &wire.ConceptInfo{
 			ID:       c.ID,
 			Gloss:    c.Content,
@@ -443,6 +466,7 @@ func (d *Daemon) conceptInfos() ([]*wire.ConceptInfo, error) {
 			Names:    namesOf[c.ID],
 			Grounded: tally[c.ID],
 			Heat:     d.ws.heat(c.ID),
+			Features: featuresOf[c.ID],
 		})
 	}
 	return infos, nil

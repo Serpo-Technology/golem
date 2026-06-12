@@ -4,7 +4,38 @@ import (
 	"sort"
 
 	"golem/internal/memory"
+	"golem/internal/wire"
 )
+
+// recallSeeds is the recall faculty's core, shared by the CLI verb and
+// the autonomous act: literal matches from both tiers, widened through
+// the lexicon so paraphrases that share concepts land together, then
+// through the feature layer so a phrasing never seen still lands near
+// what it resembles. The mediating word, concept, and feature nodes
+// come back for replies that want to show the path the match took.
+func (d *Daemon) recallSeeds(query string) ([]*memory.Fragment, []*wire.FragmentInfo, error) {
+	seeds, err := d.recallTiered(query, 3)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Meaning widens the literal match: words of the query name
+	// concepts, and what those concepts ground joins the seeds even
+	// with no substring in common.
+	grounded, mediators := d.semanticSeeds(query)
+	resembled, featureMeds := d.featureSeeds(query)
+	mediators = append(mediators, featureMeds...)
+	seen := make(map[uint64]bool, len(seeds))
+	for _, f := range seeds {
+		seen[f.ID] = true
+	}
+	for _, f := range append(grounded, resembled...) {
+		if !seen[f.ID] {
+			seen[f.ID] = true
+			seeds = append(seeds, f)
+		}
+	}
+	return seeds, mediators, nil
+}
 
 // recallTiered answers a query from the hot working set first, topping up
 // from the archive and promoting what it fetched. Hot hits still write

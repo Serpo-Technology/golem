@@ -15,38 +15,42 @@ import (
 // surface form in some language, a concept node is the amodal hub that
 // words name and episodes instantiate, an operation node is one setting
 // of the think primitive whose weight is the learned preference for that
-// kind of thought, and a grammar node is one entrenched parameter of the
-// language faculty.
+// kind of thought, a grammar node is one entrenched parameter of the
+// language faculty, and a feature node is one interpretable attribute
+// that concepts share, the sparse layer similarity reads.
 const (
 	KindEpisodic  = "episodic"
 	KindWord      = "word"
 	KindConcept   = "concept"
 	KindOperation = "operation"
 	KindGrammar   = "grammar"
+	KindFeature   = "feature"
 )
 
 // An edge's relation types the association: temporal is co-occurrence
 // (bidirectional), successor is order (directed, earlier to later), names
-// points a word at its concept, and grounds points a concept at the
-// episodes that instantiate it.
+// points a word at its concept, grounds points a concept at the episodes
+// that instantiate it, and feature points a concept at an attribute its
+// lived experience exhibits, weighted by how much of it does.
 const (
 	RelTemporal  = "temporal"
 	RelSuccessor = "successor"
 	RelNames     = "names"
 	RelGrounds   = "grounds"
+	RelFeature   = "feature"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."
 //
 // This struct is the most important thing in the whole project. It is the
-// REPRESENTATION CONTRACT — the membrane every specialized module reads from
-// and writes to. The predictor, the hippocampus, the (future) basal ganglia
-// all agree on this shape. Get it right and the parts compose; get it wrong
+// REPRESENTATION CONTRACT: the membrane every specialized module reads from
+// and writes to. The predictor, the hippocampus, and the basal ganglia all
+// agree on this shape. Get it right and the parts compose; get it wrong
 // and you rewrite everything. Expect to fight with this file.
 type Fragment struct {
 	ID       uint64       // assigned by the hippocampus on encode
 	Channel  string       // the "labeled line" it arrived on (which sense)
-	Content  string       // the raw observation — a pointer to the experience
+	Content  string       // the raw observation that points at the experience
 	Template string       // normalized shape of Content; what prediction runs on
 	Surprise float64      // information-theoretic surprise (bits) that birthed it
 	Limbic   limbic.State // neurochemical snapshot at the instant of encoding

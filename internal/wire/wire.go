@@ -57,8 +57,8 @@ type VoiceInfo struct {
 
 // ConceptInfo is the wire form of one concept node: its gloss, its lemma
 // category, the words that name it tagged by language, how much
-// experience grounds it, and how warm it currently sits in the
-// workspace.
+// experience grounds it, how warm it currently sits in the workspace,
+// and the sparse feature signature its experience earned.
 type ConceptInfo struct {
 	ID       uint64   `json:"id"`
 	Gloss    string   `json:"gloss"`
@@ -66,6 +66,7 @@ type ConceptInfo struct {
 	Names    []string `json:"names,omitempty"`
 	Grounded int      `json:"grounded"`
 	Heat     float64  `json:"heat,omitempty"`
+	Features []string `json:"features,omitempty"`
 }
 
 // LinkInfo is the wire form of one association edge, set on dump so the
@@ -137,6 +138,7 @@ type StatusInfo struct {
 	Running        []string                `json:"running,omitempty"` // in-flight actions, oldest first
 	Queued         int                     `json:"queued,omitempty"`  // actions waiting on claims or a slot
 	Warm           []*WarmInfo             `json:"warm,omitempty"`    // workspace concepts, hottest first
+	Goal           string                  `json:"goal,omitempty"`    // the held intention, when one is open
 }
 
 // WarmInfo is one workspace entry: a concept gloss and its activation.

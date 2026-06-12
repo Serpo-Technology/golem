@@ -17,6 +17,7 @@ const (
 	catAdv   = "adv"   // adverbs of habit
 	catAgain = "again" // the repetition pro-verb modifier
 	catPro   = "pro"   // pro-forms: resolve from the workspace
+	catOth   = "oth"   // "other": shift a pro-form past the warmest referent
 	catImp   = "imp"   // imperative openers: command force
 	catDet   = "det"   // determiners: skipped during resolution
 	catCop   = "cop"   // copulas: definition questions
@@ -47,19 +48,33 @@ var innateCategory = map[string]string{
 	"usually": catAdv, "always": catAdv, "often": catAdv, "sometimes": catAdv,
 	"again": catAgain,
 	"it":    catPro, "that": catPro, "this": catPro, "them": catPro, "one": catPro,
-	"do": catImp, "run": catImp, "execute": catImp, "show": catImp, "retry": catImp, "try": catImp,
+	"other": catOth,
+	"do":    catImp, "run": catImp, "execute": catImp, "show": catImp, "retry": catImp, "try": catImp,
+	"recall": catImp, "remember": catImp, "consolidate": catImp, "tidy": catImp, "introspect": catImp,
 	"the": catDet, "a": catDet, "an": catDet, "my": catDet, "your": catDet,
 	"is": catCop, "are": catCop, "was": catCop, "were": catCop,
 	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap, "came": catHap,
 	"follow": catHap, "come": catHap, "happen": catHap,
 	"precedes": catHap, "preceded": catHap, "precede": catHap,
+	"think": catHap, "thinking": catHap, "thought": catHap,
 	"not": catNeg, "never": catNeg, "no": catNeg, "cannot": catNeg,
 	"many": catCnt, "much": catCnt,
 	"i": catFn, "you": catFn, "we": catFn, "me": catFn, "us": catFn,
 	"to": catFn, "of": catFn, "in": catFn, "on": catFn, "at": catFn, "and": catFn, "or": catFn,
 	"does": catFn, "did": catFn, "next": catFn, "then": catFn, "now": catFn, "yet": catFn,
-	"please": catFn, "know": catFn, "about": catFn, "with": catFn, "for": catFn,
+	"please": catFn, "know": catFn, "about": catFn, "with": catFn, "for": catFn, "as": catFn,
 	"times": catFn, "time": catFn,
+}
+
+// imperativeIntents maps the faculty verbs onto the acts they invoke:
+// an utterance opening with one carries an intent over GOLEM's own
+// action space rather than a cue for an external command. The mapping
+// is engine procedure; whether a form still parses as imperative is the
+// memory-backed closed class's call.
+var imperativeIntents = map[string]string{
+	"recall": "recall", "remember": "recall",
+	"consolidate": "consolidate", "tidy": "consolidate",
+	"introspect": "introspect",
 }
 
 // happenVerbs maps each event-verb surface form to the predicate it
@@ -72,6 +87,7 @@ var happenVerbs = map[string]hapEntry{
 	"follows": {"follow", false}, "follow": {"follow", false}, "followed": {"follow", true},
 	"comes": {"follow", false}, "come": {"follow", false}, "came": {"follow", true},
 	"precedes": {"precede", false}, "precede": {"precede", false}, "preceded": {"precede", true},
+	"think": {"think", false}, "thinking": {"think", false}, "thought": {"think", true},
 }
 
 // Parse runs the innate grammar backward with the built-in parameter
@@ -106,6 +122,11 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 		f.Wh = tokens[0]
 	case p.category("en", tokens[0]) == catImp:
 		f.Force = ForceCommand
+		// A faculty verb opens an intent over GOLEM's own acts; the
+		// generic openers (do, run) leave the whole utterance as the cue.
+		if intent, ok := imperativeIntents[tokens[0]]; ok {
+			f.Action = Term{Phrase: intent}
+		}
 	case question:
 		f.Force = ForceQuestion
 	}
@@ -166,17 +187,23 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 		switch p.category("en", tok) {
 		case catHap:
 			// The span before the verb closes as the subject before the
-			// flag flips; what follows is the object.
+			// flag flips; what follows is the object. A faculty intent
+			// already in the action slot keeps it: "recall what happened"
+			// stays a recall.
 			flush()
 			v, _ := p.hap("en", tok)
-			f.Action = Term{Phrase: v.base}
+			if f.Force != ForceCommand || f.Action.Empty() {
+				f.Action = Term{Phrase: v.base}
+			}
 			if v.past {
 				f.Past = true
 			}
 			verbSeen = true
 		case catCop:
 			flush()
-			f.Action = Term{Phrase: "be"}
+			if f.Force != ForceCommand || f.Action.Empty() {
+				f.Action = Term{Phrase: "be"}
+			}
 			if tok == "was" || tok == "were" {
 				f.Past = true
 			}
@@ -186,6 +213,9 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 			flush()
 		case catPro:
 			f.Pro = true
+			flush()
+		case catOth:
+			f.Alt = true
 			flush()
 		case catAgain:
 			f.Again = true

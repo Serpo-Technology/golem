@@ -255,6 +255,12 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)`, KindConcept, RelGrounds); err != nil {
 		return int(pruned), err
 	}
+	// A feature no concept carries describes nothing; it follows its
+	// last bearer out of the graph.
+	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
+		AND id NOT IN (SELECT to_id FROM links WHERE rel = ?)`, KindFeature, RelFeature); err != nil {
+		return int(pruned), err
+	}
 	if err := dropOrphanLinks(); err != nil {
 		return int(pruned), err
 	}

@@ -307,11 +307,13 @@ func TestDeciderThinksWithoutActing(t *testing.T) {
 		t.Fatalf("the command shape should be a verb concept: %+v", c)
 	}
 	// The thought channel has seen enough shapes that a new one clears
-	// the gate.
+	// the gate. The fillers' alarm settles the way a real calm stretch
+	// would, so the relevance drive is not what speaks here.
 	for i := range 6 {
 		d.process(senses.Observation{Channel: thoughtChannel,
 			Content: "thought: filler shape " + string(rune('a'+i)), At: time.Now()}, true, true)
 	}
+	settleChem(d)
 	d.lastObs = time.Now().Add(-time.Minute)
 	d.lastSurprise = time.Now().Add(-time.Minute)
 	d.ws.excite(c.ID, 1.0)

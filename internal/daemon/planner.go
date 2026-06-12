@@ -1,8 +1,10 @@
 package daemon
 
 import (
+	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"golem/internal/attention"
 	"golem/internal/events"
@@ -239,8 +241,19 @@ func (d *Daemon) speakFor(f *memory.Fragment) string {
 }
 
 // warmestVerb returns the hottest verb-like concept in working memory,
-// the referent of "do it again."
-func (d *Daemon) warmestVerb() *memory.Fragment {
+// the referent of "do it again"; skip steps past the warmest matches,
+// so "the other one" reaches the second.
+func (d *Daemon) warmestVerb(skip int) *memory.Fragment {
+	return d.warmConceptWhere(skip, func(f *memory.Fragment) bool { return f.Category == "verb" })
+}
+
+// warmConcept returns the workspace's hottest concept of any category,
+// the referent of a bare "it" or "that"; skip steps past the warmest.
+func (d *Daemon) warmConcept(skip int) *memory.Fragment {
+	return d.warmConceptWhere(skip, func(f *memory.Fragment) bool { return true })
+}
+
+func (d *Daemon) warmConceptWhere(skip int, keep func(*memory.Fragment) bool) *memory.Fragment {
 	entries := d.ws.warmest(workspaceBudget)
 	if len(entries) == 0 {
 		return nil
@@ -258,11 +271,44 @@ func (d *Daemon) warmestVerb() *memory.Fragment {
 		byID[f.ID] = f
 	}
 	for _, e := range entries {
-		if f := byID[e.id]; f != nil && f.Category == "verb" {
-			return f
+		f := byID[e.id]
+		if f == nil || f.Kind != memory.KindConcept || !keep(f) {
+			continue
 		}
+		if skip > 0 {
+			skip--
+			continue
+		}
+		return f
 	}
 	return nil
+}
+
+// warmTopic resolves a pro-form against working memory: "it" and "that"
+// take the warmest concept, "the other one" the one past it. The
+// workspace carrying this referent across turns is what holds a
+// conversation's thread, and resolving through it is itself a touch,
+// so the topic stays current for the turn after.
+func (d *Daemon) warmTopic(alt bool) grammar.Term {
+	skip := 0
+	if alt {
+		skip = 1
+	}
+	if c := d.warmConcept(skip); c != nil {
+		d.ws.excite(c.ID, exciteSpeech)
+		return grammar.Term{Concept: c, Phrase: c.Content}
+	}
+	return grammar.Term{}
+}
+
+// warmSpoken warms the concept behind a shape the answer actually
+// spoke. Saying is the strongest touch there is, so the conversational
+// thread follows the answer: after "make deploy usually follows," a
+// bare "it" means the deploy.
+func (d *Daemon) warmSpoken(template string) {
+	if c, err := d.store.ConceptByTemplate(template); err == nil && c != nil {
+		d.ws.excite(c.ID, exciteSpeech)
+	}
 }
 
 // conceptDecision weighs the commands grounding a verb concept, the way
@@ -371,8 +417,9 @@ func (d *Daemon) plan(frame grammar.Frame, raw string) (string, *wire.DecisionIn
 		return d.planCommand(frame, raw)
 	default:
 		// A statement teaches; GOLEM only speaks up when curiosity about
-		// an unknown word wins.
+		// an unknown word wins, and an asked question is held as a goal.
 		if len(frame.Unknown) > 0 && d.chem.Snapshot().Dopamine >= curiosityGate {
+			d.adoptGoal("learn", frame.Unknown[0])
 			return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceQuestion, Action: grammar.Term{Phrase: "be"},
 				Patient: grammar.Term{Phrase: frame.Unknown[0]}}, d.chem.Snapshot()), nil
 		}
@@ -383,9 +430,52 @@ func (d *Daemon) plan(frame grammar.Frame, raw string) (string, *wire.DecisionIn
 // planQuestion answers from grounded memory or admits it cannot. The
 // interrogative routes the question: what and which ask along order or
 // for definitions, when asks for a time, where for a channel, how many
-// for a count, and who and why name gaps GOLEM genuinely has.
+// for a count, who and why name gaps GOLEM genuinely has, and a
+// question about thinking reads the inner loop. Unresolved words can
+// earn an appended follow-up question when curiosity is high: deciding
+// what to say next includes asking.
 func (d *Daemon) planQuestion(frame grammar.Frame) string {
+	return d.withFollowUp(frame, d.planAnswer(frame))
+}
+
+// withFollowUp appends the curiosity question when the exchange left a
+// word pointing at nothing: GOLEM holds the thread by asking after the
+// gap instead of only answering around it. A phrase the answer already
+// speaks was not a gap, whether it anchored the reply or names the very
+// thing the admission is about.
+func (d *Daemon) withFollowUp(frame grammar.Frame, answer string) string {
+	if len(frame.Unknown) == 0 || d.chem.Snapshot().Dopamine < curiosityGate {
+		return answer
+	}
+	spoken := strings.ToLower(answer)
+	for _, unknown := range frame.Unknown {
+		if unknown == "" || strings.Contains(spoken, strings.ToLower(unknown)) {
+			continue
+		}
+		// Asking is more than a reflex: the open question is held as a
+		// goal, and the drives keep hunting it until it resolves.
+		d.adoptGoal("learn", unknown)
+		ask := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceQuestion,
+			Action:  grammar.Term{Phrase: "be"},
+			Patient: grammar.Term{Phrase: unknown}}, d.chem.Snapshot())
+		if answer == "" {
+			return ask
+		}
+		return answer + " " + ask
+	}
+	return answer
+}
+
+func (d *Daemon) planAnswer(frame grammar.Frame) string {
 	chem := d.chem.Snapshot()
+
+	// "What were you thinking" reads the inner loop, the same report the
+	// introspect act gives.
+	if frame.Action.Phrase == "think" {
+		line := d.introspectLine()
+		d.finishAct(actIntrospect, "", line, d.lastThought != "", "asked")
+		return line
+	}
 
 	// A relation carried by the verb is a qualifier in disguise: "which
 	// command follows X" asks after X, "what preceded X" asks before it.
@@ -417,10 +507,15 @@ func (d *Daemon) planQuestion(frame grammar.Frame) string {
 		return d.planSuccession(frame, quals, chem)
 	}
 
-	// "What is X": definitions read the concept layer.
+	// "What is X": definitions read the concept layer. A bare pro-form
+	// ("what is it?", "what is the other one?") resolves against what is
+	// still warm from the turns before.
 	topic := frame.Patient
 	if topic.Empty() {
 		topic = frame.Agent
+	}
+	if topic.Empty() && (frame.Pro || frame.Alt) {
+		topic = d.warmTopic(frame.Alt)
 	}
 	if topic.Concept != nil {
 		c := topic.Concept
@@ -529,14 +624,17 @@ func (d *Daemon) planSuccession(frame grammar.Frame, quals []grammar.Qualifier, 
 	}
 
 	// A plural sortal asks for the field, capped at three; everything
-	// else takes the winner.
+	// else takes the winner. What the answer names becomes the warmest
+	// referent, so the thread follows the answer.
 	subjects := []string{strong[0].speak}
+	d.warmSpoken(strong[0].template)
 	if frame.SortPl {
 		for _, r := range strong[1:] {
 			if len(subjects) == 3 {
 				break
 			}
 			subjects = append(subjects, r.speak)
+			d.warmSpoken(r.template)
 		}
 	}
 	subject := grammar.Term{Phrase: grammar.JoinAnd(subjects), Plural: len(subjects) > 1}
@@ -571,13 +669,17 @@ func (d *Daemon) planSuccession(frame grammar.Frame, quals []grammar.Qualifier, 
 
 // whenceAnchor picks the term a when/where/count question is about: the
 // qualifier's anchor when one was spoken, otherwise the patient or the
-// subject.
-func whenceAnchor(frame grammar.Frame, quals []grammar.Qualifier) grammar.Term {
+// subject, otherwise the warm referent a pro-form points at ("when did
+// it happen?").
+func (d *Daemon) whenceAnchor(frame grammar.Frame, quals []grammar.Qualifier) grammar.Term {
 	if len(quals) > 0 && !quals[0].Anchor.Empty() {
 		return quals[0].Anchor
 	}
 	if !frame.Patient.Empty() {
 		return frame.Patient
+	}
+	if frame.Agent.Empty() && (frame.Pro || frame.Alt) {
+		return d.warmTopic(frame.Alt)
 	}
 	return frame.Agent
 }
@@ -585,7 +687,7 @@ func whenceAnchor(frame grammar.Frame, quals []grammar.Qualifier) grammar.Term {
 // planWhence answers when and where: the newest moment the anchor
 // stands for supplies its time or its channel.
 func (d *Daemon) planWhence(frame grammar.Frame, quals []grammar.Qualifier, chem limbic.State) string {
-	topic := whenceAnchor(frame, quals)
+	topic := d.whenceAnchor(frame, quals)
 	ids, face := d.anchorEpisodes(topic)
 	if len(ids) == 0 {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
@@ -602,6 +704,7 @@ func (d *Daemon) planWhence(frame grammar.Frame, quals []grammar.Qualifier, chem
 			newest = f
 		}
 	}
+	d.warmSpoken(newest.Template)
 	at := "the " + newest.Channel + " channel"
 	last := false
 	if frame.Wh == "when" {
@@ -623,7 +726,7 @@ func (d *Daemon) planWhence(frame grammar.Frame, quals []grammar.Qualifier, chem
 // planCount answers "how many times" and "how often" with the tally of
 // moments behind the anchor, prototype counts included.
 func (d *Daemon) planCount(frame grammar.Frame, quals []grammar.Qualifier, chem limbic.State) string {
-	topic := whenceAnchor(frame, quals)
+	topic := d.whenceAnchor(frame, quals)
 	ids, face := d.anchorEpisodes(topic)
 	if len(ids) > 0 {
 		if frags, err := d.fragmentsByIDsTiered(ids); err == nil && len(frags) > 0 {
@@ -639,20 +742,49 @@ func (d *Daemon) planCount(frame grammar.Frame, quals []grammar.Qualifier, chem 
 		Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem)
 }
 
-// planCommand turns command force into a staged proposal: by taught cue
-// first, then through the concept the words or the workspace point at.
-// The proposal waits for approval exactly like one made with golem
-// propose; speech never runs a command by itself.
+// stageProposal parks a decision in the pending slot behind the usual
+// approve and deny, records it on the trail, and returns its wire form.
+// Speech, the propose act, and the propose verb all stage through here.
+func (d *Daemon) stageProposal(dec Decision) *wire.DecisionInfo {
+	di := decisionInfo(dec)
+	outcome := "proposed"
+	if dec.Conflict {
+		outcome = "conflict"
+	}
+	d.event(events.Event{Ev: "proposal", Cue: dec.CueTemplate, Action: di.Proposed, Outcome: outcome})
+	d.pending = &dec
+	return di
+}
+
+// planCommand acts on command force. A faculty verb drives the matching
+// internal act directly; anything else becomes a staged proposal, by
+// taught cue first, then through the concept the words or the workspace
+// point at. A proposal waits for approval exactly like one made with
+// golem propose; speech never runs an external command by itself.
 func (d *Daemon) planCommand(frame grammar.Frame, raw string) (string, *wire.DecisionInfo) {
 	chem := d.chem.Snapshot()
+	switch frame.Action.Phrase {
+	case "recall":
+		return d.planRecall(frame, chem), nil
+	case "consolidate":
+		outcome, fruitful := d.actConsolidateNow()
+		d.finishAct(actConsolidate, "", outcome, fruitful, "asked")
+		return "I consolidated: " + outcome + ".", nil
+	case "introspect":
+		line := d.introspectLine()
+		d.finishAct(actIntrospect, "", line, d.lastThought != "", "asked")
+		return line, nil
+	}
 	dec, err := d.decide(raw)
 	if err == nil && dec.Proposed == nil {
 		var c *memory.Fragment
 		switch {
 		case frame.Patient.Concept != nil:
 			c = frame.Patient.Concept
+		case frame.Alt:
+			c = d.warmestVerb(1)
 		case frame.Pro || frame.Again:
-			c = d.warmestVerb()
+			c = d.warmestVerb(0)
 		}
 		if c != nil {
 			if cdec, cerr := d.conceptDecision(c); cerr == nil && cdec.Proposed != nil {
@@ -666,18 +798,84 @@ func (d *Daemon) planCommand(frame grammar.Frame, raw string) (string, *wire.Dec
 			Negate: true, Patient: grammar.Term{Phrase: "how to " + raw}}, chem), nil
 	}
 
-	di := decisionInfo(dec)
-	outcome := "proposed"
-	if dec.Conflict {
-		outcome = "conflict"
-	}
-	d.event(events.Event{Ev: "proposal", Cue: dec.CueTemplate, Action: di.Proposed, Outcome: outcome})
-	d.pending = &dec
-
+	di := d.stageProposal(dec)
 	if dec.Conflict {
 		return dec.Question, di
 	}
 	say := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "propose"},
 		Patient: grammar.Term{Phrase: dec.Proposed.Command}}, chem)
 	return say, di
+}
+
+// planRecall drives the recall faculty from speech. "Remember this as a
+// bell" is the naming shape: the pro-form picks the warm referent and
+// the patient word comes to name it. Everything else retrieves: the
+// topic is the patient, or the warm referent a pro-form points at, and
+// the reply speaks the strongest moment found.
+func (d *Daemon) planRecall(frame grammar.Frame, chem limbic.State) string {
+	if frame.Pro && !frame.Patient.Empty() {
+		return d.nameWarmConcept(frame.Patient.Phrase, frame.Lang, chem)
+	}
+	topic := frame.Patient
+	if topic.Empty() && (frame.Pro || frame.Alt) {
+		topic = d.warmTopic(frame.Alt)
+	}
+	if topic.Empty() {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: "what to recall"}}, chem)
+	}
+	query := topic.Phrase
+	if topic.Concept != nil {
+		query = topic.Concept.Content
+	}
+	seeds, outcome, fruitful := d.actRecallNow(query)
+	d.finishAct(actRecall, query, outcome, fruitful, "asked")
+	if len(seeds) == 0 {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: query}}, chem)
+	}
+	say := "I remember: " + d.speakFor(seeds[0]) + "."
+	if len(seeds) > 1 {
+		say += fmt.Sprintf(" It keeps company with %d more moment(s).", len(seeds)-1)
+	}
+	return say
+}
+
+// nameWarmConcept binds a spoken word to the workspace's warm referent,
+// the deliberate half of grounding: "remember this as a bell" makes
+// bell name whatever is most present. The bond is firm because the
+// labeling is explicit, the same standing a mental-teach name gets.
+func (d *Daemon) nameWarmConcept(phrase, lang string, chem limbic.State) string {
+	c := d.warmConcept(0)
+	if c == nil {
+		return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: "what you mean"}}, chem)
+	}
+	if lang == "" {
+		lang = "en"
+	}
+	named := false
+	for _, form := range grammar.AllTokens(phrase) {
+		w, _, err := d.store.WordNode(form, lang, chem, time.Now())
+		if err != nil {
+			fmt.Fprintf(d.out, "word mint error: %v\n", err)
+			continue
+		}
+		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, opNameWeight); err != nil {
+			fmt.Fprintf(d.out, "naming link error: %v\n", err)
+			continue
+		}
+		d.event(events.Event{Ev: "name", From: w.ID, To: c.ID, Rel: memory.RelNames, Weight: opNameWeight})
+		named = true
+	}
+	if !named {
+		return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: "what you mean"}}, chem)
+	}
+	d.ws.excite(c.ID, exciteSpeech)
+	d.finishAct(actGround, phrase, "named "+c.Content, true, "asked")
+	return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: phrase},
+		Action:  grammar.Term{Phrase: "name"},
+		Patient: grammar.Term{Phrase: c.Content}}, chem)
 }

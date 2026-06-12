@@ -148,6 +148,68 @@ func (s *Store) WordNodesByForms(forms []string) ([]*Fragment, error) {
 		WHERE kind = ? AND lower(content) IN (`+strings.Join(marks, ",")+`)`, args...)
 }
 
+// FeatureNode returns the node for one interpretable feature, minting
+// it on first use. Features are shared across concepts: one node per
+// attribute is what makes overlap a plain graph walk.
+func (s *Store) FeatureNode(feature string, at time.Time) (*Fragment, error) {
+	frags, err := s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE kind = ? AND template = ? LIMIT 1`, KindFeature, feature)
+	if err != nil {
+		return nil, err
+	}
+	if len(frags) > 0 {
+		return frags[0], nil
+	}
+	f := &Fragment{
+		Kind:     KindFeature,
+		Channel:  "feature",
+		Content:  feature,
+		Template: feature,
+		Time:     at,
+	}
+	if _, err := s.Encode(f); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// FeaturesByNames returns the feature nodes matching the given
+// attribute strings, for overlap lookups at recall time.
+func (s *Store) FeaturesByNames(names []string) ([]*Fragment, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(names)+1)
+	marks := make([]string, len(names))
+	args = append(args, KindFeature)
+	for i, n := range names {
+		marks[i] = "?"
+		args = append(args, n)
+	}
+	return s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE kind = ? AND template IN (`+strings.Join(marks, ",")+`)`, args...)
+}
+
+// DropRelFrom removes every edge of one relation leaving the given
+// fragments. The nightly feature pass owns its edges outright: each
+// signature is rewritten whole, so a dissolved attribute disappears
+// instead of fading.
+func (s *Store) DropRelFrom(ids []uint64, rel string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args := make([]any, 0, len(ids)+1)
+	marks := make([]string, len(ids))
+	for i, id := range ids {
+		marks[i] = "?"
+		args = append(args, id)
+	}
+	args = append(args, rel)
+	_, err := s.db.Exec(`DELETE FROM links
+		WHERE from_id IN (`+strings.Join(marks, ",")+`) AND rel = ?`, args...)
+	return err
+}
+
 // LinksToRel returns the edges of one relation arriving at the given
 // fragments.
 func (s *Store) LinksToRel(ids []uint64, rel string) ([]LinkEdge, error) {

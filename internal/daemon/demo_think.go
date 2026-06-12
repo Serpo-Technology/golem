@@ -137,11 +137,44 @@ func DemoThink() {
 		fmt.Printf("      the worried mind dwells: %q\n", d.lastThought)
 	}
 
+	fmt.Println("\n7. THE FACULTIES ARE ACTS. Recall, ground, consolidate, speak,")
+	fmt.Println("   propose, and introspect sit in the same operant space as the")
+	fmt.Println("   walks. A day's clutter has piled up, \"tidy\" was taught to name")
+	fmt.Println("   the consolidate act, and saying it steers the quiet loop to fire")
+	fmt.Println("   the same consolidation the sleep verb runs:")
+	if err := d.teachThought("tidy", "act", "consolidate", "en"); err != nil {
+		demoFail(err)
+	}
+	fmt.Println("      taught: \"tidy\" -> act(consolidate)")
+	settleAlarm(d)
+	// A calm stretch builds moderate sleep pressure: messy and drowsy,
+	// but not yet over the sleep gate. That gap is the act's niche.
+	for range 8 {
+		d.chem.BuildSleepPressure()
+	}
+	d.encodesSinceSleep = 40
+	d.lastSleep = time.Now().Add(-time.Hour) // the nap was hours ago; clutter is real
+	nights := d.sleeps
+	d.lastObs = time.Now().Add(-time.Minute)
+	d.lastSurprise = time.Now().Add(-time.Minute)
+	d.startThinkRound()
+	d.settleThinking()
+	if d.sleeps > nights {
+		fmt.Println("      the loop consolidated unprompted; the firing is on the trail:")
+		if entries, err := d.store.AuditTail(3); err == nil {
+			for _, e := range entries {
+				if strings.HasPrefix(e.Cue, "act:") {
+					fmt.Printf("      audit: %s -> %s\n", e.Cue, e.Outcome)
+				}
+			}
+		}
+	}
+
 	fmt.Println("\n" + line)
 	fmt.Println("The loop closed: perception warmed a concept, one primitive walked")
 	fmt.Println("the lived graph with mood picking the setting, the surprising step")
-	fmt.Println("became memory and fed its operation, and a taught word now names a")
-	fmt.Println("kind of thinking.")
+	fmt.Println("became memory and fed its operation, a taught word now names a kind")
+	fmt.Println("of thinking, and the faculties fire from the same arbiter as acts.")
 }
 
 // settleAlarm drains the day's noradrenaline the way the homeostasis

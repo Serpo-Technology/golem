@@ -6,7 +6,7 @@ GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. 
 
 ## What Runs Today
 
-The build covers the whole loop the design describes: observation, memory, association, language, and gated action. In detail:
+The build covers the whole loop the design describes: observation, memory, association, language, thought, self-directed acts, and gated action. In detail:
 
 - A normalizer collapses the variable parts of each line (numbers, hex, UUIDs, timestamps, IPs, paths) so prediction runs on line shapes.
 - A forgetting frequency model scores Shannon surprise per shape. It habituates to repeated anomalies, adapts when the channel's normal drifts, and stays bounded no matter how long it runs.
@@ -29,7 +29,7 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Replies can be spoken: with the voice on, every sentence the realizer builds is also rendered through the system text-to-speech, queued off the brain loop. `golem voice` switches speech on and off at runtime and `golem voice use <name>` picks the system voice; both persist to config and land in the event trail. Eyes and ears are external transducers by design, neural weights kept at the edge: pipe a captioner into `golem observe vision "a red door"` and a speech recognizer into `golem tell`, narrate while GOLEM perceives, and the night's naming pass grounds the words across showings.
 - Open-world perception is policed: channels marked untrusted (the web by default) encode at half weight, can never fire a graduated habit, and never anchor the grounding of an action, so an adversarial page can be remembered without ever moving the hands.
 - Attention is channel-relative: each channel's gate asks for a z-score against that channel's own surprise history, so a chatty channel and a quiet one are judged fairly. Sensors never block the brain; a full queue drops its oldest entry and counts the drop.
-- Memory is one graph of typed nodes (episodic moments, language-tagged words, amodal concepts, thought operations, grammar parameters) under typed edges: temporal co-occurrence, directed order, names, and grounds.
+- Memory is one graph of typed nodes (episodic moments, language-tagged words, amodal concepts, thought operations, grammar parameters, feature attributes) under typed edges: temporal co-occurrence, directed order, names, grounds, and feature.
 - Order is learned by spike timing: a moment binds forward to what followed it, and no edge is written backward. Sleep replay weaves the same directed edges along the day it re-fires, so "what usually happens after make test" is answered by reading edges.
 - Concepts are born during sleep from shapes that recurred into prototypes. Each carries a lemma category derived from its grounding role (a command shape is verb-like, a recurring sensory shape noun-like) and grounds out to the episodes that instantiate it. Serotonin paces how many concepts one night may mint.
 - Spoken words become word nodes bound to the moments around them. The night's naming pass bonds each word to the concepts its moments ground by cross-situational reliability: the share of the word's lived company that lands on the concept, blended with the reverse share, so a word scattered across many concepts bonds weakly everywhere while a faithful one bonds firmly. Dopamine gates how readily words bond at all, a coincidental bond weakens the moment its word recurs amid other active concepts, and utterances count for nothing: a repeated question can never become a thing. Forms from any language converge on one concept once grounded alike, so "testler" recalls what "tests" recalls.
@@ -39,7 +39,12 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Thinking is concurrent under a serial arbiter: every setting of one primitive, walk(relation, signal), computes on an immutable snapshot of what is warm and posts a candidate through one channel; the brain loop weighs the candidates and commits every mutation single-threaded. Rounds yield whole to fresh perception, and sleep invalidates in-flight thought.
 - The kinds of thought emerge from the walk's settings rather than from named modules: free association is the temporal walk by lived weight, expectation the successor walk, stressful recollection the grounding walk by noradrenaline, deliberation the grounding walk by saliency. Mood selects among them (an alarmed mind dwells on stressful memory, a rewarded one notices what it could run), a thought surprising enough to be remembered reinforces the operation that produced it, and each operation's learned worth sits on an inspectable node in the graph.
 - `golem teach --mind worry grounds stress` gives a kind of thinking a name: the word bonds to a concept grounded in the operation itself, and saying it leans the next quiet stretch toward that operation. `golem demo think` walks the arc from lived day to remembered insight to a worried dwell.
+- The faculties themselves are acts in the same operant space: recall, ground, consolidate, speak, propose, and introspect compete with the walks under one arbiter, weighed by the chemistry's appetite, their learned worth, and the warmth of any taught name (`golem teach --mind tidy act consolidate`). A winning act runs the function its CLI verb runs, audits the firing, and a proposal it stages still waits behind approve. Each act cools on its own refractory, so the inner life stays a murmur.
+- Drives give the unprompted acts their reasons: relevance (alarm seeks context) pushes recall, tidiness (clutter since the last night) pushes consolidation, curiosity (high dopamine over a nameless warm thing) makes the speak act ask what it is, and every drive signs the audit trail with its urge, so an autonomous firing reads as "what, because of which reason."
+- One goal at a time can be held across turns: asking about a word that points at nothing adopts a learning goal, visible in `golem status`, hunted by the recall act on quiet rounds, rewarded with dopamine and cleared when the word finally names something, and dropped once it goes stale.
+- Each concept carries a sparse signature of interpretable features mined from its lived experience at sleep: the recurring words of its shape, its channel, how it felt. Similarity is feature overlap, so "full disk emergency", never seen and never told, still recalls the disk-full experience, and the reply names the shared attributes that carried the match. The same relation gives the inner loop resemblance: disconnected kin associate as "X is like Y" while every thought still starts and lands on a named node.
 - `golem tell` parses each utterance into a concept-frame with an innate grammar and reads its force. Questions are answered with constructed sentences ("After make test, make deploy usually follows."), unknowns are admitted ("I do not know flibber yet."), high dopamine asks back about new words, and low oxytocin hedges the claim ("may follow"). A command stages a proposal behind the same approve gate as always; speech never executes anything by itself.
+- Plain language drives the faculties and holds a thread: "recall the disk" runs the recall act and speaks the moment it found, "remember this as a bell" names whatever is most present, "tidy" consolidates, "what were you thinking" reads the inner loop, and "it", "that", and "the other one" follow the conversation's warm topic across turns, with the answer's subject becoming the next referent. A question that leaves a real gap can earn an appended follow-up question: the planner also decides what to say next.
 - English inflects, never bolts on: verbs conjugate from principal parts with agreement computed from person, number, and tense ("what happened after make test" gets "usually followed" back), nouns pluralize on a rule table with the irregulars, articles follow the sound ("an hour", "a user"), and negation takes do-support everywhere, so a denial can never realize as its opposite.
 - The interrogative routes the answer: what and which read order or definitions ("which commands follow make test" coordinates the field with plural agreement), when answers with the newest moment's time, where with its channel, how many with the tally, and who and why name gaps GOLEM genuinely has. "After X and before Y" parses as two clauses and the answer satisfies both.
 - Turkish is the second grammar on the same frame: detected from its closed class, parsed SOV with the anchor before its relator, and answered in kind with suffix morphology under vowel harmony and voicing assimilation ("Make test'ten sonra genellikle make deploy gelir."). The language of the question picks the language of the answer.
@@ -65,6 +70,8 @@ GOLEM maps its components directly to biological structures, replacing LLM inter
 | **Semantic Hub / Concept Store** | **Anterior Temporal Lobe** | The amodal meaning layer. Words and senses converge on one concept node, so synonyms and cross-language translations share a single pointer. | Word Embeddings / Shared Vector Space |
 | **Workspace / Global Broadcast** | **Dorsolateral PFC** | Sustained activation held across ticks. Carries dialogue reference and is the seat of the inner loop. | Attention Context Window |
 | **Inner Loop / Thought Operations** | **Default Mode Network** | Mind-wandering when perception goes quiet: one primitive, walk(relation, signal), applied to the warmest concept, with chemistry selecting the kind of thought and remembered insights reinforcing the operations that produce them. | Chain-of-Thought Sampling |
+| **Drives & Goals** | **Hypothalamus** | Named urges (relevance, tidiness, curiosity, the held goal) computed from body state. A drive only biases the action gate, and the winning act carries its drive's reason onto the audit trail. | Reward Shaping / Objective Functions |
+| **Feature Signatures** | **Cortical Feature Populations** | Sparse interpretable attributes under each concept node, mined from lived experience. Similarity is feature overlap, so novel phrasings land near what they resemble while concept cells keep the provenance. | Embedding Similarity |
 | **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways over parameters held in memory. | Transformer Decoder / Tokenizer |
 
 ---
@@ -180,8 +187,8 @@ GOLEM uses **Synaptic Scaling** during its "Sleep Cycle" to decide what stays.
 - Every "Night," GOLEM reduces the weight of all fragments by 10%.
 - If a fragment's weight ≤ a threshold (e.g., 0.1), it is **permanently deleted**.
 - **Result:** Repetitive, boring data fades away. Rare, high-impact events (like a system crash) stay forever.
-- Word and concept nodes sit outside the nightly fade. They die by disconnection instead: a word vanishes when its last edge does, and a concept vanishes when nothing grounds it anymore.
-- Thought-operation and grammar nodes never fade at all. An operation's weight is its learned worth, moved only by the fruit of its own thoughts, and a grammar parameter's weight is its entrenchment, moved only by competition with the lexicon.
+- Word, concept, and feature nodes sit outside the nightly fade. They die by disconnection instead: a word vanishes when its last edge does, a concept when nothing grounds it anymore, and a feature when its last bearer goes.
+- Thought-operation and grammar nodes never fade at all. An operation's weight is its learned worth, moved only by the fruit of its own thoughts and acts, and a grammar parameter's weight is its entrenchment, moved only by competition with the lexicon.
 
 ---
 
@@ -192,7 +199,8 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 1. **Replay:** The system reactivates the day's "surprising" fragments in order, weaving cross-channel links and directed successor edges the waking window missed.
 2. **Synaptic Downscaling:** Global weight reduction of all memories. Weak/noisy fragments are pruned (deleted).
 3. **Abstraction:** Recurring shapes merge into prototype fragments, prototypes distil into concept nodes, the day's words bond to the concepts their moments ground, and a word whose company is a stable cloud of concepts distils into an abstraction grounded in that constellation.
-4. **The Grammar's Night:** seeded parameters and lived usage settle their competition, and the working grammar recompiles from the surviving weights.
+4. **Signatures:** every concept's sparse feature signature rewrites from its current grounding, so resemblance stays current and auditable down to the moments underneath.
+5. **The Grammar's Night:** seeded parameters and lived usage settle their competition, and the working grammar recompiles from the surviving weights.
 
 ---
 
@@ -223,10 +231,10 @@ internal/
   senses/           the observation packet and the built-in sensors: files,
                     file tails, vitals, syslog, web pages, the frontmost
                     app, the synthetic channel, and the shell contract
-  memory/           moments, words, concepts, thought operations, and
-                    grammar parameters as one typed graph in sqlite, the
-                    in-RAM hippocampus, the hot working set, and
-                    consolidation (hippocampus and cortex)
+  memory/           moments, words, concepts, thought operations, grammar
+                    parameters, and feature attributes as one typed graph
+                    in sqlite, the in-RAM hippocampus, the hot working
+                    set, and consolidation (hippocampus and cortex)
   grammar/          the innate language engine and its curriculum: one
                     concept-frame, English and Turkish parsers and
                     realizers, hand-rolled morphology, and the parameters
@@ -241,9 +249,11 @@ internal/
   daemon/           the brain loop that owns all mutable state: encoding,
                     association, sleep, the decision loop and its gates, the
                     parallel action arbiter, the message planner, the
-                    workspace, the inner loop and its walk operations, the
-                    voice, and the demos that drive it all on throwaway
-                    homes (basal ganglia, ACC, and the global workspace)
+                    workspace, the inner loop with its walk operations and
+                    acts, the drives and the held goal, the feature passes,
+                    the voice, and the demos that drive it all on throwaway
+                    homes (basal ganglia, ACC, hypothalamus, and the global
+                    workspace)
 ```
 
 ---
@@ -278,9 +288,12 @@ go build -o golem ./cmd/golem
 ./golem status
 ./golem recall disk
 ./golem tell "what usually happens after make test"
+./golem tell "when did it happen"
+./golem tell "recall the disk"
 ./golem tell --lang tr "testler temiz"
 ./golem concepts
 ./golem teach --mind worry grounds stress
+./golem teach --mind tidy act consolidate
 ./golem stop
 
 # Optional: feed your shell into GOLEM (open a new shell afterward)

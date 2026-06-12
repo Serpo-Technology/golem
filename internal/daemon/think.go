@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -85,7 +86,8 @@ func (op thoughtOp) template() string { return "walk(" + op.rel + "," + op.sig +
 // gloss is the operation's speakable face.
 func (op thoughtOp) gloss() string { return "walk " + op.rel + " by " + op.sig }
 
-var thinkRels = []string{memory.RelTemporal, memory.RelSuccessor, memory.RelGrounds, memory.RelNames}
+var thinkRels = []string{memory.RelTemporal, memory.RelSuccessor, memory.RelGrounds,
+	memory.RelNames, memory.RelFeature}
 var thinkSigs = []string{sigWeight, sigStress, sigSaliency, sigRecency}
 
 // thoughtOps is the whole operation space, the innate floor of thought:
@@ -105,12 +107,14 @@ func thoughtOps() []thoughtOp {
 // and order carry the lived weights, order slightly preferred because
 // lived sequence is the brain's favored next step; dwelling on a
 // grounding and noticing an action are quieter than active association;
-// names are the quietest, a murmur about vocabulary.
+// resemblance through shared features is quieter still, and names are
+// the quietest, a murmur about vocabulary.
 var opGains = map[string]map[string]float64{
 	memory.RelTemporal:  {sigWeight: 1.00, sigStress: 0.45, sigSaliency: 0, sigRecency: 0.50},
 	memory.RelSuccessor: {sigWeight: 1.05, sigStress: 0.45, sigSaliency: 0, sigRecency: 0.50},
 	memory.RelGrounds:   {sigWeight: 0.50, sigStress: 0.80, sigSaliency: 0.60, sigRecency: 0.55},
 	memory.RelNames:     {sigWeight: 0.50, sigStress: 0.30, sigSaliency: 0, sigRecency: 0.35},
+	memory.RelFeature:   {sigWeight: 0.70, sigStress: 0.30, sigSaliency: 0, sigRecency: 0.40},
 }
 
 // appetite is the chemistry's pull toward a signal, 1.0 at baseline so a
@@ -181,9 +185,10 @@ func (d *Daemon) mindWandering() bool {
 // racing the graph.
 
 // thoughtSnapshot is everything an operation may read: the warm seed,
-// its prefetched neighborhood per relation, the chemistry, and the
-// policy state (learned worth and naming warmth per operation), all
-// gathered on the loop.
+// its prefetched neighborhood per relation, the chemistry, the policy
+// state (learned worth and naming warmth per operation), and the body
+// state the acts weigh (clutter, the pending slot, the last thought),
+// all gathered on the loop.
 type thoughtSnapshot struct {
 	epoch     uint64
 	seed      uint64
@@ -194,12 +199,24 @@ type thoughtSnapshot struct {
 	plan      deliberation
 	opWorth   map[string]float64
 	opHeat    map[string]float64
+
+	clutter        float64 // fresh encodes since the last consolidation, scaled
+	canConsolidate bool    // enough time and clutter for an unprompted night
+	pendingHeld    bool    // a proposal is already awaiting the operator
+	introRecency   float64 // closeness of the last committed thought
+
+	// Drives bias the act gate: per-act multipliers with the reasons
+	// that earned them, and the held goal's topic for the recall act to
+	// aim at.
+	driveBias map[string]float64
+	driveWhy  map[string]string
+	goalTopic string
 }
 
 // worth reports the learned preference for an operation, 1.0 until
 // experience has moved it.
-func (sn thoughtSnapshot) worth(op thoughtOp) float64 {
-	if w, ok := sn.opWorth[op.template()]; ok {
+func (sn thoughtSnapshot) worth(tpl string) float64 {
+	if w, ok := sn.opWorth[tpl]; ok {
 		return w
 	}
 	return 1.0
@@ -215,12 +232,14 @@ type deliberation struct {
 }
 
 // thoughtCandidate is one operation's offer: a thought as perception
-// would see it, the workspace changes it implies, and the priority the
-// arbiter weighs.
+// would see it (or an act the loop would perform), the workspace
+// changes it implies, and the priority the arbiter weighs.
 type thoughtCandidate struct {
 	epoch    uint64
 	op       string // the producing operation's template, for fruit and the trail
 	content  string
+	arg      string // the act's target, when the operation is an act
+	why      string // the drive that pushed it, when one did
 	seed     uint64
 	seedHeat float64
 	warm     []uint64
@@ -235,7 +254,7 @@ type thoughtCandidate struct {
 // thought; no specialist is named anywhere.
 func opPriority(sn thoughtSnapshot, op thoughtOp, sig float64) float64 {
 	return sig * opGains[op.rel][op.sig] * appetite(sn.chem, op.sig) *
-		sn.worth(op) * (1 + opHeatGain*sn.opHeat[op.template()])
+		sn.worth(op.template()) * (1 + opHeatGain*sn.opHeat[op.template()])
 }
 
 // startThinkRound snapshots the warm seed and fans the operation space
@@ -245,6 +264,9 @@ func (d *Daemon) startThinkRound() {
 	if d.thinking > 0 {
 		return
 	}
+	// The held intention settles before anything is selected: a goal the
+	// world has answered should reward and clear, not keep steering.
+	d.checkGoal()
 	seeds := d.ws.warmest(1)
 	if len(seeds) == 0 || seeds[0].heat < thinkSeedFloor {
 		return
@@ -276,13 +298,36 @@ func (d *Daemon) startThinkRound() {
 		}
 	}
 	sn.opWorth, sn.opHeat = d.opPolicy()
+	sn.clutter = clutterOf(d.encodesSinceSleep)
+	sn.canConsolidate = d.encodesSinceSleep >= actClutterMin &&
+		time.Since(d.lastSleep) >= d.cfg.SleepInterval()/4
+	sn.pendingHeld = d.pending != nil
+	if d.lastThought != "" {
+		sn.introRecency = recencyOf(time.Now(), d.lastThoughtAt)
+	}
+	seedNameless := false
+	if seed.Kind == memory.KindConcept {
+		if names, err := d.store.LinksToRel([]uint64{seed.ID}, memory.RelNames); err == nil {
+			seedNameless = len(names) == 0
+		}
+	}
+	sn.driveBias, sn.driveWhy = driveMaps(d.computeDrives(time.Now(), seedNameless))
+	if d.goal != nil {
+		sn.goalTopic = d.goal.topic
+	}
 
 	d.thinkSeed, d.thinkSeedHeat = sn.seed, sn.seedHeat
 	panel := thoughtOps()
-	d.thinking = len(panel)
+	acts := d.actPanel(time.Now())
+	d.thinking = len(panel) + len(acts)
 	for _, op := range panel {
 		go func(op thoughtOp) {
 			d.thinkDone <- walkThought(sn, op)
+		}(op)
+	}
+	for _, op := range acts {
+		go func(op actOp) {
+			d.thinkDone <- actThought(sn, op)
 		}(op)
 	}
 }
@@ -426,6 +471,12 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 		})
 	}
 
+	siblings, err := d.featureSiblings(seed, now)
+	if err != nil {
+		return nil, err
+	}
+	dests[memory.RelFeature] = siblings
+
 	for rel := range dests {
 		list := dests[rel]
 		sort.Slice(list, func(i, j int) bool {
@@ -436,6 +487,68 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 		})
 	}
 	return dests, nil
+}
+
+// featureSiblings finds the concepts a seed resembles: those sharing
+// its feature attributes, scored by the overlapping shares against the
+// seed's whole signature, so resemblance lives in [0, 1] and a shared
+// channel or one common word never outshouts lived association. Walking
+// to one is analogy along the sparse layer, while the thought itself
+// still originates from and lands on named nodes, so provenance
+// survives the resemblance.
+func (d *Daemon) featureSiblings(seed uint64, now time.Time) ([]walkDest, error) {
+	mine, err := d.store.LinksFromRel([]uint64{seed}, memory.RelFeature)
+	if err != nil || len(mine) == 0 {
+		return nil, err
+	}
+	featIDs := make([]uint64, 0, len(mine))
+	share := make(map[uint64]float64, len(mine))
+	mass := 0.0
+	for _, e := range mine {
+		featIDs = append(featIDs, e.To)
+		share[e.To] = e.Weight
+		mass += e.Weight
+	}
+	bearers, err := d.store.LinksToRel(featIDs, memory.RelFeature)
+	if err != nil {
+		return nil, err
+	}
+	overlap := map[uint64]float64{}
+	for _, e := range bearers {
+		if e.From == seed {
+			continue
+		}
+		w := e.Weight
+		if share[e.To] < w {
+			w = share[e.To]
+		}
+		overlap[e.From] += w / mass
+	}
+	ids := make([]uint64, 0, len(overlap))
+	for id, w := range overlap {
+		if w >= thinkAssocFloor {
+			ids = append(ids, id)
+		}
+	}
+	siblings, err := d.fragmentsByIDsTiered(ids)
+	if err != nil {
+		return nil, err
+	}
+	var out []walkDest
+	for _, f := range siblings {
+		if f.Kind != memory.KindConcept {
+			continue
+		}
+		out = append(out, walkDest{
+			id:      f.ID,
+			gloss:   f.Content,
+			kind:    f.Kind,
+			weight:  overlap[f.ID],
+			stress:  f.Limbic.Noradrenaline,
+			recency: recencyOf(now, f.Time),
+		})
+	}
+	return out, nil
 }
 
 // recencyOf scores closeness in time into (0, 1]: the just-now is 1 and
@@ -526,14 +639,16 @@ func walkThought(sn thoughtSnapshot, op thoughtOp) thoughtCandidate {
 // renderThought is the thought's face in perception, shaped by the
 // relation that carried it: order speaks as expectation, co-occurrence
 // as association, a grounding as a remembered moment (or, for an
-// abstract concept's constellation, as association again), and a name
-// as vocabulary.
+// abstract concept's constellation, as association again), a shared
+// signature as resemblance, and a name as vocabulary.
 func renderThought(op thoughtOp, seedGloss string, dst walkDest) string {
 	switch {
 	case op.rel == memory.RelSuccessor:
 		return fmt.Sprintf("thought: after %s, %s", seedGloss, dst.gloss)
 	case op.rel == memory.RelNames:
 		return fmt.Sprintf("thought: %s is called %s", seedGloss, dst.gloss)
+	case op.rel == memory.RelFeature:
+		return fmt.Sprintf("thought: %s is like %s", seedGloss, dst.gloss)
 	case op.rel == memory.RelGrounds && dst.kind != memory.KindConcept:
 		return fmt.Sprintf("thought: that time: %s", dst.gloss)
 	default:
@@ -571,6 +686,12 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 		}
 	}
 	d.ws.cool(winner.seed, thinkFatigue)
+	// An act that won the round is performed rather than re-entered: the
+	// loop fires the faculty the way a CLI verb would, single-threaded.
+	if name, ok := actNameOf(winner.op); ok {
+		d.performAct(name, winner)
+		return
+	}
 	// A thought already re-entered in the recent rounds is rumination. A
 	// repeat is the most barren thought there is, so wear its operation the
 	// way any routine step does, but neither re-encode nor re-broadcast it,
@@ -583,6 +704,7 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 		d.ws.excite(id, winner.seedHeat*thinkDamping)
 	}
 	d.lastThought = winner.content
+	d.lastThoughtAt = time.Now()
 	d.rememberThought(winner.content)
 	res := d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
 	d.noteThoughtFruit(winner, res)
@@ -608,29 +730,29 @@ func (d *Daemon) rememberThought(content string) {
 	}
 }
 
-// noteThoughtFruit is the operant loop turned inward: a thought
-// surprising enough to be encoded is fruit and reinforces the operation
-// that produced it, with a grounds edge from the operation node to the
-// insight so the trail shows which operation produced which thought; a
-// routine thought wears the operation a little. The learned worth lives
-// as the operation node's weight, bounded on both sides.
-func (d *Daemon) noteThoughtFruit(winner thoughtCandidate, res wire.ObserveResult) {
-	node := d.opNode(winner.op)
+// noteOpFruit is the operant loop turned inward: an operation whose
+// product was worth keeping (an encoded insight, an act that surfaced or
+// changed something) gains worth, and a barren one wears a little. The
+// learned worth lives as the operation node's weight, bounded on both
+// sides. A fruitful thought also takes a grounds edge from its operation
+// to the insight, so the trail shows which operation produced it.
+func (d *Daemon) noteOpFruit(tpl string, fruitful bool, insightID uint64) {
+	node := d.opNode(tpl)
 	if node == nil {
 		return
 	}
-	outcome := "routine"
-	if res.Conscious && res.FragmentID != 0 {
-		outcome = "insight"
+	if fruitful {
 		node.Weight += opFruitDelta
 		if node.Weight > opWeightCeil {
 			node.Weight = opWeightCeil
 		}
-		if err := d.store.LinkRel(node.ID, res.FragmentID, memory.RelGrounds, groundsWeight); err != nil {
-			fmt.Fprintf(d.out, "thought grounding error: %v\n", err)
+		if insightID != 0 {
+			if err := d.store.LinkRel(node.ID, insightID, memory.RelGrounds, groundsWeight); err != nil {
+				fmt.Fprintf(d.out, "thought grounding error: %v\n", err)
+			}
+			d.event(events.Event{Ev: "thought", Tpl: tpl, ID: insightID,
+				Weight: node.Weight, Outcome: "insight"})
 		}
-		d.event(events.Event{Ev: "thought", Tpl: winner.op, ID: res.FragmentID,
-			Weight: node.Weight, Outcome: outcome})
 	} else {
 		node.Weight -= opBarrenDelta
 		if node.Weight < opWeightFloor {
@@ -640,6 +762,12 @@ func (d *Daemon) noteThoughtFruit(winner thoughtCandidate, res wire.ObserveResul
 	if err := d.store.SetWeight(node.ID, node.Weight); err != nil {
 		fmt.Fprintf(d.out, "thought worth error: %v\n", err)
 	}
+}
+
+// noteThoughtFruit judges one committed thought: encoded means insight,
+// anything else means routine wear.
+func (d *Daemon) noteThoughtFruit(winner thoughtCandidate, res wire.ObserveResult) {
+	d.noteOpFruit(winner.op, res.Conscious && res.FragmentID != 0, res.FragmentID)
 }
 
 // opNodes lazily loads the operation nodes the graph holds, keyed by
@@ -667,14 +795,14 @@ func (d *Daemon) opNode(tpl string) *memory.Fragment {
 	if n, ok := ops[tpl]; ok {
 		return n
 	}
-	op, ok := opByTemplate(tpl)
+	gloss, ok := opGloss(tpl)
 	if !ok {
 		return nil
 	}
 	n := &memory.Fragment{
 		Kind:     memory.KindOperation,
 		Channel:  "mind",
-		Content:  op.gloss(),
+		Content:  gloss,
 		Template: tpl,
 		Category: "verb",
 		Limbic:   d.chem.Snapshot(),
@@ -688,8 +816,20 @@ func (d *Daemon) opNode(tpl string) *memory.Fragment {
 	return n
 }
 
-// opByTemplate parses an operation template back into its setting,
-// refusing shapes outside the innate space.
+// opGloss resolves any operation template, walk or act, to its speakable
+// face, refusing shapes outside the innate space.
+func opGloss(tpl string) (string, bool) {
+	if op, ok := opByTemplate(tpl); ok {
+		return op.gloss(), true
+	}
+	if name, ok := actNameOf(tpl); ok {
+		return name, true
+	}
+	return "", false
+}
+
+// opByTemplate parses a walk template back into its setting, refusing
+// shapes outside the innate space.
 func opByTemplate(tpl string) (thoughtOp, bool) {
 	body, ok := strings.CutPrefix(tpl, "walk(")
 	if !ok || !strings.HasSuffix(body, ")") {
@@ -740,28 +880,33 @@ func (d *Daemon) opPolicy() (worth, heat map[string]float64) {
 }
 
 // teachThought is the mental-teach: as teach grounds a cue to a command,
-// this grounds a concept to a thought operation and bonds the word to
+// this grounds a concept to a mental operation and bonds the word to
 // that concept, so a word can name a kind of thinking ("worry" for
-// grounding by stress, "expect" for the successor walk) and saying it
-// leans the inner loop toward that operation.
+// grounding by stress, "expect" for the successor walk) or a whole
+// faculty ("tidy" for the consolidate act), and saying it leans the
+// inner loop toward that operation.
 func (d *Daemon) teachThought(word, rel, sig, lang string) error {
-	op := thoughtOp{rel: rel, sig: sig}
-	if _, ok := opGains[rel]; !ok {
-		return fmt.Errorf("unknown relation %q (one of: %s)", rel, strings.Join(thinkRels, ", "))
-	}
-	validSig := false
-	for _, s := range thinkSigs {
-		validSig = validSig || s == sig
-	}
-	if !validSig {
+	var tpl string
+	switch {
+	case rel == relAct:
+		if !slices.Contains(actNames, sig) {
+			return fmt.Errorf("unknown act %q (one of: %s)", sig, strings.Join(actNames, ", "))
+		}
+		tpl = actOp{name: sig}.template()
+	case opGains[rel] == nil:
+		return fmt.Errorf("unknown relation %q (one of: %s, %s)", rel,
+			strings.Join(thinkRels, ", "), relAct)
+	case !slices.Contains(thinkSigs, sig):
 		return fmt.Errorf("unknown signal %q (one of: %s)", sig, strings.Join(thinkSigs, ", "))
+	default:
+		tpl = thoughtOp{rel: rel, sig: sig}.template()
 	}
-	node := d.opNode(op.template())
+	node := d.opNode(tpl)
 	if node == nil {
 		return fmt.Errorf("the operation could not be minted; check the daemon log")
 	}
 
-	cTpl := "op:" + op.template()
+	cTpl := "op:" + tpl
 	c, err := d.store.ConceptByTemplate(cTpl)
 	if err != nil {
 		return err
@@ -770,7 +915,7 @@ func (d *Daemon) teachThought(word, rel, sig, lang string) error {
 		c = &memory.Fragment{
 			Kind:     memory.KindConcept,
 			Channel:  "concept",
-			Content:  op.gloss(),
+			Content:  node.Content,
 			Template: cTpl,
 			Category: "verb",
 			Limbic:   d.chem.Snapshot(),

@@ -31,7 +31,7 @@ func (h *Hippocampus) Encode(f *Fragment) uint64 {
 }
 
 // RecallByStress returns the fragment with the highest noradrenaline at
-// encoding — i.e. "show me the moment when things felt wrong." This is the
+// encoding, i.e. "show me the moment when things felt wrong." This is the
 // point: GOLEM retrieves by how it FELT, not by string match.
 //
 // Recall is also retrieval practice: the returned fragment gets its weight

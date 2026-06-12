@@ -36,7 +36,14 @@ Usage:
   golem tell <words>              speak to GOLEM; the words become a memory
                                   bound to the moments around them, a
                                   question is answered from what is
-                                  grounded, and a command becomes a proposal
+                                  grounded, and a command becomes a proposal.
+                                  Plain language also drives the faculties:
+                                  "recall the disk" retrieves, "remember
+                                  this as a bell" names what is present,
+                                  "tidy" consolidates, "what were you
+                                  thinking" introspects, and "it", "that",
+                                  and "the other one" follow the
+                                  conversation's warm topic across turns
   golem tell                      the same, as an interactive session
   golem tell --lang <tag> <words> tag the words' language ("tr", "de");
                                   words in any language converge on the
@@ -56,8 +63,14 @@ Usage:
                                   mean the walk(relation, signal) thought
                                   operation, and saying it leans idle thought
                                   that way (relations: temporal, successor,
-                                  grounds, names; signals: weight, stress,
-                                  saliency, recency)
+                                  grounds, names, feature; signals: weight,
+                                  stress, saliency, recency)
+  golem teach --mind <word> act <name>
+                                  name a faculty instead: the word comes to
+                                  mean one of GOLEM's own acts (recall,
+                                  ground, consolidate, speak, propose,
+                                  introspect), the same acts the quiet loop
+                                  fires on its own when its state calls
   golem propose <cue>             weigh the actions grounded to a cue and
                                   propose one, or ask when it is ambiguous
   golem approve                   approve the pending proposal
@@ -205,7 +218,11 @@ func main() {
 				fail(fmt.Errorf("usage: golem teach --mind <word> <relation> <signal>"))
 			}
 			call(home, wire.Request{Cmd: "teach", Mind: true, Content: args[2], Command: args[3] + " " + args[4]})
-			fmt.Printf("named the thought operation walk(%s,%s) %q\n", args[3], args[4], args[2])
+			if args[3] == "act" {
+				fmt.Printf("named the %s act %q\n", args[4], args[2])
+			} else {
+				fmt.Printf("named the thought operation walk(%s,%s) %q\n", args[3], args[4], args[2])
+			}
 			return
 		}
 		if len(args) < 3 {
@@ -244,6 +261,9 @@ func main() {
 				c.ID, c.Category, c.Gloss, c.Grounded, warmth)
 			if len(c.Names) > 0 {
 				fmt.Printf("     named by: %s\n", strings.Join(c.Names, ", "))
+			}
+			if len(c.Features) > 0 {
+				fmt.Printf("     signature: %s\n", strings.Join(c.Features, ", "))
 			}
 		}
 
@@ -360,6 +380,9 @@ func printStatus(st *wire.StatusInfo) {
 			parts = append(parts, fmt.Sprintf("%q %.2f", w.Gloss, w.Heat))
 		}
 		fmt.Printf("  workspace: %s\n", strings.Join(parts, ", "))
+	}
+	if st.Goal != "" {
+		fmt.Printf("  goal: %s\n", st.Goal)
 	}
 	if len(st.Channels) == 0 {
 		fmt.Println("  channels: none observed yet")
@@ -541,6 +564,8 @@ func printFragments(frags []*wire.FragmentInfo) {
 			head = "operation"
 		case memory.KindGrammar:
 			head = "grammar"
+		case memory.KindFeature:
+			head = "feature"
 		}
 		fmt.Printf("#%-3d %s  %-12s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
 			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), head,

@@ -244,9 +244,10 @@ Goal: see the graph before building the GUI that edits it.
       survived a few weeks without changing. The concept layer changed it
       on 2026-06-11 (fragments gained kind, lang, and category; links
       gained a rel column and a wider primary key), which restarts that
-      clock. The thought operations, grammar parameters, and abstractions
-      that followed ride the same columns (new kind values and template
-      conventions, no schema change), so the clock stands.
+      clock. Everything since (thought operations, grammar parameters,
+      abstractions, the act layer, and the feature signatures) rides the
+      same columns: new kind and rel values and template conventions, no
+      schema change, so the clock stands.
 
 ## Step 8: The action layer: pipelines and parallel execution
 
@@ -904,14 +905,14 @@ name. This widens that one move to every faculty. GOLEM already drives
 sleep, encoding, naming, and autocue proposals on its own, so the pattern
 exists and this extends it.
 
-- [ ] One action space spanning external commands and internal faculties,
+- [x] One action space spanning external commands and internal faculties,
       each a primitive the basal-ganglia gate can select.
-- [ ] Selection by the machinery already in place: chemistry appetite,
+- [x] Selection by the machinery already in place: chemistry appetite,
       workspace warmth, and the operation's learned worth, the way
       walk(R, S) is chosen now.
-- [ ] A concept can name any act (the mental-teach generalized), so a word
+- [x] A concept can name any act (the mental-teach generalized), so a word
       steers a faculty.
-- [ ] The CLI verbs become handles on those acts, not the only way they
+- [x] The CLI verbs become handles on those acts, not the only way they
       fire; the loop fires them when its state calls for it.
 
 Forced deviation, flagged: the act primitives are a hand-listed innate
@@ -921,6 +922,21 @@ the think primitive take.
 Done when: GOLEM recalls, grounds, or consolidates unprompted when its state
 calls for it, the same act a CLI verb triggers, and a taught word can invoke
 any of them.
+
+Status: built and demonstrated (golem demo think). Six acts (recall,
+ground, consolidate, speak, propose, introspect) compute on the same
+snapshot as the walks and the same arbiter ignites one winner per quiet
+round: signal times innate gain, times the chemistry's appetite (alarm
+for recall, reward for grounding and proposing, sleep pressure for
+tidying, trust for speaking, calm for introspection), times learned
+worth, times the warmth of any taught name. A winning act runs the
+function its CLI verb runs (recall shares the verb's seed path,
+consolidate is the sleep verb's cycle, propose stages behind the same
+pending slot and never executes), audits the firing, and feeds the
+operant loop, so a fruitful faculty is preferred the way a fruitful
+thought-type is. Each act cools on its own refractory; teach --mind
+<word> act <name> names one. All three done-when criteria hold in
+tests.
 
 ## Step 18: Natural-language control and conversation
 
@@ -934,16 +950,32 @@ bell" grounds, "what were you thinking" introspects), and turns the planner
 into a turn-taker. It stays bounded by grounding, interpreting requests about
 its own world and faculties, not open-domain prose.
 
-- [ ] Parse a wider range of input into intents, mapped onto the action
+- [x] Parse a wider range of input into intents, mapped onto the action
       space, and admit incomprehension instead of bluffing when nothing
       parses.
-- [ ] The workspace carries the topic across turns; reference like "it",
+- [x] The workspace carries the topic across turns; reference like "it",
       "that", and "the other one" resolves against it.
-- [ ] Decide what to say next, including asking a follow-up, not only
+- [x] Decide what to say next, including asking a follow-up, not only
       answering the immediate question.
 
 Done when: a plain request drives the matching internal act, and GOLEM
 sustains a multi-turn exchange about a grounded topic, holding the thread.
+
+Status: built. Faculty verbs in the closed class open intents over the
+act space: "recall the disk" runs the recall act and speaks the moment
+it found, "remember this as a bell" names the warm referent (the ground
+act), "tidy" runs the consolidation the sleep verb runs, and "what were
+you thinking" reads the inner loop, each landing on the audit trail as
+an asked act. Anything that maps to nothing is admitted.
+The thread lives in the workspace: a spoken answer's subject becomes
+the warmest referent, resolving "it" or "the other one" refreshes the
+referent it picked, and a pro-form question or "do it again" follows
+the topic across turns. When a question leaves a word pointing at
+nothing the answer did not already speak, high dopamine appends the
+follow-up question, so the planner decides what to say next rather
+than only answering. A curriculum top-up at boot seeds newly innate
+forms into an older memory without touching learned weights. Both
+done-when criteria hold in tests.
 
 ## Step 19: Drives and goals
 
@@ -955,18 +987,34 @@ asks. Genuine self-direction needs a goal it can hold and pursue. This is
 the deepest and least-charted piece, so it is staged from cheap drives
 toward real goal-pursuit, with the far end treated as open research.
 
-- [ ] Cheap drives first: a relevance drive that recalls what fits the
+- [x] Cheap drives first: a relevance drive that recalls what fits the
       moment, a tidiness drive that consolidates clutter, building on the
       curiosity drive already present.
-- [ ] Drives bias the action gate, so GOLEM acts for a reason, and the
+- [x] Drives bias the action gate, so GOLEM acts for a reason, and the
       reason is on the trail.
-- [ ] A goal representation the loop can hold across steps and act toward.
+- [x] A goal representation the loop can hold across steps and act toward.
 
 Flagged: the first two are reachable; a held, pursued goal is the frontier
 of the frontier and stays open research.
 
 Done when: GOLEM takes an unprompted internal act because a drive called for
 it, and the drive is readable on the audit trail.
+
+Status: built. Drives are named urges computed at each quiet round:
+relevance (alarm above baseline) pushes the recall act, tidiness (fresh
+encodes since the last night) pushes consolidate, curiosity (elevated
+dopamine over a warm nameless concept) pushes the speak act, which then
+asks what the thing is instead of remarking. A drive never acts; it
+multiplies its act's priority in the same arbitration everything else
+competes in, and the winning act carries the drive's reason onto the
+audit trail ("unprompted (tidiness: 80 fresh moments): ..."). The goal
+is one held intention: asking about a word that points at nothing
+adopts a learning goal (one slot, on the trail, visible in status),
+the goal drive aims the recall act at its topic on the rounds that
+follow, satisfaction (the word finally names a concept, however that
+happened) rewards with dopamine and clears it, and a stale goal is
+dropped before it can become an obsession. Pursuit beyond learning
+goals stays open research. The done-when holds in tests.
 
 ## Step 20: Sparse feature signatures
 
@@ -980,13 +1028,13 @@ distributed feature populations; mirror that. Each named concept keeps its
 node and gains a sparse set of interpretable features, and similarity becomes
 feature overlap.
 
-- [ ] A sparse feature layer under the concept nodes; each concept carries a
+- [x] A sparse feature layer under the concept nodes; each concept carries a
       signature of interpretable features.
-- [ ] Features earn meaning from clustered experience, the one place reading
+- [x] Features earn meaning from clustered experience, the one place reading
       is interpretive, where a named node's meaning is simply declared.
-- [ ] Similarity by feature overlap, so an input lands near the concept it
+- [x] Similarity by feature overlap, so an input lands near the concept it
       resembles with no shared substring, and the shared features explain why.
-- [ ] Concept-node provenance preserved: a thought still originates from a
+- [x] Concept-node provenance preserved: a thought still originates from a
       named node, so everything the inner loop and the trail already show
       stays exactly as readable.
 
@@ -1002,6 +1050,24 @@ milestone.
 Done when: a word never seen, sharing features with a known concept, recalls
 that concept by overlap, and the shared features can be read off to explain
 the match.
+
+Status: built. Consolidation rewrites each concept's signature whole
+from its current grounding (an abstraction's through its constellation,
+so the chain still bottoms out in moments): the recurring open-class
+words of its shape, the channels it lives on, and the felt chemistry,
+each a shared feature node under a weighted feature edge, floored,
+capped, and free of normalizer placeholders. Feature nodes are kind
+"feature" in the same store, visible in dump and in golem concepts as
+the signature line, and they die by disconnection when their last
+bearer goes. Recall reads the layer after the literal and lexical
+paths: a phrasing never seen that shares enough attributes lands on
+the resembled concept's experience, with the matched feature nodes
+returned as mediators, so the reply shows exactly which shared
+attributes carried the match. The same relation extends the think
+primitive (walk(feature, S), resemblance scored in [0, 1] against the
+seed's whole signature), so disconnected kin associate as "X is like
+Y" while every thought still starts and lands on named nodes. The
+done-when holds in tests.
 
 ## Known limitations
 
@@ -1031,11 +1097,12 @@ the match.
   memory or grounding an action (marking channels untrusted, weighting them
   low, barring them from action grounding) is a policy to get right as the
   agency work lands.
-- Localist coding does not generalize. One node per concept is maximally
-  auditable but blind to paraphrase: a synonym or a novel phrasing matches
-  nothing until an explicit link or a shared feature signature exists. This
-  is the representation root under the answer-shaped comprehension ceiling,
-  and Step 20 is the planned lever.
+- Feature signatures are surface-deep. The sparse layer generalizes by
+  recurring tokens, channels, and felt chemistry, so a paraphrase lands
+  only when it shares surface attributes with the lived shape; a true
+  synonym with no shared token still needs a naming bond or a lived
+  bridge. Breadth has to be lived or told, and the answer-shaped
+  comprehension ceiling stands above the representation either way.
 
 ## Open questions
 

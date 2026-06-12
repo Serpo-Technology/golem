@@ -139,6 +139,13 @@ func testDaemon(t *testing.T) (*Daemon, *memory.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	return testDaemonOn(t, s), s
+}
+
+// testDaemonOn wires a loop-less daemon over an existing store, so a
+// test can pre-seed the memory a boot finds.
+func testDaemonOn(t *testing.T, s *memory.Store) *Daemon {
+	t.Helper()
 	d := &Daemon{
 		store:        s,
 		chem:         limbic.New(),
@@ -161,7 +168,7 @@ func testDaemon(t *testing.T) (*Daemon, *memory.Store) {
 	if err := d.loadGrammar(); err != nil {
 		t.Fatal(err)
 	}
-	return d, s
+	return d
 }
 
 // encodeAt stores one moment with a chosen surprise and time.

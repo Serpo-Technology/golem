@@ -36,16 +36,18 @@ const (
 // loadGrammar reads the grammar parameters out of memory, training the
 // curriculum into starter memory on first run, and compiles the working
 // copy the engine reads. The compile is the cache: per-parse lookups
-// are RAM map hits, rebuilt at wake after the nightly competition.
+// are RAM map hits, rebuilt at wake after the nightly competition. A
+// memory trained by an earlier build tops up: innate forms the
+// curriculum has since gained are seeded in, while every parameter the
+// store already holds keeps its learned weight.
 func (d *Daemon) loadGrammar() error {
 	nodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {
 		return err
 	}
-	if len(nodes) == 0 {
-		if err := d.trainGrammar(); err != nil {
-			return err
-		}
+	if trained, err := d.trainGrammar(nodes); err != nil {
+		return err
+	} else if trained > 0 {
 		if nodes, err = d.store.NodesByKind(memory.KindGrammar); err != nil {
 			return err
 		}
@@ -56,9 +58,18 @@ func (d *Daemon) loadGrammar() error {
 // trainGrammar writes the innate curriculum into starter memory through
 // the standard encode path, so the grammar seed is the first curriculum
 // and the seeding path is the one all bootstrapping uses. Encode stamps
-// every node at maximal weight.
-func (d *Daemon) trainGrammar() error {
+// every node at maximal weight. Parameters already held are left alone,
+// which makes the same pass both the first boot and the top-up.
+func (d *Daemon) trainGrammar(held []*memory.Fragment) (int, error) {
+	have := make(map[string]bool, len(held))
+	for _, n := range held {
+		have[n.Template] = true
+	}
+	trained := 0
 	for _, p := range grammar.Curriculum() {
+		if have[p.Key] {
+			continue
+		}
 		f := &memory.Fragment{
 			Kind:     memory.KindGrammar,
 			Channel:  "grammar",
@@ -69,10 +80,11 @@ func (d *Daemon) trainGrammar() error {
 			Time:     time.Now(),
 		}
 		if _, err := d.store.Encode(f); err != nil {
-			return err
+			return trained, err
 		}
+		trained++
 	}
-	return nil
+	return trained, nil
 }
 
 // compileGrammar builds the engine's working copy from grammar nodes,

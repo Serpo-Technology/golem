@@ -118,10 +118,22 @@ type Daemon struct {
 	thinkSeed     uint64
 	thinkSeedHeat float64
 	lastThought   string
+	lastThoughtAt time.Time
 	// recentThoughts is the refractory ring: thoughts that re-entered
 	// perception lately, so the loop cannot ruminate one line into memory.
 	recentThoughts []string
 	ops            map[string]*memory.Fragment
+
+	// The faculties fire from the same arbiter the walks use. lastAct
+	// holds each act's refractory, and encodesSinceSleep is the clutter
+	// the tidiness acts read.
+	lastAct           map[string]time.Time
+	encodesSinceSleep int
+
+	// goal is the one intention held across steps: adopted when GOLEM
+	// asks about a word that points at nothing, pursued by the drives,
+	// settled by checkGoal.
+	goal *goalState
 
 	// voice carries utterances to the text-to-speech effector, opened on
 	// first use when the voice is on. voiceOn and voiceName start from
@@ -800,6 +812,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		return wire.ObserveResult{Bits: bits}
 	}
 	st.Conscious++
+	d.encodesSinceSleep++
 	d.hot.Put(frag)
 	// A moment whose shape has a concept warms that concept: experience
 	// keeps working memory pointed at what is happening.
@@ -1100,15 +1113,16 @@ func (d *Daemon) readyToSleep() bool {
 // cross-channel links and order, decay and prune in the store, merge
 // recurring shapes into prototypes, distil prototypes into concepts and
 // bond words to them, flush predictor state, wake with reset sleep
-// pressure.
-func (d *Daemon) sleepCycle() {
+// pressure. The counts come back so the consolidate act can judge its
+// own fruit.
+func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	_, woven := d.replay(d.lastSleep)
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err != nil {
 		fmt.Fprintf(d.out, "sleep error: %v\n", err)
-		return
+		return 0, 0, 0
 	}
-	merged, err := d.store.MergeDuplicates()
+	merged, err = d.store.MergeDuplicates()
 	if err != nil {
 		fmt.Fprintf(d.out, "merge error: %v\n", err)
 	}
@@ -1116,6 +1130,9 @@ func (d *Daemon) sleepCycle() {
 	// Words whose company is a stable cloud rather than one shape
 	// distil into abstractions grounded in their constellations.
 	born += d.growAbstractions()
+	// Each concept's sparse signature rewrites from its current
+	// grounding, so resemblance stays current and auditable.
+	d.growFeatures()
 	// Usage and seed settle their nightly contest, and the working
 	// grammar recompiles from the surviving weights.
 	d.grammarCompetition()
@@ -1133,6 +1150,7 @@ func (d *Daemon) sleepCycle() {
 	d.thinkEpoch++
 	d.sleeps++
 	d.lastSleep = time.Now()
+	d.encodesSinceSleep = 0
 	held, _ := d.store.Count()
 	d.event(events.Event{Ev: "replay", Count: woven})
 	d.event(events.Event{Ev: "prune", Count: pruned})
@@ -1140,6 +1158,7 @@ func (d *Daemon) sleepCycle() {
 	d.event(events.Event{Ev: "sleep", Count: held})
 	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d concept(s) born, %d word(s) bonded, %d held.\n",
 		d.sleeps, woven, pruned, merged, born, named, held)
+	return pruned, merged, born
 }
 
 func (d *Daemon) flushModels() {
@@ -1178,6 +1197,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	}
 	d.growConcepts()
 	d.growAbstractions()
+	d.growFeatures()
 	d.grammarCompetition()
 	d.flushModels()
 	d.store.Checkpoint()
@@ -1263,6 +1283,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			Running:        d.runningCmds(),
 			Queued:         len(d.waiting),
 			Warm:           d.warmInfos(3),
+			Goal:           d.goalDescription(),
 		}}, false, false
 
 	case "concepts":
@@ -1313,6 +1334,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		resp.Say, resp.Decision = d.plan(frame, req.Content)
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)
+		// The exchange may have named what a held goal was hunting.
+		d.checkGoal()
 		// What do these words point at? The new fragment just bound to the
 		// recent past, so a spread from it is GOLEM's side of the exchange.
 		if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {
@@ -1334,24 +1357,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				d.hot.Put(f)
 			}
 		} else {
-			seeds, err = d.recallTiered(req.Query, 3)
-			if err == nil {
-				// Meaning widens the literal match: words of the query
-				// name concepts, and what those concepts ground joins
-				// the seeds even with no substring in common.
-				grounded, meds := d.semanticSeeds(req.Query)
-				mediators = meds
-				seen := make(map[uint64]bool, len(seeds))
-				for _, f := range seeds {
-					seen[f.ID] = true
-				}
-				for _, f := range grounded {
-					if !seen[f.ID] {
-						seen[f.ID] = true
-						seeds = append(seeds, f)
-					}
-				}
-			}
+			seeds, mediators, err = d.recallSeeds(req.Query)
 		}
 		if err != nil {
 			return wire.Response{Error: err.Error()}, false, false
