@@ -116,19 +116,23 @@ func TestSleepClearsHot(t *testing.T) {
 // tiers, so an inner-loop thought cannot crowd out the experience asked for.
 func TestRecallTieredDemotesThoughts(t *testing.T) {
 	d, s := testDaemon(t)
-	s.Encode(&memory.Fragment{Channel: "thought", Content: "thought: that time: a small brown dog",
-		Surprise: 5, Limbic: limbic.State{Noradrenaline: 1.0}, Time: time.Now()})
+	// Many loud (high-stress) thoughts mention the concept, and one quieter
+	// grounded sighting does too. The per-tier limit would drop the sighting
+	// behind the thoughts unless grounded recollections are demoted before
+	// the cut, which is the case this guards.
+	for i := range 8 {
+		s.Encode(&memory.Fragment{Channel: "thought",
+			Content:  "thought: that time: a small brown dog " + string(rune('a'+i)),
+			Surprise: 5, Limbic: limbic.State{Noradrenaline: 1.0}, Time: time.Now()})
+	}
 	s.Encode(&memory.Fragment{Channel: "vision", Content: "a small brown dog",
 		Surprise: 4, Limbic: limbic.State{Noradrenaline: 0.4}, Time: time.Now()})
 
-	frags, err := d.recallTiered("dog", 5)
+	frags, err := d.recallTiered("dog", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(frags) != 2 {
-		t.Fatalf("both the sighting and the thought should be recallable: %+v", frags)
-	}
-	if frags[0].Channel != "vision" {
-		t.Fatalf("a grounded recollection should outrank self-talk, got %q first", frags[0].Channel)
+	if len(frags) == 0 || frags[0].Channel != "vision" {
+		t.Fatalf("the grounded sighting should lead despite many louder thoughts: %+v", frags)
 	}
 }

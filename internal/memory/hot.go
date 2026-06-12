@@ -83,6 +83,11 @@ func (h *HotTier) Search(query string, limit int) []*Fragment {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
+		// Grounded recollections rank above thought-channel self-talk, so
+		// the limit cut keeps experience over the inner loop's chatter.
+		if ti, tj := out[i].Channel == thoughtChannel, out[j].Channel == thoughtChannel; ti != tj {
+			return tj
+		}
 		if out[i].Limbic.Noradrenaline != out[j].Limbic.Noradrenaline {
 			return out[i].Limbic.Noradrenaline > out[j].Limbic.Noradrenaline
 		}
