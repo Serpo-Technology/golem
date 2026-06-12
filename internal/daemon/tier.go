@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"sort"
+
 	"golem/internal/memory"
 )
 
@@ -11,36 +13,40 @@ import (
 // path: what a cue means should not bend toward whatever happens to be
 // cached.
 func (d *Daemon) recallTiered(query string, limit int) ([]*memory.Fragment, error) {
-	hits := d.hot.Search(query, limit)
-	if len(hits) > 0 {
-		ids := make([]uint64, len(hits))
-		for i, f := range hits {
-			ids[i] = f.ID
-			f.Weight = 1.0
-		}
-		if err := d.store.Refresh(ids); err != nil {
-			return nil, err
-		}
-	}
-	if len(hits) >= limit {
-		return hits, nil
-	}
-	cold, err := d.store.Recall(query, limit)
+	// Gather from both tiers before trimming, so a hot-tier thought cannot
+	// crowd out a grounded recollection that lives only in the archive.
+	hot := d.hot.Search(query, limit*2)
+	cold, err := d.store.Recall(query, limit*2)
 	if err != nil {
 		return nil, err
 	}
-	seen := make(map[uint64]bool, len(hits))
-	for _, f := range hits {
-		seen[f.ID] = true
-	}
-	for _, f := range cold {
-		if seen[f.ID] || len(hits) >= limit {
-			continue
+	seen := make(map[uint64]bool, len(hot)+len(cold))
+	merged := make([]*memory.Fragment, 0, len(hot)+len(cold))
+	for _, f := range append(hot, cold...) {
+		if !seen[f.ID] {
+			seen[f.ID] = true
+			merged = append(merged, f)
 		}
-		hits = append(hits, f)
+	}
+	// A thought re-enters memory carrying a concept's gloss verbatim, so it
+	// substring-matches the query. Self-talk stays recallable but ranks
+	// below grounded recollections, so it cannot outrank experience.
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[i].Channel != thoughtChannel && merged[j].Channel == thoughtChannel
+	})
+	if len(merged) > limit {
+		merged = merged[:limit]
+	}
+	ids := make([]uint64, 0, len(merged))
+	for _, f := range merged {
+		f.Weight = 1.0
+		ids = append(ids, f.ID)
 		d.hot.Put(f)
 	}
-	return hits, nil
+	if err := d.store.Refresh(ids); err != nil {
+		return nil, err
+	}
+	return merged, nil
 }
 
 // fragmentsByIDsTiered fetches by ID through the working set, promoting

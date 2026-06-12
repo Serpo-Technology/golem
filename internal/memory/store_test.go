@@ -169,26 +169,6 @@ func TestRecallByQuery(t *testing.T) {
 	}
 }
 
-// A thought re-enters memory carrying a concept's gloss verbatim, so it
-// substring-matches a query for that concept. Self-talk is held out of the
-// direct recall the way word and concept nodes are: reachable through the
-// link graph but never a recall hit that could outrank experience.
-func TestRecallExcludesThoughts(t *testing.T) {
-	s, _ := tempStore(t)
-	s.Encode(&Fragment{Channel: thoughtChannel, Content: "thought: that time: a small brown dog",
-		Surprise: 5, Limbic: limbic.State{Noradrenaline: 1.0}, Time: time.Now()})
-	s.Encode(&Fragment{Channel: "vision", Content: "a small brown dog",
-		Surprise: 4, Limbic: limbic.State{Noradrenaline: 0.4}, Time: time.Now()})
-
-	frags, err := s.Recall("dog", 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(frags) != 1 || frags[0].Channel != "vision" {
-		t.Fatalf("recall should return only the grounded sighting, not self-talk: %+v", frags)
-	}
-}
-
 // Links bind, never weaken by rebinding, strengthen with practice, fade
 // each night, and die with their endpoints.
 func TestLinksLifecycle(t *testing.T) {

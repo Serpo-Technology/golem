@@ -109,3 +109,26 @@ func TestSleepClearsHot(t *testing.T) {
 		t.Fatalf("sleep should clear the working set, %d left", d.hot.Len())
 	}
 }
+
+// A thought re-enters memory carrying a concept's gloss verbatim, so it
+// substring-matches a concept query. Tiered recall keeps it reachable but
+// ranks grounded recollections above the mind's self-talk, across both
+// tiers, so an inner-loop thought cannot crowd out the experience asked for.
+func TestRecallTieredDemotesThoughts(t *testing.T) {
+	d, s := testDaemon(t)
+	s.Encode(&memory.Fragment{Channel: "thought", Content: "thought: that time: a small brown dog",
+		Surprise: 5, Limbic: limbic.State{Noradrenaline: 1.0}, Time: time.Now()})
+	s.Encode(&memory.Fragment{Channel: "vision", Content: "a small brown dog",
+		Surprise: 4, Limbic: limbic.State{Noradrenaline: 0.4}, Time: time.Now()})
+
+	frags, err := d.recallTiered("dog", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frags) != 2 {
+		t.Fatalf("both the sighting and the thought should be recallable: %+v", frags)
+	}
+	if frags[0].Channel != "vision" {
+		t.Fatalf("a grounded recollection should outrank self-talk, got %q first", frags[0].Channel)
+	}
+}

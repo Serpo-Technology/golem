@@ -77,11 +77,6 @@ func (h *HotTier) Search(query string, limit int) []*Fragment {
 		if f.Kind != "" && f.Kind != KindEpisodic {
 			continue
 		}
-		if f.Channel == thoughtChannel {
-			// Self-talk is reachable through the link graph, not as a direct
-			// recall hit, so it cannot crowd out experience in the hot tier.
-			continue
-		}
 		if strings.Contains(strings.ToLower(f.Content), q) ||
 			strings.Contains(strings.ToLower(f.Template), q) {
 			out = append(out, f)
