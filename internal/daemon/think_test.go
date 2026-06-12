@@ -496,6 +496,27 @@ func TestFruitReinforcesOperation(t *testing.T) {
 	}
 }
 
+// The refractory ring guards against rumination: a thought re-entered
+// within the recent window is recognized as a repeat, and ages out once
+// enough distinct thoughts have passed.
+func TestThoughtRefractory(t *testing.T) {
+	d, _ := testDaemon(t)
+	if d.thoughtRuminates("thought: a small brown dog") {
+		t.Fatal("a thought never thought is not rumination")
+	}
+	d.rememberThought("thought: a small brown dog")
+	if !d.thoughtRuminates("thought: a small brown dog") {
+		t.Fatal("a just-remembered thought is rumination")
+	}
+	// Push it out of the bounded ring with distinct thoughts.
+	for i := range thoughtRefractory {
+		d.rememberThought("thought: filler " + string(rune('a'+i)))
+	}
+	if d.thoughtRuminates("thought: a small brown dog") {
+		t.Fatal("a thought aged out of the ring is no longer rumination")
+	}
+}
+
 // A thought-type that repeatedly bears fruit is preferred over one that
 // does not: learned worth multiplies into the arbitration priority.
 func TestFruitfulOperationIsPreferred(t *testing.T) {

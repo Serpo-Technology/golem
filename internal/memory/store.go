@@ -349,9 +349,15 @@ func (s *Store) RecallByStress() (*Fragment, error) {
 // semantic walk through words and concepts widens it to paraphrases.
 func (s *Store) Recall(query string, limit int) ([]*Fragment, error) {
 	q := strings.ToLower(query)
+	// Thoughts are episodic moments on the thought channel, and the inner
+	// loop embeds a concept's gloss verbatim, so a thought about a dog
+	// substring-matches a query for "dog". They stay reachable but rank
+	// below grounded recollections, so the mind's self-talk cannot outrank
+	// the experience the query is actually after.
 	frags, err := s.query(`SELECT `+fragmentCols+` FROM fragments
 		WHERE kind = ? AND (instr(lower(content), ?) > 0 OR instr(lower(template), ?) > 0)
-		ORDER BY noradrenaline DESC, id DESC LIMIT ?`, KindEpisodic, q, q, limit)
+		ORDER BY (channel = ?) ASC, noradrenaline DESC, id DESC LIMIT ?`,
+		KindEpisodic, q, q, thoughtChannel, limit)
 	if err != nil {
 		return nil, err
 	}

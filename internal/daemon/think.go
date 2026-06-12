@@ -51,13 +51,14 @@ import (
 // Thoughts never reset the quiet timers and never cue habits: the mind's
 // own activity is not the world's.
 const (
-	thoughtChannel   = "thought"
-	utteranceChannel = "tell"
-	thinkDamping     = 0.7  // warmth handed to an association, per step
-	thinkFatigue     = 0.4  // what remains on a seed after thinking from it
-	thinkSeedFloor   = 0.10 // embers below this do not seed a thought
-	thinkFanout      = 2    // associations fed back per step
-	thinkAssocFloor  = 0.05 // edges weaker than this carry no association
+	thoughtChannel    = "thought"
+	utteranceChannel  = "tell"
+	thinkDamping      = 0.7  // warmth handed to an association, per step
+	thinkFatigue      = 0.4  // what remains on a seed after thinking from it
+	thinkSeedFloor    = 0.10 // embers below this do not seed a thought
+	thinkFanout       = 2    // associations fed back per step
+	thinkAssocFloor   = 0.05 // edges weaker than this carry no association
+	thoughtRefractory = 24   // recent re-entered thoughts guarded against repeat
 )
 
 // The signals a walk can rank by. Weight is the lived strength of the
@@ -570,12 +571,41 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 		}
 	}
 	d.ws.cool(winner.seed, thinkFatigue)
+	// A thought already re-entered in the recent rounds is rumination. A
+	// repeat is the most barren thought there is, so wear its operation the
+	// way any routine step does, but neither re-encode nor re-broadcast it,
+	// so one line cannot pile up as memory.
+	if d.thoughtRuminates(winner.content) {
+		d.noteThoughtFruit(winner, wire.ObserveResult{})
+		return
+	}
 	for _, id := range winner.warm {
 		d.ws.excite(id, winner.seedHeat*thinkDamping)
 	}
 	d.lastThought = winner.content
+	d.rememberThought(winner.content)
 	res := d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
 	d.noteThoughtFruit(winner, res)
+}
+
+// thoughtRuminates reports whether this exact thought re-entered perception
+// within the recent refractory window.
+func (d *Daemon) thoughtRuminates(content string) bool {
+	for _, t := range d.recentThoughts {
+		if t == content {
+			return true
+		}
+	}
+	return false
+}
+
+// rememberThought records a re-entered thought in the bounded refractory
+// ring, evicting the oldest.
+func (d *Daemon) rememberThought(content string) {
+	d.recentThoughts = append(d.recentThoughts, content)
+	if len(d.recentThoughts) > thoughtRefractory {
+		d.recentThoughts = d.recentThoughts[len(d.recentThoughts)-thoughtRefractory:]
+	}
 }
 
 // noteThoughtFruit is the operant loop turned inward: a thought

@@ -118,7 +118,10 @@ type Daemon struct {
 	thinkSeed     uint64
 	thinkSeedHeat float64
 	lastThought   string
-	ops           map[string]*memory.Fragment
+	// recentThoughts is the refractory ring: thoughts that re-entered
+	// perception lately, so the loop cannot ruminate one line into memory.
+	recentThoughts []string
+	ops            map[string]*memory.Fragment
 
 	// voice carries utterances to the text-to-speech effector, opened on
 	// first use when the voice is on. voiceOn and voiceName start from
