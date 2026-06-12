@@ -57,6 +57,20 @@ Two commitments govern every decision below.
   at the edge under the glass box; agency (acting on the world) rides the
   execution gates and comes last, with untrusted channels barred from
   grounding actions.
+- Conversational target: GOLEM runs itself and converses about what it has
+  grounded, taking natural-language direction. Its faculties collapse into
+  the conscious loop, so only start and stop stay manual. Open-domain
+  fluency is not ruled out, since the brain reaches it without an LLM, but
+  it is a long road, and the lever is the representation; the absence of an
+  LLM was never the barrier. Importing pretrained weights to chase open chat
+  is the one move that would cost the glass box, so it stays out.
+- Representation: a concept keeps its single named node as the auditable
+  handle, and generalization comes from a sparse, interpretable feature
+  signature hung underneath it, never from replacing the node with an opaque
+  distributed pattern. Similarity is feature overlap; provenance and the
+  glass box survive at the concept layer, and only the learned feature layer
+  is read by interpretation. Concept cells over feature populations, the
+  brain's own arrangement.
 
 ## Step 1: Core hardening
 
@@ -875,6 +889,120 @@ window-based naming depression exempts it, since an abstraction's
 referent is never directly in a sensory window. The done-when holds in
 tests, with the dominance and recurrence refusals asserted alongside.
 
+## Step 17: Faculties become acts
+
+Goal: collapse the CLI into the conscious loop. GOLEM's own faculties
+(recall, ground, consolidate, introspect, speak, propose) become selectable
+acts in the same operant space as the walk(R, S) thought primitive, so the
+loop drives them itself and a request can trigger them. Only start and stop
+stay manual.
+
+The gate already selects external commands, chemistry and the workspace
+already bias it, and outcome already reinforces it; Step 13 already turned
+thinking into a selectable operation with learned worth and a teachable
+name. This widens that one move to every faculty. GOLEM already drives
+sleep, encoding, naming, and autocue proposals on its own, so the pattern
+exists and this extends it.
+
+- [ ] One action space spanning external commands and internal faculties,
+      each a primitive the basal-ganglia gate can select.
+- [ ] Selection by the machinery already in place: chemistry appetite,
+      workspace warmth, and the operation's learned worth, the way
+      walk(R, S) is chosen now.
+- [ ] A concept can name any act (the mental-teach generalized), so a word
+      steers a faculty.
+- [ ] The CLI verbs become handles on those acts, not the only way they
+      fire; the loop fires them when its state calls for it.
+
+Forced deviation, flagged: the act primitives are a hand-listed innate
+floor, the same innate-machinery, learned-selection stance the grammar and
+the think primitive take.
+
+Done when: GOLEM recalls, grounds, or consolidates unprompted when its state
+calls for it, the same act a CLI verb triggers, and a taught word can invoke
+any of them.
+
+## Step 18: Natural-language control and conversation
+
+Goal: plain language becomes both control and conversation. A request
+resolves to an intent over Step 17's action space, and the planner holds a
+multi-turn exchange instead of answering one shot.
+
+Comprehension is answer-shaped today: a few frames map to answers. This
+widens it to intents ("recall the dog" fires recall, "remember this as a
+bell" grounds, "what were you thinking" introspects), and turns the planner
+into a turn-taker. It stays bounded by grounding, interpreting requests about
+its own world and faculties, not open-domain prose.
+
+- [ ] Parse a wider range of input into intents, mapped onto the action
+      space, and admit incomprehension instead of bluffing when nothing
+      parses.
+- [ ] The workspace carries the topic across turns; reference like "it",
+      "that", and "the other one" resolves against it.
+- [ ] Decide what to say next, including asking a follow-up, not only
+      answering the immediate question.
+
+Done when: a plain request drives the matching internal act, and GOLEM
+sustains a multi-turn exchange about a grounded topic, holding the thread.
+
+## Step 19: Drives and goals
+
+Goal: give the loop reasons to act beyond chemical reflex, so it can direct
+itself with intent and not only react.
+
+Today the drives are chemical: surprise encodes, pressure sleeps, dopamine
+asks. Genuine self-direction needs a goal it can hold and pursue. This is
+the deepest and least-charted piece, so it is staged from cheap drives
+toward real goal-pursuit, with the far end treated as open research.
+
+- [ ] Cheap drives first: a relevance drive that recalls what fits the
+      moment, a tidiness drive that consolidates clutter, building on the
+      curiosity drive already present.
+- [ ] Drives bias the action gate, so GOLEM acts for a reason, and the
+      reason is on the trail.
+- [ ] A goal representation the loop can hold across steps and act toward.
+
+Flagged: the first two are reachable; a held, pursued goal is the frontier
+of the frontier and stays open research.
+
+Done when: GOLEM takes an unprompted internal act because a drive called for
+it, and the drive is readable on the audit trail.
+
+## Step 20: Sparse feature signatures
+
+Goal: let concepts generalize, so a paraphrase or a novel phrasing lands
+near what it resembles, by hanging a sparse, interpretable feature signature
+under each concept. Augment the localist node, never replace it.
+
+One node per concept is maximally auditable but blind to paraphrase: every
+synonym needs an explicit link. The brain puts concept cells over
+distributed feature populations; mirror that. Each named concept keeps its
+node and gains a sparse set of interpretable features, and similarity becomes
+feature overlap.
+
+- [ ] A sparse feature layer under the concept nodes; each concept carries a
+      signature of interpretable features.
+- [ ] Features earn meaning from clustered experience, the one place reading
+      is interpretive, where a named node's meaning is simply declared.
+- [ ] Similarity by feature overlap, so an input lands near the concept it
+      resembles with no shared substring, and the shared features explain why.
+- [ ] Concept-node provenance preserved: a thought still originates from a
+      named node, so everything the inner loop and the trail already show
+      stays exactly as readable.
+
+Forced deviation, flagged: the feature layer is learned and read by
+interpretation, softer than a named node's declared meaning. The trade is
+deliberate and confined to the feature layer, so the concept layer stays
+crisp.
+
+Boundary, flagged: this is the lever toward open-domain, but breadth still
+has to be lived or told, and human-range fluency remains a long road, not a
+milestone.
+
+Done when: a word never seen, sharing features with a known concept, recalls
+that concept by overlap, and the shared features can be read off to explain
+the match.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -903,6 +1031,11 @@ tests, with the dominance and recurrence refusals asserted alongside.
   memory or grounding an action (marking channels untrusted, weighting them
   low, barring them from action grounding) is a policy to get right as the
   agency work lands.
+- Localist coding does not generalize. One node per concept is maximally
+  auditable but blind to paraphrase: a synonym or a novel phrasing matches
+  nothing until an explicit link or a shared feature signature exists. This
+  is the representation root under the answer-shaped comprehension ceiling,
+  and Step 20 is the planned lever.
 
 ## Open questions
 
