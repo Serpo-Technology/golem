@@ -170,10 +170,10 @@ func TestRecallByQuery(t *testing.T) {
 }
 
 // A thought re-enters memory carrying a concept's gloss verbatim, so it
-// substring-matches a query for that concept. Thoughts stay recallable but
-// rank below grounded recollections even when they carry more stress, so
-// the mind's self-talk cannot outrank the experience the query is after.
-func TestRecallDemotesThoughts(t *testing.T) {
+// substring-matches a query for that concept. Self-talk is held out of the
+// direct recall the way word and concept nodes are: reachable through the
+// link graph but never a recall hit that could outrank experience.
+func TestRecallExcludesThoughts(t *testing.T) {
 	s, _ := tempStore(t)
 	s.Encode(&Fragment{Channel: thoughtChannel, Content: "thought: that time: a small brown dog",
 		Surprise: 5, Limbic: limbic.State{Noradrenaline: 1.0}, Time: time.Now()})
@@ -184,14 +184,8 @@ func TestRecallDemotesThoughts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(frags) != 2 {
-		t.Fatalf("both the sighting and the thought should be recallable: %+v", frags)
-	}
-	if frags[0].Channel != "vision" {
-		t.Fatalf("the grounded sighting should outrank the thought, got %q first", frags[0].Channel)
-	}
-	if frags[1].Channel != thoughtChannel {
-		t.Fatalf("the thought should still be reachable, just demoted: %+v", frags)
+	if len(frags) != 1 || frags[0].Channel != "vision" {
+		t.Fatalf("recall should return only the grounded sighting, not self-talk: %+v", frags)
 	}
 }
 
