@@ -194,3 +194,39 @@ func TestComprehendBestFitPrefersAnimateAgent(t *testing.T) {
 		t.Fatalf("position should stand when it already agrees: %+v", m2.Roles)
 	}
 }
+
+// The same construction both says and understands: a meaning generated to a
+// surface string comprehends back into the same roles over the same relation,
+// the round trip through one inventory read each way that is the whole point.
+func TestArgConstructionRoundTrip(t *testing.T) {
+	p := Builtin()
+	dog := &memory.Fragment{ID: 1, Content: "dog"}
+	cat := &memory.Fragment{ID: 2, Content: "cat"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "dog":
+			return dog
+		case "cat":
+			return cat
+		}
+		return nil
+	}
+	said, ok := p.Speak("en", Meaning{
+		Relation: Term{Phrase: "chase"},
+		Roles:    map[string]Term{"agent": {Phrase: "the dog"}, "patient": {Phrase: "the cat"}},
+		Past:     true,
+	})
+	if !ok || said != "The dog chased the cat." {
+		t.Fatalf("generation should speak the proposition: %q", said)
+	}
+	back, ok := p.Comprehend("en", said, resolve, nil)
+	if !ok {
+		t.Fatal("the said sentence should comprehend back")
+	}
+	if back.Roles["agent"].Concept != dog || back.Roles["patient"].Concept != cat {
+		t.Fatalf("the round trip should recover the roles: %+v", back.Roles)
+	}
+	if back.Relation.Phrase != "chase" || !back.Past {
+		t.Fatalf("the round trip should recover the relation and tense: %q past %v", back.Relation.Phrase, back.Past)
+	}
+}
