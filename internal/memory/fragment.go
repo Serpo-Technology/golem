@@ -34,13 +34,19 @@ const (
 // (bidirectional), successor is order (directed, earlier to later), names
 // points a word at its concept, grounds points a concept at the episodes
 // that instantiate it, and feature points a concept at an attribute its
-// lived experience exhibits, weighted by how much of it does.
+// lived experience exhibits, weighted by how much of it does. A relation
+// reified as a concept grounds in the moments that instantiate it like any
+// other, and those moments point at what filled each role: agent at what
+// acted, patient at what was acted on, so a proposition is a moment with its
+// roles named.
 const (
 	RelTemporal  = "temporal"
 	RelSuccessor = "successor"
 	RelNames     = "names"
 	RelGrounds   = "grounds"
 	RelFeature   = "feature"
+	RelAgent     = "agent"
+	RelPatient   = "patient"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."

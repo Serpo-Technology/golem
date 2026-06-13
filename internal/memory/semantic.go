@@ -96,6 +96,29 @@ func (s *Store) Reground(weight float64) (int, error) {
 	return int(n), err
 }
 
+// Propose records one instance of a relation: the relation grounds in the
+// moment that instantiates it, and the moment points at what filled each role,
+// the agent at what acted and the patient at what it acted on. So "a dog
+// chased a cat" grounds chase in the moment with the dog as agent and the cat
+// as patient, the structure a proposition stands on. A zero role is left
+// unbound, so an intransitive instance carries an agent and no patient.
+func (s *Store) Propose(relation, moment, agent, patient uint64, weight float64) error {
+	if err := s.LinkRel(relation, moment, RelGrounds, weight); err != nil {
+		return err
+	}
+	if agent != 0 {
+		if err := s.LinkRel(moment, agent, RelAgent, weight); err != nil {
+			return err
+		}
+	}
+	if patient != 0 {
+		if err := s.LinkRel(moment, patient, RelPatient, weight); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // WordNode returns the node for a surface form in a language, minting it
 // on first use. Reuse is practice: the count grows and the weight
 // refreshes.
