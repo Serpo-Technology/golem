@@ -134,6 +134,35 @@ func pastEN(base string) string {
 	}
 }
 
+// restoreSilentE puts back the silent e the regular past and third-person
+// rules drop, where the stem's ending implies one: a sibilant or soft
+// consonant, or a single consonant after a vowel, carried an e in the base
+// (chase, like, dance), while a consonant cluster did not (walk, jump). It
+// is the spelling half of recovering a lemma from an inflected verb.
+func restoreSilentE(stem string) string {
+	if stem == "" {
+		return stem
+	}
+	last := rune(stem[len(stem)-1])
+	switch last {
+	case 'c', 's', 'z', 'g', 'v':
+		return stem + "e"
+	}
+	if len(stem) >= 2 && isConsonantLetter(last) && isVowelLetter(rune(stem[len(stem)-2])) {
+		return stem + "e"
+	}
+	return stem
+}
+
+// isConsonantLetter reports a plain consonant, treating the glides y and w
+// as vowels so a word ending in one does not draw a spurious silent e.
+func isConsonantLetter(r rune) bool {
+	if r < 'a' || r > 'z' {
+		return false
+	}
+	return !isVowelLetter(r) && r != 'y' && r != 'w'
+}
+
 // pluralIrregularEN are the noun plurals no rule reaches.
 var pluralIrregularEN = map[string]string{
 	"child":  "children",

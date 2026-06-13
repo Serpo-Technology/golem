@@ -1,6 +1,10 @@
 package grammar
 
-import "strings"
+import (
+	"strings"
+
+	"golem/internal/memory"
+)
 
 // An argument-structure construction is a two-poled form-and-meaning pair:
 // a form pole of ordered, typed slots (the word order and the syntactic
@@ -146,6 +150,201 @@ func (p *Params) layout(lang string, c ArgConstruction) []ArgSlot {
 		out = append(out, pred)
 	}
 	return out
+}
+
+// bestFitMargin is how decisively feature fit must beat the word order
+// before it overrides position: the form pole is the strong prior, so only
+// a clear preference (an animate filler stranded in the patient slot)
+// reassigns the roles. Equal fits leave position standing.
+const bestFitMargin = 0.2
+
+// Comprehend runs the argument-structure constructions form to meaning, the
+// one engine reversed. The utterance's surface spans fill the
+// construction's slots in the language's word order, the same layout
+// generation lays out by; each noun-phrase span resolves to the concept it
+// names and the predicate span to the relation's lemma, so a told "a dog
+// chased a cat" yields the proposition chase(agent: dog, patient: cat).
+// When a feature-fit scorer is given, best fit refines the role assignment
+// the order proposed, so an animate concept stranded as the patient is read
+// as the agent instead. It returns false when no construction's shape fits
+// the utterance, so the caller can fall back to the frame parser.
+func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory.Fragment, fit func(*memory.Fragment, string) float64) (Meaning, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	spans, ok := p.argSpans(lang, utterance)
+	if !ok {
+		return Meaning{}, false
+	}
+	cxn, ok := p.selectArgByArity(lang, len(spans))
+	if !ok {
+		return Meaning{}, false
+	}
+	order := p.layout(lang, cxn)
+	if len(order) != len(spans) {
+		return Meaning{}, false
+	}
+	m := Meaning{Roles: map[string]Term{}, Lang: lang}
+	for i, slot := range order {
+		span := spans[i]
+		if slot.Role == cxn.Pred {
+			lemma := p.verbLemma(lang, span)
+			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
+			m.Past = p.verbPast(lang, span)
+			continue
+		}
+		m.Roles[slot.Role] = Term{Concept: resolve(span), Phrase: span}
+	}
+	p.bestFit(cxn, m, fit)
+	return m, true
+}
+
+// bestFit reorders the role assignment by feature fit when one is clearly
+// better placed elsewhere, the constraint satisfaction the feature
+// signatures supply. For the two-argument case it weighs the agent and
+// patient as bound against the swap, and swaps only when the swap wins by a
+// margin, so the word order stands unless the features overrule it
+// decisively (an animate concept is the better agent). Roles are mutated in
+// place on the meaning's map.
+func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragment, string) float64) {
+	if fit == nil {
+		return
+	}
+	args := cxn.argRoles()
+	if len(args) != 2 {
+		return
+	}
+	a, b := args[0], args[1]
+	ta, tb := m.Roles[a], m.Roles[b]
+	if ta.Concept == nil || tb.Concept == nil {
+		return
+	}
+	asIs := fit(ta.Concept, a) + fit(tb.Concept, b)
+	swapped := fit(tb.Concept, a) + fit(ta.Concept, b)
+	if swapped > asIs+bestFitMargin {
+		m.Roles[a], m.Roles[b] = tb, ta
+	}
+}
+
+// argSpans segments an utterance into the ordered surface spans an
+// argument-structure construction's slots bind to, in the language's word
+// order so generation and comprehension read the layout the same way. The
+// determiners mark the noun-phrase boundaries: two open a transitive
+// clause, the verb taking the slot the order leaves it (between the phrases
+// for SVO, after them for SOV); one opens an intransitive clause with the
+// verb at the close; none falls back to the open-class tokens in order, the
+// canonical bare clause.
+func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
+	tokens, _ := Tokenize(utterance)
+	if len(tokens) == 0 {
+		return nil, false
+	}
+	var dets []int
+	for i, tok := range tokens {
+		if p.category(lang, tok) == catDet {
+			dets = append(dets, i)
+		}
+	}
+	verbFinal := p.verbFinal(lang)
+	switch {
+	case len(dets) >= 2:
+		d2 := dets[1]
+		if verbFinal {
+			np1 := p.contentSpan(tokens[:d2])
+			np2 := p.contentSpan(tokens[d2 : len(tokens)-1])
+			verb := tokens[len(tokens)-1]
+			return []string{np1, np2, verb}, np1 != "" && np2 != "" && verb != ""
+		}
+		verb := tokens[d2-1]
+		np1 := p.contentSpan(tokens[:d2-1])
+		np2 := p.contentSpan(tokens[d2:])
+		return []string{np1, verb, np2}, np1 != "" && np2 != "" && verb != ""
+	case len(dets) == 1:
+		verb := tokens[len(tokens)-1]
+		np1 := p.contentSpan(tokens[:len(tokens)-1])
+		return []string{np1, verb}, np1 != "" && verb != ""
+	default:
+		content := p.ContentTokens(utterance)
+		return content, len(content) >= 2
+	}
+}
+
+// selectArgByArity picks the construction with the given number of slots,
+// the strongest entrenched one, ties broken by name. Arity is how a
+// three-span clause reaches the transitive construction and a two-span one
+// the intransitive, with no intent label to dispatch on.
+func (p *Params) selectArgByArity(lang string, n int) (ArgConstruction, bool) {
+	var best ArgConstruction
+	found := false
+	for _, c := range p.argcxns[lang] {
+		if len(c.Slots) != n {
+			continue
+		}
+		if !found || c.Weight > best.Weight || (c.Weight == best.Weight && c.Name < best.Name) {
+			best, found = c, true
+		}
+	}
+	return best, found
+}
+
+// verbPast reads an inflected verb's tense: a seeded event verb carries its
+// own, a form matching a seeded verb's principal parts takes the part's
+// tense, and an unknown form reads as past on the regular -ed ending, so a
+// novel "blorped" is settled while "blorps" is not.
+func (p *Params) verbPast(lang, surface string) bool {
+	if h, ok := p.hap(lang, surface); ok {
+		return h.past
+	}
+	if lang == "en" || lang == "" {
+		for _, v := range p.verbs {
+			switch surface {
+			case v.past, v.part:
+				return true
+			case v.base, v.third:
+				return false
+			}
+		}
+	}
+	return strings.HasSuffix(surface, "ed")
+}
+
+// verbLemma recovers a verb's base form from an inflected surface form, the
+// reverse of the regular conjugation, so a relation heard as "chased",
+// "chases", or "chasing" keys on the one lemma "chase". A seeded event verb
+// yields its known base; otherwise the regular endings are stripped and a
+// silent e restored where the spelling rules dropped one. It is a best
+// effort over the regular paradigm: an irregular form keeps its surface,
+// and a grounded relation is matched by the resolver before a lemma is
+// minted from it.
+func (p *Params) verbLemma(lang, surface string) string {
+	if h, ok := p.hap(lang, surface); ok {
+		return h.base
+	}
+	if lang == "en" || lang == "" {
+		for _, v := range p.verbs {
+			switch surface {
+			case v.base, v.third, v.past, v.part:
+				return v.base
+			}
+		}
+	}
+	s := surface
+	switch {
+	case strings.HasSuffix(s, "ies") && len(s) > 4:
+		return s[:len(s)-3] + "y"
+	case strings.HasSuffix(s, "ied") && len(s) > 4:
+		return s[:len(s)-3] + "y"
+	case strings.HasSuffix(s, "ing") && len(s) > 5:
+		return restoreSilentE(s[:len(s)-3])
+	case strings.HasSuffix(s, "ed") && len(s) > 3:
+		return restoreSilentE(s[:len(s)-2])
+	case strings.HasSuffix(s, "es") && len(s) > 3:
+		return restoreSilentE(s[:len(s)-2])
+	case strings.HasSuffix(s, "s") && len(s) > 2 && !strings.HasSuffix(s, "ss"):
+		return s[:len(s)-1]
+	}
+	return s
 }
 
 // SetArgConstructions installs the argument-structure constructions

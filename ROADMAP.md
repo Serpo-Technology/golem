@@ -1659,7 +1659,7 @@ way perception does, the capability that gates conversation.
 - [x] A construction carries two poles, a form pole of order, function words,
       and slots, and a meaning pole of roles over concepts and the relation
       (Step 31) that binds them, both in memory, both learned.
-- [ ] One unification engine runs the inventory both ways, meaning to form to
+- [x] One unification engine runs the inventory both ways, meaning to form to
       generate and form to meaning to comprehend, the engine the innate floor
       and the constructions the learned content, the same split as the walk and
       the graph.
@@ -1710,9 +1710,17 @@ through them: the meaning's roles pick the construction that binds them, the
 slots lay out in the language's word-order parameter so the same construction
 speaks SVO and SOV, the noun phrases speak their fillers, and the predicate is
 conjugated by the morphology engine, which now carries the regular English
-spelling rules so an open-vocabulary verb like chase comes out as chased. What
-remains is the other direction, form to meaning, and writing the proposition
-into the graph.
+spelling rules so an open-vocabulary verb like chase comes out as chased.
+
+The other direction runs now too, through the same constructions. Comprehension
+segments an utterance into the slots' surface spans by the determiners and the
+word order, the layout generation reads, resolves each noun phrase to its
+concept and the predicate to the relation's lemma (the morphology run backward,
+so chased keys on chase), and yields the proposition chase(agent, patient). Best
+fit refines what the order proposed: given a feature-fit scorer, an animate
+concept stranded in the patient slot is read as the agent, while position stands
+when it already agrees. What remains is writing the proposition into the graph
+and wiring comprehension into the daemon.
 
 ## Step 33: Discourse on the workspace field
 
