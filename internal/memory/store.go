@@ -347,6 +347,71 @@ func (s *Store) DeleteByTemplate(tpl string) (int, error) {
 	return int(n), nil
 }
 
+// Forget removes every node holding a template key and the edges touching it,
+// then sweeps any name-word, feature, or moment the cut leaves with no edges
+// at all. So deleting a concept also clears the name that pointed only at it
+// and the moments that were only about it, in one pass, while shared
+// neighbors and every other concept keep their edges and survive. The count
+// returned includes the swept satellites.
+func (s *Store) Forget(tpl string) (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	// The neighbors of the doomed nodes, gathered before the cut so each can
+	// be re-checked once its edge to the deleted node is gone.
+	rows, err := tx.Query(`SELECT from_id FROM links WHERE to_id IN (SELECT id FROM fragments WHERE template = ?)
+		UNION SELECT to_id FROM links WHERE from_id IN (SELECT id FROM fragments WHERE template = ?)`, tpl, tpl)
+	if err != nil {
+		return 0, err
+	}
+	var neighbors []uint64
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		neighbors = append(neighbors, id)
+	}
+	rows.Close()
+	if _, err := tx.Exec(`DELETE FROM links WHERE from_id IN (SELECT id FROM fragments WHERE template = ?)
+		OR to_id IN (SELECT id FROM fragments WHERE template = ?)`, tpl, tpl); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec(`DELETE FROM fragments WHERE template = ?`, tpl)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	// A name-word, feature, or moment now touching nothing existed only to
+	// describe what is gone, so it goes with it. Concepts and machinery are
+	// spared even when the cut leaves them momentarily isolated, so forgetting
+	// one concept never silently deletes another.
+	for _, id := range neighbors {
+		var cnt int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM links WHERE from_id = ? OR to_id = ?`, id, id).Scan(&cnt); err != nil {
+			return 0, err
+		}
+		if cnt > 0 {
+			continue
+		}
+		swept, err := tx.Exec(`DELETE FROM fragments WHERE id = ? AND kind IN (?, ?, ?)`,
+			id, KindWord, KindFeature, KindEpisodic)
+		if err != nil {
+			return 0, err
+		}
+		if k, _ := swept.RowsAffected(); k > 0 {
+			n += k
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
 // SetInfo records a node's information, the diversity of its grounding, in
 // the surprise column, which a concept does not otherwise use. Salience and
 // persistence read it so the system weights a node by how informative it

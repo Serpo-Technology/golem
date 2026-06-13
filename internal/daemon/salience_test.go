@@ -154,3 +154,42 @@ func TestForgetDeletesNode(t *testing.T) {
 		t.Fatal("the deletion belongs on the trail")
 	}
 }
+
+// forget prefers the concept a query names over an incidental episodic
+// mention of it, and sweeps the now-nameless word the cut orphans, so an
+// abstraction whose template is shared by neither its members' moments nor a
+// question carrying its name still goes in one pass. The member it grounded
+// in survives untouched.
+func TestForgetPrefersConceptAndSweepsName(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	// An abstraction, the word that names it, a member it grounds in, and a
+	// question that merely mentions the word. The abstraction shares its
+	// template with none of them, the shape that used to take three passes.
+	item, _ := s.Encode(&memory.Fragment{Kind: memory.KindConcept, Content: "item", Template: "abs:en:item", Time: now})
+	word, _ := s.Encode(&memory.Fragment{Kind: memory.KindWord, Content: "item", Template: "item", Time: now})
+	member, _ := s.Encode(&memory.Fragment{Kind: memory.KindConcept, Content: "a green ribbon", Template: "a green ribbon", Time: now})
+	tell, _ := s.Encode(&memory.Fragment{Kind: memory.KindEpisodic, Channel: "tell", Content: "what is item", Template: "what is item", Time: now})
+	s.LinkRel(word, item, memory.RelNames, 1.0)
+	s.LinkRel(item, member, memory.RelGrounds, 1.0)
+
+	// Under the old order recall returned the mention first, so forget took it
+	// and left the concept behind.
+	if hits, _ := s.Recall("item", 1); len(hits) == 0 || hits[0].ID != tell {
+		t.Fatalf("setup: the mention should shadow the concept in recall, got %+v", hits)
+	}
+
+	n, what, err := d.forget("item")
+	if err != nil || n == 0 {
+		t.Fatalf("forget should delete the concept: %d %q %v", n, what, err)
+	}
+	if got, _ := s.FragmentsByIDs([]uint64{item}); len(got) != 0 {
+		t.Fatal("the abstraction should be gone in one pass")
+	}
+	if got, _ := s.FragmentsByIDs([]uint64{word}); len(got) != 0 {
+		t.Fatal("the orphaned name-word should be swept with it")
+	}
+	if got, _ := s.FragmentsByIDs([]uint64{member}); len(got) != 1 {
+		t.Fatal("a member concept must survive forgetting the abstraction over it")
+	}
+}

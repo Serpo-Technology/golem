@@ -1260,16 +1260,22 @@ func (d *Daemon) tellAbout(req wire.Request) wire.Response {
 // dropped so nothing keeps a stale copy.
 func (d *Daemon) forget(query string) (int, string, error) {
 	tpl, what := "", ""
-	if hits, err := d.store.Recall(query, 1); err != nil {
+	// Prefer the concept or abstraction the query names over an incidental
+	// episodic mention of it. A told word, or a question carrying the word, is
+	// a moment about the concept and not the concept itself; resolving to one
+	// of those first deleted the mention and left the concept orphaned, so the
+	// concept comes first and an episodic shape is the fallback for a moment
+	// that never distilled into one.
+	if c := d.resolveConcept(query); c != nil {
+		tpl, what = c.Template, c.Content
+	} else if hits, err := d.store.Recall(query, 1); err != nil {
 		return 0, "", err
 	} else if len(hits) > 0 {
 		tpl, what = hits[0].Template, hits[0].Content
-	} else if c := d.resolveConcept(query); c != nil {
-		tpl, what = c.Template, c.Content
 	} else {
 		return 0, "", nil
 	}
-	n, err := d.store.DeleteByTemplate(tpl)
+	n, err := d.store.Forget(tpl)
 	if err != nil {
 		return 0, "", err
 	}
