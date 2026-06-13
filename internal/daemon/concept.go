@@ -269,13 +269,67 @@ const (
 	attentionConceptCap    = 2   // how many warm concepts can be attended at once
 )
 
+// attendedWarmest returns the n hottest concepts after lateral
+// inhibition: a concept warm enough to attend damps the concepts it
+// grounds in, so a category held in mind quiets its members instead of
+// being swamped by them. The damping scales with the inhibitor's own
+// warmth and the cfg.LateralInhibition knob; at zero this is plain
+// warmest. A concept with no attended parent above it keeps its warmth,
+// so a specific merely perceived is left alone.
+func (d *Daemon) attendedWarmest(n int) []warmEntry {
+	all := d.ws.warmest(workspaceBudget)
+	strength := d.cfg.LateralInhibition
+	if strength <= 0 || len(all) == 0 {
+		if len(all) > n {
+			return all[:n]
+		}
+		return all
+	}
+	heat := make(map[uint64]float64, len(all))
+	inhibitors := make([]uint64, 0, len(all))
+	for _, e := range all {
+		heat[e.id] = e.heat
+		if e.heat >= attentionGroundingGate {
+			inhibitors = append(inhibitors, e.id)
+		}
+	}
+	damp := make(map[uint64]float64, len(all))
+	if grounds, err := d.store.LinksFromRel(inhibitors, memory.RelGrounds); err == nil {
+		for _, g := range grounds {
+			if _, held := heat[g.To]; !held {
+				continue
+			}
+			damp[g.To] += strength * heat[g.From]
+		}
+	}
+	out := make([]warmEntry, 0, len(all))
+	for _, e := range all {
+		h := e.heat - damp[e.id]
+		if h < 0 {
+			h = 0
+		}
+		out = append(out, warmEntry{id: e.id, heat: h})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].heat != out[j].heat {
+			return out[i].heat > out[j].heat
+		}
+		return d.ws.touchOf(out[i].id) > d.ws.touchOf(out[j].id)
+	})
+	if len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
 // attentionAnchors returns the grounded moments of the warmest workspace
 // concepts above the attention gate, newest first and capped, so a told
 // word can keep company with what is held in mind. The moments are the
 // concept's own direct groundings, so the word grounds in that concept
-// rather than in its specifics.
+// rather than in its specifics. Lateral inhibition picks the warmest, so
+// an attended category wins the slot over the members it subsumes.
 func (d *Daemon) attentionAnchors() []recentMoment {
-	warm := d.ws.warmest(attentionConceptCap)
+	warm := d.attendedWarmest(attentionConceptCap)
 	var out []recentMoment
 	for _, e := range warm {
 		if e.heat < attentionGroundingGate {
@@ -307,6 +361,14 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 			if n++; n >= attentionAnchorCap {
 				break
 			}
+		}
+		// A higher abstraction grounds in concepts, not episodes, so it
+		// has no episodic moment to lend even though it is what is held in
+		// mind. Bind the word to the concept itself, so a name taught
+		// across several attended categories grounds in those categories
+		// rather than falling through to one of their members.
+		if n == 0 {
+			out = append(out, recentMoment{id: frags[0].ID, template: frags[0].Template, at: frags[0].Time})
 		}
 	}
 	return out

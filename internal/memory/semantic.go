@@ -254,33 +254,40 @@ type NamingPair struct {
 }
 
 // NamingPairs aggregates word-to-concept co-occurrence over the whole
-// graph. Utterance episodes count for nothing on either side: a word
-// always keeps company with its own saying, and that company says
-// nothing about the world.
+// graph. A word keeps company with a concept two ways: through a lived
+// episode the concept grounds, and directly with a concept that was
+// only held in mind when the word was said (attention-grounding, which a
+// higher abstraction needs since it grounds in concepts, not episodes).
+// Utterance episodes count for nothing on either side: a word always
+// keeps company with its own saying, and that says nothing about the
+// world.
 func (s *Store) NamingPairs() ([]NamingPair, error) {
 	rows, err := s.db.Query(`
-		WITH wt AS (
-			SELECT l.from_id AS wid, SUM(l.weight) AS total
+		WITH company AS (
+			SELECT l1.from_id AS wid, c.id AS cid, l1.weight AS wgt
+			FROM links l1
+			JOIN fragments wd ON wd.id = l1.from_id AND wd.kind = ?
+			JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel NOT IN (?, ?)
+			JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
+			JOIN fragments c ON c.id = l2.from_id AND c.kind = ?
+			WHERE l1.rel = ?
+			UNION ALL
+			SELECT l.from_id AS wid, l.to_id AS cid, l.weight AS wgt
 			FROM links l
-			JOIN fragments w2 ON w2.id = l.from_id AND w2.kind = ?
-			JOIN fragments e2 ON e2.id = l.to_id AND e2.kind = ? AND e2.channel NOT IN (?, ?)
+			JOIN fragments wd ON wd.id = l.from_id AND wd.kind = ?
+			JOIN fragments c ON c.id = l.to_id AND c.kind = ?
 			WHERE l.rel = ?
-			GROUP BY l.from_id
-		)
-		SELECT w.id, c.id, SUM(l1.weight), wt.total,
+		),
+		wt AS (SELECT wid, SUM(wgt) AS total FROM company GROUP BY wid)
+		SELECT company.wid, company.cid, SUM(company.wgt), wt.total,
 		       COALESCE((SELECT weight FROM links
-		                 WHERE from_id = w.id AND to_id = c.id AND rel = ?), 0)
-		FROM fragments w
-		JOIN links l1 ON l1.from_id = w.id AND l1.rel = ?
-		JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel NOT IN (?, ?)
-		JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
-		JOIN fragments c ON c.id = l2.from_id AND c.kind = ?
-		JOIN wt ON wt.wid = w.id
-		WHERE w.kind = ?
-		GROUP BY w.id, c.id`,
-		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelTemporal,
-		RelNames, RelTemporal, KindEpisodic, utteranceChannel, thoughtChannel,
-		RelGrounds, KindConcept, KindWord)
+		                 WHERE from_id = company.wid AND to_id = company.cid AND rel = ?), 0)
+		FROM company
+		JOIN wt ON wt.wid = company.wid
+		GROUP BY company.wid, company.cid`,
+		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelGrounds, KindConcept, RelTemporal,
+		KindWord, KindConcept, RelTemporal,
+		RelNames)
 	if err != nil {
 		return nil, err
 	}

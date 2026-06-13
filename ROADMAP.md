@@ -1486,20 +1486,25 @@ day-six `thing`. The members win the slot the category should hold. The fix is
 the brain's own arrangement, where a general concept quiets the particulars it
 contains, which is what categorization is.
 
-- [ ] A warmed concept damps the concepts it grounds in, gated by relative
+- [x] A warmed concept damps the concepts it grounds in, gated by relative
       warmth, so a category attended above its members quiets them rather than
       drowning in them, while a member merely perceived is left alone when no
       category above it is attended.
-- [ ] Attending a category and then telling a name grounds the name on the
+- [x] Attending a category and then telling a name grounds the name on the
       category, so abstraction-by-constellation (Step 16) gathers the categories
       and a `thing` taught over three of them grounds in `animal`, `metal`, and
-      `plant` rather than in one member each.
-- [ ] The damping is a tunable defaulted gentle, exposed like the rest of the
+      `plant` rather than in one member each. (Live: a name taught over the three
+      categories grounded in animal/metal/plant, its recall walking to them and
+      through them to their members. The warming must seat the category at the
+      ceiling: speech warms the named concept, while the CLI recall handler does
+      not, so a name is warmed by speaking the category, not by recalling it.)
+- [x] The damping is a tunable defaulted gentle, exposed like the rest of the
       chemistry, so it sharpens attention without starving the cases that want a
-      general and a specific held together.
-- [ ] The behavior already verified holds: the inner loop's wandering, recall's
+      general and a specific held together. (config: lateral_inhibition, 0.6.)
+- [x] The behavior already verified holds: the inner loop's wandering, recall's
       spread, and the abstractions distilled so far do not regress once
-      inhibition is on.
+      inhibition is on. (Inhibition is scoped to the naming attention path;
+      recall and the wandering loop read raw warmth and are untouched.)
 
 Framing: this is GABA, the brain's inhibitory transmitter, brought to the
 concept hierarchy. Lateral inhibition already sharpens vision and focuses
@@ -1584,13 +1589,16 @@ recall behave as before with inhibition at its gentle default.
   breadth of edges seen from the current seed, so a junk hub that has merged
   into a few episodes can still slip the damping. A finer measure, the
   entropy of a node's whole company, is the next turn.
-- Abstraction is flat; attention-grounding alone does not build a second level.
-  Step 27 lets a told word bind to the warmest workspace concept, and it fires,
-  a name grounds with nothing in view, but warming a category surfaces its thick
-  members, and they take the attention slots over the thin category node, so a
-  `thing` taught over animals, metals, and plants still grounds in one member
-  each and lands as their sibling. The category holds attention only once its
-  members are quieted, which is the lateral inhibition of Step 29.
+- Two-level abstraction needs the category seated above its members and warmed
+  at the ceiling. Step 29's lateral inhibition damps a warmed category's members
+  so the category holds the attention slot, and a name then grounds in the
+  category: a superordinate taught over animal, metal, and plant grounds in the
+  three categories, not in one member each. The remaining sharp edge is the
+  warming itself. Inhibition only quiets a category's own members, so a stray
+  concept warmed by something else can still take a slot, and the CLI recall
+  handler does not warm the workspace at all; a category is seated reliably only
+  by speech (warmConcepts excites the named concept to the ceiling). A direct
+  excite-by-id verb would make the seating dependable from any path.
 
 ## Open questions
 

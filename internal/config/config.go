@@ -25,6 +25,7 @@ const (
 	defaultCalibWarmup       = 30
 	defaultGraduation        = 3
 	defaultConflictMargin    = 0.15
+	defaultLateralInhibition = 0.6
 	defaultExecuteTimeoutSec = 30
 	defaultExecuteParallel   = 4
 	defaultAutoCueCooldown   = 60
@@ -90,6 +91,12 @@ type Config struct {
 	// actions sit within this fraction of each other, GOLEM asks instead
 	// of choosing.
 	ConflictMargin float64 `json:"conflict_margin"`
+	// LateralInhibition is how strongly a warmed concept damps the
+	// concepts it grounds in, so a category held in mind quiets its
+	// members instead of being swamped by them and a name taught over
+	// categories can settle on the categories. Gentle by default; 0
+	// turns the damping off and attention is plain warmth.
+	LateralInhibition float64 `json:"lateral_inhibition"`
 	// ExecuteEnabled is the master switch for actually running commands.
 	// Off by default: until it is on, every approved or graduated action
 	// is a dry run. Turning it on requires editing this file and
@@ -163,6 +170,7 @@ func Default() Config {
 		PredictorWindows:    map[string]float64{"syslog": 8192},
 		GraduationApprovals: defaultGraduation,
 		ConflictMargin:      defaultConflictMargin,
+		LateralInhibition:   defaultLateralInhibition,
 		ExecuteEnabled:      false,
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,

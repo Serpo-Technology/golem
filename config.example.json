@@ -27,6 +27,7 @@
   },
   "graduation_approvals": 3,
   "conflict_margin": 0.15,
+  "lateral_inhibition": 0.6,
   "execute_enabled": false,
   "execute_allowlist": [],
   "execute_timeout_sec": 30,

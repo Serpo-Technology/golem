@@ -102,6 +102,10 @@ func (w *workspace) clear() {
 // heat reports a concept's current activation.
 func (w *workspace) heat(id uint64) float64 { return w.act[id] }
 
+// touchOf reports the recency sequence of a concept's last excitation,
+// the tie-break among entries left equally warm after inhibition.
+func (w *workspace) touchOf(id uint64) uint64 { return w.touch[id] }
+
 // warmEntry is one workspace concept with its activation.
 type warmEntry struct {
 	id   uint64

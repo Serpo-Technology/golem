@@ -93,3 +93,64 @@ func TestAttentionGroundingNeedsRecurrence(t *testing.T) {
 		}
 	}
 }
+
+// Lateral inhibition lets a name reach a category that grounds in
+// concepts, not episodes. Warming such a category spreads into its
+// well-grounded members; without inhibition they take the attention slot
+// and the name lands on a member. With it, the category holds the slot
+// and the name binds to the category itself, the second level of
+// abstraction attention-grounding alone could not build.
+func TestLateralInhibitionGroundsNameOnCategory(t *testing.T) {
+	d, s := testDaemon(t)
+	disk, deploy := constellationDay(t, d, s)
+	for i := range 3 {
+		d.mintWords("trouble", "en", 0, []recentMoment{disk[i], deploy[i]}, false)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growAbstractions()
+	trouble, _ := s.ConceptByTemplate("abs:en:trouble")
+	if trouble == nil {
+		t.Fatal("the concept-grounded category should exist")
+	}
+	diskC, _ := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	deployC, _ := s.ConceptByTemplate(attention.Normalize("run: make deploy"))
+	if diskC == nil || deployC == nil {
+		t.Fatal("the member concepts should exist")
+	}
+
+	// The category and its members, warmed alike: inhibition must seat the
+	// category above the members it subsumes.
+	warmAll := func() {
+		d.ws.clear()
+		d.ws.excite(trouble.ID, exciteRecall)
+		d.ws.excite(diskC.ID, exciteRecall)
+		d.ws.excite(deployC.ID, exciteRecall)
+	}
+	warmAll()
+	warm := d.attendedWarmest(1)
+	if len(warm) != 1 || warm[0].id != trouble.ID {
+		t.Fatalf("the attended category should outrank its members: %+v", warm)
+	}
+
+	// A name told across situations while the category is held in mind
+	// grounds on the category, not on a member.
+	for range 3 {
+		warmAll()
+		d.mintWords("mess", "en", 0, d.attentionAnchors(), false)
+		calm(d)
+	}
+	d.growConcepts()
+	d.growAbstractions()
+	if c := d.resolveConcept("mess"); c == nil || c.ID != trouble.ID {
+		t.Fatalf("the name should reach the attended category, not a member: %+v", c)
+	}
+
+	// With inhibition off, the same warming lets the members take the slot.
+	d.cfg.LateralInhibition = 0
+	warmAll()
+	off := d.attendedWarmest(1)
+	if len(off) == 1 && off[0].id == trouble.ID {
+		t.Fatal("with inhibition off a member should be able to hold the slot")
+	}
+}
