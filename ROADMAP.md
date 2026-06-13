@@ -1683,7 +1683,7 @@ way perception does, the capability that gates conversation.
       structure and handing it to the engine, so an answer is generated from
       meaning rather than selected from a menu, and the per-language parse fork
       retires into the one engine over each language's seeded constructions.
-- [ ] New constructions are induced from grounded usage, an item-based pattern
+- [x] New constructions are induced from grounded usage, an item-based pattern
       lifted from repeated form-meaning pairings and generalized at its slot over
       recurrences, so the inventory grows from what is heard.
 
@@ -1796,6 +1796,32 @@ can seed; the fork itself, the second parse function, is gone. So the answers
 come from meaning structures run through engines and the parsing is one engine
 over each language's seeded grammar, both directions and both languages on the
 one floor.
+
+Constructions are induced from grounded usage now, in the same nightly rhythm as
+concept and abstraction genesis. A relation told in enough propositions, its
+role slots filled by varied concepts across them, has shown a construction whose
+slots generalized over the recurrences, from the specific fillers first heard to
+open positions; consolidation writes it as a construction node keyed by the
+relation, entrenched by the recurrence and competing with the seed by weight.
+The slot generalizes only when varied fillers fill it, so a relation always
+heard with the same agent induces nothing yet, and a relation heard with many
+agents and patients induces the transitive while one heard with no patient
+induces the intransitive. The supersession is real: with the seeded transitive
+removed, a brand-new transitive clause still parses, through the construction
+grown from usage, the measure of how little of the seed need stay load-bearing.
+This is the bootstrap stage of a long arc, honestly: the induced construction
+re-derives one relation's argument structure from its own tellings, which is
+item-based learning; generalizing across relations into a single abstract
+construction, and inducing the novel structures a richer comprehension would
+surface, are the reach this leaves open, the open research the framing names.
+
+Step 32 stands built on this footing. A construction is a two-poled
+form-and-meaning pair; one engine runs the inventory both ways and across
+languages; a told proposition is comprehended into the graph and a partial one
+degrades to a learning signal; answers come from meaning structures run through
+the engine; the per-language parse fork is folded into the one engine; and the
+inventory grows by induction from what is heard. The seed still carries weight,
+and the deep generalizations stay open, as the fluid path expects.
 
 ## Step 33: Discourse on the workspace field
 

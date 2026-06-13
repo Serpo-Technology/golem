@@ -1135,6 +1135,9 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// Each concept's sparse signature rewrites from its current
 	// grounding, so resemblance stays current and auditable.
 	d.growFeatures()
+	// A relation told often enough, its slots filled by varied concepts,
+	// induces an argument-structure construction grown from that usage.
+	born += d.growConstructions()
 	// Usage and seed settle their nightly contest, and the working
 	// grammar recompiles from the surviving weights.
 	d.grammarCompetition()
@@ -1200,6 +1203,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	d.growConcepts()
 	d.growAbstractions()
 	d.growFeatures()
+	d.growConstructions()
 	d.grammarCompetition()
 	d.flushModels()
 	d.store.Checkpoint()
