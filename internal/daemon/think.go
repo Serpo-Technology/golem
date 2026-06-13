@@ -88,7 +88,7 @@ func (op thoughtOp) template() string { return "walk(" + op.rel + "," + op.sig +
 func (op thoughtOp) gloss() string { return "walk " + op.rel + " by " + op.sig }
 
 var thinkRels = []string{memory.RelTemporal, memory.RelSuccessor, memory.RelGrounds,
-	memory.RelNames, memory.RelFeature}
+	memory.RelNames, memory.RelFeature, memory.RelAgent, memory.RelPatient}
 var thinkSigs = []string{sigWeight, sigStress, sigSaliency, sigRecency}
 
 // thoughtOps is the whole operation space, the innate floor of thought:
@@ -116,6 +116,8 @@ var opGains = map[string]map[string]float64{
 	memory.RelGrounds:   {sigWeight: 0.50, sigStress: 0.80, sigSaliency: 0.60, sigRecency: 0.55},
 	memory.RelNames:     {sigWeight: 0.50, sigStress: 0.30, sigSaliency: 0, sigRecency: 0.35},
 	memory.RelFeature:   {sigWeight: 0.70, sigStress: 0.30, sigSaliency: 0, sigRecency: 0.40},
+	memory.RelAgent:     {sigWeight: 0.80, sigStress: 0.45, sigSaliency: 0.30, sigRecency: 0.45},
+	memory.RelPatient:   {sigWeight: 0.80, sigStress: 0.45, sigSaliency: 0.30, sigRecency: 0.45},
 }
 
 // appetite is the chemistry's pull toward a signal, 1.0 at baseline so a
@@ -163,6 +165,7 @@ type walkDest struct {
 	id      uint64 // concept to warm; zero when the destination is not a workspace referent
 	gloss   string
 	kind    string
+	via     string // the relation crossed to reach here, when this is a relation step
 	weight  float64
 	stress  float64
 	recency float64
@@ -501,6 +504,53 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 	}
 	dests[memory.RelFeature] = siblings
 
+	// Relation crossings: a step from the seed through a relation to its
+	// co-argument. As agent the seed reaches what it acted on, the patient of
+	// the shared moment; as patient, what acted on it, the agent. The relation
+	// that grounds the moment names the crossing. The role edges stay empty
+	// until comprehension writes propositions, so this is dormant until then.
+	roleCross := func(seedRole, partnerRole, key string) error {
+		held, err := d.store.LinksToRel([]uint64{seed}, seedRole)
+		if err != nil {
+			return err
+		}
+		for _, m := range held {
+			via := ""
+			if g, err := d.store.LinksToRel([]uint64{m.From}, memory.RelGrounds); err == nil && len(g) > 0 {
+				if rf, err := d.fragmentsByIDsTiered([]uint64{g[0].From}); err == nil && len(rf) > 0 {
+					via = rf[0].Content
+				}
+			}
+			partners, err := d.store.LinksFromRel([]uint64{m.From}, partnerRole)
+			if err != nil {
+				return err
+			}
+			for _, p := range partners {
+				pf, err := d.fragmentsByIDsTiered([]uint64{p.To})
+				if err != nil || len(pf) == 0 || pf[0].ID == seed {
+					continue
+				}
+				f := pf[0]
+				dests[key] = append(dests[key], walkDest{
+					id:      f.ID,
+					gloss:   f.Content,
+					kind:    f.Kind,
+					via:     via,
+					weight:  m.Weight * p.Weight * f.Weight,
+					stress:  f.Limbic.Noradrenaline,
+					recency: recencyOf(now, f.Time),
+				})
+			}
+		}
+		return nil
+	}
+	if err := roleCross(memory.RelAgent, memory.RelPatient, memory.RelPatient); err != nil {
+		return nil, err
+	}
+	if err := roleCross(memory.RelPatient, memory.RelAgent, memory.RelAgent); err != nil {
+		return nil, err
+	}
+
 	for rel := range dests {
 		list := dests[rel]
 		sort.Slice(list, func(i, j int) bool {
@@ -673,6 +723,16 @@ func renderThought(op thoughtOp, seedGloss string, dst walkDest) string {
 		return fmt.Sprintf("thought: %s is called %s", seedGloss, dst.gloss)
 	case op.rel == memory.RelFeature:
 		return fmt.Sprintf("thought: %s is like %s", seedGloss, dst.gloss)
+	case op.rel == memory.RelPatient:
+		if dst.via != "" {
+			return fmt.Sprintf("thought: %s %s %s", seedGloss, dst.via, dst.gloss)
+		}
+		return fmt.Sprintf("thought: %s acts on %s", seedGloss, dst.gloss)
+	case op.rel == memory.RelAgent:
+		if dst.via != "" {
+			return fmt.Sprintf("thought: %s %s %s", dst.gloss, dst.via, seedGloss)
+		}
+		return fmt.Sprintf("thought: %s acts on %s", dst.gloss, seedGloss)
 	case op.rel == memory.RelGrounds && dst.kind != memory.KindConcept:
 		return fmt.Sprintf("thought: that time: %s", dst.gloss)
 	default:

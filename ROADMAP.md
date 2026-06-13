@@ -1596,17 +1596,18 @@ mechanism, and the comprehension work needs it first: to bind `chased` in "a
 dog chased a cat" there must be a chase-relation to bind it into. A relation is
 the substrate a proposition stands on.
 
-- [ ] A relation is a concept like any other, grounded, named, weighted, and
+- [x] A relation is a concept like any other, grounded, named, weighted, and
       salient by information, living in the one graph under the one glass box,
       but it carries argument slots for the roles it relates, chaser and chased,
       capital and country.
-- [ ] A relation grounds in the moments that instantiate it, so chase grounds in
+- [x] A relation grounds in the moments that instantiate it, so chase grounds in
       seen or told chasings the way a thing grounds in its sightings, and its
       slots fill from what played the roles there.
-- [ ] A relation forms by the same constellation pass that mints a category,
-      lifted from a recurring co-occurrence of concepts in a stable
-      configuration, so it is learned from grounded usage, not declared.
-- [ ] The walk crosses a relation, so a step from one concept to another through
+- [ ] A relation forms from grounded usage, a parsed proposition writing the
+      relation and its roles rather than blind co-occurrence guessing them. That
+      producer is comprehension, so it rides with Step 32, which already owns
+      writing a parsed proposition into the graph.
+- [x] The walk crosses a relation, so a step from one concept to another through
       the relation that binds them runs on the primitive already built.
 
 Framing: this is the constellation mechanism raised from things to the structure
@@ -1627,6 +1628,17 @@ open; reifying and grounding the relation is the floor it stands on.
 Done when: chase, taught by narrating chasings, becomes a relation whose slots
 are the chaser and the chased, a walk from a dog to what it chased crosses it,
 and a second relation learned the same way stands apart from the first.
+
+Status: substrate and crossing built, formation deferred to comprehension. A
+relation is a concept that grounds in the moment instantiating it, with agent
+and patient edges on that moment naming what filled each role, written by one
+store method. The walk crosses a relation: from a role-filler it steps through
+the shared moment to the co-argument and back, the role relations added to the
+walk's repertoire and gains, dormant until propositions exist. What remains,
+turning a narrated chasing into the role-bound instance, is parsing a transitive
+utterance into roles and writing it, which is the comprehension of the next
+step; built here it would be torn out when the bidirectional engine lands, so it
+rides with Step 32. The representation and the crossing hold in tests.
 
 ## Step 32: Bidirectional constructions and the comprehension engine
 
