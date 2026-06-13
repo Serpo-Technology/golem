@@ -300,24 +300,3 @@ func parseLexEntry(value string) lexEntry {
 	}
 	return e
 }
-
-// DeclSeed is the hand-seeded declarative grammar, the milestone the
-// general engine runs: a clause whose subject and verb agree in number and
-// whose order is a memory rule, a noun phrase nesting inside it, so two
-// structures combine to depth. It is curriculum like the rest, seeded
-// through the trainer and editable in the graph.
-func DeclSeed() []Param {
-	decl := func(key, value string) Param {
-		return Param{Key: key, Value: value, Lang: "en", Weight: 1.0}
-	}
-	return []Param{
-		decl("syn:en:s", "subj vp | num:subj>vp | vp"),
-		decl("syn:en:vp", "v | | v"),
-		decl("syn:en:np", "det n | | n"),
-		decl("lex:en:the", "cat=det;any=the"),
-		decl("lex:en:dog", "cat=n;sg=dog;pl=dogs"),
-		decl("lex:en:cat", "cat=n;sg=cat;pl=cats"),
-		decl("lex:en:run", "cat=v;sg=runs;pl=run"),
-		decl("lex:en:sleep", "cat=v;sg=sleeps;pl=sleep"),
-	}
-}

@@ -50,59 +50,6 @@ type Params struct {
 	decl map[string]*DeclGrammar
 }
 
-// Curriculum returns the innate grammar seed as parameters, the first
-// curriculum the trainer writes into starter memory. The tables in
-// english.go and turkish.go are its source; once seeded, the engine
-// reads the memory copy.
-func Curriculum() []Param {
-	var out []Param
-	add := func(key, value, lang, category string) {
-		out = append(out, Param{Key: key, Value: value, Lang: lang, Category: category, Weight: 1.0})
-	}
-	for _, form := range sortedKeys(innateCategory) {
-		if cat := innateCategory[form]; cat != catHap {
-			add("fw:en:"+form, form, "en", cat)
-		}
-	}
-	for _, form := range sortedKeys(sortalNouns) {
-		add("sortal:en:"+form, form, "en", sortalNouns[form])
-	}
-	for _, form := range sortedKeys(happenVerbs) {
-		add("hap:en:"+form, form, "en", hapCategory(happenVerbs[form].base, happenVerbs[form].past))
-	}
-	for _, base := range sortedKeys(verbsEN) {
-		v := verbsEN[base]
-		add("verb:en:"+base, strings.Join([]string{v.base, v.third, v.past, v.part}, " "), "en", "")
-	}
-	for _, form := range sortedKeys(turkishCategory) {
-		if cat := turkishCategory[form]; cat != catHap {
-			add("fw:tr:"+form, form, "tr", cat)
-		}
-	}
-	for _, form := range sortedKeys(turkishSortals) {
-		add("sortal:tr:"+form, form, "tr", turkishSortals[form])
-	}
-	for _, form := range sortedKeys(turkishHappenVerbs) {
-		add("hap:tr:"+form, form, "tr", hapCategory(turkishHappenVerbs[form].base, turkishHappenVerbs[form].past))
-	}
-	for _, base := range sortedKeys(verbsTR) {
-		v := verbsTR[base]
-		add("verb:tr:"+base,
-			strings.Join([]string{v.aorist, v.aoristNeg, v.past, v.pastNeg, v.potential, v.hedgedPast}, "|"),
-			"tr", "")
-	}
-	add("order:en", "svo", "en", "")
-	add("order:tr", "sov", "tr", "")
-	add("suffix:tr:ablative", "DAn", "tr", "")
-	add("suffix:tr:accusative", "(y)I", "tr", "")
-	add("suffix:tr:copula", "DIr", "tr", "")
-	add("suffix:tr:locative", "DA", "tr", "")
-	// The declarative grammar the general engine runs rides the same
-	// grammar nodes, seeded through the same trainer.
-	out = append(out, DeclSeed()...)
-	return out
-}
-
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -112,15 +59,8 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// hapCategory packs an event verb's predicate and tense into the node's
-// category field; parseHap unpacks it.
-func hapCategory(base string, past bool) string {
-	if past {
-		return base + ":past"
-	}
-	return base
-}
-
+// parseHap unpacks the predicate and tense the seed packs into an event
+// verb's category field, "<base>" or "<base>:past".
 func parseHap(category string) hapEntry {
 	base, tense, _ := strings.Cut(category, ":")
 	return hapEntry{base: base, past: tense == "past"}
@@ -267,7 +207,7 @@ func (p *Params) verbTurkish(base string) verbTR {
 	if v, ok := p.verbsTR["happen"]; ok {
 		return v
 	}
-	return verbsTR["happen"]
+	return verbTR{}
 }
 
 // verbFinal reports a language's word-order setting: true when the

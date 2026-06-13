@@ -27,45 +27,6 @@ const (
 	catFn    = "fn"    // grammatical filler with no slot of its own
 )
 
-// sortalNouns restrict what kind of thing a question wants back, the
-// "command" of "which command follows X". They are meta-vocabulary
-// about GOLEM's own ontology. Plural forms invite more than one answer.
-// This table is curriculum: the engine reads the memory copy.
-var sortalNouns = map[string]string{
-	"command": "command", "commands": "command",
-	"action": "action", "actions": "action",
-	"thing": "thing", "things": "thing",
-	"event": "event", "events": "event",
-	"step": "step", "steps": "step",
-}
-
-// innateCategory is the English closed class, the curriculum source for
-// the fw:en grammar nodes. Event-verb forms (catHap) seed separately as
-// hap:en nodes carrying their predicate and tense.
-var innateCategory = map[string]string{
-	"what": catWh, "when": catWh, "which": catWh, "where": catWh, "who": catWh, "why": catWh, "how": catWh,
-	"after": catRel, "before": catRel,
-	"usually": catAdv, "always": catAdv, "often": catAdv, "sometimes": catAdv,
-	"again": catAgain,
-	"it":    catPro, "that": catPro, "this": catPro, "them": catPro, "one": catPro,
-	"other": catOth,
-	"do":    catImp, "run": catImp, "execute": catImp, "show": catImp, "retry": catImp, "try": catImp,
-	"recall": catImp, "remember": catImp, "consolidate": catImp, "tidy": catImp, "introspect": catImp,
-	"the": catDet, "a": catDet, "an": catDet, "my": catDet, "your": catDet,
-	"is": catCop, "are": catCop, "was": catCop, "were": catCop,
-	"happens": catHap, "happened": catHap, "follows": catHap, "followed": catHap, "comes": catHap, "came": catHap,
-	"follow": catHap, "come": catHap, "happen": catHap,
-	"precedes": catHap, "preceded": catHap, "precede": catHap,
-	"think": catHap, "thinking": catHap, "thought": catHap,
-	"not": catNeg, "never": catNeg, "no": catNeg, "cannot": catNeg,
-	"many": catCnt, "much": catCnt,
-	"i": catFn, "you": catFn, "we": catFn, "me": catFn, "us": catFn,
-	"to": catFn, "of": catFn, "in": catFn, "on": catFn, "at": catFn, "and": catFn, "or": catFn,
-	"does": catFn, "did": catFn, "next": catFn, "then": catFn, "now": catFn, "yet": catFn,
-	"please": catFn, "know": catFn, "about": catFn, "with": catFn, "for": catFn, "as": catFn,
-	"times": catFn, "time": catFn,
-}
-
 // imperativeIntents maps the faculty verbs onto the acts they invoke:
 // an utterance opening with one carries an intent over GOLEM's own
 // action space rather than a cue for an external command. The mapping
@@ -75,19 +36,6 @@ var imperativeIntents = map[string]string{
 	"recall": "recall", "remember": "recall",
 	"consolidate": "consolidate", "tidy": "consolidate",
 	"introspect": "introspect",
-}
-
-// happenVerbs maps each event-verb surface form to the predicate it
-// fills and the tense it carries, so "followed" and "follows" land in
-// one concept with the time told apart. Succession verbs collapse onto
-// "follow"; precedence verbs onto its inverse. Curriculum for the
-// hap:en nodes.
-var happenVerbs = map[string]hapEntry{
-	"happens": {"follow", false}, "happen": {"follow", false}, "happened": {"follow", true},
-	"follows": {"follow", false}, "follow": {"follow", false}, "followed": {"follow", true},
-	"comes": {"follow", false}, "come": {"follow", false}, "came": {"follow", true},
-	"precedes": {"precede", false}, "precede": {"precede", false}, "preceded": {"precede", true},
-	"think": {"think", false}, "thinking": {"think", false}, "thought": {"think", true},
 }
 
 // Parse runs the innate grammar backward with the built-in parameter

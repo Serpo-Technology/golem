@@ -45,7 +45,7 @@ func TestGeneralEngineAgreement(t *testing.T) {
 // engine: the same meaning lays out verb-first once the rule says so, and
 // agreement still holds.
 func TestGeneralEngineWordOrderIsData(t *testing.T) {
-	seed := DeclSeed()
+	seed := Curriculum()
 	for i := range seed {
 		if seed[i].Key == "syn:en:s" {
 			seed[i].Value = "vp subj | num:subj>vp | vp"

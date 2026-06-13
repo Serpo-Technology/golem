@@ -1543,19 +1543,19 @@ compiles straight from those tables, which makes them look load-bearing at
 runtime when they serve only callers with no store. The learnable home of
 grammar is memory while its source is still hardcoded, the seam this closes.
 
-- [ ] One bootstrap holds every seed source, the closed class, sortals, event
+- [x] One bootstrap holds every seed source, the closed class, sortals, event
       verbs, principal parts, word order, suffix recipes, the constructions, and
       the declarative grammar, in the uniform parameter shape they already
       share, embedded in the binary so first-deployment seeding needs no
       external file.
-- [ ] The existing idempotent seeder writes the bootstrap into starter memory on
+- [x] The existing idempotent seeder writes the bootstrap into starter memory on
       first run and tops up new entries on a later build while every parameter
       the store already holds keeps its learned weight, the path already in use,
       now fed by data.
-- [ ] The grammar files keep only the engine, parse, compile, morphology, and
+- [x] The grammar files keep only the engine, parse, compile, morphology, and
       unification, and the package-level fallback and the tests read the
       embedded bootstrap, so nothing reads a hardcoded table.
-- [ ] A new language or a corrected form is a bootstrap edit, not a code change.
+- [x] A new language or a corrected form is a bootstrap edit, not a code change.
 
 Framing: this is the innate-engine and learned-content split made clean. The
 engine is the innate floor and belongs in code, like the walk; the seed is the
@@ -1571,6 +1571,15 @@ is how few seeded entries stay load-bearing as the system learns its own.
 Done when: deleting a form from the bootstrap removes it from a fresh brain and
 only a fresh brain, an existing brain keeps what it learned, and the grammar
 package compiles with no grammar content left in it, only the engine.
+
+Status: built. The seed lives in `seed.txt`, embedded and read by `Curriculum`
+and `Constructions`, which split it by key prefix; the daemon's existing seeder
+writes it into starter memory on first run and tops up later builds while
+learned weights stand. The closed class, sortals, event verbs, principal parts,
+word order, suffix recipes, the declarative grammar, and the constructions all
+left the Go files; only the engine and its types remain, so a form is added or
+corrected by editing the bootstrap. The seed reproduces the old tables exactly,
+so the suite is unchanged, and a test pins the load and the split.
 
 ## Step 31: Reify relations
 

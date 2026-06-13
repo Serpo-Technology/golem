@@ -20,38 +20,6 @@ import (
 // case suffixes attach with an apostrophe the way Turkish writes
 // suffixed proper names: "make test'ten sonra", "make deploy'dan once".
 
-// The Turkish closed class, curriculum source for the fw:tr nodes.
-// Categories reuse the innate set; the SOV parser reads them with the
-// anchor on the other side of the relator.
-var turkishCategory = map[string]string{
-	"ne": catWh, "hangi": catWh, "kim": catWh, "neden": catWh, "niye": catWh,
-	"nerede": catWh, "nasıl": catWh, "nedir": catWh,
-	"sonra": catRel, "önce": catRel,
-	"kaç": catCnt,
-	"kez": catFn, "kere": catFn, "defa": catFn, "zaman": catFn,
-	"genellikle": catAdv, "hep": catAdv, "bazen": catAdv,
-	"asla": catNeg, "hiç": catNeg, "değil": catNeg,
-	"olur": catHap, "oluyor": catHap, "oldu": catHap,
-	"gelir": catHap, "geliyor": catHap, "geldi": catHap,
-	"bir": catDet, "ve": catFn,
-	"mi": catFn, "mı": catFn, "mu": catFn, "mü": catFn,
-}
-
-// Turkish sortals, the "komut" of "hangi komut": the same ontology
-// vocabulary as the English set, curriculum for the sortal:tr nodes.
-var turkishSortals = map[string]string{
-	"komut": "command", "komutlar": "command",
-	"eylem": "action", "eylemler": "action",
-	"şey": "thing", "şeyler": "thing",
-}
-
-// turkishHappenVerbs carry the predicate and the tense, like their
-// English counterparts: curriculum for the hap:tr nodes.
-var turkishHappenVerbs = map[string]hapEntry{
-	"olur": {"follow", false}, "oluyor": {"follow", false}, "oldu": {"follow", true},
-	"gelir": {"follow", false}, "geliyor": {"follow", false}, "geldi": {"follow", true},
-}
-
 // detectTurkish reports whether an utterance is Turkish: any closed-class
 // or sortal hit decides, since the two vocabularies share no forms.
 func (p *Params) detectTurkish(tokens []string) bool {
@@ -351,12 +319,6 @@ func timeLocativeTR(p *Params, formatted string) string {
 // verb:tr nodes.
 type verbTR struct {
 	aorist, aoristNeg, past, pastNeg, potential, hedgedPast string
-}
-
-var verbsTR = map[string]verbTR{
-	"follow":  {"gelir", "gelmez", "geldi", "gelmedi", "gelebilir", "gelmiş olabilir"},
-	"precede": {"gelir", "gelmez", "geldi", "gelmedi", "gelebilir", "gelmiş olabilir"},
-	"happen":  {"olur", "olmaz", "oldu", "olmadı", "olabilir", "olmuş olabilir"},
 }
 
 func finiteVerbTR(p *Params, base string, past, negate, hedge bool) string {

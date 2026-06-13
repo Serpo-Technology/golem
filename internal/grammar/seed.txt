@@ -1,0 +1,182 @@
+# GOLEM grammar and construction seed: the first curriculum, written into
+# starter memory on first run by the daemon's idempotent seeder, then read
+# from the memory copy as it competes with lived usage. This file is the
+# source; the engine carries no grammar content of its own.
+#
+# One parameter per line, tab-separated: key, value, language, category.
+# The key prefix names the kind: fw (closed class), sortal, hap (event verb),
+# verb (principal parts), order, suffix, syn and lex (the declarative grammar),
+# and cxn (sentence constructions). A blank line or a # comment is ignored.
+# Every entry enters at full weight; the competition in memory bends it from
+# there.
+fw:en:a	a	en	det
+fw:en:about	about	en	fn
+fw:en:after	after	en	rel
+fw:en:again	again	en	again
+fw:en:always	always	en	adv
+fw:en:an	an	en	det
+fw:en:and	and	en	fn
+fw:en:are	are	en	cop
+fw:en:as	as	en	fn
+fw:en:at	at	en	fn
+fw:en:before	before	en	rel
+fw:en:cannot	cannot	en	neg
+fw:en:consolidate	consolidate	en	imp
+fw:en:did	did	en	fn
+fw:en:do	do	en	imp
+fw:en:does	does	en	fn
+fw:en:execute	execute	en	imp
+fw:en:for	for	en	fn
+fw:en:how	how	en	wh
+fw:en:i	i	en	fn
+fw:en:in	in	en	fn
+fw:en:introspect	introspect	en	imp
+fw:en:is	is	en	cop
+fw:en:it	it	en	pro
+fw:en:know	know	en	fn
+fw:en:many	many	en	cnt
+fw:en:me	me	en	fn
+fw:en:much	much	en	cnt
+fw:en:my	my	en	det
+fw:en:never	never	en	neg
+fw:en:next	next	en	fn
+fw:en:no	no	en	neg
+fw:en:not	not	en	neg
+fw:en:now	now	en	fn
+fw:en:of	of	en	fn
+fw:en:often	often	en	adv
+fw:en:on	on	en	fn
+fw:en:one	one	en	pro
+fw:en:or	or	en	fn
+fw:en:other	other	en	oth
+fw:en:please	please	en	fn
+fw:en:recall	recall	en	imp
+fw:en:remember	remember	en	imp
+fw:en:retry	retry	en	imp
+fw:en:run	run	en	imp
+fw:en:show	show	en	imp
+fw:en:sometimes	sometimes	en	adv
+fw:en:that	that	en	pro
+fw:en:the	the	en	det
+fw:en:them	them	en	pro
+fw:en:then	then	en	fn
+fw:en:this	this	en	pro
+fw:en:tidy	tidy	en	imp
+fw:en:time	time	en	fn
+fw:en:times	times	en	fn
+fw:en:to	to	en	fn
+fw:en:try	try	en	imp
+fw:en:us	us	en	fn
+fw:en:usually	usually	en	adv
+fw:en:was	was	en	cop
+fw:en:we	we	en	fn
+fw:en:were	were	en	cop
+fw:en:what	what	en	wh
+fw:en:when	when	en	wh
+fw:en:where	where	en	wh
+fw:en:which	which	en	wh
+fw:en:who	who	en	wh
+fw:en:why	why	en	wh
+fw:en:with	with	en	fn
+fw:en:yet	yet	en	fn
+fw:en:you	you	en	fn
+fw:en:your	your	en	det
+sortal:en:action	action	en	action
+sortal:en:actions	actions	en	action
+sortal:en:command	command	en	command
+sortal:en:commands	commands	en	command
+sortal:en:event	event	en	event
+sortal:en:events	events	en	event
+sortal:en:step	step	en	step
+sortal:en:steps	steps	en	step
+sortal:en:thing	thing	en	thing
+sortal:en:things	things	en	thing
+hap:en:came	came	en	follow:past
+hap:en:come	come	en	follow
+hap:en:comes	comes	en	follow
+hap:en:follow	follow	en	follow
+hap:en:followed	followed	en	follow:past
+hap:en:follows	follows	en	follow
+hap:en:happen	happen	en	follow
+hap:en:happened	happened	en	follow:past
+hap:en:happens	happens	en	follow
+hap:en:precede	precede	en	precede
+hap:en:preceded	preceded	en	precede:past
+hap:en:precedes	precedes	en	precede
+hap:en:think	think	en	think
+hap:en:thinking	thinking	en	think
+hap:en:thought	thought	en	think:past
+verb:en:fail	fail fails failed failed	en	
+verb:en:follow	follow follows followed followed	en	
+verb:en:happen	happen happens happened happened	en	
+verb:en:know	know knows knew known	en	
+verb:en:name	name names named named	en	
+verb:en:precede	precede precedes preceded preceded	en	
+verb:en:propose	propose proposes proposed proposed	en	
+verb:en:run	run runs ran run	en	
+verb:en:see	see sees saw seen	en	
+fw:tr:asla	asla	tr	neg
+fw:tr:bazen	bazen	tr	adv
+fw:tr:bir	bir	tr	det
+fw:tr:defa	defa	tr	fn
+fw:tr:değil	değil	tr	neg
+fw:tr:genellikle	genellikle	tr	adv
+fw:tr:hangi	hangi	tr	wh
+fw:tr:hep	hep	tr	adv
+fw:tr:hiç	hiç	tr	neg
+fw:tr:kaç	kaç	tr	cnt
+fw:tr:kere	kere	tr	fn
+fw:tr:kez	kez	tr	fn
+fw:tr:kim	kim	tr	wh
+fw:tr:mi	mi	tr	fn
+fw:tr:mu	mu	tr	fn
+fw:tr:mü	mü	tr	fn
+fw:tr:mı	mı	tr	fn
+fw:tr:nasıl	nasıl	tr	wh
+fw:tr:ne	ne	tr	wh
+fw:tr:neden	neden	tr	wh
+fw:tr:nedir	nedir	tr	wh
+fw:tr:nerede	nerede	tr	wh
+fw:tr:niye	niye	tr	wh
+fw:tr:sonra	sonra	tr	rel
+fw:tr:ve	ve	tr	fn
+fw:tr:zaman	zaman	tr	fn
+fw:tr:önce	önce	tr	rel
+sortal:tr:eylem	eylem	tr	action
+sortal:tr:eylemler	eylemler	tr	action
+sortal:tr:komut	komut	tr	command
+sortal:tr:komutlar	komutlar	tr	command
+sortal:tr:şey	şey	tr	thing
+sortal:tr:şeyler	şeyler	tr	thing
+hap:tr:geldi	geldi	tr	follow:past
+hap:tr:gelir	gelir	tr	follow
+hap:tr:geliyor	geliyor	tr	follow
+hap:tr:oldu	oldu	tr	follow:past
+hap:tr:olur	olur	tr	follow
+hap:tr:oluyor	oluyor	tr	follow
+verb:tr:follow	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
+verb:tr:happen	olur|olmaz|oldu|olmadı|olabilir|olmuş olabilir	tr	
+verb:tr:precede	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
+order:en	svo	en	
+order:tr	sov	tr	
+suffix:tr:ablative	DAn	tr	
+suffix:tr:accusative	(y)I	tr	
+suffix:tr:copula	DIr	tr	
+suffix:tr:locative	DA	tr	
+syn:en:s	subj vp | num:subj>vp | vp	en	
+syn:en:vp	v | | v	en	
+syn:en:np	det n | | n	en	
+lex:en:the	cat=det;any=the	en	
+lex:en:dog	cat=n;sg=dog;pl=dogs	en	
+lex:en:cat	cat=n;sg=cat;pl=cats	en	
+lex:en:run	cat=v;sg=runs;pl=run	en	
+lex:en:sleep	cat=v;sg=sleeps;pl=sleep	en	
+cxn:en:introspect:report	I was thinking: {thought}	en	
+cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
+cxn:en:definition:plain	{subject} is {kind}.	en	
+cxn:en:seen_count:plain	I have seen {object} {count}.	en	
+cxn:en:described:full	{defn} {count}	en	
+cxn:en:succession_after:assert	{adjunct}, {subject} {vp_assert}.	en	confident
+cxn:en:succession_after:hedge	{adjunct}, {subject} {vp_hedge}.	en	tentative
+cxn:en:succession_before:assert	{subject} {vp_assert} {anchor}.	en	confident
+cxn:en:succession_before:hedge	{subject} {vp_hedge} {anchor}.	en	tentative

@@ -17,20 +17,6 @@ type verbEN struct {
 	base, third, past, part string
 }
 
-// verbsEN is the curriculum source for the verb:en grammar nodes; the
-// engine conjugates from the memory copy.
-var verbsEN = map[string]verbEN{
-	"follow":  {"follow", "follows", "followed", "followed"},
-	"precede": {"precede", "precedes", "preceded", "preceded"},
-	"happen":  {"happen", "happens", "happened", "happened"},
-	"know":    {"know", "knows", "knew", "known"},
-	"name":    {"name", "names", "named", "named"},
-	"propose": {"propose", "proposes", "proposed", "proposed"},
-	"see":     {"see", "sees", "saw", "seen"},
-	"fail":    {"fail", "fails", "failed", "failed"},
-	"run":     {"run", "runs", "ran", "run"},
-}
-
 // finiteVerb conjugates a verb for its subject: third person singular
 // present takes the -s form, everything else in the present takes the
 // base, and the past ignores person the way English does.

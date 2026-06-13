@@ -207,43 +207,6 @@ func (p *Params) Compose(lang string, m Message, chem limbic.State) (string, []s
 	return sentence(line, ""), trace, true
 }
 
-// Constructions is the innate construction seed, the first sentence-pattern
-// curriculum the trainer writes into starter memory beside the grammar
-// parameters. Once seeded, the engine reads the memory copy, and a taught
-// construction competes with these by weight.
-//
-// The succession and definition answers and the introspection report move
-// out of the realizer to here; the verb group inside a succession slot is
-// still conjugated by the engine, so morphology stays innate while the
-// frame around it is learned. The assert and hedge variants carry the same
-// oxytocin split the realizer used to make in code.
-func Constructions() []Param {
-	seed := func(intent, variant, cond, template string) Param {
-		return Param{
-			Key:      "cxn:en:" + intent + ":" + variant,
-			Value:    template,
-			Lang:     "en",
-			Category: cond,
-			Weight:   1.0,
-		}
-	}
-	return []Param{
-		seed("introspect", "report", "", "I was thinking: {thought}"),
-		seed("introspect_idle", "plain", "", "I have not been thinking about anything."),
-		seed("definition", "plain", "", "{subject} is {kind}."),
-		seed("seen_count", "plain", "", "I have seen {object} {count}."),
-		// A composition: the definition clause and, when there is one, the
-		// count clause nest in its slots. With the count absent the slot
-		// collapses, so the same pattern says both "X is a thing." and "X
-		// is a thing. I have seen it twice."
-		seed("described", "full", "", "{defn} {count}"),
-		seed("succession_after", "assert", "confident", "{adjunct}, {subject} {vp_assert}."),
-		seed("succession_after", "hedge", "tentative", "{adjunct}, {subject} {vp_hedge}."),
-		seed("succession_before", "assert", "confident", "{subject} {vp_assert} {anchor}."),
-		seed("succession_before", "hedge", "tentative", "{subject} {vp_hedge} {anchor}."),
-	}
-}
-
 // SetConstructions installs the construction registry compiled from cxn
 // parameters, keyed language then intent, and returns the same Params for
 // chaining onto Compile. Each key is "cxn:<lang>:<intent>:<variant>"; the
