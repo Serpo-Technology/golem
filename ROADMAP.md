@@ -1527,6 +1527,201 @@ grounds the name in the categories rather than their members, so a `thing`
 taught that way is their parent and not their sibling, and the inner loop and
 recall behave as before with inhibition at its gentle default.
 
+## Step 30: The seed becomes data, the engine stays code
+
+Goal: lift the grammar and construction seed out of Go literals into a single
+bootstrap the existing seeder writes into starter memory on first run, so the
+only grammar left in code is the engine, the seed is a script anyone can edit,
+and a new language is data rather than a new code path.
+
+Step 14 moved grammar's runtime into memory: the engine compiles its working
+copy from grammar nodes, and a form's lived naming mass can out-weigh a seeded
+entry, so grammar learns and bends to usage there. But the seed's source stayed
+in code. `Curriculum` and `Constructions` are functions returning literals
+sourced from the tables in `english.go` and `turkish.go`, and `Builtin`
+compiles straight from those tables, which makes them look load-bearing at
+runtime when they serve only callers with no store. The learnable home of
+grammar is memory while its source is still hardcoded, the seam this closes.
+
+- [ ] One bootstrap holds every seed source, the closed class, sortals, event
+      verbs, principal parts, word order, suffix recipes, the constructions, and
+      the declarative grammar, in the uniform parameter shape they already
+      share, embedded in the binary so first-deployment seeding needs no
+      external file.
+- [ ] The existing idempotent seeder writes the bootstrap into starter memory on
+      first run and tops up new entries on a later build while every parameter
+      the store already holds keeps its learned weight, the path already in use,
+      now fed by data.
+- [ ] The grammar files keep only the engine, parse, compile, morphology, and
+      unification, and the package-level fallback and the tests read the
+      embedded bootstrap, so nothing reads a hardcoded table.
+- [ ] A new language or a corrected form is a bootstrap edit, not a code change.
+
+Framing: this is the innate-engine and learned-content split made clean. The
+engine is the innate floor and belongs in code, like the walk; the seed is the
+first curriculum and belongs in data, like every concept grounded after it.
+Today the engine and the seed share the same files; this separates them, so the
+code holds mechanism and the data holds content.
+
+Fluid path: a seeded entry is the rigid bootstrap that learned structure
+supersedes. Once it is data on one footing with what is learned, it is a first
+guess at maximal weight that lived usage out-weighs, and the measure of progress
+is how few seeded entries stay load-bearing as the system learns its own.
+
+Done when: deleting a form from the bootstrap removes it from a fresh brain and
+only a fresh brain, an existing brain keeps what it learned, and the grammar
+package compiles with no grammar content left in it, only the engine.
+
+## Step 31: Reify relations
+
+Goal: make a relation a first-class concept, so a verb like chase or a stated
+is-a becomes a node a proposition binds into, the structure shared across
+Paris-France and Tokyo-Japan can be reified, and comprehension has somewhere to
+put the link between two bound concepts.
+
+GOLEM forms a concept from a recurring constellation of concepts (Step 16) and
+now nests them (Step 29), but it cannot reify the relation itself, the thing
+that holds between a dog and the cat it chased, or between a capital and its
+country. The roadmap has carried this as relational abstraction with no
+mechanism, and the comprehension work needs it first: to bind `chased` in "a
+dog chased a cat" there must be a chase-relation to bind it into. A relation is
+the substrate a proposition stands on.
+
+- [ ] A relation is a concept like any other, grounded, named, weighted, and
+      salient by information, living in the one graph under the one glass box,
+      but it carries argument slots for the roles it relates, chaser and chased,
+      capital and country.
+- [ ] A relation grounds in the moments that instantiate it, so chase grounds in
+      seen or told chasings the way a thing grounds in its sightings, and its
+      slots fill from what played the roles there.
+- [ ] A relation forms by the same constellation pass that mints a category,
+      lifted from a recurring co-occurrence of concepts in a stable
+      configuration, so it is learned from grounded usage, not declared.
+- [ ] The walk crosses a relation, so a step from one concept to another through
+      the relation that binds them runs on the primitive already built.
+
+Framing: this is the constellation mechanism raised from things to the structure
+between them. A thing is the constellation of its features and company; a
+relation is the recurring configuration of the concepts it binds, with the
+roles named. The innate part is the slot-bearing node and the walk that crosses
+it; the learned part is which relations exist and what they ground in, distilled
+from usage like everything else.
+
+Fluid path: relations are not a fixed inventory and the seed needs none. They
+form from grounded co-occurrence the way categories do, so the set grows with
+experience, a relation barely lived staying weak and forgettable while one lived
+often entrenches, the same currency as every other node. Generalizing one
+relation across instances by structure-mapping, the analogy that sees
+Paris-France and Tokyo-Japan as the same shape, is the deeper reach this leaves
+open; reifying and grounding the relation is the floor it stands on.
+
+Done when: chase, taught by narrating chasings, becomes a relation whose slots
+are the chaser and the chased, a walk from a dog to what it chased crosses it,
+and a second relation learned the same way stands apart from the first.
+
+## Step 32: Bidirectional constructions and the comprehension engine
+
+Goal: make a construction a true form-and-meaning pair run by one unification
+engine in both directions, so the inventory that speaks also comprehends, an
+utterance parses into a meaning structure GOLEM writes into the graph, and the
+rigid planner dispatch gives way to meaning handed to the engine.
+
+Today a construction is a surface template keyed by a bare intent label, and the
+planner fills its slots through a fixed dispatch over a fixed set of intents,
+which is the rigid fill-in-the-blank machine: the surface moved into memory,
+what GOLEM can mean did not. The move, drawn from Fluid Construction Grammar, is
+to deepen the meaning side from a label into a grounded structure of roles over
+concepts and relations, so one engine unifies meaning with form to speak and
+form with meaning to understand. Comprehension then carries meaning inward the
+way perception does, the capability that gates conversation.
+
+- [ ] A construction carries two poles, a form pole of order, function words,
+      and slots, and a meaning pole of roles over concepts and the relation
+      (Step 31) that binds them, both in memory, both learned.
+- [ ] One unification engine runs the inventory both ways, meaning to form to
+      generate and form to meaning to comprehend, the engine the innate floor
+      and the constructions the learned content, the same split as the walk and
+      the graph.
+- [ ] Comprehension binds an utterance's word-concepts into a construction's
+      roles by best fit, the feature signatures constraining it so an animate
+      concept is the better agent, and writes the resulting proposition into the
+      graph, grounding what was said.
+- [ ] A partial or novel utterance yields a partial meaning and a learning
+      signal, not a parse failure, so an unknown relation leaves its slots bound
+      and itself marked to be grounded.
+- [ ] The planner's fixed answer dispatch gives way to building a meaning
+      structure and handing it to the engine, so an answer is generated from
+      meaning rather than selected from a menu, and the per-language parse fork
+      retires into the one engine over each language's seeded constructions.
+- [ ] New constructions are induced from grounded usage, an item-based pattern
+      lifted from repeated form-meaning pairings and generalized at its slot over
+      recurrences, so the inventory grows from what is heard.
+
+Framing: this is the system's own principle reaching language at last.
+Perception carries the world into the graph; this lets language carry meaning in
+too, by the same grounded, weighted, inspectable structure. The engine is
+innate, the constructions are learned, and comprehension is generation run
+backward over them.
+
+Fluid path: the seeded constructions are the bootstrap and induction is what
+makes them fluid. A few argument-structure patterns are seeded as data (Step 30)
+so there is something to parse with at all, but each is a form-meaning pair on
+one footing with what is learned, and usage-based induction grows new ones and
+re-weights the seeds. Induction over open usage is the long arc of the work,
+demonstrated in grounded language games and unsolved at large, so the seed
+carries weight for a while and the measure of fluidity is how little of it stays
+load-bearing.
+
+Done when: "a dog chased a cat," told to a brain that has grounded dog, cat, and
+chase, parses into chaser and chased and is written as a proposition the brain
+can then be asked about, a sentence never given whole is both said and
+understood through the same constructions, and an answer the old planner
+hardcoded now comes from a meaning structure run through the engine.
+
+## Step 33: Discourse on the workspace field
+
+Goal: hold the thread of a conversation in the workspace's activation field, so
+a pronoun binds to what is warm, a follow-up reads as a move on the warm
+proposition, and a topic persists across turns, all on the field already there
+and not a discourse template.
+
+The probe showed "what is it" resolving to the warm dog, so the workspace is
+already minimal discourse memory of the brain's kind, a decaying activation
+field and not a symbolic stack. But it holds one warm node, not a structure: no
+set of recent referents, no reading of "why" or "and then," no topic continuity
+past raw warmth. A conversation is a structure of references and moves, and the
+field needs to carry a little more of it.
+
+- [ ] The workspace keeps a small decaying set of recently-active concepts with
+      the roles they last played, so a turn leaves referents behind, not only
+      the hottest node.
+- [ ] A pronoun or bare reference binds to the best-fit member of that set, most
+      active and feature-compatible, so "it" finds the inanimate it should and
+      "she" the animate, by the signatures already carried.
+- [ ] A discourse move reads as a walk over the warm proposition, "why" to its
+      grounds, "and then" to its successor, "what about X" shifting the warm
+      referent, so connectives run on the primitive already built and not a
+      parser of dialogue acts.
+- [ ] A topic persists as the sustained warm region the inner loop already
+      biases toward, so a subject can be followed across turns and its change
+      noticed.
+
+Framing: discourse is sustained activation and binding, the same field that gave
+anaphora for free, read a little more richly. The innate part is the decay, the
+binding, and the walk; the learned part is nothing new, only the concepts and
+relations already grounded, now tracked across a few turns. No discourse
+representation is added; the workspace is the discourse model.
+
+Fluid path: there is no template to make fluid here because there is none. The
+mechanism is the activation field and the walk, both already general, so what
+grows is only what is grounded, and a conversation about richer concepts is a
+richer conversation with nothing language-specific or hand-listed to maintain.
+
+Done when: across turns "it" and "she" bind to the right warm referents, "why"
+answers about the proposition just stated by walking its grounds, the subject of
+an exchange can be followed and its change noticed, and none of it reads from a
+discourse script.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1543,12 +1738,16 @@ recall behave as before with inhibition at its gentle default.
   recurring constellation of concepts (Step 16), but it cannot yet reify a
   relation itself: "capital of" or "causes", the shared structure across
   Paris-France and Tokyo-Japan, needs the analogy and structure-mapping the
-  graph does not do.
+  graph does not do. Step 31 plans the reification, the relation as a
+  slot-bearing concept a proposition binds into, leaving cross-instance
+  structure-mapping the deeper reach.
 - Language comprehension is answer-shaped. The realizer and parser cover the
   sentence shapes GOLEM speaks and the questions it answers; open
   comprehension is beyond them. Receiving a stated abstraction, following a
   definition, or parsing arbitrary prose is well past today's grammar, and
-  it is the larger half of the abstraction work.
+  it is the larger half of the abstraction work. Step 32 plans the
+  comprehension engine that runs the constructions backward and writes meaning
+  into the graph.
 - Untrusted perception is a standing hazard for agency. Web and other
   open-world channels carry adversarial content. The gates and denylist stop
   it from triggering execution, but the hygiene that keeps it from polluting
@@ -1572,7 +1771,8 @@ recall behave as before with inhibition at its gentle default.
   until it carries its own punctuation and well-formed slots; the innate
   slot-filling engine keeps spacing and capitalization right but does not
   repair a malformed template. Breadth of expression, like breadth of
-  meaning, still has to be lived or told.
+  meaning, still has to be lived or told. Step 32 plans the usage-based
+  induction that grows the inventory from what is heard.
 - The realization engine has a general core, but the answers do not run on
   it yet. Step 24 added a unification engine over a declarative grammar in
   memory, with agreement and word order as editable nodes and composition to
@@ -1580,7 +1780,8 @@ recall behave as before with inhibition at its gentle default.
   the sentences GOLEM actually speaks still go through the procedural English
   realizer and the constructions above it. Wiring the planner's answers onto
   the general engine, and inducing the declarative grammar from usage rather
-  than seeding it, remain.
+  than seeding it, remain. Step 32 retires the procedural dispatch, generating
+  an answer from a meaning structure run through the one engine.
 - Salience weights by information, but the measure is coarse. Step 26 changed
   persistence, the relevance drive, and the walk from raw count to
   information: grounding diversity, a boost for a deliberately taught name,
