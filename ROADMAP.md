@@ -1182,12 +1182,12 @@ tokens: an attribute that recurs across many concepts becomes a feature in
 its own right, so two things resemble each other by a learned trait instead
 of a shared word.
 
-- [ ] Features discovered by clustering co-occurring attributes across
+- [x] Features discovered by clustering co-occurring attributes across
       concepts during consolidation, beside the surface tokens already minted.
-- [ ] A discovered feature is itself an inspectable node, read by
+- [x] A discovered feature is itself an inspectable node, read by
       interpretation (which concepts it fires for), the give already flagged
       for the feature layer.
-- [ ] Resemblance computed over discovered features, so similarity survives a
+- [x] Resemblance computed over discovered features, so similarity survives a
       change of words.
 
 Flagged research: feature discovery is concept induction's cousin, hard and
@@ -1196,6 +1196,17 @@ unproven at scale; the surface-token layer stays the floor it builds on.
 Done when: two concepts that share no caption token but keep similar
 conceptual company resemble each other, and the shared discovered features
 read back.
+
+Status: built. Consolidation now mines a second kind of feature beside the
+surface tokens: the conceptual company a concept keeps. It sweeps the whole
+concept graph, sums the lived neighbors of each concept's grounded episodes
+into the concepts they instantiate, normalizes to shares, and keeps a
+company concept as a discovered feature only where it recurs across enough
+concepts to be a shared trait rather than an incidental neighbor. Each is a
+"co:" feature node like any other, visible in dump and in the concept
+signature, so two concepts with no describing word in common but the same
+neighborhood come to share a feature and resemble each other through it. The
+done-when holds in tests, with the no-shared-token case asserted alongside.
 
 ## Step 24: A general realization engine
 
@@ -1213,16 +1224,16 @@ functional unification) merge feature structures. In either, the engine is
 one small general mechanism and all the linguistic knowledge is declarative
 data in memory.
 
-- [ ] Replace the procedural slot-filler with a general combination primitive
+- [x] Replace the procedural slot-filler with a general combination primitive
       (unification, or tree substitution and adjunction), the new and far
       smaller innate floor.
-- [ ] Move agreement, article choice, and word order out of code into
+- [x] Move agreement, article choice, and word order out of code into
       declarative feature structures or elementary trees, weighted and
       inspectable beside the constructions.
-- [ ] Open composition falls out: structures combine by the general operation
+- [x] Open composition falls out: structures combine by the general operation
       to any depth, so a novel sentence is built, and read back, as the
       structures that made it.
-- [ ] Keep output reliable: unify or search toward a grammatical result, and
+- [x] Keep output reliable: unify or search toward a grammatical result, and
       fail to the simpler engine instead of emitting a broken sentence.
 
 Forced deviation, flagged: the floor shrinks and generalizes but never
@@ -1239,6 +1250,22 @@ Done when: agreement and word order are read from memory nodes rather than
 code, two structures combine to any depth by the general engine, and editing
 a declarative rule changes the grammar without touching the engine.
 
+Status: built to the milestone. The general engine is one operation,
+feature-structure unification, over declarative rules read from memory: a
+phrase rule names its daughters' surface order (the word order) and the
+features that flow between them (the agreement), and a lexical entry gives a
+lemma its category and inflected forms. The engine unifies, selects each
+form, and linearizes, recursing through a noun phrase nested in a clause so
+two structures combine to depth, and it returns the trace of rules and
+lexical items that built the sentence so the composition reads back. The
+rules are ordinary grammar nodes, seeded through the trainer and editable in
+the graph: changing the word-order node and recompiling reorders the clause
+with no change to the engine, agreement intact. It fails cleanly on an
+unknown lemma or a language it has no grammar for, so the procedural realizer
+stays the reliable floor beneath it. A hand-seeded declarative grammar run by
+the engine is the milestone; inducing the grammar from usage and the search
+cost of open generation stay research. All done-when criteria hold in tests.
+
 ## Step 25: Goal-pursuit
 
 Goal: a held, pursued goal, so self-direction reaches past Step 19's reflex
@@ -1249,11 +1276,11 @@ action gate in the moment. A goal is a state the loop holds and works toward
 over many steps, re-selecting acts until it is reached or abandoned. This is
 the least-charted piece of the whole project.
 
-- [ ] A goal representation the loop can hold: a target state, a sense of
+- [x] A goal representation the loop can hold: a target state, a sense of
       distance to it, and a hold that survives across ticks.
-- [ ] The action gate weighs acts by how far they move toward the held goal,
+- [x] The action gate weighs acts by how far they move toward the held goal,
       alongside chemistry and learned worth.
-- [ ] A goal is set by a drive, by a request, or by GOLEM itself, and released
+- [x] A goal is set by a drive, by a request, or by GOLEM itself, and released
       when reached or when it stops paying.
 
 Flagged research: persistent goal-pursuit is the frontier of the frontier,
@@ -1262,6 +1289,18 @@ held goal that visibly steers a few acts.
 
 Done when: GOLEM holds a goal across several loop ticks, its acts visibly bend
 toward it, and the goal and its progress read back on the trail.
+
+Status: built to the milestone. The held intention from Step 19 grows a
+target and a measured distance: a learning goal aims at understanding its
+topic, and the distance closes from one as lived experience about it is
+gathered, reaching zero when a concept finally answers to it. Each quiet tick
+the gate aims the recall act at the topic, weighted by how far the target
+still is; the closing distance is logged as progress on the trail, and the
+goal is released when it is reached (with a reward), when it goes stale, or
+when it stops making progress, so a pursuit never becomes an obsession. A
+goal is set by a request (a question that left a word pointing at nothing) or
+by GOLEM itself (curiosity over a warm nameless thing). A held, freely chosen
+goal beyond learning stays the frontier; the done-when holds in tests.
 
 ## Step 26: Salience by information, not frequency
 
@@ -1280,20 +1319,20 @@ revisited died. Step 11 fixed exactly this currency for naming, where a
 count-based bond once let one word name everything. The same currency is
 wrong for forgetting, for the drive, and for the walk.
 
-- [ ] Persistence by information: a concept's resistance to decay weights by
+- [x] Persistence by information: a concept's resistance to decay weights by
       the diversity of its grounding, so a thing seen many times in one fixed
       context is cheap to drop while a thing lived across varied contexts is
       durable.
-- [ ] Drive salience by information: the relevance drive discounts a node by
+- [x] Drive salience by information: the relevance drive discounts a node by
       how predictably it recurs, so a high-frequency low-information node
       cannot pull the loop above real knowledge.
-- [ ] The walk avoids junk hubs: damp a destination by its degree or its
+- [x] The walk avoids junk hubs: damp a destination by its degree or its
       information, so the inner loop stops circling a node everything connects
       to.
-- [ ] Entrench what was taught: deliberately narrated or taught content
+- [x] Entrench what was taught: deliberately narrated or taught content
       carries a durability boost over an incidentally observed companion, so
       meaning outlives ambient noise.
-- [ ] A true-forget maintenance path: a command to delete a node and its
+- [x] A true-forget maintenance path: a command to delete a node and its
       edges, since some traces, bug-junk and sensitive data alike, must be
       destroyable rather than only demoted (today this needs database surgery).
 
@@ -1306,6 +1345,21 @@ Done when: a node repeated many times in one fixed context is cheap to retain
 and never pulls the drive above a varied concept, a taught concept survives
 where an incidental companion fades, the inner loop does not circle a
 high-degree hub, and a node can be truly deleted by command.
+
+Status: built. Consolidation scores each concept by its information, the
+diversity of the contexts its experience spans plus a boost when a firm name
+was deliberately taught, and caches it on the node. The score drives three
+things that used to run on raw count. Persistence: the experience under an
+informative concept is refreshed so it outlives the night, while a node lived
+in one fixed context is left to fade however often it recurred, so a taught
+or varied concept survives where an incidental companion does not. Salience:
+a recurring shape warms its concept in proportion to its information, so a
+high-frequency low-information node cannot pull the inner loop above real
+knowledge. The walk: a destination is damped by the breadth of edges that
+reach it, so the loop stops circling a hub everything connects to while a
+focused neighbor keeps its pull. And golem forget deletes a remembered shape
+and its edges outright, the concept and its episodes alike, the true-forget
+that a demotion never gave. All four done-when criteria hold in tests.
 
 ## Known limitations
 
@@ -1335,12 +1389,15 @@ high-degree hub, and a node can be truly deleted by command.
   memory or grounding an action (marking channels untrusted, weighting them
   low, barring them from action grounding) is a policy to get right as the
   agency work lands.
-- Feature signatures are surface-deep. The sparse layer generalizes by
-  recurring tokens, channels, and felt chemistry, so a paraphrase lands
-  only when it shares surface attributes with the lived shape; a true
-  synonym with no shared token still needs a naming bond or a lived
-  bridge. Breadth has to be lived or told, and the answer-shaped
-  comprehension ceiling stands above the representation either way.
+- Feature resemblance is grounded, not lexical. The sparse layer now
+  generalizes by recurring tokens, channels, felt chemistry, and the
+  conceptual company a concept keeps (Step 23), so two things can resemble
+  each other by a shared neighborhood with no word in common. But
+  resemblance still bottoms out in what was lived near: a true synonym that
+  never kept the same company nor shared a surface attribute still needs a
+  naming bond or a lived bridge. Breadth has to be lived or told, and the
+  answer-shaped comprehension ceiling stands above the representation either
+  way.
 - Language generation is construction-based but thinly seeded. The sentence
   patterns now live in memory as constructions the engine fills and composes
   (Steps 21 and 22), so a form can be taught, varied, and nested, but only a
@@ -1350,17 +1407,22 @@ high-degree hub, and a node can be truly deleted by command.
   slot-filling engine keeps spacing and capitalization right but does not
   repair a malformed template. Breadth of expression, like breadth of
   meaning, still has to be lived or told.
-- The realization engine is hand-coded English. Slot-filling, agreement,
-  article choice, and word order live in code as the innate floor, so the
-  grammar itself can be neither edited nor learned, only its constructions
-  and parameters. Step 24 shrinks that floor to a general combination
-  primitive (unification or tree adjunction) over declarative rules in memory.
-- Salience is frequency-driven, so noise can outweigh meaning. Persistence,
-  the relevance drive, and the inner loop all weight by raw occurrence count,
-  so a high-frequency low-information node (a repeated companion, a bug's
-  junk) can become the most durable, most recalled, and most walked-to node
-  while a meaningful concept seen fewer times and not revisited dies. Step 26
-  changes the currency from frequency to information.
+- The realization engine has a general core, but the answers do not run on
+  it yet. Step 24 added a unification engine over a declarative grammar in
+  memory, with agreement and word order as editable nodes and composition to
+  depth, and it runs a hand-seeded grammar as a demonstrated milestone. But
+  the sentences GOLEM actually speaks still go through the procedural English
+  realizer and the constructions above it. Wiring the planner's answers onto
+  the general engine, and inducing the declarative grammar from usage rather
+  than seeding it, remain.
+- Salience weights by information, but the measure is coarse. Step 26 changed
+  persistence, the relevance drive, and the walk from raw count to
+  information: grounding diversity, a boost for a deliberately taught name,
+  and edge-breadth hub-damping. The information score is a simple
+  channel-diversity-plus-teaching heuristic, and the walk damps by the
+  breadth of edges seen from the current seed, so a junk hub that has merged
+  into a few episodes can still slip the damping. A finer measure, the
+  entropy of a node's whole company, is the next turn.
 
 ## Open questions
 

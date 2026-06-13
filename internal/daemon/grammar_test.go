@@ -4,8 +4,45 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
+
+// The general engine runs a declarative grammar read entirely from memory:
+// the seeded rules make a clause agree and order itself, and editing the
+// word-order node and recompiling changes the grammar with no change to
+// the engine.
+func TestGeneralEngineFromMemory(t *testing.T) {
+	d, s := testDaemon(t)
+	tree := grammar.Phrase("s", nil, map[string]*grammar.GenNode{
+		"subj": grammar.Phrase("np", map[string]string{"num": "pl"}, map[string]*grammar.GenNode{
+			"det": grammar.Leaf("the", nil),
+			"n":   grammar.Leaf("dog", nil),
+		}),
+		"vp": grammar.Phrase("vp", nil, map[string]*grammar.GenNode{
+			"v": grammar.Leaf("run", nil),
+		}),
+	})
+	if got, _, ok := d.gram.Generate("en", tree); !ok || got != "the dogs run" {
+		t.Fatalf("the seeded declarative grammar should generate the clause: %q %v", got, ok)
+	}
+
+	// Edit the word-order rule in the graph and recompile; nothing in the
+	// engine changes, only the data.
+	if _, err := s.DeleteByTemplate("syn:en:s"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Encode(&memory.Fragment{Kind: memory.KindGrammar, Channel: "grammar",
+		Template: "syn:en:s", Content: "vp subj | num:subj>vp | vp", Lang: "en", Time: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, ok := d.gram.Generate("en", tree); !ok || got != "run the dogs" {
+		t.Fatalf("editing the order rule should reorder the clause: %q %v", got, ok)
+	}
+}
 
 // The grammar seeds into starter memory on first run, through the same
 // encode path everything takes: a function word's category and a verb's

@@ -118,7 +118,11 @@ func (d *Daemon) recompileGrammar() error {
 	if err != nil {
 		return err
 	}
-	d.gram = grammar.Compile(paramsOf(gnodes), mass).SetConstructions(paramsOf(cnodes))
+	// The grammar nodes carry the closed class, the constructions' siblings,
+	// and the declarative grammar the general engine runs; each compile step
+	// reads the slice it understands and ignores the rest.
+	gparams := paramsOf(gnodes)
+	d.gram = grammar.Compile(gparams, mass).SetConstructions(paramsOf(cnodes)).SetDecl(gparams)
 	return nil
 }
 

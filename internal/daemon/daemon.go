@@ -815,9 +815,11 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	d.encodesSinceSleep++
 	d.hot.Put(frag)
 	// A moment whose shape has a concept warms that concept: experience
-	// keeps working memory pointed at what is happening.
+	// keeps working memory pointed at what is happening. The warming scales
+	// with the concept's information, so a high-frequency low-information
+	// node cannot pull the inner loop above real knowledge.
 	if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
-		d.ws.excite(c.ID, exciteEncode)
+		d.ws.excite(c.ID, exciteEncode*infoScale(c.Surprise))
 	}
 	d.event(events.Event{Ev: "encode", Channel: o.Channel, ID: id, Bits: bits, Tpl: wire.Clip(tpl, 120)})
 	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
@@ -1250,6 +1252,36 @@ func (d *Daemon) tellAbout(req wire.Request) wire.Response {
 	return resp
 }
 
+// forget is the true-forget maintenance path: it deletes a remembered
+// shape and everything hanging off it, the concept, its episodes, and
+// their edges, since some traces (a bug's junk, sensitive data) must be
+// destroyable rather than only demoted. The strongest match to the query
+// names the shape; its whole template goes, and the cached working set is
+// dropped so nothing keeps a stale copy.
+func (d *Daemon) forget(query string) (int, string, error) {
+	tpl, what := "", ""
+	if hits, err := d.store.Recall(query, 1); err != nil {
+		return 0, "", err
+	} else if len(hits) > 0 {
+		tpl, what = hits[0].Template, hits[0].Content
+	} else if c := d.resolveConcept(query); c != nil {
+		tpl, what = c.Template, c.Content
+	} else {
+		return 0, "", nil
+	}
+	n, err := d.store.DeleteByTemplate(tpl)
+	if err != nil {
+		return 0, "", err
+	}
+	d.hot.Clear()
+	d.ws.clear()
+	d.event(events.Event{Ev: "forget", Tpl: wire.Clip(tpl, 120), Count: n})
+	if err := d.store.Audit(time.Now().Unix(), "forget", what, fmt.Sprintf("deleted %d node(s)", n)); err != nil {
+		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+	}
+	return n, what, nil
+}
+
 // handle services one CLI request inside the brain loop. A deferred reply
 // means an execution was started: the reply channel is answered when the
 // command's result marshals back through execDone, and the loop must not
@@ -1575,6 +1607,19 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// loop, so memory is never touched concurrently.
 		d.sleepCycle()
 		return wire.Response{OK: true}, false, false
+
+	case "forget":
+		if req.Query == "" {
+			return wire.Response{Error: "forget needs something to forget"}, false, false
+		}
+		n, what, err := d.forget(req.Query)
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		if n == 0 {
+			return wire.Response{Error: fmt.Sprintf("nothing matches %q to forget", req.Query)}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("forgot %q (%d node(s) gone).", what, n)}, false, false
 
 	case "stop":
 		return wire.Response{OK: true}, false, true

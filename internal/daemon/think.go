@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -155,7 +156,9 @@ const (
 )
 
 // walkDest is one destination a walk can land on, with every signal
-// measured so any (relation, signal) setting can rank it.
+// measured so any (relation, signal) setting can rank it. degree counts
+// the edges that led here, the breadth that marks a junk hub everything
+// connects to, so the walk can discount it.
 type walkDest struct {
 	id      uint64 // concept to warm; zero when the destination is not a workspace referent
 	gloss   string
@@ -163,6 +166,22 @@ type walkDest struct {
 	weight  float64
 	stress  float64
 	recency float64
+	degree  int
+}
+
+// hubDamp discounts a destination by how many edges reach it, so salience
+// is information, not frequency: a node reached by a few strong paths keeps
+// its pull while a hub everything connects to is divided down and stops
+// dominating the walk. A handful of edges is ordinary association and goes
+// untouched; only past that does the logarithmic damping bite, so a focused
+// neighbor is left alone and only a true hub is held back.
+const hubDampFree = 6
+
+func hubDamp(degree int) float64 {
+	if degree <= hubDampFree {
+		return 1
+	}
+	return 1 + math.Log2(float64(degree)/float64(hubDampFree))
 }
 
 // mindWandering reports the default-mode condition: nothing surprising
@@ -432,6 +451,7 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 			agg[e.Rel][c.ID] = a
 		}
 		a.weight += e.Weight * f.Weight
+		a.degree++
 		if f.Limbic.Noradrenaline > a.stress {
 			a.stress = f.Limbic.Noradrenaline
 		}
@@ -441,6 +461,10 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 	}
 	for rel, byConcept := range agg {
 		for _, a := range byConcept {
+			// Salience by information: a destination reached by many edges is
+			// a hub, and dividing its mass by that breadth keeps the inner
+			// loop from circling whatever everything happens to touch.
+			a.weight /= hubDamp(a.degree)
 			if a.weight >= thinkAssocFloor {
 				dests[rel] = append(dests[rel], *a)
 			}

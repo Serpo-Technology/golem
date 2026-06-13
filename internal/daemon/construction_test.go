@@ -40,7 +40,7 @@ func TestIntrospectConstructionTaughtAndForgotten(t *testing.T) {
 	}
 
 	// Forgetting it reverts to the seed; the engine never broke.
-	if err := s.DeleteByTemplate("cxn:en:introspect:taught0"); err != nil {
+	if _, err := s.DeleteByTemplate("cxn:en:introspect:taught0"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.recompileGrammar(); err != nil {
@@ -69,7 +69,7 @@ func TestSuccessionConstructionWithEngineFallback(t *testing.T) {
 	forgot := false
 	for _, n := range cnodes {
 		if strings.HasPrefix(n.Template, "cxn:en:succession_after:") {
-			if err := s.DeleteByTemplate(n.Template); err != nil {
+			if _, err := s.DeleteByTemplate(n.Template); err != nil {
 				t.Fatal(err)
 			}
 			forgot = true

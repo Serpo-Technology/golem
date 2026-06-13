@@ -230,6 +230,69 @@ func TestResemblanceThought(t *testing.T) {
 	}
 }
 
+// The done-when for discovered features: two concepts that share no
+// caption token but keep the same conceptual company resemble each other
+// through a discovered "co:" feature, and that shared feature reads back.
+func TestResembleByConceptualCompany(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-8 * time.Hour)
+	// Dog is lived just before the vet, four times, on the screen channel.
+	for i := range 4 {
+		d.recent = nil
+		at := base.Add(time.Duration(i) * 30 * time.Minute)
+		d.process(senses.Observation{Channel: "screen", Content: "dog in the yard", At: at}, true, true)
+		d.process(senses.Observation{Channel: "screen", Content: "vet on monday", At: at.Add(15 * time.Second)}, true, true)
+	}
+	// Cat is lived just before the vet, four times, on a different channel,
+	// so dog and cat share no word and no channel, only the vet's company.
+	for i := range 4 {
+		d.recent = nil
+		at := base.Add(4*time.Hour + time.Duration(i)*30*time.Minute)
+		d.process(senses.Observation{Channel: "files", Content: "cat by the door", At: at}, true, true)
+		d.process(senses.Observation{Channel: "files", Content: "vet on monday", At: at.Add(15 * time.Second)}, true, true)
+	}
+	d.recent = nil
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growFeatures()
+
+	dog, _ := s.ConceptByTemplate(attention.Normalize("dog in the yard"))
+	cat, _ := s.ConceptByTemplate(attention.Normalize("cat by the door"))
+	vet, _ := s.ConceptByTemplate(attention.Normalize("vet on monday"))
+	if dog == nil || cat == nil || vet == nil {
+		t.Fatal("all three shapes should distil")
+	}
+
+	dogSig := featureNames(t, d, dog.ID)
+	catSig := featureNames(t, d, cat.ID)
+	co := "co:" + vet.Content
+	if dogSig[co] == 0 || catSig[co] == 0 {
+		t.Fatalf("both should carry the discovered company feature %q: %+v %+v", co, dogSig, catSig)
+	}
+	for name := range dogSig {
+		if strings.HasPrefix(name, "tok:") && catSig[name] != 0 {
+			t.Fatalf("the resemblance must not lean on a shared word: %s", name)
+		}
+	}
+
+	sibs, err := d.featureSiblings(dog.ID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reached := false
+	for _, s := range sibs {
+		if s.id == cat.ID {
+			reached = true
+		}
+	}
+	if !reached {
+		t.Fatalf("shared company should make the dog resemble the cat: %+v", sibs)
+	}
+}
+
 // Features die by disconnection: when the experience and its concept
 // go, the attributes follow, and nothing dangles.
 func TestFeaturesDieWithTheirConcept(t *testing.T) {

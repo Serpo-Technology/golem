@@ -45,6 +45,9 @@ type Params struct {
 	// constructions holds the sentence patterns the planner fills, keyed
 	// language then intent; set by SetConstructions after Compile.
 	constructions map[string]map[string][]Construction
+	// decl holds the declarative grammar the general engine runs, keyed by
+	// language; set by SetDecl after Compile.
+	decl map[string]*DeclGrammar
 }
 
 // Curriculum returns the innate grammar seed as parameters, the first
@@ -94,6 +97,9 @@ func Curriculum() []Param {
 	add("suffix:tr:accusative", "(y)I", "tr", "")
 	add("suffix:tr:copula", "DIr", "tr", "")
 	add("suffix:tr:locative", "DA", "tr", "")
+	// The declarative grammar the general engine runs rides the same
+	// grammar nodes, seeded through the same trainer.
+	out = append(out, DeclSeed()...)
 	return out
 }
 
@@ -200,7 +206,7 @@ func ensure[V any](m map[string]map[string]V, lang string) map[string]V {
 }
 
 var builtinOnce = sync.OnceValue(func() *Params {
-	return Compile(Curriculum(), nil).SetConstructions(Constructions())
+	return Compile(Curriculum(), nil).SetConstructions(Constructions()).SetDecl(Curriculum())
 })
 
 // Builtin is the grammar compiled straight from the curriculum, for

@@ -87,6 +87,8 @@ Usage:
                                   the system default (say -v ? lists them)
   golem dump                      list every fragment held in memory
   golem dump --dot                export the memory graph as graphviz dot
+  golem forget <what>             truly delete a remembered shape and its
+                                  edges, the concept and episodes alike
   golem sleep                     consolidate once now and keep running
   golem stop                      ask the daemon to sleep once and shut down
   golem shellhook                 print the zsh hook that feeds the shell channel
@@ -329,6 +331,17 @@ func main() {
 	case "sleep":
 		call(home, wire.Request{Cmd: "sleep"})
 		fmt.Println("golem consolidated once and is still awake.")
+
+	case "forget":
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: golem forget <what>"))
+		}
+		resp := call(home, wire.Request{Cmd: "forget", Query: strings.Join(args[1:], " ")})
+		if resp.Say != "" {
+			fmt.Println(resp.Say)
+		} else {
+			fmt.Println("forgotten.")
+		}
 
 	case "stop":
 		call(home, wire.Request{Cmd: "stop"})

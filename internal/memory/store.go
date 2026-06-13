@@ -320,24 +320,40 @@ func (s *Store) SetWeight(id uint64, w float64) error {
 	return err
 }
 
-// DeleteByTemplate removes the node holding a template key and the edges
-// touching it. Construction and grammar templates are unique keys, so
-// this forgets one parameter outright, the way a removed construction
-// changes how GOLEM says a thing.
-func (s *Store) DeleteByTemplate(tpl string) error {
+// DeleteByTemplate removes every node holding a template key and the edges
+// touching them, reporting how many nodes went. A construction or grammar
+// template is a unique key, so this forgets one parameter outright; a
+// concrete shape's template is shared by its episodes and their concept,
+// so forgetting it takes the whole trace, the true-forget a demoted node
+// never gives.
+func (s *Store) DeleteByTemplate(tpl string) (int, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback()
 	if _, err := tx.Exec(`DELETE FROM links WHERE from_id IN (SELECT id FROM fragments WHERE template = ?)
 		OR to_id IN (SELECT id FROM fragments WHERE template = ?)`, tpl, tpl); err != nil {
-		return err
+		return 0, err
 	}
-	if _, err := tx.Exec(`DELETE FROM fragments WHERE template = ?`, tpl); err != nil {
-		return err
+	res, err := tx.Exec(`DELETE FROM fragments WHERE template = ?`, tpl)
+	if err != nil {
+		return 0, err
 	}
-	return tx.Commit()
+	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// SetInfo records a node's information, the diversity of its grounding, in
+// the surprise column, which a concept does not otherwise use. Salience and
+// persistence read it so the system weights a node by how informative it
+// is rather than how often it has recurred.
+func (s *Store) SetInfo(id uint64, info float64) error {
+	_, err := s.db.Exec(`UPDATE fragments SET surprise = ? WHERE id = ?`, info, id)
+	return err
 }
 
 // Refresh is retrieval practice: recalled memories get their weight

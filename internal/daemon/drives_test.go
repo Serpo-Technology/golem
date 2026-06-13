@@ -7,7 +7,45 @@ import (
 
 	"golem/internal/attention"
 	"golem/internal/memory"
+	"golem/internal/senses"
 )
+
+// A pursued goal closes a measurable distance as experience accumulates,
+// logs the progress on the trail, and is released when it stops paying.
+func TestGoalPursuitClosesDistance(t *testing.T) {
+	d, s := testDaemon(t)
+	d.adoptGoal("learn", "comet")
+	if d.goal == nil || d.goal.distance < 0.9 {
+		t.Fatalf("an unknown topic starts far from understood: %+v", d.goal)
+	}
+	// Lived experience about the topic shortens the distance to it.
+	for i := range 3 {
+		d.recent = nil
+		d.process(senses.Observation{Channel: "screen", Content: "comet over the ridge",
+			At: time.Now().Add(time.Duration(i) * time.Second)}, true, true)
+	}
+	d.recent = nil
+	d.checkGoal()
+	if d.goal == nil {
+		t.Fatal("a goal making progress should still be held")
+	}
+	if d.goal.distance >= 0.9 {
+		t.Fatalf("gathering experience should close the distance: %.2f", d.goal.distance)
+	}
+	if out, ok := auditHas(t, s, "goal"); !ok || !strings.HasPrefix(out, "progress:") {
+		t.Fatalf("progress should read back on the trail: %q %v", out, ok)
+	}
+
+	// With no further progress, the pursuit stops paying and is released.
+	d.goal.lastProgress = time.Now().Add(-goalStallTTL - time.Minute)
+	d.checkGoal()
+	if d.goal != nil {
+		t.Fatalf("a stalled goal should be released: %+v", d.goal)
+	}
+	if out, ok := auditHas(t, s, "goal"); !ok || !strings.HasPrefix(out, "abandoned:") {
+		t.Fatalf("the release should read back on the trail: %q %v", out, ok)
+	}
+}
 
 // The done-when: an unprompted internal act fires because a drive
 // called for it, and the drive is readable on the audit trail.
