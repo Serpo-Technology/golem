@@ -84,6 +84,15 @@ Two commitments govern every decision below.
   learning-rate dopamine already gates and waits until that coarseness bites;
   adenosine duplicates serotonin's sleep pressure and stays out unless mood and
   sleep pressure are ever worth splitting apart.
+- Self-extension: GOLEM is meant to evolve and program itself, and that
+  capability is the demonstration, the real thing speaking for itself. The
+  discipline that keeps it GOLEM through that growth is that meaning stays
+  grounded throughout: code grounded in execution, authored memory grounded by
+  teaching, every self-change traced to a grounded outcome and auditable in the
+  glass box. From the runtime onward the whole of GOLEM is run inside a sealed
+  container the operator places it in, the containment external rather than a
+  feature GOLEM builds, with the terminal and the memory editor as separate human
+  interfaces into it.
 
 ## Step 1: Core hardening
 
@@ -1799,6 +1808,244 @@ Done when: across turns "it" and "she" bind to the right warm referents, "why"
 answers about the proposition just stated by walking its grounds, the subject of
 an exchange can be followed and its change noticed, and none of it reads from a
 discourse script.
+
+## Step 34: The goal loop, one determination each moment
+
+Goal: make the top of the loop a single continuous determination, what to do
+now, run every tick over a candidate set and arbitrated by chemistry, so a goal
+is whatever currently wins selection and the absence of one is not a stall but a
+determination whose answer is to rest. This folds drive, request, consolidation,
+and idle into one decision and deletes the no-goal special case.
+
+GOLEM has the pieces, the inner loop, the drives, the act gate, but no single
+place that decides, each moment, among pursuing a goal, answering a request,
+consolidating, and idling. Without it, no goal reads as a frozen state rather
+than a choice. The brain runs action selection continuously and falls to the
+default-mode network when nothing presses; idling is an output, not a gap.
+
+- [ ] Each tick determines an action over the candidates, the active goal, a
+      pending request, consolidation pressure, and idle, ranked by chemistry,
+      with idle as the floor so there is always an answer.
+- [ ] An adopted goal carries inertia, persisting against distraction until
+      satisfied or abandoned, so the loop pursues rather than re-deciding from
+      scratch every tick.
+- [ ] A salient trigger preempts, a user request above all, so the loop
+      interrupts idle or wandering when the world demands it, noradrenaline the
+      currency of urgency.
+- [ ] Idling is a first-class outcome, the default-mode wander already built,
+      reached when nothing outranks it rather than as a missing case.
+
+Framing: this is the basal ganglia's job made explicit, continuous selection
+with a resting default, the same snapshot-in, candidate-out, loop-commits shape
+the thought round and the execution layer already use. The innate part is the
+arbitration; the learned part is which goals matter and what they are worth.
+
+Fluid path: nothing here is a fixed script. The candidate set is whatever is warm
+or pending, the ranking is chemistry over learned worth, and a new kind of goal
+needs no new branch, only a way to enter the candidate set.
+
+Done when: with no task GOLEM rests and wanders rather than stalling, an adopted
+goal survives a passing distraction, a user request interrupts within a tick, and
+the transition among pursue, answer, consolidate, and rest reads off one
+arbitration with no special case for emptiness.
+
+## Step 35: A runtime for the code GOLEM writes
+
+Goal: give GOLEM the computer's native strength, the ability to write a program
+and run it, so computation it would labor at symbolically, arithmetic, search,
+transformation, it offloads to executed code the way a person reaches for a tool.
+The runtime is the capability GOLEM gains; the sandbox around the whole of it is
+the operator's, placed from outside, not a feature GOLEM builds for itself.
+
+GOLEM runs on von Neumann hardware whose strength is programmability, and the
+honest way to use that strength is to let GOLEM program the machine rather than
+simulate computation in the graph. Executed code is also more auditable than a
+weight, because it can be read. Running code GOLEM wrote is the execute gate kept
+shut, and it opens only once the whole process is placed inside the sealed
+container the operator runs it in, the containment a precondition GOLEM trusts
+rather than enforces.
+
+- [ ] GOLEM can compose a program and execute it, the result returned as a
+      percept it can ground, through an interpreter or the toolchain it carries.
+- [ ] A program it runs is bounded, a time and resource budget and a recovered
+      panic, so a bad program fails to a contained error GOLEM learns from rather
+      than wedging its own loop.
+- [ ] The executed program is an artifact, written to the graph and the audit
+      trail, so what GOLEM ran is as readable as what it thought, the glass box
+      extended rather than pierced.
+
+Framing: this is the keep-the-computer's-advantages principle cashed in. It is
+not brain-emulation, executed code is still von Neumann; it is GOLEM using the
+machine's own gift. The runtime and the bounding of a single program are what
+GOLEM builds; the outer sandbox around the whole process is the operator's hand,
+and which programs are worth writing is learned, grounded in what they do (Step
+36).
+
+Fluid path: the runtime is a fixed capability, but its use is open. A program is
+another act the goal loop can select, judged by its outcome, so the computations
+GOLEM reaches for grow with grounding rather than being enumerated.
+
+Done when: GOLEM writes and runs a small program, grounds its result, and a
+runaway or panicking program is contained to an error it can learn from without
+disturbing the loop, the whole running inside the sandbox the operator placed it
+in.
+
+## Step 36: Ground programming as a learned language
+
+Goal: teach GOLEM to code the way it learns any language, through the
+bidirectional construction engine, so a programming language is form on one side
+and computation on the other, grounded in what the code does when it runs.
+
+Code is language. Step 32 built an engine that learns a language as form-meaning
+constructions, and a programming language has a grammar too. The form pole is the
+syntax, the meaning pole is the computation (an abstract syntax tree, which is
+pseudocode made precise), and the grounding is execution: a loop is grounded in
+having repeated, seen by running it in the Step 35 sandbox and watching the
+effect. So pseudocode is the meaning representation, literal language is the
+teaching surface, source is the executable form, and the run is the percept.
+
+- [ ] A programming language is seeded and learned as constructions like any
+      other, its syntax the form pole and an executable meaning the other, in
+      memory and competing by weight.
+- [ ] Comprehending code yields its computation; generating from a computation
+      yields code, the one engine run both ways, so GOLEM both reads and writes
+      programs.
+- [ ] Code grounds in execution, a construction's meaning tied to the effect of
+      running it, so understanding a program is knowing what it does, not just
+      its shape.
+- [ ] Literal-language and pseudocode teaching reach the same grounded meaning,
+      so a loop or a function can be taught in words, in pseudocode, or by
+      example, and converge.
+
+Framing: this is the language faculty turned on its most precise language. The
+engine is innate, the constructions of the language are learned, and execution
+is the grounding that keeps the code understood rather than merely emitted, which
+is what makes Step 38's self-programming a grounded act.
+
+Fluid path: no fixed code templates. Programming constructions are induced and
+taught like the rest, grounded in execution, so GOLEM's command of a language
+grows from what it has run, and a second language is more seeded constructions
+over the one engine.
+
+Done when: GOLEM, told what a small program should do, writes it, runs it in the
+sandbox, and grounds the result; shown a program, it says what it computes; and
+the same meaning taught in words and in pseudocode lands on one grounded concept.
+
+## Step 37: A grounded fitness for self-change
+
+Goal: give GOLEM a grounded measure of whether a change to itself is an
+improvement, so self-modification converges rather than drifts. Any change is a
+hypothesis, this makes me better at something, kept only if grounded outcomes
+agree.
+
+A system that can rewrite itself needs an answer to is this better, or it walks
+randomly until it breaks. Passing tests says a change is valid, not that it
+helps. The measure has to be grounded in outcomes, goal progress, reduced
+prediction error on the world, user trust, and multi-factor, because any single
+currency is gameable: approval alone breeds flattery, surprise-reduction alone
+seeks boredom. This is operant learning lifted from the operation layer, where a
+fruitful thought already wears its operation's weight, up to architecture.
+
+- [ ] A change is evaluated against grounded outcomes after it lands, goal
+      progress, world prediction, and trust blended, so improvement is measured,
+      not assumed.
+- [ ] The currency is multi-factor and anchored in real outcomes, so no single
+      signal can be gamed into a degenerate optimum.
+- [ ] A change that fails to improve is reverted, the same reinforce-or-wear loop
+      the operation weights already run, now over larger units.
+- [ ] The reason a change survived is legible, which outcome it improved, so
+      self-improvement is auditable in the glass box rather than opaque.
+
+Framing: this is reinforcement learning's selection pressure, grounded and
+glass-box, the gate that turns self-modification from a hazard into a direction.
+It couples to the goal loop, which generates the outcomes the fitness reads, so
+Step 34 and this are two ends of one mechanism.
+
+Fluid path: the fitness is a measure, not a goal hand-set; what counts as better
+is read from grounded outcomes that themselves grow with experience, so the
+standard GOLEM holds itself to sharpens as it lives rather than being fixed.
+
+Done when: a beneficial self-change is kept and a harmful one reverted on
+grounded evidence, the decision traces to the outcome it moved, and no
+single-signal exploit survives the blend.
+
+## Step 38: Self-source and self-modification
+
+Goal: give GOLEM its own source and let it improve itself through the tested,
+fitness-gated deploy pipeline, never a live patch. This is the self-referential
+loop the project aimed at from the start, made safe by grounding and the gate.
+
+With code grounded (Step 36), a runtime to run it (Step 35), and a fitness to
+judge a change (Step 37), GOLEM can read its own source and propose changes to
+it. The danger is a system editing its running engine; the discipline is the
+build-and-deploy pipeline already used by hand, propose, compile, test, judge by
+fitness, swap, with backups behind it, so a bad change is caught or reverted and
+never bricks the live mind.
+
+- [ ] GOLEM can read and reason about its own source as grounded code, so a
+      proposed change comes from understanding, not guesswork.
+- [ ] A self-change runs the full pipeline, compile, test, fitness gate, then
+      swap, and never hot-patches the running engine.
+- [ ] A change that fails compile, test, or fitness is rejected and the prior
+      binary stands, the backup the floor under every swap.
+- [ ] Every self-modification is on the audit trail, what changed, why proposed,
+      which outcome it improved, so the system's growth is readable.
+
+Framing: this is the keystone of the self-extending GOLEM, and it earns its place
+only on the three steps under it. The pipeline is innate guardrail; what GOLEM
+becomes is learned and grounded, traceable change by change in the glass box,
+which is what makes the self-extension a demonstration rather than a black box.
+
+Fluid path: the architecture itself becomes learned content under the same
+currency as everything else, a faculty kept because it improved grounded
+outcomes, dropped when it did not, so GOLEM's shape grows from its experience
+rather than from a fixed design.
+
+Done when: GOLEM proposes a change to its own source that improves a grounded
+outcome, the change survives the pipeline and the fitness gate and swaps in, a
+regressing change is caught and reverted, and the whole event reads back off the
+trail.
+
+## Step 39: The memory editor, a grounded console
+
+Goal: build a memory editor, a separate program for filling and inspecting
+GOLEM's memory, where authoring goes through teaching so what is added is
+grounded, with a raw-edit mode for surgery and an optional honest mark on what
+was touched.
+
+A glass box deserves an instrument to read and shape it; graph surgery has
+already been done by hand with raw SQL. The editor is that instrument, a separate
+program from GOLEM and from the terminal that talks to it, so editing memory and
+conversing with GOLEM stay distinct. The discipline that keeps it from
+re-introducing floating symbols: authoring emits teaching events through GOLEM's
+real grounding pipeline, so a filled-in concept is grounded exactly as a narrated
+one, only faster and visual.
+
+- [ ] Filling memory in the editor emits teaching events through the grounding
+      pipeline, so what is authored is grounded, never a bare declared symbol.
+- [ ] A separate edit mode allows raw surgery, splicing and deletion, with every
+      direct write logged to the audit trail, so a raw edit is never silent.
+- [ ] A fragment can optionally be marked as edited through the editor, on the
+      fragment itself, so GOLEM can know which memories were hand-touched rather
+      than lived and weigh them accordingly; using the mark is optional, but the
+      truth is available.
+- [ ] The editor reads and renders the live graph for inspection, the same glass
+      box the audit trail records, so shaping memory and watching it are one tool.
+
+Framing: the editor is a console beside the terminal, not a replacement for it,
+and it serves grounding rather than bypassing it. Teaching is the default path
+and grounds; raw edit is the scalpel and is audited; the provenance mark keeps
+GOLEM honest with itself about where a memory came from.
+
+Fluid path: the editor adds no knowledge of its own; it is an interface to the
+grounding GOLEM already does, so everything it puts in is earned the way lived
+experience is, and its reach grows with the faculties it fronts rather than
+encoding any content itself.
+
+Done when: a concept authored in the editor is grounded indistinguishably from
+one taught at the terminal, a raw edit lands on the audit trail, a fragment
+marked as editor-touched reads back as such, and GOLEM can tell a hand-touched
+memory from a lived one when the mark is used.
 
 ## Known limitations
 
