@@ -68,6 +68,9 @@ type Meaning struct {
 // the procedural realizer rather than speak a broken clause.
 func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
 	cxn, ok := p.selectArg(lang, m)
 	if !ok {
 		return "", false

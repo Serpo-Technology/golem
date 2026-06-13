@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"golem/internal/events"
@@ -73,6 +74,120 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		}
 	}
 	return true
+}
+
+// planRoleQuestion answers a question about a role of a relation by walking
+// the proposition graph and generating the answer through the engine, rather
+// than selecting a reply from a fixed menu. "What did the dog chase" asks for
+// the patient of a chase the dog was the agent of; "who chased the cat" asks
+// for the agent of a chase whose patient was the cat. The walk crosses the
+// relation to the co-argument, and the construction speaks the proposition
+// back, the same construction comprehension read forward. It returns false
+// when the question is not a relational role question, so the planner's older
+// handling stands.
+func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Wh != "what" && frame.Wh != "who" && frame.Wh != "which" {
+		return "", false
+	}
+	rel, known, knownRole, verb := d.analyzeRoleQuestion(frame.Lang, raw)
+	if rel == nil || known == nil {
+		return "", false
+	}
+	questioned, cross := "patient", memory.RelPatient
+	if knownRole == "patient" {
+		questioned, cross = "agent", memory.RelAgent
+	}
+	past := frame.Past || d.gram.VerbPast(frame.Lang, verb)
+	dests, err := d.walkableDests(known.ID)
+	if err != nil {
+		return "", false
+	}
+	var filler *walkDest
+	for i := range dests[cross] {
+		if dests[cross][i].via == rel.Content {
+			filler = &dests[cross][i]
+			break
+		}
+	}
+	if filler == nil {
+		// The relation is known but nothing filled the questioned role: the
+		// honest answer is the gap, spoken through the older admission.
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
+	}
+	m := grammar.Meaning{
+		Relation: grammar.Term{Phrase: rel.Content},
+		Roles: map[string]grammar.Term{
+			knownRole:  {Phrase: definiteNP(known.Content)},
+			questioned: {Phrase: definiteNP(filler.gloss)},
+		},
+		Past: past,
+	}
+	line, ok := d.gram.Speak(frame.Lang, m)
+	if !ok {
+		return "", false
+	}
+	// The answer's referent becomes the warmest, so the conversational thread
+	// follows what was just said.
+	d.ws.excite(filler.id, exciteSpeech)
+	d.warmSpoken(known.Content)
+	return line, true
+}
+
+// analyzeRoleQuestion reads a relational role question into the relation it
+// asks about, the argument it gives, and which role that argument fills. The
+// verb is the content word whose lemma names a grounded relation; the other
+// content word is the known argument. Where the verb sits decides the rest:
+// a verb leading the clause makes the wh-word the subject, so the known
+// argument is the patient ("who chased the cat"), while a verb after an
+// intervening noun makes the wh-word the object, so the known argument is the
+// agent ("what did the dog chase").
+func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragment, knownRole, verb string) {
+	tokens, _ := grammar.Tokenize(raw)
+	var content []string
+	for _, t := range tokens {
+		if d.gram.IsContentWord(lang, t) {
+			content = append(content, t)
+		}
+	}
+	verbIdx := -1
+	for i, t := range content {
+		if c := d.resolveConcept(d.gram.Lemma(lang, t)); c != nil && c.Category == "relation" {
+			verbIdx, rel, verb = i, c, t
+			break
+		}
+	}
+	if verbIdx < 0 {
+		return nil, nil, "", ""
+	}
+	for i, t := range content {
+		if i == verbIdx {
+			continue
+		}
+		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+			known = c
+			break
+		}
+	}
+	if known == nil {
+		return nil, nil, "", ""
+	}
+	if verbIdx == 0 {
+		return rel, known, "patient", verb // the wh-word is the subject; the known argument is the patient
+	}
+	return rel, known, "agent", verb // an argument precedes the verb; the wh-word is the object
+}
+
+// definiteNP gives a concept's gloss the definite article an answer wants,
+// unless the gloss already carries a determiner, so a bare "dog" speaks as
+// "the dog" while "a dog" is left alone.
+func definiteNP(gloss string) string {
+	lead, _, _ := strings.Cut(gloss, " ")
+	switch lead {
+	case "a", "an", "the", "this", "that", "my", "your", "its":
+		return gloss
+	}
+	return "the " + gloss
 }
 
 // relationConcept resolves the relation a proposition binds into, minting it

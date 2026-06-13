@@ -1743,6 +1743,19 @@ what was understood and holds the gap as a learning goal, the signal
 comprehension would otherwise swallow now that it has taken over the told
 statement, behind the same curiosity gate the older path used.
 
+An answer now comes from a meaning structure run through the engine, not only
+from the fixed menu. A question about a relation's role, "what did the dog
+chase" or "who chased the cat," is answered by crossing the proposition to the
+co-argument and speaking it back through the very construction comprehension
+read forward: the walk reaches the patient the dog chased, a meaning is built
+over the relation and the two roles, and the engine generates "the dog chased
+the cat," tense settled from the question's verb. This closes the done-when's
+last clause and the conversational probe, and establishes the engine-driven
+answer pattern. The broader retirement of the planner's other branches and the
+folding of the per-language parse fork into the one engine over each language's
+constructions remain, the long part of the slice, with the relational answer the
+first branch to cross over.
+
 ## Step 33: Discourse on the workspace field
 
 Goal: hold the thread of a conversation in the workspace's activation field, so

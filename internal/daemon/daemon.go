@@ -1372,6 +1372,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if frame.Lang == "" && req.Lang != "" {
 			frame.Lang = req.Lang
 		}
+		if frame.Lang == "" {
+			frame.Lang = "en" // English is the default tongue when none was detected or tagged
+		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)

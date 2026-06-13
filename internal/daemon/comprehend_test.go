@@ -163,6 +163,42 @@ func TestComprehendPartialHoldsTheGap(t *testing.T) {
 	}
 }
 
+// The done-when's third clause: an answer the old planner hardcoded now comes
+// from a meaning structure run through the engine. After "a dog chased a cat"
+// is comprehended and written, "what did the dog chase" is answered by
+// crossing the relation to the co-argument and speaking the proposition back
+// through the same construction, and "who chased the cat" answers the agent.
+func TestRoleQuestionAnsweredThroughEngine(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+
+	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
+		t.Fatalf("the patient question should be answered from the proposition: %q", got)
+	}
+	if got := say(t, d, "who chased the cat").Say; got != "The dog chased the cat." {
+		t.Fatalf("the agent question should be answered from the proposition: %q", got)
+	}
+}
+
+// A role question about a relation that holds no such proposition admits the
+// gap rather than inventing an answer.
+func TestRoleQuestionAdmitsGap(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "ball")
+	say(t, d, "a dog chased a cat")
+
+	// The dog chased the cat, not the ball; asking what chased the ball finds
+	// no agent for that proposition.
+	got := say(t, d, "what chased the ball").Say
+	if got == "The dog chased the ball." {
+		t.Fatalf("a proposition that was never told should not be invented: %q", got)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

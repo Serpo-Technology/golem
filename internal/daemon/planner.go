@@ -413,7 +413,7 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 
 	switch frame.Force {
 	case grammar.ForceQuestion:
-		return d.planQuestion(frame), nil
+		return d.planQuestion(frame, raw), nil
 	case grammar.ForceCommand:
 		return d.planCommand(frame, raw)
 	default:
@@ -442,8 +442,8 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 // question about thinking reads the inner loop. Unresolved words can
 // earn an appended follow-up question when curiosity is high: deciding
 // what to say next includes asking.
-func (d *Daemon) planQuestion(frame grammar.Frame) string {
-	return d.withFollowUp(frame, d.planAnswer(frame))
+func (d *Daemon) planQuestion(frame grammar.Frame, raw string) string {
+	return d.withFollowUp(frame, d.planAnswer(frame, raw))
 }
 
 // withFollowUp appends the curiosity question when the exchange left a
@@ -474,7 +474,7 @@ func (d *Daemon) withFollowUp(frame grammar.Frame, answer string) string {
 	return answer
 }
 
-func (d *Daemon) planAnswer(frame grammar.Frame) string {
+func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	chem := d.chem.Snapshot()
 
 	// "What were you thinking" reads the inner loop, the same report the
@@ -482,6 +482,13 @@ func (d *Daemon) planAnswer(frame grammar.Frame) string {
 	if frame.Action.Phrase == "think" {
 		line := d.introspectLine()
 		d.finishAct(actIntrospect, "", line, d.lastThought != "", "asked")
+		return line
+	}
+
+	// A question about a relation's role is answered from the proposition
+	// graph through the engine: the walk crosses to the co-argument and the
+	// construction speaks the proposition back, not a hardcoded reply.
+	if line, ok := d.planRoleQuestion(frame, raw); ok {
 		return line
 	}
 

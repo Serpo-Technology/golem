@@ -231,6 +231,29 @@ func (p *Params) suffix(name, fallback string) string {
 	return fallback
 }
 
+// IsContentWord reports whether a surface form is an open-class word in a
+// language: long enough to carry content and outside the closed class. The
+// comprehension engine reads it to pick which tokens fill role slots,
+// keeping the determiners and the auxiliaries out.
+func (p *Params) IsContentWord(lang, form string) bool {
+	p = p.get()
+	return len(form) >= 2 && p.category(lang, form) == ""
+}
+
+// Lemma recovers a verb's base form from an inflected surface, exposing the
+// reverse morphology so a caller outside the package can key a relation on
+// one lemma across its inflections.
+func (p *Params) Lemma(lang, surface string) string {
+	return p.get().verbLemma(lang, surface)
+}
+
+// VerbPast reads an inflected verb's tense, exposing the same judgement
+// comprehension uses so a caller can settle the tense of an answer it
+// generates from a question's verb.
+func (p *Params) VerbPast(lang, surface string) bool {
+	return p.get().verbPast(lang, surface)
+}
+
 // ContentTokens returns the distinct open-class words of an utterance,
 // the ones eligible to become word nodes and point at concepts.
 func (p *Params) ContentTokens(s string) []string {
