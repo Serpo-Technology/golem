@@ -1169,6 +1169,100 @@ whole compose to the innate realizer, so removing one never speaks a
 half-built clause. The done-when holds in tests; one level of nesting is
 the milestone and arbitrary generative fluency stays open research.
 
+## Step 23: Semantic features
+
+Goal: deepen the feature layer from surface tokens to learned semantic
+features, so resemblance can hold between things that share meaning without
+sharing a describing word.
+
+Step 20's features are surface-deep (tok:small, tok:brown), so a paraphrase
+lands only on shared surface attributes and a true synonym with no shared
+token misses. Let features be discovered, not only minted from caption
+tokens: an attribute that recurs across many concepts becomes a feature in
+its own right, so two things resemble each other by a learned trait instead
+of a shared word.
+
+- [ ] Features discovered by clustering co-occurring attributes across
+      concepts during consolidation, beside the surface tokens already minted.
+- [ ] A discovered feature is itself an inspectable node, read by
+      interpretation (which concepts it fires for), the give already flagged
+      for the feature layer.
+- [ ] Resemblance computed over discovered features, so similarity survives a
+      change of words.
+
+Flagged research: feature discovery is concept induction's cousin, hard and
+unproven at scale; the surface-token layer stays the floor it builds on.
+
+Done when: two concepts that share no caption token but keep similar
+conceptual company resemble each other, and the shared discovered features
+read back.
+
+## Step 24: A general realization engine
+
+Goal: shrink the slot-filling engine from hand-coded English rules to a
+small, language-agnostic combination primitive over declarative, learnable
+knowledge, so even the engine becomes fluid and open composition falls out.
+This subsumes Step 22's far end.
+
+Today a construction's slots are filled by a procedural engine with English
+morphology, agreement, and word order baked in, the innate floor. Classical
+symbolic NLP offers a different shape: elementary structures that combine by
+one general operation. Borrow it. Tree-adjoining grammar combines elementary
+trees by substitution and adjunction; unification grammars (HPSG, LFG, Kay's
+functional unification) merge feature structures. In either, the engine is
+one small general mechanism and all the linguistic knowledge is declarative
+data in memory.
+
+- [ ] Replace the procedural slot-filler with a general combination primitive
+      (unification, or tree substitution and adjunction), the new and far
+      smaller innate floor.
+- [ ] Move agreement, article choice, and word order out of code into
+      declarative feature structures or elementary trees, weighted and
+      inspectable beside the constructions.
+- [ ] Open composition falls out: structures combine by the general operation
+      to any depth, so a novel sentence is built, and read back, as the
+      structures that made it.
+- [ ] Keep output reliable: unify or search toward a grammatical result, and
+      fail to the simpler engine instead of emitting a broken sentence.
+
+Forced deviation, flagged: the floor shrinks and generalizes but never
+vanishes; a unifier or a tree-combiner is the irreducible engine. The gain is
+that the English-specific knowledge becomes learnable, inspectable data
+instead of code.
+
+Flagged research: inducing the declarative grammar from usage, and the search
+cost of generation, are the unproven parts. Treat a hand-seeded declarative
+grammar run by the general engine as the milestone, and induced structures as
+open research.
+
+Done when: agreement and word order are read from memory nodes rather than
+code, two structures combine to any depth by the general engine, and editing
+a declarative rule changes the grammar without touching the engine.
+
+## Step 25: Goal-pursuit
+
+Goal: a held, pursued goal, so self-direction reaches past Step 19's reflex
+drives into intention that persists across steps.
+
+Step 19 gave cheap drives (relevance, tidiness, curiosity) that bias the
+action gate in the moment. A goal is a state the loop holds and works toward
+over many steps, re-selecting acts until it is reached or abandoned. This is
+the least-charted piece of the whole project.
+
+- [ ] A goal representation the loop can hold: a target state, a sense of
+      distance to it, and a hold that survives across ticks.
+- [ ] The action gate weighs acts by how far they move toward the held goal,
+      alongside chemistry and learned worth.
+- [ ] A goal is set by a drive, by a request, or by GOLEM itself, and released
+      when reached or when it stops paying.
+
+Flagged research: persistent goal-pursuit is the frontier of the frontier,
+where the grounded path is least proven; nothing is promised beyond the first
+held goal that visibly steers a few acts.
+
+Done when: GOLEM holds a goal across several loop ticks, its acts visibly bend
+toward it, and the goal and its progress read back on the trail.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1212,6 +1306,11 @@ the milestone and arbitrary generative fluency stays open research.
   slot-filling engine keeps spacing and capitalization right but does not
   repair a malformed template. Breadth of expression, like breadth of
   meaning, still has to be lived or told.
+- The realization engine is hand-coded English. Slot-filling, agreement,
+  article choice, and word order live in code as the innate floor, so the
+  grammar itself can be neither edited nor learned, only its constructions
+  and parameters. Step 24 shrinks that floor to a general combination
+  primitive (unification or tree adjunction) over declarative rules in memory.
 
 ## Open questions
 
