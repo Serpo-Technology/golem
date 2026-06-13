@@ -1263,6 +1263,50 @@ held goal that visibly steers a few acts.
 Done when: GOLEM holds a goal across several loop ticks, its acts visibly bend
 toward it, and the goal and its progress read back on the trail.
 
+## Step 26: Salience by information, not frequency
+
+Goal: weight persistence, the relevance drive, and the inner loop by how
+informative a node is rather than how often it has occurred, so a
+high-frequency low-information node is cheap to keep and quiet to attend to
+while a meaningful concept resists forgetting. This generalizes Step 11's
+cross-situational reliability from the lexicon to the rest of the system.
+
+A bug once repeated a companion caption thirty to sixty times and exposed a
+flaw that was always there. Raw frequency drives three things, and all three
+broke: the junk became the most durable node in memory, it pulled the
+relevance drive to its ceiling, and it dominated the inner loop as the
+most-connected hub, while a real concept seen thirteen times and never
+revisited died. Step 11 fixed exactly this currency for naming, where a
+count-based bond once let one word name everything. The same currency is
+wrong for forgetting, for the drive, and for the walk.
+
+- [ ] Persistence by information: a concept's resistance to decay weights by
+      the diversity of its grounding, so a thing seen many times in one fixed
+      context is cheap to drop while a thing lived across varied contexts is
+      durable.
+- [ ] Drive salience by information: the relevance drive discounts a node by
+      how predictably it recurs, so a high-frequency low-information node
+      cannot pull the loop above real knowledge.
+- [ ] The walk avoids junk hubs: damp a destination by its degree or its
+      information, so the inner loop stops circling a node everything connects
+      to.
+- [ ] Entrench what was taught: deliberately narrated or taught content
+      carries a durability boost over an incidentally observed companion, so
+      meaning outlives ambient noise.
+- [ ] A true-forget maintenance path: a command to delete a node and its
+      edges, since some traces, bug-junk and sensitive data alike, must be
+      destroyable rather than only demoted (today this needs database surgery).
+
+Framing: this is cross-situational reliability generalized from the lexicon
+to persistence and attention, and the tunable, information-weighted forgetting
+from the design notes made concrete. The currency changes from how often to
+how informative.
+
+Done when: a node repeated many times in one fixed context is cheap to retain
+and never pulls the drive above a varied concept, a taught concept survives
+where an incidental companion fades, the inner loop does not circle a
+high-degree hub, and a node can be truly deleted by command.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1311,6 +1355,12 @@ toward it, and the goal and its progress read back on the trail.
   grammar itself can be neither edited nor learned, only its constructions
   and parameters. Step 24 shrinks that floor to a general combination
   primitive (unification or tree adjunction) over declarative rules in memory.
+- Salience is frequency-driven, so noise can outweigh meaning. Persistence,
+  the relevance drive, and the inner loop all weight by raw occurrence count,
+  so a high-frequency low-information node (a repeated companion, a bug's
+  junk) can become the most durable, most recalled, and most walked-to node
+  while a meaningful concept seen fewer times and not revisited dies. Step 26
+  changes the currency from frequency to information.
 
 ## Open questions
 
