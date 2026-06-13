@@ -397,9 +397,10 @@ func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) stri
 
 // plan acts on one parsed frame. It returns the sentence GOLEM says
 // (empty when silence is the honest reply) and, for command force, the
-// staged proposal. All planning reads memory; the only side effects are
-// workspace warmth and the pending proposal slot.
-func (d *Daemon) plan(frame grammar.Frame, raw string) (string, *wire.DecisionInfo) {
+// staged proposal. All planning reads memory; the side effects are
+// workspace warmth, the pending proposal slot, and a comprehended
+// proposition written into the graph.
+func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string, *wire.DecisionInfo) {
 	terms := []grammar.Term{frame.Agent, frame.Patient}
 	for _, q := range frame.Quals {
 		terms = append(terms, q.Anchor)
@@ -416,6 +417,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string) (string, *wire.DecisionIn
 	case grammar.ForceCommand:
 		return d.planCommand(frame, raw)
 	default:
+		// Comprehension carries a told proposition into the graph the way
+		// perception carries a percept. A statement understood as a
+		// proposition is taught, not queried, so the curiosity question is
+		// held back for the verb it just grounded.
+		if d.comprehendStatement(frame, raw, momentID) {
+			return "", nil
+		}
 		// A statement teaches; GOLEM only speaks up when curiosity about
 		// an unknown word wins, and an asked question is held as a goal.
 		if len(frame.Unknown) > 0 && d.chem.Snapshot().Dopamine >= curiosityGate {

@@ -1372,7 +1372,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if frame.Lang == "" && req.Lang != "" {
 			frame.Lang = req.Lang
 		}
-		resp.Say, resp.Decision = d.plan(frame, req.Content)
+		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)
 		// The exchange may have named what a held goal was hunting.

@@ -1603,7 +1603,7 @@ the substrate a proposition stands on.
 - [x] A relation grounds in the moments that instantiate it, so chase grounds in
       seen or told chasings the way a thing grounds in its sightings, and its
       slots fill from what played the roles there.
-- [ ] A relation forms from grounded usage, a parsed proposition writing the
+- [x] A relation forms from grounded usage, a parsed proposition writing the
       relation and its roles rather than blind co-occurrence guessing them. That
       producer is comprehension, so it rides with Step 32, which already owns
       writing a parsed proposition into the graph.
@@ -1663,7 +1663,7 @@ way perception does, the capability that gates conversation.
       generate and form to meaning to comprehend, the engine the innate floor
       and the constructions the learned content, the same split as the walk and
       the graph.
-- [ ] Comprehension binds an utterance's word-concepts into a construction's
+- [x] Comprehension binds an utterance's word-concepts into a construction's
       roles by best fit, the feature signatures constraining it so an animate
       concept is the better agent, and writes the resulting proposition into the
       graph, grounding what was said.
@@ -1719,8 +1719,21 @@ concept and the predicate to the relation's lemma (the morphology run backward,
 so chased keys on chase), and yields the proposition chase(agent, patient). Best
 fit refines what the order proposed: given a feature-fit scorer, an animate
 concept stranded in the patient slot is read as the agent, while position stands
-when it already agrees. What remains is writing the proposition into the graph
-and wiring comprehension into the daemon.
+when it already agrees.
+
+Comprehension is wired into the daemon and writes the proposition. A told
+statement that parses as a proposition mints its relation when the verb is new,
+a relation concept under a key that marks it as one and named by the verb's
+lemma, and writes the proposition with the one store method: the relation
+grounds in the moment of its telling, the moment points at the dog as agent and
+the cat as patient. The best fit reads an animacy off lived usage, a concept's
+affinity for the agent role measured from the role edges it already carries and
+its feature kinship to past agents, so it is empty on the first telling and
+sharpens as propositions accumulate. With the proposition in the graph the walk
+that crosses a relation reaches the co-argument, the crossing reified relations
+left dormant now lit, and the producer that step deferred is supplied. This
+satisfies the first clause of the done-when: "a dog chased a cat" is parsed into
+chaser and chased and written as a proposition the brain can be asked about.
 
 ## Step 33: Discourse on the workspace field
 
