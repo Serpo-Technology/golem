@@ -1361,6 +1361,73 @@ focused neighbor keeps its pull. And golem forget deletes a remembered shape
 and its edges outright, the concept and its episodes alike, the true-forget
 that a demotion never gave. All four done-when criteria hold in tests.
 
+## Step 27: Ground language in attention, not only perception
+
+Goal: let a told word bind to the warmest concept in the workspace, not only
+to the percept's concept, so GOLEM can name what is in mind and not only what
+is in view. This makes hierarchy teachable and opens naming the abstract and
+the internal.
+
+The day-six frontier settled a boundary: a told word grounds in the moment it
+is spoken in, and a moment grounds in the percept's concept, which is always
+specific. So ostension tops out at one level. A `thing` told over a dog
+percept grounds in `dog`, a flat sibling of the categories, never in `animal`
+above them, because no percept maps to `animal`. The fix reuses machinery
+already built: the workspace holds what is active, and recall already warms a
+concept. Bind the told word to the warmest workspace concept, so warming a
+category and then naming it grounds the name on the category.
+
+- [ ] A told word binds to the warmest concept in the workspace, alongside
+      the perceptual window, so what is attended can be the referent.
+- [ ] Naming a recalled or thought-about concept grounds the word there:
+      recall animal, say "thing", and the name grounds in animal, so a
+      superordinate over the categories becomes teachable.
+- [ ] The same wire lets GOLEM name an abstraction, a thought, or what was
+      just discussed, since each is warm in the workspace even when nothing
+      perceptual matches.
+- [ ] Cross-situational reliability still cleans up, so a word warmed by
+      accident in one scene fades unless the binding recurs, and
+      attention-grounding does not become a new junk source.
+
+Framing: this is the brain's own arrangement, naming what is attended and not
+only what is sensed, the difference between a word for what is in view and a
+word for what is in mind. It needs no new representation, only a change to
+what a told word grounds in.
+
+Done when: recalling a category to warm it and then telling a third name
+grounds that name in the category, so a `thing` taught that way grounds in
+`animal`, `metal`, and `plant` rather than in their specifics, and a word
+taught while a concept is only thought about grounds in that concept with
+nothing perceptual present.
+
+## Step 28: Information-weighting in the feature layer
+
+Goal: extend Step 26's information-weighting from persistence, the drive, and
+the walk into the feature layer, so signature composition and resemblance
+ranking stop running on raw count, where a frequent feature swamps a correct
+but less common match.
+
+Step 26 changed the currency for what is kept and what is attended, and it
+took, since the junk audit is clean. But the feature path was untouched, and
+it shows. On day five `a tall green shrub` surfaced the whole green family
+above the correct tree, because green had become high-frequency. On day six
+`thing`'s signature was built from its highest-count carriers, dog and key,
+with tree dropped. The same fix Step 26 applied elsewhere belongs here.
+
+- [ ] Signature composition by information: which features a concept carries
+      weighs by how much each discriminates, so a frequent feature does not
+      crowd out a rarer but defining one, and tree's tokens survive beside
+      dog's and key's.
+- [ ] Resemblance ranking by information: a shared feature counts toward a
+      match in proportion to how informative it is, so a frequent feature
+      stops outranking a correct two-feature match.
+- [ ] One currency: the reliability measure Step 11 and Step 26 already use,
+      applied to the feature path, so the whole system speaks it.
+
+Done when: a probe sharing a rare defining feature outranks one sharing only
+a frequent feature, and a concept's signature keeps a low-count defining token
+rather than dropping it for a high-count one.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1423,6 +1490,17 @@ that a demotion never gave. All four done-when criteria hold in tests.
   breadth of edges seen from the current seed, so a junk hub that has merged
   into a few episodes can still slip the damping. A finer measure, the
   entropy of a node's whole company, is the next turn.
+- Abstraction is flat; ostension cannot build a second level. A told word
+  grounds in the concept its percept maps to, always a specific, so a category
+  and a word taught across categories land at the same depth: a `thing` taught
+  over animals, metals, and plants becomes their sibling, never their parent.
+  Hierarchy needs Step 27, grounding a told word in the attended concept
+  rather than only the perceived one.
+- Information-weighting did not reach the feature layer. Step 26 changed
+  persistence, the drive, and the walk, but signature composition and the
+  resemblance ranking at recall still run on raw count, so a frequent feature
+  crowds a rarer defining one out of a signature and outranks a correct match.
+  Step 28 extends the same measure into the feature path.
 
 ## Open questions
 
