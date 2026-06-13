@@ -20,20 +20,6 @@ import (
 // case suffixes attach with an apostrophe the way Turkish writes
 // suffixed proper names: "make test'ten sonra", "make deploy'dan once".
 
-// detectTurkish reports whether an utterance is Turkish: any closed-class
-// or sortal hit decides, since the two vocabularies share no forms.
-func (p *Params) detectTurkish(tokens []string) bool {
-	for _, tok := range tokens {
-		if p.category("tr", tok) != "" {
-			return true
-		}
-		if _, ok := p.sortal("tr", tok); ok {
-			return true
-		}
-	}
-	return false
-}
-
 // stripCaseTR removes a case suffix from an anchor word: the apostrophe
 // form of a suffixed foreign name ("test'ten" to "test"), or a bare
 // ablative/locative ending when the word plainly carries one.
@@ -101,10 +87,14 @@ func turkishVerbStem(surface string) string {
 	return surface
 }
 
-// parseTurkish reads a Turkish utterance into the shared frame. SOV
-// reverses the qualifier: the anchor span comes before its relator.
-func (p *Params) parseTurkish(tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {
-	f := Frame{Force: ForceStatement, Lang: "tr"}
+// parseVerbFinal reads a verb-final utterance into the shared frame, the SOV
+// branch the word order selects: the anchor span comes before its relator,
+// and the closed class is read by the detected language so the structure is
+// language-general. The case stripping and the interrogative compounds it
+// still calls are Turkish morphology on the floor, the residue a later pass
+// moves into the seed.
+func (p *Params) parseVerbFinal(lang string, tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {
+	f := Frame{Force: ForceStatement, Lang: lang}
 	if question {
 		f.Force = ForceQuestion
 	}
@@ -125,13 +115,13 @@ func (p *Params) parseTurkish(tokens []string, question bool, resolve func(strin
 
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
-		if base, ok := p.sortal("tr", tok); ok {
+		if base, ok := p.sortal(lang, tok); ok {
 			f.Sort = base
 			f.SortPl = tok != base
 			flush()
 			continue
 		}
-		if v, ok := p.hap("tr", tok); ok {
+		if v, ok := p.hap(lang, tok); ok {
 			flush()
 			f.Action = Term{Phrase: v.base}
 			if v.past {
@@ -140,7 +130,7 @@ func (p *Params) parseTurkish(tokens []string, question bool, resolve func(strin
 			verbSeen = true
 			continue
 		}
-		switch p.category("tr", tok) {
+		switch p.category(lang, tok) {
 		case catRel:
 			// The span just gathered is this relator's anchor, its case
 			// suffix stripped from the final word.

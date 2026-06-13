@@ -44,6 +44,29 @@ func Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
 	return Builtin().Parse(utterance, resolve)
 }
 
+// detectLanguage reads the language an utterance is in from the seeded
+// closed classes, which share no forms across languages, so a hit names the
+// tongue. It returns the seeded language whose function words and sortals
+// the tokens hit most, or the empty string when none does, so a third
+// language is detected from its bootstrap alone and not a new code path.
+func (p *Params) detectLanguage(tokens []string) string {
+	best, bestHits := "", 0
+	for _, lang := range sortedKeys(p.categories) {
+		hits := 0
+		for _, tok := range tokens {
+			if p.category(lang, tok) != "" {
+				hits++
+			} else if _, ok := p.sortal(lang, tok); ok {
+				hits++
+			}
+		}
+		if hits > bestHits {
+			best, bestHits = lang, hits
+		}
+	}
+	return best
+}
+
 // Parse runs the innate grammar backward: an utterance becomes a frame.
 // The resolver is one learned half, mapping a surface phrase to its
 // concept; the closed class, the event verbs, and the sortals are the
@@ -58,11 +81,12 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 	if len(tokens) == 0 {
 		return f
 	}
-	// The closed classes share no forms, so one hit decides the grammar
-	// the utterance is read with. Word order is a parameter too: only a
-	// verb-final setting engages the SOV parse.
-	if p.detectTurkish(tokens) && p.verbFinal("tr") {
-		return p.parseTurkish(tokens, question, resolve)
+	// The closed classes share no forms across languages, so a hit names the
+	// tongue from the seed alone. Word order is a parameter too: only a
+	// verb-final language engages the SOV parse, so a third language is a
+	// bootstrap edit and not a new code path.
+	if lang := p.detectLanguage(tokens); lang != "" && p.verbFinal(lang) {
+		return p.parseVerbFinal(lang, tokens, question, resolve)
 	}
 	switch {
 	case p.category("en", tokens[0]) == catWh:

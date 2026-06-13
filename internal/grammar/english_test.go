@@ -28,6 +28,29 @@ func TestParseReadsForce(t *testing.T) {
 	}
 }
 
+// Language detection reads the seed: a third verb-final language, defined
+// only as data, is detected from its closed class and parsed through the SOV
+// branch with no new code, the parser inferring the tongue from a marker in
+// the grammar rather than a hardcoded fork.
+func TestParseDetectsSeededLanguage(t *testing.T) {
+	extra := append(Curriculum(),
+		Param{Key: "order:xx", Value: "sov", Lang: "xx", Weight: 1},
+		Param{Key: "fw:xx:zog", Value: "zog", Lang: "xx", Category: catWh, Weight: 1},
+	)
+	p := Compile(extra, nil)
+	f := p.Parse("zog beta gamma", nil)
+	if f.Lang != "xx" {
+		t.Fatalf("a seeded third language should be detected and parsed as itself: %+v", f)
+	}
+	if f.Force != ForceQuestion {
+		t.Fatalf("its seeded wh marker should open a question: %+v", f)
+	}
+	// English still reads as English, the default tongue.
+	if g := p.Parse("what follows make test", nil); g.Lang == "xx" {
+		t.Fatalf("an English utterance must not be taken for the third language: %+v", g)
+	}
+}
+
 // A temporal question fills the qualifier and its anchor, with the
 // grammatical filler stripped from the anchor span.
 func TestParseFillsTemporalAnchor(t *testing.T) {
