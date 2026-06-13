@@ -1398,6 +1398,12 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		return wire.Response{OK: true, Fragments: infos, Links: links}, false, false
 
 	case "teach":
+		if req.Say {
+			if err := d.teachConstruction(req.Content, req.Command, req.Lang); err != nil {
+				return wire.Response{Error: err.Error()}, false, false
+			}
+			return wire.Response{OK: true}, false, false
+		}
 		if req.Content == "" || req.Command == "" {
 			return wire.Response{Error: "teach needs a cue and a command"}, false, false
 		}

@@ -51,6 +51,8 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Abstractions form by the same machinery as concrete concepts: a word that never settles on one sensory shape but keeps stable company with the same small cloud of concepts distils, at sleep, into a concept grounded in that constellation. "Trouble" can come to mean disk alarms plus failed deploys jointly, recall reaches the moments through it, and the chain unfolds concept by concept down to lived experience, so even an abstraction stays auditable.
 - `golem concepts` lists the abstraction layer: each concept, the words that name it per language, its grounding tally, and its current workspace warmth.
 - The grammar's parameters live in memory: function words and their categories, event-verb forms, principal parts, word order, and Turkish suffix recipes are nodes in the same graph, trained in as the first curriculum on first boot and compiled into a working copy at each wake. The engine procedures stay innate; the data is inspectable in `golem dump`. Grammar never fades with the nightly decay, and the one force on it is competition with the lexicon: a form deliberately taught as a label can, over sustained nights, out-weigh its seeded closed-class entry and start parsing as a content word, then heal back once the usage fades.
+- The sentence patterns live in memory too, as constructions: an intent paired with an ordered template of literal text and typed slots, weighted and inspectable beside the grammar parameters. The introspection report, the succession answer, and the definition answer are filled from them rather than concatenated from hardcoded strings, while the engine keeps the morphology and word order, so the conjugated verb of "usually follows" is still computed, not stored. A meaning can have alternatives the chemistry chooses between (the oxytocin split between "usually follows" and "may follow" is now a choice between two construction variants), `golem teach --say <intent> "<template>"` adds a new way to say a thing, and removing one falls back to the innate realizer without breaking it.
+- Constructions compose: a slot can be filled by another construction, so the full definition answer is built by nesting the definition clause and the count clause into a frame no single template holds ("Make test is an action. I have seen it 4 times."). The realizer renders bottom-up, each layer choosing its construction the same way, and the composition lands on the trail as the constructions that made it, so a novel sentence reads back as its parts.
 
 [ROADMAP.md](ROADMAP.md) tracks how the build got here and what stays open; the GUI memory editor below is the part still ahead of the code.
 
@@ -72,7 +74,7 @@ GOLEM maps its components directly to biological structures, replacing LLM inter
 | **Inner Loop / Thought Operations** | **Default Mode Network** | Mind-wandering when perception goes quiet: one primitive, walk(relation, signal), applied to the warmest concept, with chemistry selecting the kind of thought and remembered insights reinforcing the operations that produce them. | Chain-of-Thought Sampling |
 | **Drives & Goals** | **Hypothalamus** | Named urges (relevance, tidiness, curiosity, the held goal) computed from body state. A drive only biases the action gate, and the winning act carries its drive's reason onto the audit trail. | Reward Shaping / Objective Functions |
 | **Feature Signatures** | **Cortical Feature Populations** | Sparse interpretable attributes under each concept node, mined from lived experience. Similarity is feature overlap, so novel phrasings land near what they resemble while concept cells keep the provenance. | Embedding Similarity |
-| **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways over parameters held in memory. | Transformer Decoder / Tokenizer |
+| **Language (Speech & Parsing)** | **Broca's & Wernicke's Areas** | Builds a sentence from a concept-frame and parses an utterance back into one, with a single innate grammar both ways over parameters and sentence constructions held in memory, composed by recursive slot-filling. | Transformer Decoder / Tokenizer |
 
 ---
 
@@ -237,8 +239,9 @@ internal/
                     set, and consolidation (hippocampus and cortex)
   grammar/          the innate language engine and its curriculum: one
                     concept-frame, English and Turkish parsers and
-                    realizers, hand-rolled morphology, and the parameters
-                    compiled from memory (Broca and Wernicke)
+                    realizers, hand-rolled morphology, the parameters
+                    compiled from memory, and the constructions filled and
+                    composed into sentences (Broca and Wernicke)
   pipeline/         shell-free execution: parse commands into argv stages or
                     refuse, run them over real pipes, derive resource claims
   events/           the structured trail, one JSON object per line, rotated
@@ -294,6 +297,7 @@ go build -o golem ./cmd/golem
 ./golem concepts
 ./golem teach --mind worry grounds stress
 ./golem teach --mind tidy act consolidate
+./golem teach --say introspect "my mind was on {thought}"
 ./golem stop
 
 # Optional: feed your shell into GOLEM (open a new shell afterward)

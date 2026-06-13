@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"golem/internal/config"
+	"golem/internal/grammar"
 	"golem/internal/memory"
 	"golem/internal/senses"
 	"golem/internal/wire"
@@ -154,7 +155,45 @@ func DemoLanguage() {
 	ask("run the tests")
 	ask("do it again")
 
+	fmt.Println("\n7. THE SENTENCES ARE LEARNED, NOT FIXED. Every answer above was")
+	fmt.Println("   filled from a construction held in memory, a pattern with typed")
+	fmt.Println("   slots the engine fills. They are nodes like any other:")
+	if cnodes, err := d.store.NodesByKind(memory.KindConstruction); err == nil {
+		shown := 0
+		for _, n := range cnodes {
+			if !strings.HasPrefix(n.Template, "cxn:en:succession_after:") &&
+				!strings.HasPrefix(n.Template, "cxn:en:definition:") &&
+				!strings.HasPrefix(n.Template, "cxn:en:described:") {
+				continue
+			}
+			fmt.Printf("      %-26s %q\n", strings.TrimPrefix(n.Template, "cxn:en:"), n.Content)
+			if shown++; shown == 3 {
+				break
+			}
+		}
+	}
+	fmt.Println("   The definition answer composes two of them, the definition clause")
+	fmt.Println("   and the count clause, into one sentence no single template holds,")
+	fmt.Println("   and the composition reads back as what made it:")
+	composed, trace, ok := d.gram.Compose("en", grammar.Message{Intent: "described", Slots: map[string]grammar.Filler{
+		"defn": {Sub: &grammar.Message{Intent: "definition",
+			Slots: grammar.TextSlots(map[string]string{"subject": "make test", "kind": "an action"})}},
+		"count": {Sub: &grammar.Message{Intent: "seen_count",
+			Slots: grammar.TextSlots(map[string]string{"object": "it", "count": "four times"})}},
+	}}, d.chem.Snapshot())
+	if ok {
+		fmt.Printf("      %q\n      from: %s\n", composed, strings.Join(trace, " + "))
+	}
+	fmt.Println("   Teach a new way to say a thing and the next answer takes it:")
+	ask("what is make test")
+	if err := d.teachConstruction("definition", "{subject} seems to be {kind}.", "en"); err != nil {
+		demoFail(err)
+	}
+	fmt.Println("      taught: definition -> \"{subject} seems to be {kind}.\"")
+	ask("what is make test")
+
 	fmt.Println("\n" + line)
 	fmt.Println("The pointer chain under every answer: word -> concept -> moments,")
-	fmt.Println("with order carried on directed edges laid down by lived sequence.")
+	fmt.Println("with order carried on directed edges laid down by lived sequence,")
+	fmt.Println("and the sentence itself built from constructions held in the graph.")
 }

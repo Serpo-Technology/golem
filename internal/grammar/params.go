@@ -42,6 +42,9 @@ type Params struct {
 	verbsTR    map[string]verbTR              // base -> form set (tr)
 	verbFinals map[string]bool                // lang -> the verb closes the clause (sov)
 	suffixes   map[string]string              // name -> recipe (tr)
+	// constructions holds the sentence patterns the planner fills, keyed
+	// language then intent; set by SetConstructions after Compile.
+	constructions map[string]map[string][]Construction
 }
 
 // Curriculum returns the innate grammar seed as parameters, the first
@@ -197,7 +200,7 @@ func ensure[V any](m map[string]map[string]V, lang string) map[string]V {
 }
 
 var builtinOnce = sync.OnceValue(func() *Params {
-	return Compile(Curriculum(), nil)
+	return Compile(Curriculum(), nil).SetConstructions(Constructions())
 })
 
 // Builtin is the grammar compiled straight from the curriculum, for

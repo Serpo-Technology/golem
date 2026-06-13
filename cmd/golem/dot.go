@@ -42,6 +42,9 @@ func renderDOT(frags []*wire.FragmentInfo, links []*wire.LinkInfo) string {
 		case memory.KindGrammar:
 			shape = ", shape=plaintext"
 			head = "grammar " + dotEscape(f.Lang)
+		case memory.KindConstruction:
+			shape = ", shape=note"
+			head = "construction"
 		}
 		label := fmt.Sprintf("#%d %s\\n%s", f.ID, head, dotEscape(wire.Clip(f.Content, 60)))
 		if f.Count > 1 {

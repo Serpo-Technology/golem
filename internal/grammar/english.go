@@ -450,13 +450,20 @@ func embeddedClause(p *Params, f Frame) string {
 // timesWord counts occurrences grammatically, so the realizer never
 // emits "1 times."
 func timesWord(f Frame) string {
-	switch f.Times {
+	return TimesWord(f.Times)
+}
+
+// TimesWord renders an occurrence count the way prose does, so a
+// construction slot reads "once" or "twice" before falling back to
+// digits. The realizer and the planner share it.
+func TimesWord(n int) string {
+	switch n {
 	case 1:
 		return "once"
 	case 2:
 		return "twice"
 	default:
-		return fmt.Sprintf("%d times", f.Times)
+		return fmt.Sprintf("%d times", n)
 	}
 }
 

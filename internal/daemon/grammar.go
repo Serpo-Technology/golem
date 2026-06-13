@@ -33,45 +33,58 @@ const (
 	grammarContestMass = 0.30 // naming mass below this is noise, no contest
 )
 
-// loadGrammar reads the grammar parameters out of memory, training the
-// curriculum into starter memory on first run, and compiles the working
-// copy the engine reads. The compile is the cache: per-parse lookups
-// are RAM map hits, rebuilt at wake after the nightly competition. A
-// memory trained by an earlier build tops up: innate forms the
-// curriculum has since gained are seeded in, while every parameter the
-// store already holds keeps its learned weight.
+// taughtConstructionWeight is the entrenchment a freshly taught
+// construction takes: above the seeds, so a new way to say a thing is the
+// one that speaks, until it is forgotten or out-weighed.
+const taughtConstructionWeight = 1.5
+
+// loadGrammar reads the grammar parameters and the sentence constructions
+// out of memory, training both curricula into starter memory on first
+// run, and compiles the working copy the engine reads. The compile is the
+// cache: per-parse lookups are RAM map hits, rebuilt at wake after the
+// nightly competition. A memory trained by an earlier build tops up:
+// innate forms and constructions the curriculum has since gained are
+// seeded in, while every parameter the store already holds keeps its
+// learned weight.
 func (d *Daemon) loadGrammar() error {
-	nodes, err := d.store.NodesByKind(memory.KindGrammar)
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {
 		return err
 	}
-	if trained, err := d.trainGrammar(nodes); err != nil {
+	if _, err := d.seedParams(gnodes, memory.KindGrammar, grammar.Curriculum()); err != nil {
 		return err
-	} else if trained > 0 {
-		if nodes, err = d.store.NodesByKind(memory.KindGrammar); err != nil {
-			return err
-		}
 	}
-	return d.compileGrammar(nodes)
+	cnodes, err := d.store.NodesByKind(memory.KindConstruction)
+	if err != nil {
+		return err
+	}
+	if _, err := d.seedParams(cnodes, memory.KindConstruction, grammar.Constructions()); err != nil {
+		return err
+	}
+	// recompileGrammar reloads both kinds from the store, so the nodes
+	// just seeded are picked up without a second fetch here.
+	return d.recompileGrammar()
 }
 
-// trainGrammar writes the innate curriculum into starter memory through
-// the standard encode path, so the grammar seed is the first curriculum
-// and the seeding path is the one all bootstrapping uses. Encode stamps
-// every node at maximal weight. Parameters already held are left alone,
-// which makes the same pass both the first boot and the top-up.
-func (d *Daemon) trainGrammar(held []*memory.Fragment) (int, error) {
+// seedParams writes the missing entries of a curriculum into starter
+// memory through the standard encode path, so the grammar seed and the
+// construction seed are both first curricula and the seeding path is the
+// one all bootstrapping uses. Encode stamps every node at maximal weight.
+// Entries already held are left alone, which makes the same pass both the
+// first boot and the top-up. The kind decides which curriculum a node
+// belongs to; both ride the same columns.
+func (d *Daemon) seedParams(held []*memory.Fragment, kind string, curriculum []grammar.Param) (int, error) {
 	have := make(map[string]bool, len(held))
 	for _, n := range held {
 		have[n.Template] = true
 	}
 	trained := 0
-	for _, p := range grammar.Curriculum() {
+	for _, p := range curriculum {
 		if have[p.Key] {
 			continue
 		}
 		f := &memory.Fragment{
-			Kind:     memory.KindGrammar,
+			Kind:     kind,
 			Channel:  "grammar",
 			Content:  p.Value,
 			Template: p.Key,
@@ -87,14 +100,31 @@ func (d *Daemon) trainGrammar(held []*memory.Fragment) (int, error) {
 	return trained, nil
 }
 
-// compileGrammar builds the engine's working copy from grammar nodes,
-// with each form's lived naming mass standing against its seeded
-// weight.
-func (d *Daemon) compileGrammar(nodes []*memory.Fragment) error {
+// recompileGrammar rebuilds the engine's working copy from the grammar
+// nodes and the construction nodes the store now holds, each grammar
+// form's lived naming mass standing against its seeded weight. Both the
+// boot path and the nightly competition recompile through here, so the
+// constructions are never dropped when the grammar re-weights.
+func (d *Daemon) recompileGrammar() error {
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return err
+	}
+	cnodes, err := d.store.NodesByKind(memory.KindConstruction)
+	if err != nil {
+		return err
+	}
 	mass, err := d.store.NamesMassByForm()
 	if err != nil {
 		return err
 	}
+	d.gram = grammar.Compile(paramsOf(gnodes), mass).SetConstructions(paramsOf(cnodes))
+	return nil
+}
+
+// paramsOf reads a set of grammar or construction nodes back into the
+// parameters the engine compiles from.
+func paramsOf(nodes []*memory.Fragment) []grammar.Param {
 	params := make([]grammar.Param, 0, len(nodes))
 	for _, n := range nodes {
 		params = append(params, grammar.Param{
@@ -105,8 +135,55 @@ func (d *Daemon) compileGrammar(nodes []*memory.Fragment) error {
 			Weight:   n.Weight,
 		})
 	}
-	d.gram = grammar.Compile(params, mass)
-	return nil
+	return params
+}
+
+// teachConstruction mints a new way to say an intent: a construction node
+// whose template the planner will fill, entrenched above the seeds so it
+// is the one that speaks. The variant key is made unique per intent, so a
+// second teaching of the same intent adds an alternative rather than
+// overwriting the first. It is the construction twin of the mental-teach.
+func (d *Daemon) teachConstruction(intent, template, lang string) error {
+	if lang == "" {
+		lang = "en"
+	}
+	intent = strings.TrimSpace(intent)
+	template = strings.TrimSpace(template)
+	if intent == "" || template == "" {
+		return fmt.Errorf("teach --say needs an intent and a template")
+	}
+	if strings.ContainsAny(intent, " :") {
+		return fmt.Errorf("an intent is one word, not %q", intent)
+	}
+	prefix := "cxn:" + lang + ":" + intent + ":"
+	existing, err := d.store.NodesByKind(memory.KindConstruction)
+	if err != nil {
+		return err
+	}
+	n := 0
+	for _, e := range existing {
+		if strings.HasPrefix(e.Template, prefix+"taught") {
+			n++
+		}
+	}
+	key := fmt.Sprintf("%staught%d", prefix, n)
+	node := &memory.Fragment{
+		Kind:     memory.KindConstruction,
+		Channel:  "grammar",
+		Content:  template,
+		Template: key,
+		Lang:     lang,
+		Time:     time.Now(),
+	}
+	id, err := d.store.Encode(node)
+	if err != nil {
+		return err
+	}
+	if err := d.store.SetWeight(id, taughtConstructionWeight); err != nil {
+		return err
+	}
+	d.event(events.Event{Ev: "grammar", ID: id, Tpl: key, Weight: taughtConstructionWeight})
+	return d.recompileGrammar()
 }
 
 // grammarCompetition is the nightly weighted competition between seeded
@@ -155,7 +232,7 @@ func (d *Daemon) grammarCompetition() {
 		}
 		d.event(events.Event{Ev: "grammar", ID: n.ID, Tpl: n.Template, Weight: w})
 	}
-	if err := d.compileGrammar(nodes); err != nil {
+	if err := d.recompileGrammar(); err != nil {
 		fmt.Fprintf(d.out, "grammar compile error: %v\n", err)
 	}
 }

@@ -16,15 +16,18 @@ import (
 // words name and episodes instantiate, an operation node is one setting
 // of the think primitive whose weight is the learned preference for that
 // kind of thought, a grammar node is one entrenched parameter of the
-// language faculty, and a feature node is one interpretable attribute
-// that concepts share, the sparse layer similarity reads.
+// language faculty, a feature node is one interpretable attribute that
+// concepts share, the sparse layer similarity reads, and a construction
+// node is one sentence pattern the planner fills, the form of an answer
+// lifted out of the realizer into memory.
 const (
-	KindEpisodic  = "episodic"
-	KindWord      = "word"
-	KindConcept   = "concept"
-	KindOperation = "operation"
-	KindGrammar   = "grammar"
-	KindFeature   = "feature"
+	KindEpisodic     = "episodic"
+	KindWord         = "word"
+	KindConcept      = "concept"
+	KindOperation    = "operation"
+	KindGrammar      = "grammar"
+	KindFeature      = "feature"
+	KindConstruction = "construction"
 )
 
 // An edge's relation types the association: temporal is co-occurrence

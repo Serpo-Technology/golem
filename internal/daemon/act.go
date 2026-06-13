@@ -399,10 +399,46 @@ func (d *Daemon) proposeFromSeed(id uint64) (*wire.DecisionInfo, string) {
 }
 
 // introspectLine reports the inner loop's own latest product, the same
-// answer "what were you thinking" earns.
+// answer "what were you thinking" earns. The report and its idle form are
+// memory constructions; the innate line is the fallback when none is
+// seeded, so the engine still speaks if the construction is forgotten.
 func (d *Daemon) introspectLine() string {
 	if d.lastThought == "" {
+		if line, ok := d.construct("en", "introspect_idle", nil); ok {
+			return line
+		}
 		return "I have not been thinking about anything."
 	}
-	return "I was thinking: " + strings.TrimPrefix(d.lastThought, "thought: ")
+	thought := strings.TrimPrefix(d.lastThought, "thought: ")
+	if line, ok := d.construct("en", "introspect", map[string]string{"thought": thought}); ok {
+		return line
+	}
+	return "I was thinking: " + thought
+}
+
+// construct realizes an intent through a memory construction, picking the
+// variant the chemistry calls for. It returns false when no construction
+// is seeded for the language, so every caller can fall back to the innate
+// realizer and a tongue with no construction still speaks.
+func (d *Daemon) construct(lang, intent string, slots map[string]string) (string, bool) {
+	if lang == "" {
+		lang = "en"
+	}
+	return d.gram.Construct(lang, intent, slots, d.chem.Snapshot())
+}
+
+// compose renders a layered message by recursive slot-filling, a sentence
+// built from constructions that were each seeded on their own. The
+// composition that built it lands on the trail, so the utterance reads
+// back as the constructions that made it. It returns false when any layer
+// has no construction, so the caller falls back to the innate realizer.
+func (d *Daemon) compose(lang string, m grammar.Message) (string, bool) {
+	if lang == "" {
+		lang = "en"
+	}
+	line, trace, ok := d.gram.Compose(lang, m, d.chem.Snapshot())
+	if ok && len(trace) > 0 {
+		d.event(events.Event{Ev: "compose", Tpl: strings.Join(trace, " + ")})
+	}
+	return line, ok
 }

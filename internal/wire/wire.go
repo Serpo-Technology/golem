@@ -27,6 +27,7 @@ type Request struct {
 	Command string `json:"command,omitempty"`
 	Lang    string `json:"lang,omitempty"` // language tag for tell; empty means English
 	Mind    bool   `json:"mind,omitempty"` // teach: ground the word to a thought operation, not a command
+	Say     bool   `json:"say,omitempty"`  // teach: add a construction (Content is the intent, Command the template)
 	Arg     string `json:"arg,omitempty"`  // voice subcommand: status, on, off, use (the name rides in Content)
 }
 

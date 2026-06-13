@@ -531,31 +531,45 @@ func (d *Daemon) planAnswer(frame grammar.Frame) string {
 				kindWord = "bir eylem"
 			}
 		}
-		tentative := false
-		var parts []string
 		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {
 			// The asked word and the concept differ: name the pointer. Greedy
 			// early naming bonds bystander words too, so a word that names the
 			// concept far more weakly than its firmest name is spoken as a
-			// tentative pointer rather than asserted as fact.
+			// tentative pointer rather than asserted as fact. A tentative
+			// pointer does not borrow the concept's tally as if it were the
+			// word's own.
 			asked, top := d.namingContrast(topic.Phrase, c.ID)
-			tentative = asked > 0 && top-asked > namesContrastGap
-			parts = append(parts, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			tentative := asked > 0 && top-asked > namesContrastGap
+			parts := []string{d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 				Agent:  grammar.Term{Phrase: topic.Phrase},
 				Action: grammar.Term{Phrase: "name"}, Patient: grammar.Term{Phrase: c.Content},
-				Hedge: tentative}, chem))
-		} else {
-			parts = append(parts, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
-				Agent:  grammar.Term{Phrase: c.Content},
-				Action: grammar.Term{Phrase: "be"}, Patient: grammar.Term{Phrase: kindWord}}, chem))
+				Hedge: tentative}, chem)}
+			if n := tally[c.ID]; n > 0 && !tentative {
+				parts = append(parts, d.countClause(frame.Lang, n, chem))
+			}
+			return strings.Join(parts, " ")
 		}
-		// A firm answer counts the experience behind the concept; a tentative
-		// pointer does not borrow that concept's tally as if it were the
-		// word's own.
-		if n := tally[c.ID]; n > 0 && !tentative {
-			parts = append(parts, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
-				Action:  grammar.Term{Phrase: "see"},
-				Patient: grammar.Term{Phrase: "it"}, Times: n}, chem))
+		// A firm definition, composed: the definition clause, and when
+		// experience stands behind the concept the count clause nests beside
+		// it. The sentence is built from constructions, not a fixed template,
+		// and the composition reads back on the trail as the constructions
+		// that made it.
+		msg := grammar.Message{Intent: "described", Slots: map[string]grammar.Filler{
+			"defn": {Sub: &grammar.Message{Intent: "definition",
+				Slots: grammar.TextSlots(map[string]string{"subject": c.Content, "kind": kindWord})}},
+		}}
+		if n := tally[c.ID]; n > 0 {
+			msg.Slots["count"] = grammar.Filler{Sub: &grammar.Message{Intent: "seen_count",
+				Slots: grammar.TextSlots(map[string]string{"object": "it", "count": grammar.TimesWord(n)})}}
+		}
+		if line, ok := d.compose(frame.Lang, msg); ok {
+			return line
+		}
+		// With no constructions the innate realizer assembles the same
+		// answer, so the engine stays the floor under the learned patterns.
+		parts := []string{d.definitionClause(frame.Lang, c.Content, kindWord, chem)}
+		if n := tally[c.ID]; n > 0 {
+			parts = append(parts, d.countClause(frame.Lang, n, chem))
 		}
 		return strings.Join(parts, " ")
 	}
@@ -640,7 +654,18 @@ func (d *Daemon) planSuccession(frame grammar.Frame, quals []grammar.Qualifier, 
 	subject := grammar.Term{Phrase: grammar.JoinAnd(subjects), Plural: len(subjects) > 1}
 
 	if quals[0].Rel == "before" && len(outQuals) == 1 {
-		// "make test usually precedes make deploy."
+		// "Make test usually precedes make deploy." The pattern is a
+		// construction; the verb group inside it is conjugated by the
+		// engine, so morphology stays innate while the frame is learned.
+		slots := map[string]string{
+			"subject":   subject.Speak(),
+			"anchor":    anchorTerm.Speak(),
+			"vp_assert": d.gram.VerbPhrase("precede", subject.Plural, frame.Past, "habit"),
+			"vp_hedge":  d.gram.VerbPhrase("precede", subject.Plural, frame.Past, "hedge"),
+		}
+		if line, ok := d.construct(frame.Lang, "succession_before", slots); ok {
+			return line
+		}
 		return d.realizeAs(frame.Lang, grammar.Frame{
 			Force:   grammar.ForceStatement,
 			Agent:   subject,
@@ -657,6 +682,15 @@ func (d *Daemon) planSuccession(frame grammar.Frame, quals []grammar.Qualifier, 
 	if len(outQuals) > 1 {
 		verb = "happen"
 	}
+	slots := map[string]string{
+		"adjunct":   successionAdjunct(outQuals),
+		"subject":   subject.Speak(),
+		"vp_assert": d.gram.VerbPhrase(verb, subject.Plural, frame.Past, "habit"),
+		"vp_hedge":  d.gram.VerbPhrase(verb, subject.Plural, frame.Past, "hedge"),
+	}
+	if line, ok := d.construct(frame.Lang, "succession_after", slots); ok {
+		return line
+	}
 	return d.realizeAs(frame.Lang, grammar.Frame{
 		Force:  grammar.ForceStatement,
 		Agent:  subject,
@@ -665,6 +699,50 @@ func (d *Daemon) planSuccession(frame grammar.Frame, quals []grammar.Qualifier, 
 		Past:   frame.Past,
 		Quals:  outQuals,
 	}, chem)
+}
+
+// definitionClause speaks what kind of thing a concept is, through the
+// definition construction with the innate realizer as the fallback when
+// none is seeded.
+func (d *Daemon) definitionClause(lang, subject, kindWord string, chem limbic.State) string {
+	if line, ok := d.construct(lang, "definition",
+		map[string]string{"subject": subject, "kind": kindWord}); ok {
+		return line
+	}
+	return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent:  grammar.Term{Phrase: subject},
+		Action: grammar.Term{Phrase: "be"}, Patient: grammar.Term{Phrase: kindWord}}, chem)
+}
+
+// countClause speaks how much experience stands behind a concept, through
+// the seen_count construction with the innate realizer as the fallback.
+func (d *Daemon) countClause(lang string, n int, chem limbic.State) string {
+	if line, ok := d.construct(lang, "seen_count",
+		map[string]string{"object": "it", "count": grammar.TimesWord(n)}); ok {
+		return line
+	}
+	return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Action:  grammar.Term{Phrase: "see"},
+		Patient: grammar.Term{Phrase: "it"}, Times: n}, chem)
+}
+
+// successionAdjunct fronts the temporal qualifiers of a succession answer
+// into the construction's adjunct slot: "after make test", or "after make
+// test and before make deploy" when two anchors coordinate. The engine
+// fronts the same span when it realizes the fallback frame.
+func successionAdjunct(quals []grammar.Qualifier) string {
+	parts := make([]string, 0, len(quals))
+	for _, q := range quals {
+		if q.Anchor.Empty() {
+			continue
+		}
+		rel := "after"
+		if q.Rel == "before" {
+			rel = "before"
+		}
+		parts = append(parts, rel+" "+q.Anchor.Speak())
+	}
+	return strings.Join(parts, " and ")
 }
 
 // whenceAnchor picks the term a when/where/count question is about: the

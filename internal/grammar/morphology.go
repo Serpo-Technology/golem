@@ -45,6 +45,24 @@ func finiteVerb(p *Params, base string, firstPerson, plural, past bool) string {
 	return v.third
 }
 
+// VerbPhrase realizes the predicate's verb group a construction places in
+// a slot, so the pattern can live in memory while the morphology stays
+// innate. The mode picks the aspect: "habit" prefixes the adverb onto the
+// finite form ("usually follows"), "hedge" keeps the modal ("may follow"),
+// and "plain" is the bare finite. Succession subjects are third person, so
+// only number bends agreement here.
+func (p *Params) VerbPhrase(lemma string, plural, past bool, mode string) string {
+	p = p.get()
+	switch mode {
+	case "hedge":
+		return hedgedVerb(p, lemma, past)
+	case "habit":
+		return "usually " + finiteVerb(p, lemma, false, plural, past)
+	default:
+		return finiteVerb(p, lemma, false, plural, past)
+	}
+}
+
 // negatedVerb denies a predicate with do-support, agreement carried by
 // the auxiliary: "does not follow", "do not know", "did not follow".
 func negatedVerb(p *Params, base string, firstPerson, plural, past bool) string {

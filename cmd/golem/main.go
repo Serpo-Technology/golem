@@ -71,6 +71,11 @@ Usage:
                                   ground, consolidate, speak, propose,
                                   introspect), the same acts the quiet loop
                                   fires on its own when its state calls
+  golem teach --say <intent> <template>
+                                  add a way to say a thing: a construction
+                                  with {slot} markers the engine fills, e.g.
+                                  introspect "my mind was on {thought}"; it
+                                  outweighs the seed until forgotten
   golem propose <cue>             weigh the actions grounded to a cue and
                                   propose one, or ask when it is ambiguous
   golem approve                   approve the pending proposal
@@ -223,6 +228,14 @@ func main() {
 			} else {
 				fmt.Printf("named the thought operation walk(%s,%s) %q\n", args[3], args[4], args[2])
 			}
+			return
+		}
+		if len(args) >= 2 && args[1] == "--say" {
+			if len(args) < 4 {
+				fail(fmt.Errorf("usage: golem teach --say <intent> <template>   (e.g. introspect \"my mind was on {thought}\")"))
+			}
+			call(home, wire.Request{Cmd: "teach", Say: true, Content: args[2], Command: strings.Join(args[3:], " ")})
+			fmt.Printf("taught a way to say %q: %q\n", args[2], strings.Join(args[3:], " "))
 			return
 		}
 		if len(args) < 3 {
@@ -566,6 +579,8 @@ func printFragments(frags []*wire.FragmentInfo) {
 			head = "grammar"
 		case memory.KindFeature:
 			head = "feature"
+		case memory.KindConstruction:
+			head = "construction"
 		}
 		fmt.Printf("#%-3d %s  %-12s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
 			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), head,

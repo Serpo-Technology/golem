@@ -320,6 +320,26 @@ func (s *Store) SetWeight(id uint64, w float64) error {
 	return err
 }
 
+// DeleteByTemplate removes the node holding a template key and the edges
+// touching it. Construction and grammar templates are unique keys, so
+// this forgets one parameter outright, the way a removed construction
+// changes how GOLEM says a thing.
+func (s *Store) DeleteByTemplate(tpl string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM links WHERE from_id IN (SELECT id FROM fragments WHERE template = ?)
+		OR to_id IN (SELECT id FROM fragments WHERE template = ?)`, tpl, tpl); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM fragments WHERE template = ?`, tpl); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Refresh is retrieval practice: recalled memories get their weight
 // restored, so what gets used survives consolidation. The hot tier calls
 // it for its own hits, so practice reaches the archive no matter which

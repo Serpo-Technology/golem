@@ -245,9 +245,10 @@ Goal: see the graph before building the GUI that edits it.
       on 2026-06-11 (fragments gained kind, lang, and category; links
       gained a rel column and a wider primary key), which restarts that
       clock. Everything since (thought operations, grammar parameters,
-      abstractions, the act layer, and the feature signatures) rides the
-      same columns: new kind and rel values and template conventions, no
-      schema change, so the clock stands.
+      abstractions, the act layer, the feature signatures, and the
+      sentence constructions) rides the same columns: new kind and rel
+      values and template conventions, no schema change, so the clock
+      stands.
 
 ## Step 8: The action layer: pipelines and parallel execution
 
@@ -1083,18 +1084,18 @@ act and drive layers concatenate whole templates (the "I was thinking" line
 in internal/daemon/act.go, the drive's "satisfied: it names" line). Those are
 the rigid parts. Structure first, then curriculum, the order Step 14 followed.
 
-- [ ] A construction representation in memory: a form-and-meaning pattern, an
+- [x] A construction representation in memory: a form-and-meaning pattern, an
       intent or frame on the meaning side and an ordered template with typed
       slots on the form side, a new node kind beside KindGrammar, weighted
       and inspectable.
-- [ ] The realizer and the act and drive layers fill a memory construction's
+- [x] The realizer and the act and drive layers fill a memory construction's
       slots instead of concatenating hardcoded strings. The slot-filling
       engine, the morphology, and the word order stay innate code; only the
       patterns move out.
-- [ ] More than one construction per intent, so a meaning has alternative
+- [x] More than one construction per intent, so a meaning has alternative
       forms, and the choice among them reads from context and chemistry, the
       way oxytocin already picks "usually follows" over "may follow".
-- [ ] Seed the first constructions through the trainer along the grammar-seed
+- [x] Seed the first constructions through the trainer along the grammar-seed
       path, so the starter memory speaks from day one, then learn new ones
       from usage by pairing a form heard or shown with the intent it carried.
 
@@ -1110,6 +1111,22 @@ nodes, a second construction for one intent can be taught and then chosen,
 and removing a construction changes how GOLEM says that thing without breaking
 the engine.
 
+Status: built and demonstrated (golem demo language). Constructions are a
+node kind of their own beside the grammar parameters, seeded through the
+same trainer and topped up into an older memory at boot, outside the
+nightly fade and the lexical competition. Each carries an intent, an
+ordered template with typed slots, a chemistry condition, and a weight;
+the engine fills the slots while the morphology and word order stay
+innate, so the conjugated verb group of a succession answer is still the
+engine's and only the frame around it is learned. The introspection
+report, the succession answer, and the definition answer realize through
+them, with the innate realizer kept as the floor so a missing or forgotten
+construction still speaks. The oxytocin split that chose "usually follows"
+over "may follow" is now a choice between an assert and a hedge variant of
+one intent. golem teach --say adds a construction, entrenched above the
+seeds so it is the one that speaks; forgetting it reverts the line. All
+four done-when criteria hold in tests.
+
 ## Step 22: Compositional generation
 
 Goal: build a sentence by composing constructions, so GOLEM can say something
@@ -1121,12 +1138,12 @@ pattern. Real fluency composes: a clause nests in another, modifiers stack,
 two constructions join into an utterance never seen as a unit. Staged late and
 treated as research at its far end.
 
-- [ ] A construction slot can be filled by another construction, not only a
+- [x] A construction slot can be filled by another construction, not only a
       term, so patterns nest.
-- [ ] The planner builds a layered message and the realizer renders it by
+- [x] The planner builds a layered message and the realizer renders it by
       recursive slot-filling, so a novel combination still comes out
       grammatical.
-- [ ] Selection across the layers stays driven by context and chemistry, the
+- [x] Selection across the layers stays driven by context and chemistry, the
       same choice Step 21 makes, now at every level.
 
 Flagged: open-ended compositional generation is the deep reach, where the
@@ -1136,6 +1153,21 @@ the milestone and arbitrary generative fluency as open research.
 Done when: GOLEM produces a correct sentence built from two or more
 constructions it was never given as a single template, and the composition
 reads back as the constructions that made it.
+
+Status: built to the milestone and demonstrated (golem demo language). A
+slot is filled by a layered message, an intent and a binding whose own
+slots may nest further messages; the realizer composes bottom-up, each
+layer selecting its construction by the same chemistry and weight a single
+construction uses, and only the outermost clause is capitalized so a
+nested one reads naturally mid-sentence. The full definition answer is the
+first composition: the definition clause and, when experience stands
+behind the concept, the count clause nest in a frame neither template
+holds alone, and the count slot collapses when there is none. The
+composition lands on the trail as the constructions that made it, leaves
+first, so it reads back. A missing construction at any layer fails the
+whole compose to the innate realizer, so removing one never speaks a
+half-built clause. The done-when holds in tests; one level of nesting is
+the milestone and arbitrary generative fluency stays open research.
 
 ## Known limitations
 
@@ -1171,10 +1203,15 @@ reads back as the constructions that made it.
   synonym with no shared token still needs a naming bond or a lived
   bridge. Breadth has to be lived or told, and the answer-shaped
   comprehension ceiling stands above the representation either way.
-- Language generation is templated. The sentence shapes are hardcoded in the
-  realizer and the act handlers, so GOLEM says a thing one fixed way and can
-  neither vary the form nor combine two into one. Step 21 moves the patterns
-  into learnable memory and Step 22 lets them compose.
+- Language generation is construction-based but thinly seeded. The sentence
+  patterns now live in memory as constructions the engine fills and composes
+  (Steps 21 and 22), so a form can be taught, varied, and nested, but only a
+  handful of intents are seeded and learning new constructions from heard
+  usage is barely exercised. A taught construction can also be ungrammatical
+  until it carries its own punctuation and well-formed slots; the innate
+  slot-filling engine keeps spacing and capitalization right but does not
+  repair a malformed template. Breadth of expression, like breadth of
+  meaning, still has to be lived or told.
 
 ## Open questions
 
