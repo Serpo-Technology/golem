@@ -234,13 +234,17 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if err := dropOrphanLinks(); err != nil {
 		return int(pruned), err
 	}
-	// An utterance never instantiates a concept; any grounds edge that
-	// points at one is a leftover from before that rule, and dropping it
-	// here lets a concept born from a question die of disconnection on
-	// the same night.
+	// An utterance never instantiates a thing, so a grounds edge from a
+	// concept to a tell or thought moment is a leftover that lets a concept
+	// born from a question die of disconnection on the same night. A relation
+	// is the exception: a narrated event is a real instance of the relation it
+	// states, so a relation grounding in the moment it was told in stands, and
+	// the proposition comprehension wrote persists the way a perceived one
+	// would rather than being purged before it can be consolidated.
 	if _, err := s.db.Exec(`DELETE FROM links WHERE rel = ?
-		AND to_id IN (SELECT id FROM fragments WHERE channel IN (?, ?))`,
-		RelGrounds, utteranceChannel, thoughtChannel); err != nil {
+		AND to_id IN (SELECT id FROM fragments WHERE channel IN (?, ?))
+		AND from_id NOT IN (SELECT id FROM fragments WHERE category = ?)`,
+		RelGrounds, utteranceChannel, thoughtChannel, "relation"); err != nil {
 		return int(pruned), err
 	}
 	// A word that no edge touches names nothing and recalls nothing; a
