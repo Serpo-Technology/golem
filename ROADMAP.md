@@ -71,6 +71,19 @@ Two commitments govern every decision below.
   glass box survive at the concept layer, and only the learned feature layer
   is read by interpretation. Concept cells over feature populations, the
   brain's own arrangement.
+- Neurochemical palette: a transmitter earns a place by bending a behavior that
+  nothing built already covers. Completing the set for biological fidelity is
+  not by itself a reason. Dopamine, noradrenaline, and serotonin already run
+  reward, salience, and sleep pressure, and oxytocin tracks trust and raises the
+  graduation bar under correction. Of the rest sketched for v2: GABA is the
+  lateral inhibition of Step 29, the one whose function is due now; cortisol, a
+  stress signal read from processor, memory, and heat that sheds non-essential
+  sensing to protect the core loop, is a real computer-side homeostasis worth
+  adding when GOLEM runs ambient under load; acetylcholine, a precision signal
+  that would commit a link hard rather than leave it soft, overlaps the
+  learning-rate dopamine already gates and waits until that coarseness bites;
+  adenosine duplicates serotonin's sleep pressure and stays out unless mood and
+  sleep pressure are ever worth splitting apart.
 
 ## Step 1: Core hardening
 
@@ -1455,6 +1468,60 @@ with nothing to discriminate against, leaves every share untouched. It is the
 cross-situational reliability of Steps 11 and 26 brought to the feature layer,
 so the whole system speaks one currency. The done-when holds in tests.
 
+## Step 29: Lateral inhibition along the abstraction hierarchy
+
+Goal: let a warmed concept damp the concepts it subsumes, so attending to a
+category presents the category to the workspace instead of flooding it with the
+category's members. This unblocks the second level of abstraction through the
+constellation machinery already built, and sharpens attention wherever a
+general idea would otherwise be swamped by its instances.
+
+Step 27 built attention-grounding, a told word binding to the warmest workspace
+concept, and it fires: a name grounds with nothing in view. But two-level
+nesting still does not form. Warming a category, by recall or by speech, spreads
+activation into its thick, well-grounded members, and they take the attention
+slots over the thin category node, so the constellation that hardens is made of
+members and the superordinate lands as their flat sibling, the same shape as the
+day-six `thing`. The members win the slot the category should hold. The fix is
+the brain's own arrangement, where a general concept quiets the particulars it
+contains, which is what categorization is.
+
+- [ ] A warmed concept damps the concepts it grounds in, gated by relative
+      warmth, so a category attended above its members quiets them rather than
+      drowning in them, while a member merely perceived is left alone when no
+      category above it is attended.
+- [ ] Attending a category and then telling a name grounds the name on the
+      category, so abstraction-by-constellation (Step 16) gathers the categories
+      and a `thing` taught over three of them grounds in `animal`, `metal`, and
+      `plant` rather than in one member each.
+- [ ] The damping is a tunable defaulted gentle, exposed like the rest of the
+      chemistry, so it sharpens attention without starving the cases that want a
+      general and a specific held together.
+- [ ] The behavior already verified holds: the inner loop's wandering, recall's
+      spread, and the abstractions distilled so far do not regress once
+      inhibition is on.
+
+Framing: this is GABA, the brain's inhibitory transmitter, brought to the
+concept hierarchy. Lateral inhibition already sharpens vision and focuses
+attention; the same arrangement lets a category thought hold still without
+dissolving into its examples. It needs no new representation, only that a warm
+concept turn down the concepts beneath it.
+
+Fork: the alternative to nested grounding is an explicit subsumption relation.
+Across every attempt the hierarchy emerges associatively regardless, a
+superordinate keeping company with its categories even while it grounds flat in
+their members. So rather than force `thing` to ground in `animal`, a learned
+is-a edge could link them while each stays grounded in its own exemplars, which
+is arguably truer, since a thing's lived experience is the exemplars and not the
+abstract category. Lateral inhibition serves the nested-grounding path and
+reuses the constellation mechanism, so it goes first; the subsumption relation
+is held in reserve for if a strict tree fights the grain.
+
+Done when: warming a category and teaching a name across three categories
+grounds the name in the categories rather than their members, so a `thing`
+taught that way is their parent and not their sibling, and the inner loop and
+recall behave as before with inhibition at its gentle default.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1517,17 +1584,13 @@ so the whole system speaks one currency. The done-when holds in tests.
   breadth of edges seen from the current seed, so a junk hub that has merged
   into a few episodes can still slip the damping. A finer measure, the
   entropy of a node's whole company, is the next turn.
-- Abstraction is flat; ostension cannot build a second level. A told word
-  grounds in the concept its percept maps to, always a specific, so a category
-  and a word taught across categories land at the same depth: a `thing` taught
-  over animals, metals, and plants becomes their sibling, never their parent.
-  Hierarchy needs Step 27, grounding a told word in the attended concept
-  rather than only the perceived one.
-- Information-weighting did not reach the feature layer. Step 26 changed
-  persistence, the drive, and the walk, but signature composition and the
-  resemblance ranking at recall still run on raw count, so a frequent feature
-  crowds a rarer defining one out of a signature and outranks a correct match.
-  Step 28 extends the same measure into the feature path.
+- Abstraction is flat; attention-grounding alone does not build a second level.
+  Step 27 lets a told word bind to the warmest workspace concept, and it fires,
+  a name grounds with nothing in view, but warming a category surfaces its thick
+  members, and they take the attention slots over the thin category node, so a
+  `thing` taught over animals, metals, and plants still grounds in one member
+  each and lands as their sibling. The category holds attention only once its
+  members are quieted, which is the lateral inhibition of Step 29.
 
 ## Open questions
 
@@ -1539,5 +1602,6 @@ so the whole system speaks one currency. The done-when holds in tests.
 - Template churn: how to merge templates when the normalizer learns a
   better split for lines it already knows.
 - Cross-channel calibration windows: tuned per channel class or shared.
-- Whether serotonin should also gate sensor sampling rates (the GABA idea
-  from the v2 table).
+- GABA's reach: Step 29 brings inhibition to the concept hierarchy. Whether the
+  same signal should also gate sensor sampling rates, damping a noisy channel to
+  hold focus on one task, is the sensory half and stays open.
