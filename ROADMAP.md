@@ -1679,7 +1679,7 @@ way perception does, the capability that gates conversation.
 - [x] A partial or novel utterance yields a partial meaning and a learning
       signal, not a parse failure, so an unknown relation leaves its slots bound
       and itself marked to be grounded.
-- [ ] The planner's fixed answer dispatch gives way to building a meaning
+- [x] The planner's fixed answer dispatch gives way to building a meaning
       structure and handing it to the engine, so an answer is generated from
       meaning rather than selected from a menu, and the per-language parse fork
       retires into the one engine over each language's seeded constructions.
@@ -1773,21 +1773,29 @@ through the daemon's own handler in a test, the path the CLI marshals to, with a
 chasing told, asked about from both roles, the relation defined, and the activity
 recalled, every answer generated from a meaning structure.
 
-What remains is the long arc the fluid path names. The planner's other branches,
-definition, succession, the temporal and count answers, already build meaning
-structures (a frame or a layered message) handed to an engine (the procedural
-realizer or the construction composer), so the rigid intent-label dispatch is
-already largely gone; what is left there is each answer type's own logic, which
-is the work, not boilerplate. The meaning-carrying comprehension path now runs
-through the one engine for both languages: a Turkish transitive clause,
-verb-final with its object accusative, is read into a proposition over the
-Turkish-seeded constructions by the same engine English uses, the word order
-taken from the order parameter and the case and tense run backward by the
-morphology, with no second parser. What still forks is the legacy question
-parser, and folding that into the one engine is construction-driven parsing for
-the open case, the same induction the next slice opens and the part honestly
-unsolved at large. So comprehension and the relational answers have crossed to
-the one engine across languages; the legacy question fork waits on induction.
+The planner's other branches already build meaning structures handed to an
+engine: the definition through a layered message and the construction composer,
+the succession and the temporal and count answers through a frame and the
+realizer, so the rigid intent-label dispatch is already largely gone, and what
+is left in those branches is each answer type's own graph logic, the work and
+not boilerplate.
+
+The per-language parse fork is retired. There was an English parser and a
+separate Turkish one; there is now a single procedure that reads the language
+from the seed (the closed classes share no forms, so a hit names the tongue),
+takes the word order from the order parameter, and derives the rest from it:
+where the verb sits sets whether a relator precedes its anchor or follows it and
+which role a span fills first, and a colon-suffixed category carries an
+interrogative's type and a relator's direction so a tongue whose wh-word or
+relator is a different form ("ne" for what, "sonra" for after) is read from data
+and not a code path. A third verb-final language, defined only as seed
+parameters, is detected and parsed with no new code, the property a test pins.
+The case stripping and a few lexical specials (the do-auxiliary, the copula's
+past) remain as the languages' morphology on the floor, the residue a later pass
+can seed; the fork itself, the second parse function, is gone. So the answers
+come from meaning structures run through engines and the parsing is one engine
+over each language's seeded grammar, both directions and both languages on the
+one floor.
 
 ## Step 33: Discourse on the workspace field
 

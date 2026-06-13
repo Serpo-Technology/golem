@@ -171,12 +171,49 @@ func (p *Params) get() *Params {
 }
 
 // category resolves a form's closed-class category in a language, with
-// event-verb forms reading as catHap.
+// event-verb forms reading as catHap. A category may carry a colon-suffixed
+// refinement, "wh:what" naming the interrogative's type; the broad class
+// before the colon is what classification reads, the refinement riding in a
+// dedicated accessor the way an event verb's tense does.
 func (p *Params) category(lang, form string) string {
 	if _, ok := p.haps[lang][form]; ok {
 		return catHap
 	}
-	return p.categories[lang][form]
+	cat := p.categories[lang][form]
+	if i := strings.IndexByte(cat, ':'); i >= 0 {
+		return cat[:i]
+	}
+	return cat
+}
+
+// relType reads a temporal relator's direction. English relators name their
+// own ("after", "before"); a language whose relator is a different form
+// carries the direction in the seed, "rel:after" for Turkish "sonra", so the
+// mapping is data and not a parser fork.
+func (p *Params) relType(lang, form string) string {
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "rel:"); ok && spec != "" {
+		return spec
+	}
+	return form
+}
+
+// whInfo reads an interrogative's type and whether it carries the copula.
+// English wh words name their own type, so "what" is read from the surface;
+// a language whose interrogative is a different form carries the type in the
+// seed, "wh:what" for Turkish "ne" and "wh:what:be" for the copular "nedir",
+// so the translation lives in data and not in a parser fork.
+func (p *Params) whInfo(lang, form string) (whType string, copula bool) {
+	spec, ok := strings.CutPrefix(p.categories[lang][form], "wh:")
+	if !ok {
+		return form, false
+	}
+	parts := strings.Split(spec, ":")
+	whType = parts[0]
+	if whType == "" {
+		whType = form
+	}
+	copula = len(parts) > 1 && parts[1] == "be"
+	return whType, copula
 }
 
 func (p *Params) sortal(lang, form string) (string, bool) {

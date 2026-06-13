@@ -25,6 +25,7 @@ const (
 	catNeg   = "neg"   // negators: deny the predicate
 	catCnt   = "cnt"   // count quantifiers: "how many" asks for a number
 	catFn    = "fn"    // grammatical filler with no slot of its own
+	catTime  = "time"  // a temporal noun that compounds with an interrogative
 )
 
 // imperativeIntents maps the faculty verbs onto the acts they invoke:
@@ -67,65 +68,50 @@ func (p *Params) detectLanguage(tokens []string) string {
 	return best
 }
 
-// Parse runs the innate grammar backward: an utterance becomes a frame.
-// The resolver is one learned half, mapping a surface phrase to its
-// concept; the closed class, the event verbs, and the sortals are the
-// other, read from the compiled parameters. The procedure alone is
-// wired in: force and interrogative from the opening word, temporal
-// qualifiers each owning their anchor, and content spans into thematic
-// roles by their position against the verb.
+// Parse runs the innate grammar backward: an utterance becomes a frame. It
+// reads the language from the seed (the closed classes share no forms across
+// tongues) and hands the tokens to the one language-general procedure, the
+// default tongue taken when none is detected.
 func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
 	p = p.get()
 	tokens, question := Tokenize(utterance)
-	f := Frame{Force: ForceStatement}
 	if len(tokens) == 0 {
-		return f
+		return Frame{Force: ForceStatement}
 	}
-	// The closed classes share no forms across languages, so a hit names the
-	// tongue from the seed alone. Word order is a parameter too: only a
-	// verb-final language engages the SOV parse, so a third language is a
-	// bootstrap edit and not a new code path.
-	if lang := p.detectLanguage(tokens); lang != "" && p.verbFinal(lang) {
-		return p.parseVerbFinal(lang, tokens, question, resolve)
+	lang := p.detectLanguage(tokens)
+	if lang == "" {
+		lang = "en"
 	}
-	switch {
-	case p.category("en", tokens[0]) == catWh:
+	return p.parse(lang, tokens, question, resolve)
+}
+
+// parse is the one parser for every language: the closed class, the event
+// verbs, and the sortals are read by the detected language, and the word
+// order parameter decides the rest. Where the verb sits sets the relator's
+// side (a preposition before its anchor in a verb-medial language, a
+// postposition after it in a verb-final one) and the order roles fill (the
+// subject first before the verb, the object first after it or in a verb-final
+// clause). The interrogative's type and a relator's direction are read from
+// the seed, so a tongue whose wh-word or relator is a different form needs no
+// code. The resolver is the learned half, mapping a phrase to its concept.
+func (p *Params) parse(lang string, tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {
+	verbFinal := p.verbFinal(lang)
+	f := Frame{Force: ForceStatement}
+	if lang != "en" {
+		f.Lang = lang
+	}
+	if question {
 		f.Force = ForceQuestion
-		f.Wh = tokens[0]
-	case p.category("en", tokens[0]) == catImp:
+	}
+	// An imperative opener commands; the wh-opener is read inline below, so a
+	// verb-final language that forms its interrogative mid-clause reads alike.
+	if p.category(lang, tokens[0]) == catImp {
 		f.Force = ForceCommand
-		// A faculty verb opens an intent over GOLEM's own acts; the
-		// generic openers (do, run) leave the whole utterance as the cue.
+		// A faculty verb opens an intent over GOLEM's own acts; the generic
+		// openers (do, run) leave the whole utterance as the cue.
 		if intent, ok := imperativeIntents[tokens[0]]; ok {
 			f.Action = Term{Phrase: intent}
 		}
-	case question:
-		f.Force = ForceQuestion
-	}
-
-	// Each relator opens a qualifier whose anchor runs to the next
-	// relator, so "after X and before Y" parses as two qualifiers
-	// instead of folding the second relator into the first anchor.
-	main := tokens
-	for i, tok := range tokens {
-		if p.category("en", tok) != catRel {
-			continue
-		}
-		main = tokens[:i]
-		for i < len(tokens) {
-			rel := tokens[i]
-			j := i + 1
-			for j < len(tokens) && p.category("en", tokens[j]) != catRel {
-				j++
-			}
-			anchor := p.contentSpan(tokens[i+1 : j])
-			q := Qualifier{Rel: rel, Anchor: resolveTerm(anchor, resolve)}
-			if anchor != "" {
-				f.Quals = append(f.Quals, q)
-			}
-			i = j
-		}
-		break
 	}
 
 	type span struct {
@@ -141,29 +127,50 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 			current = nil
 		}
 	}
-	for _, tok := range main {
-		// The do-auxiliary carries tense for the clause; "was" and
-		// "were" carry it for the copula. Both leave the predicate to
-		// the verb that follows.
+	// In a verb-medial language a relator precedes its anchor, so the anchor
+	// is gathered after the relator until the next one; a verb-final language
+	// takes the span already gathered as the anchor.
+	prepRel := ""
+	var prepToks []string
+	closePrep := func() {
+		if prepRel == "" {
+			return
+		}
+		if anchor := p.contentSpan(prepToks); anchor != "" {
+			f.Quals = append(f.Quals, Qualifier{Rel: prepRel, Anchor: resolveTerm(anchor, resolve)})
+		}
+		prepRel, prepToks = "", nil
+	}
+
+	for i := 0; i < len(tokens); i++ {
+		tok := tokens[i]
+		cat := p.category(lang, tok)
+
+		if prepRel != "" { // gathering a preposition's anchor
+			if cat == catRel {
+				closePrep()
+				prepRel = p.relType(lang, tok)
+			} else {
+				prepToks = append(prepToks, tok)
+			}
+			continue
+		}
+
+		// The do-auxiliary carries tense for the clause; sortals name the kind
+		// of answer; an event verb is the predicate and flips the verb flag.
 		if tok == "did" {
 			f.Past = true
 			flush()
 			continue
 		}
-		if base, ok := p.sortal("en", tok); ok {
+		if base, ok := p.sortal(lang, tok); ok {
 			f.Sort = base
 			f.SortPl = tok != base
 			flush()
 			continue
 		}
-		switch p.category("en", tok) {
-		case catHap:
-			// The span before the verb closes as the subject before the
-			// flag flips; what follows is the object. A faculty intent
-			// already in the action slot keeps it: "recall what happened"
-			// stays a recall.
+		if v, ok := p.hap(lang, tok); ok {
 			flush()
-			v, _ := p.hap("en", tok)
 			if f.Force != ForceCommand || f.Action.Empty() {
 				f.Action = Term{Phrase: v.base}
 			}
@@ -171,6 +178,39 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 				f.Past = true
 			}
 			verbSeen = true
+			continue
+		}
+
+		switch cat {
+		case catRel:
+			if verbFinal {
+				// Postposition: the span just gathered is the anchor, its case
+				// suffix shed from the final word.
+				if len(current) > 0 {
+					current[len(current)-1] = stripCaseTR(current[len(current)-1])
+					anchor := strings.Join(current, " ")
+					current = nil
+					f.Quals = append(f.Quals, Qualifier{Rel: p.relType(lang, tok), Anchor: resolveTerm(anchor, resolve)})
+				}
+			} else {
+				flush()
+				prepRel = p.relType(lang, tok)
+			}
+		case catWh:
+			f.Force = ForceQuestion
+			whType, copula := p.whInfo(lang, tok)
+			f.Wh = whType
+			if copula && (f.Force != ForceCommand || f.Action.Empty()) {
+				f.Action = Term{Phrase: "be"}
+				verbSeen = true
+			}
+			// A verb-final language may form "when" as "what" plus a time
+			// noun ("ne zaman"); the compound is read from the seed.
+			if whType == "what" && i+1 < len(tokens) && p.category(lang, tokens[i+1]) == catTime {
+				f.Wh = "when"
+				i++
+			}
+			flush()
 		case catCop:
 			flush()
 			if f.Force != ForceCommand || f.Action.Empty() {
@@ -182,6 +222,11 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 			verbSeen = true
 		case catCnt:
 			f.Counting = true
+			// Where the count word is the only interrogative, it carries the
+			// question; a verb-medial clause already has its wh-opener.
+			if verbFinal {
+				f.Force = ForceQuestion
+			}
 			flush()
 		case catPro:
 			f.Pro = true
@@ -198,39 +243,46 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 		case catNeg:
 			f.Negate = true
 			flush()
-		case catWh, catRel, catImp, catDet, catFn:
+		case catImp, catDet, catFn, catTime:
 			flush()
 		default:
 			current = append(current, tok)
 		}
 	}
 	flush()
+	closePrep()
 	// "How often" counts the way "how many" does.
 	if f.Wh == "how" && f.Habit {
 		f.Counting = true
 	}
 
-	// Position against the verb assigns the roles: a pre-verb span is
-	// the subject, a post-verb span the object. A command's spans are
-	// what the command acts on.
+	// Position against the verb assigns the roles. A verb-final clause, a
+	// command, and a post-verb span fill the object first; a verb-medial
+	// pre-verb span fills the subject first. A case-marked pre-verb span sheds
+	// its suffix to reach the concept.
 	for _, sp := range spans {
-		term := resolveTerm(sp.text, resolve)
-		switch {
-		case f.Force == ForceCommand, sp.postVerb:
+		text := sp.text
+		if verbFinal && !sp.postVerb {
+			words := strings.Fields(text)
+			if len(words) > 0 {
+				words[len(words)-1] = stripCaseTR(words[len(words)-1])
+				text = strings.Join(words, " ")
+			}
+		}
+		term := resolveTerm(text, resolve)
+		if verbFinal || f.Force == ForceCommand || sp.postVerb {
 			if f.Patient.Empty() {
 				f.Patient = term
 			} else if f.Agent.Empty() {
 				f.Agent = term
 			}
-		default:
-			if f.Agent.Empty() {
-				f.Agent = term
-			} else if f.Patient.Empty() {
-				f.Patient = term
-			}
+		} else if f.Agent.Empty() {
+			f.Agent = term
+		} else if f.Patient.Empty() {
+			f.Patient = term
 		}
-		if term.Concept == nil && sp.text != "" {
-			f.Unknown = append(f.Unknown, sp.text)
+		if term.Concept == nil && text != "" {
+			f.Unknown = append(f.Unknown, text)
 		}
 	}
 	for _, q := range f.Quals {
