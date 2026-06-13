@@ -1656,7 +1656,7 @@ concepts and relations, so one engine unifies meaning with form to speak and
 form with meaning to understand. Comprehension then carries meaning inward the
 way perception does, the capability that gates conversation.
 
-- [ ] A construction carries two poles, a form pole of order, function words,
+- [x] A construction carries two poles, a form pole of order, function words,
       and slots, and a meaning pole of roles over concepts and the relation
       (Step 31) that binds them, both in memory, both learned.
 - [ ] One unification engine runs the inventory both ways, meaning to form to
@@ -1698,6 +1698,21 @@ chase, parses into chaser and chased and is written as a proposition the brain
 can then be asked about, a sentence never given whole is both said and
 understood through the same constructions, and an answer the old planner
 hardcoded now comes from a meaning structure run through the engine.
+
+Status: the meaning pole is deepened and generation runs through it. An
+argument-structure construction is now a two-poled object, a form pole of
+ordered, typed slots and a meaning pole of thematic roles over a relation, with
+one inventory of role names shared between the poles so the same construction
+can run both ways. The transitive and intransitive constructions are seeded as
+data beside the answer templates, written into starter memory as construction
+nodes that compete by weight, never as Go literals. A proposition realizes
+through them: the meaning's roles pick the construction that binds them, the
+slots lay out in the language's word-order parameter so the same construction
+speaks SVO and SOV, the noun phrases speak their fillers, and the predicate is
+conjugated by the morphology engine, which now carries the regular English
+spelling rules so an open-vocabulary verb like chase comes out as chased. What
+remains is the other direction, form to meaning, and writing the proposition
+into the graph.
 
 ## Step 33: Discourse on the workspace field
 

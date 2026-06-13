@@ -122,7 +122,11 @@ func (d *Daemon) recompileGrammar() error {
 	// and the declarative grammar the general engine runs; each compile step
 	// reads the slice it understands and ignores the rest.
 	gparams := paramsOf(gnodes)
-	d.gram = grammar.Compile(gparams, mass).SetConstructions(paramsOf(cnodes)).SetDecl(gparams)
+	cparams := paramsOf(cnodes)
+	d.gram = grammar.Compile(gparams, mass).
+		SetConstructions(cparams).
+		SetDecl(gparams).
+		SetArgConstructions(cparams)
 	return nil
 }
 

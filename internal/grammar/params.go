@@ -48,6 +48,9 @@ type Params struct {
 	// decl holds the declarative grammar the general engine runs, keyed by
 	// language; set by SetDecl after Compile.
 	decl map[string]*DeclGrammar
+	// argcxns holds the argument-structure constructions the bidirectional
+	// engine runs, keyed by language; set by SetArgConstructions.
+	argcxns map[string][]ArgConstruction
 }
 
 func sortedKeys[V any](m map[string]V) []string {
@@ -146,7 +149,10 @@ func ensure[V any](m map[string]map[string]V, lang string) map[string]V {
 }
 
 var builtinOnce = sync.OnceValue(func() *Params {
-	return Compile(Curriculum(), nil).SetConstructions(Constructions()).SetDecl(Curriculum())
+	return Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
 })
 
 // Builtin is the grammar compiled straight from the curriculum, for
@@ -195,7 +201,7 @@ func (p *Params) verb(base string) verbEN {
 	if v, ok := p.verbs[base]; ok {
 		return v
 	}
-	return verbEN{base, base + "s", base + "ed", base + "ed"}
+	return regularVerbEN(base)
 }
 
 // verbTurkish returns a Turkish verb's form set, falling back to the

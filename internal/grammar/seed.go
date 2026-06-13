@@ -41,6 +41,15 @@ func parseSeed() []Param {
 
 var seedOnce = sync.OnceValue(parseSeed)
 
+// isConstruction reports whether a seed key carries a construction rather
+// than a grammar parameter: an answer template (cxn) or an
+// argument-structure construction (acxn). Both halves of the construction
+// inventory ride the construction nodes, leaving the curriculum the engine
+// proper.
+func isConstruction(key string) bool {
+	return strings.HasPrefix(key, "cxn:") || strings.HasPrefix(key, "acxn:")
+}
+
 // Curriculum returns the grammar half of the seed, every parameter but the
 // constructions, the first curriculum the daemon writes into starter memory.
 // The closed class, sortals, event verbs, principal parts, word order, suffix
@@ -49,21 +58,22 @@ var seedOnce = sync.OnceValue(parseSeed)
 func Curriculum() []Param {
 	var out []Param
 	for _, p := range seedOnce() {
-		if !strings.HasPrefix(p.Key, "cxn:") {
+		if !isConstruction(p.Key) {
 			out = append(out, p)
 		}
 	}
 	return out
 }
 
-// Constructions returns the sentence-pattern half of the seed, the cxn
-// entries written into starter memory beside the grammar parameters. Once
-// seeded, the engine reads the memory copy, and a taught construction competes
-// with these by weight.
+// Constructions returns the construction half of the seed, both the answer
+// templates and the argument-structure constructions, written into starter
+// memory beside the grammar parameters. Once seeded, the engine reads the
+// memory copy, and a taught or induced construction competes with these by
+// weight.
 func Constructions() []Param {
 	var out []Param
 	for _, p := range seedOnce() {
-		if strings.HasPrefix(p.Key, "cxn:") {
+		if isConstruction(p.Key) {
 			out = append(out, p)
 		}
 	}

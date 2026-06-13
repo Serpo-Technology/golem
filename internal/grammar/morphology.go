@@ -96,6 +96,44 @@ func beForm(firstPerson, plural, past bool) string {
 	}
 }
 
+// regularVerbEN derives a verb's principal parts by the English spelling
+// rules, the fallback when memory holds no seeded entry for a lemma. A
+// silent e takes -d in the past, a consonant before -y turns to -ied, a
+// sibilant takes -es in the third person. The open lexicon mints relations
+// from arbitrary verbs, so a freshly heard "chase" conjugates to "chased"
+// and "tries"/"tried" come out right without a seeded entry.
+func regularVerbEN(base string) verbEN {
+	return verbEN{base, thirdPersonEN(base), pastEN(base), pastEN(base)}
+}
+
+// thirdPersonEN forms the present third-person singular: a sibilant or a
+// terminal -o takes -es, a consonant before -y turns to -ies, all else -s.
+func thirdPersonEN(base string) string {
+	switch {
+	case strings.HasSuffix(base, "s"), strings.HasSuffix(base, "x"),
+		strings.HasSuffix(base, "z"), strings.HasSuffix(base, "ch"),
+		strings.HasSuffix(base, "sh"), strings.HasSuffix(base, "o"):
+		return base + "es"
+	case strings.HasSuffix(base, "y") && len(base) > 1 && !isVowelLetter(rune(base[len(base)-2])):
+		return base[:len(base)-1] + "ies"
+	default:
+		return base + "s"
+	}
+}
+
+// pastEN forms the past and the participle, which the regular verb shares:
+// a silent e takes -d, a consonant before -y turns to -ied, all else -ed.
+func pastEN(base string) string {
+	switch {
+	case strings.HasSuffix(base, "e"):
+		return base + "d"
+	case strings.HasSuffix(base, "y") && len(base) > 1 && !isVowelLetter(rune(base[len(base)-2])):
+		return base[:len(base)-1] + "ied"
+	default:
+		return base + "ed"
+	}
+}
+
 // pluralIrregularEN are the noun plurals no rule reaches.
 var pluralIrregularEN = map[string]string{
 	"child":  "children",

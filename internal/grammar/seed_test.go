@@ -1,9 +1,6 @@
 package grammar
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // The embedded bootstrap loads into parameters and splits cleanly: the
 // curriculum carries every grammar node, the constructions carry the sentence
@@ -17,12 +14,12 @@ func TestSeedBootstrapSplits(t *testing.T) {
 		t.Fatal("the constructions should carry the sentence patterns")
 	}
 	for _, p := range cur {
-		if strings.HasPrefix(p.Key, "cxn:") {
+		if isConstruction(p.Key) {
 			t.Fatalf("a construction leaked into the curriculum: %s", p.Key)
 		}
 	}
 	for _, p := range cxn {
-		if !strings.HasPrefix(p.Key, "cxn:") {
+		if !isConstruction(p.Key) {
 			t.Fatalf("a non-construction leaked into the constructions: %s", p.Key)
 		}
 	}

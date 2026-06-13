@@ -180,3 +180,11 @@ cxn:en:succession_after:assert	{adjunct}, {subject} {vp_assert}.	en	confident
 cxn:en:succession_after:hedge	{adjunct}, {subject} {vp_hedge}.	en	tentative
 cxn:en:succession_before:assert	{subject} {vp_assert} {anchor}.	en	confident
 cxn:en:succession_before:hedge	{subject} {vp_hedge} {anchor}.	en	tentative
+# Argument-structure constructions: the two-poled form-and-meaning pairs the
+# one engine runs both ways. The value lists the form slots in citation order
+# as role/syn pairs; the category names the predicate role; the surface order
+# follows the language's order parameter, so the same construction speaks SVO
+# and SOV. The agent slot favors an animate filler, the best fit the
+# comprehension engine reads off the feature signatures.
+acxn:en:transitive	agent/np/animate rel/v patient/np	en	rel
+acxn:en:intransitive	agent/np/animate rel/v	en	rel
