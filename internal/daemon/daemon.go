@@ -1343,14 +1343,17 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if req.Query != "" {
 			return d.tellAbout(req), false, false
 		}
+		// What is warm before the utterance is what it is about: a told word
+		// grounds in the attended concept, not only in the percept.
+		attn := d.attentionAnchors()
 		res := d.process(senses.Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
 			return wire.Response{Error: "the words could not be stored; check the daemon log"}, false, false
 		}
-		// The words themselves enter the lexicon and keep company with
-		// the moments the utterance bound to; speaking warms what the
-		// words already name.
-		anchors := d.recentWithin(time.Now(), res.FragmentID)
+		// The words themselves enter the lexicon and keep company with the
+		// moments the utterance bound to and with whatever was held in mind;
+		// speaking warms what the words already name.
+		anchors := append(d.recentWithin(time.Now(), res.FragmentID), attn...)
 		words := d.mintWords(req.Content, req.Lang, res.FragmentID, anchors, false)
 		d.warmConcepts(words, exciteSpeech)
 		resp := wire.Response{OK: true, Observe: &res}

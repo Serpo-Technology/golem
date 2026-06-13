@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"time"
@@ -58,21 +59,47 @@ func (d *Daemon) growFeatures() (built int) {
 		fmt.Fprintf(d.out, "feature error: %v\n", err)
 		return 0
 	}
+	// First pass: gather every concept's candidate features, uncapped, and
+	// count how many concepts carry each, so the second pass can weigh a
+	// feature by how much it discriminates rather than how often it recurs.
+	candidates := make(map[uint64][]featureShare, len(concepts))
+	df := map[string]int{}
 	for _, c := range concepts {
 		episodes, err := d.conceptEpisodes(c.ID)
 		if err != nil {
 			fmt.Fprintf(d.out, "feature error: %v\n", err)
 			return built
 		}
-		// Surface signature and discovered company merge into one sparse
-		// signature: the recurring words of the shape and the recurring
-		// company it keeps, capped together.
-		shares := mergeShares(mineFeatures(d, episodes), company[c.ID])
+		feats := mergeShares(mineFeatures(d, episodes), company[c.ID])
+		candidates[c.ID] = feats
+		for _, f := range feats {
+			df[f.name]++
+		}
+	}
+	// Second pass: scale each candidate by its information, keep the sparse
+	// top, and write the signature. A frequent feature is discounted so it
+	// cannot crowd out a rarer but defining one, and the weight it leaves on
+	// the edge is what resemblance later ranks by.
+	n := len(concepts)
+	for _, c := range concepts {
+		feats := candidates[c.ID]
+		for i := range feats {
+			feats[i].share *= featureIDF(df[feats[i].name], n)
+		}
+		sort.Slice(feats, func(i, j int) bool {
+			if feats[i].share != feats[j].share {
+				return feats[i].share > feats[j].share
+			}
+			return feats[i].name < feats[j].name
+		})
+		if len(feats) > featureTopK {
+			feats = feats[:featureTopK]
+		}
 		if err := d.store.DropRelFrom([]uint64{c.ID}, memory.RelFeature); err != nil {
 			fmt.Fprintf(d.out, "feature error: %v\n", err)
 			return built
 		}
-		for _, fs := range shares {
+		for _, fs := range feats {
 			node, err := d.store.FeatureNode(fs.name, time.Now())
 			if err != nil {
 				fmt.Fprintf(d.out, "feature mint error: %v\n", err)
@@ -287,31 +314,47 @@ func mineFeatures(d *Daemon, episodes []*memory.Fragment) []featureShare {
 		}
 		return out[i].name < out[j].name
 	})
-	if len(out) > featureTopK {
-		out = out[:featureTopK]
-	}
+	// The cap is not applied here: the corpus pass weighs each candidate by
+	// how much it discriminates before the signature is trimmed, so a rare
+	// defining token is not dropped for a frequent common one.
 	return out
 }
 
+// featureIDF weighs a feature by how much it discriminates: a feature
+// carried by few concepts is informative and keeps its full share, one
+// carried by many is common and is discounted, normalized so the rarest
+// feature is unscaled and a single-concept corpus (nothing to discriminate
+// against) leaves every share untouched. This is the cross-situational
+// currency Steps 11 and 26 already speak, brought to the feature layer.
+func featureIDF(df, n int) float64 {
+	if n <= 1 || df <= 0 {
+		return 1
+	}
+	// Smoothed so a feature carried by every concept is discounted, never
+	// annihilated: it still says something, just less than a rare one.
+	idf := math.Log(float64(n+1)/float64(df+1)) + 1
+	maxIDF := math.Log(float64(n+1)/2.0) + 1 // a feature in a single concept (df = 1)
+	if maxIDF <= 0 {
+		return 1
+	}
+	r := idf / maxIDF
+	if r < 0 {
+		return 0
+	}
+	if r > 1 {
+		return 1
+	}
+	return r
+}
+
 // mergeShares folds the discovered company features into the surface
-// signature and keeps the whole sparse: both kinds compete for the same
-// top-K slots, ranked by share, so a strong shared trait can outweigh a
-// rare surface token.
+// signature; both kinds then compete for the same sparse slots after the
+// corpus pass has weighed each by how much it discriminates.
 func mergeShares(surface, discovered []featureShare) []featureShare {
 	if len(discovered) == 0 {
 		return surface
 	}
-	out := append(surface, discovered...)
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].share != out[j].share {
-			return out[i].share > out[j].share
-		}
-		return out[i].name < out[j].name
-	})
-	if len(out) > featureTopK {
-		out = out[:featureTopK]
-	}
-	return out
+	return append(surface, discovered...)
 }
 
 // conceptCompany discovers the semantic features that live in the concept

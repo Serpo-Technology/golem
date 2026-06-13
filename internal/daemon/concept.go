@@ -256,6 +256,62 @@ func (d *Daemon) growConcepts() (born, named int) {
 	return born, named
 }
 
+// Attention-grounding: a told word binds to what is attended, not only to
+// what is in view. The warmest concepts in the workspace lend their
+// grounded experience as binding targets, so naming a recalled or
+// thought-about concept points the word there even with nothing perceptual
+// present. This is the brain's own arrangement, a word for what is in mind
+// and not only what is sensed; cross-situational naming still discards a
+// warming that does not recur, so it does not become a new junk source.
+const (
+	attentionGroundingGate = 0.4 // a concept must be at least this warm to lend its experience
+	attentionAnchorCap     = 4   // grounded moments of an attended concept a told word binds to
+	attentionConceptCap    = 2   // how many warm concepts can be attended at once
+)
+
+// attentionAnchors returns the grounded moments of the warmest workspace
+// concepts above the attention gate, newest first and capped, so a told
+// word can keep company with what is held in mind. The moments are the
+// concept's own direct groundings, so the word grounds in that concept
+// rather than in its specifics.
+func (d *Daemon) attentionAnchors() []recentMoment {
+	warm := d.ws.warmest(attentionConceptCap)
+	var out []recentMoment
+	for _, e := range warm {
+		if e.heat < attentionGroundingGate {
+			continue
+		}
+		frags, err := d.store.FragmentsByIDs([]uint64{e.id})
+		if err != nil || len(frags) != 1 || frags[0].Kind != memory.KindConcept {
+			continue
+		}
+		grounds, err := d.store.LinksFromRel([]uint64{e.id}, memory.RelGrounds)
+		if err != nil {
+			continue
+		}
+		epIDs := make([]uint64, 0, len(grounds))
+		for _, g := range grounds {
+			epIDs = append(epIDs, g.To)
+		}
+		eps, err := d.store.FragmentsByIDs(epIDs)
+		if err != nil {
+			continue
+		}
+		sort.Slice(eps, func(i, j int) bool { return eps[i].ID > eps[j].ID })
+		n := 0
+		for _, f := range eps {
+			if f.Kind != memory.KindEpisodic {
+				continue
+			}
+			out = append(out, recentMoment{id: f.ID, template: f.Template, at: f.Time})
+			if n++; n >= attentionAnchorCap {
+				break
+			}
+		}
+	}
+	return out
+}
+
 // mintWords stores or refreshes word nodes for the content words of an
 // utterance and binds each to the tell moment and to the moments the
 // utterance bound to, so the night's naming pass can see which

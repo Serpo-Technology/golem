@@ -1377,15 +1377,15 @@ already built: the workspace holds what is active, and recall already warms a
 concept. Bind the told word to the warmest workspace concept, so warming a
 category and then naming it grounds the name on the category.
 
-- [ ] A told word binds to the warmest concept in the workspace, alongside
+- [x] A told word binds to the warmest concept in the workspace, alongside
       the perceptual window, so what is attended can be the referent.
-- [ ] Naming a recalled or thought-about concept grounds the word there:
+- [x] Naming a recalled or thought-about concept grounds the word there:
       recall animal, say "thing", and the name grounds in animal, so a
       superordinate over the categories becomes teachable.
-- [ ] The same wire lets GOLEM name an abstraction, a thought, or what was
+- [x] The same wire lets GOLEM name an abstraction, a thought, or what was
       just discussed, since each is warm in the workspace even when nothing
       perceptual matches.
-- [ ] Cross-situational reliability still cleans up, so a word warmed by
+- [x] Cross-situational reliability still cleans up, so a word warmed by
       accident in one scene fades unless the binding recurs, and
       attention-grounding does not become a new junk source.
 
@@ -1399,6 +1399,19 @@ grounds that name in the category, so a `thing` taught that way grounds in
 `animal`, `metal`, and `plant` rather than in their specifics, and a word
 taught while a concept is only thought about grounds in that concept with
 nothing perceptual present.
+
+Status: built. A told word now binds to what is attended as well as to what
+is perceived: before the utterance is processed, the warmest concepts in the
+workspace above a gate lend their grounded moments as binding targets, so the
+word keeps company with what is held in mind. Naming then grounds it there by
+the same cross-situational pass that grounds it in a percept, so recalling a
+category to warm it and telling a name points the name at the category with
+nothing perceptual present, and three such situations distil a superordinate
+over the categories through the existing abstraction machinery. It needs no
+new representation, only a change to what a told word grounds in, and the
+reliability pass still discards a one-off accidental warming, so attention
+does not become a new junk source. The done-when holds in tests, with the
+no-recurrence cleanup asserted alongside.
 
 ## Step 28: Information-weighting in the feature layer
 
@@ -1414,19 +1427,33 @@ above the correct tree, because green had become high-frequency. On day six
 `thing`'s signature was built from its highest-count carriers, dog and key,
 with tree dropped. The same fix Step 26 applied elsewhere belongs here.
 
-- [ ] Signature composition by information: which features a concept carries
+- [x] Signature composition by information: which features a concept carries
       weighs by how much each discriminates, so a frequent feature does not
       crowd out a rarer but defining one, and tree's tokens survive beside
       dog's and key's.
-- [ ] Resemblance ranking by information: a shared feature counts toward a
+- [x] Resemblance ranking by information: a shared feature counts toward a
       match in proportion to how informative it is, so a frequent feature
       stops outranking a correct two-feature match.
-- [ ] One currency: the reliability measure Step 11 and Step 26 already use,
+- [x] One currency: the reliability measure Step 11 and Step 26 already use,
       applied to the feature path, so the whole system speaks it.
 
 Done when: a probe sharing a rare defining feature outranks one sharing only
 a frequent feature, and a concept's signature keeps a low-count defining token
 rather than dropping it for a high-count one.
+
+Status: built. Signature composition runs in two passes now: the first
+gathers every concept's candidate features uncapped and counts how many
+concepts carry each, and the second weighs every candidate by how much it
+discriminates before trimming to the sparse top, so a feature carried by many
+concepts is discounted and a rare defining one survives the cap it used to
+lose. The discriminative weight is what stays on the feature edge, so
+resemblance reads the same currency: a shared rare feature counts for more
+than a shared common one, and a correct two-feature match outranks a single
+frequent coincidence. The measure is smoothed so a feature shared by every
+concept is discounted rather than annihilated, and a single-concept corpus,
+with nothing to discriminate against, leaves every share untouched. It is the
+cross-situational reliability of Steps 11 and 26 brought to the feature layer,
+so the whole system speaks one currency. The done-when holds in tests.
 
 ## Known limitations
 
