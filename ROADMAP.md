@@ -1778,13 +1778,16 @@ definition, succession, the temporal and count answers, already build meaning
 structures (a frame or a layered message) handed to an engine (the procedural
 realizer or the construction composer), so the rigid intent-label dispatch is
 already largely gone; what is left there is each answer type's own logic, which
-is the work, not boilerplate. The per-language parse fork still stands for the
-legacy question types: the meaning-carrying comprehension path is already one
-engine over the seeded constructions, language-general by the word-order
-parameter, but folding the question parser into that one engine is
-construction-driven parsing for the open case, the same induction the next slice
-opens and the part honestly unsolved at large. So the relational answer and its
-neighbors have crossed; the legacy question fork waits on induction.
+is the work, not boilerplate. The meaning-carrying comprehension path now runs
+through the one engine for both languages: a Turkish transitive clause,
+verb-final with its object accusative, is read into a proposition over the
+Turkish-seeded constructions by the same engine English uses, the word order
+taken from the order parameter and the case and tense run backward by the
+morphology, with no second parser. What still forks is the legacy question
+parser, and folding that into the one engine is construction-driven parsing for
+the open case, the same induction the next slice opens and the part honestly
+unsolved at large. So comprehension and the relational answers have crossed to
+the one engine across languages; the legacy question fork waits on induction.
 
 ## Step 33: Discourse on the workspace field
 

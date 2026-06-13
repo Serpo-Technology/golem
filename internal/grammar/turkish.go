@@ -49,6 +49,58 @@ func stripCaseTR(w string) string {
 	return w
 }
 
+// stripCase removes a case suffix from a noun-phrase span so a comprehended
+// role-filler resolves to its base concept. Turkish marks the definite
+// object accusative and a temporal anchor ablative, while English marks no
+// case, so this is the identity outside Turkish. The comprehension engine
+// calls it as a fallback when the surface span names nothing, leaving an
+// unmarked word untouched.
+func (p *Params) stripCase(lang, phrase string) string {
+	if lang != "tr" {
+		return phrase
+	}
+	words := strings.Fields(phrase)
+	if len(words) == 0 {
+		return phrase
+	}
+	words[len(words)-1] = stripCaseAccTR(words[len(words)-1])
+	return strings.Join(words, " ")
+}
+
+// stripCaseAccTR removes the accusative a definite object wears, as well as
+// the ablative and locative an anchor may carry, so "kediyi" resolves to
+// "kedi". The accusative is the high vowel, with the buffer y after a vowel
+// stem. It is a best effort: applied only when the marked form failed to
+// resolve, so it never strips a word it would not then ground.
+func stripCaseAccTR(w string) string {
+	w = stripCaseTR(w)
+	for _, suf := range []string{"yı", "yi", "yu", "yü"} {
+		if strings.HasSuffix(w, suf) && len([]rune(w)) > 3 {
+			return strings.TrimSuffix(w, suf)
+		}
+	}
+	for _, suf := range []string{"ı", "i", "u", "ü"} {
+		if strings.HasSuffix(w, suf) && len([]rune(w)) > 2 {
+			return strings.TrimSuffix(w, suf)
+		}
+	}
+	return w
+}
+
+// turkishVerbStem recovers a Turkish verb's stem from an inflected surface,
+// stripping a past-tense suffix so a relation heard as "kovaladı" keys on
+// "kovala". It is the Turkish twin of the English reverse morphology, a best
+// effort over the regular paradigm; a seeded event verb is resolved by the
+// closed class before this is consulted.
+func turkishVerbStem(surface string) string {
+	for _, suf := range []string{"dı", "di", "du", "dü", "tı", "ti", "tu", "tü"} {
+		if strings.HasSuffix(surface, suf) && len([]rune(surface)) > 3 {
+			return strings.TrimSuffix(surface, suf)
+		}
+	}
+	return surface
+}
+
 // parseTurkish reads a Turkish utterance into the shared frame. SOV
 // reverses the qualifier: the anchor span comes before its relator.
 func (p *Params) parseTurkish(tokens []string, question bool, resolve func(string) *memory.Fragment) Frame {

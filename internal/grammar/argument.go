@@ -197,7 +197,19 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 			m.Past = p.verbPast(lang, span)
 			continue
 		}
-		m.Roles[slot.Role] = Term{Concept: resolve(span), Phrase: span}
+		// A noun phrase resolves on its surface, and on its case-stripped form
+		// when the surface names nothing, so a case-marked Turkish object
+		// ("kediyi") reaches the concept its stem names ("kedi"). An unmarked
+		// word is left as it is.
+		filler := Term{Concept: resolve(span), Phrase: span}
+		if filler.Concept == nil {
+			if base := p.stripCase(lang, span); base != span {
+				if c := resolve(base); c != nil {
+					filler = Term{Concept: c, Phrase: base}
+				}
+			}
+		}
+		m.Roles[slot.Role] = filler
 	}
 	p.bestFit(cxn, m, fit)
 	return m, true
@@ -324,12 +336,13 @@ func (p *Params) verbLemma(lang, surface string) string {
 	if h, ok := p.hap(lang, surface); ok {
 		return h.base
 	}
-	if lang == "en" || lang == "" {
-		for _, v := range p.verbs {
-			switch surface {
-			case v.base, v.third, v.past, v.part:
-				return v.base
-			}
+	if lang == "tr" {
+		return turkishVerbStem(surface)
+	}
+	for _, v := range p.verbs {
+		switch surface {
+		case v.base, v.third, v.past, v.part:
+			return v.base
 		}
 	}
 	s := surface

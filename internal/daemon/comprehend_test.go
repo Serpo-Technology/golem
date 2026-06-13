@@ -6,12 +6,19 @@ import (
 	"time"
 
 	"golem/internal/memory"
+	"golem/internal/wire"
 )
 
 // groundNoun seeds a concept and a word that names it, so the planner's
 // resolver reaches the concept from its surface form the way it would after
 // the concept distilled from lived experience.
 func groundNoun(t *testing.T, d *Daemon, gloss string) *memory.Fragment {
+	return groundNounLang(t, d, gloss, "en")
+}
+
+// groundNounLang is groundNoun in a chosen language, for grounding a concept
+// a non-English word names.
+func groundNounLang(t *testing.T, d *Daemon, gloss, lang string) *memory.Fragment {
 	t.Helper()
 	now := time.Now()
 	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: gloss,
@@ -19,7 +26,7 @@ func groundNoun(t *testing.T, d *Daemon, gloss string) *memory.Fragment {
 	if _, err := d.store.Encode(c); err != nil {
 		t.Fatal(err)
 	}
-	w, _, err := d.store.WordNode(gloss, "en", d.chem.Snapshot(), now)
+	w, _, err := d.store.WordNode(gloss, lang, d.chem.Snapshot(), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +34,17 @@ func groundNoun(t *testing.T, d *Daemon, gloss string) *memory.Fragment {
 		t.Fatal(err)
 	}
 	return c
+}
+
+// sayLang tells GOLEM an utterance tagged with its language, the path the
+// CLI takes for "tell --lang tr".
+func sayLang(t *testing.T, d *Daemon, lang, words string) wire.Response {
+	t.Helper()
+	resp, _, _ := d.handle(wire.Request{Cmd: "tell", Content: words, Lang: lang}, nil)
+	if !resp.OK {
+		t.Fatalf("tell %q failed: %s", words, resp.Error)
+	}
+	return resp
 }
 
 // The done-when of the comprehension producer: "a dog chased a cat," told to
@@ -251,6 +269,37 @@ func TestConversationalProbe(t *testing.T) {
 	}
 	if got := say(t, d, "what is chase").Say; !strings.HasPrefix(got, "Chase is an action.") {
 		t.Fatalf("the relation should define as an action: %q", got)
+	}
+}
+
+// The same construction engine comprehends Turkish: a verb-final transitive
+// clause, the object accusative, is read into a proposition over the seeded
+// Turkish constructions, with no separate parser. "köpek kediyi kovaladı"
+// binds the dog as agent and the cat as patient and mints the relation from
+// the verb's stem, the per-language parse fork folded into the one engine for
+// the meaning-carrying path.
+func TestComprehendTurkishProposition(t *testing.T) {
+	d, s := testDaemon(t)
+	kopek := groundNounLang(t, d, "köpek", "tr")
+	kedi := groundNounLang(t, d, "kedi", "tr")
+
+	resp := sayLang(t, d, "tr", "köpek kediyi kovaladı")
+	moment := resp.Observe.FragmentID
+	if moment == 0 {
+		t.Fatal("the telling should leave a moment")
+	}
+
+	rel, _ := s.ConceptByTemplate("rel:tr:kovala")
+	if rel == nil || rel.Category != "relation" {
+		t.Fatalf("the Turkish verb should mint a relation from its stem: %+v", rel)
+	}
+	ag, _ := s.LinksFromRel([]uint64{moment}, memory.RelAgent)
+	if !linksTo(ag, kopek.ID) {
+		t.Fatalf("köpek should be the agent: %+v", ag)
+	}
+	pat, _ := s.LinksFromRel([]uint64{moment}, memory.RelPatient)
+	if !linksTo(pat, kedi.ID) {
+		t.Fatalf("the accusative kedi should be the patient: %+v", pat)
 	}
 }
 

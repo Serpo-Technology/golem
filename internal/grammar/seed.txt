@@ -188,3 +188,5 @@ cxn:en:succession_before:hedge	{subject} {vp_hedge} {anchor}.	en	tentative
 # comprehension engine reads off the feature signatures.
 acxn:en:transitive	agent/np/animate rel/v patient/np	en	rel
 acxn:en:intransitive	agent/np/animate rel/v	en	rel
+acxn:tr:transitive	agent/np/animate rel/v patient/np	tr	rel
+acxn:tr:intransitive	agent/np/animate rel/v	tr	rel
