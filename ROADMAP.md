@@ -1069,6 +1069,74 @@ seed's whole signature), so disconnected kin associate as "X is like
 Y" while every thought still starts and lands on named nodes. The
 done-when holds in tests.
 
+## Step 21: Constructions into memory
+
+Goal: move the sentence patterns out of code and into the weighted, auditable
+graph, so what GOLEM says stops being a fixed template and becomes a learned,
+varied construction. The same move Step 14 made for grammar parameters,
+raised from words to whole patterns.
+
+Grammar parameters already live in memory (KindGrammar nodes, read in
+internal/daemon/grammar.go), but the sentence shapes are still hardcoded: the
+realizer assembles from fixed pieces (internal/grammar/english.go), and the
+act and drive layers concatenate whole templates (the "I was thinking" line
+in internal/daemon/act.go, the drive's "satisfied: it names" line). Those are
+the rigid parts. Structure first, then curriculum, the order Step 14 followed.
+
+- [ ] A construction representation in memory: a form-and-meaning pattern, an
+      intent or frame on the meaning side and an ordered template with typed
+      slots on the form side, a new node kind beside KindGrammar, weighted
+      and inspectable.
+- [ ] The realizer and the act and drive layers fill a memory construction's
+      slots instead of concatenating hardcoded strings. The slot-filling
+      engine, the morphology, and the word order stay innate code; only the
+      patterns move out.
+- [ ] More than one construction per intent, so a meaning has alternative
+      forms, and the choice among them reads from context and chemistry, the
+      way oxytocin already picks "usually follows" over "may follow".
+- [ ] Seed the first constructions through the trainer along the grammar-seed
+      path, so the starter memory speaks from day one, then learn new ones
+      from usage by pairing a form heard or shown with the intent it carried.
+
+Forced deviation, flagged: a learned construction can be wrong until it is
+well-trained, where a hardcoded template was always grammatical. Reliability
+is traded for fluidity, earned back over many examples, with the innate
+slot-filling engine the floor that keeps even a thin set of constructions
+grammatical.
+
+Done when: the "I was thinking" line and the successor and definition answers
+are built from constructions read out of memory, golem dump shows them as
+nodes, a second construction for one intent can be taught and then chosen,
+and removing a construction changes how GOLEM says that thing without breaking
+the engine.
+
+## Step 22: Compositional generation
+
+Goal: build a sentence by composing constructions, so GOLEM can say something
+it was never given whole. This is the deepest sense of fluid, and the one the
+no-weights stance makes hardest.
+
+Even with constructions in memory, Step 21 still selects a whole learned
+pattern. Real fluency composes: a clause nests in another, modifiers stack,
+two constructions join into an utterance never seen as a unit. Staged late and
+treated as research at its far end.
+
+- [ ] A construction slot can be filled by another construction, not only a
+      term, so patterns nest.
+- [ ] The planner builds a layered message and the realizer renders it by
+      recursive slot-filling, so a novel combination still comes out
+      grammatical.
+- [ ] Selection across the layers stays driven by context and chemistry, the
+      same choice Step 21 makes, now at every level.
+
+Flagged: open-ended compositional generation is the deep reach, where the
+grounded path is least proven. Treat one level of nesting and coordination as
+the milestone and arbitrary generative fluency as open research.
+
+Done when: GOLEM produces a correct sentence built from two or more
+constructions it was never given as a single template, and the composition
+reads back as the constructions that made it.
+
 ## Known limitations
 
 - Commands execute within the modeled pipeline subset. Substitution,
@@ -1103,6 +1171,10 @@ done-when holds in tests.
   synonym with no shared token still needs a naming bond or a lived
   bridge. Breadth has to be lived or told, and the answer-shaped
   comprehension ceiling stands above the representation either way.
+- Language generation is templated. The sentence shapes are hardcoded in the
+  realizer and the act handlers, so GOLEM says a thing one fixed way and can
+  neither vary the form nor combine two into one. Step 21 moves the patterns
+  into learnable memory and Step 22 lets them compose.
 
 ## Open questions
 
