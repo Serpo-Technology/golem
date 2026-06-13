@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -196,6 +197,60 @@ func TestRoleQuestionAdmitsGap(t *testing.T) {
 	got := say(t, d, "what chased the ball").Say
 	if got == "The dog chased the ball." {
 		t.Fatalf("a proposition that was never told should not be invented: %q", got)
+	}
+}
+
+// A relation is first-class in answers too: "what is chase" is answered that
+// chase is an action, not a thing, the kind a verb names.
+func TestRelationDefinedAsAction(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat") // mints chase as a relation
+
+	got := say(t, d, "what is chase").Say
+	if !strings.HasPrefix(got, "Chase is an action.") {
+		t.Fatalf("a relation should be defined as an action: %q", got)
+	}
+}
+
+// "What did the dog do" asks the relation itself: the walk reads the
+// strongest proposition the dog took part in and the engine speaks the whole
+// clause back, an answer built from a meaning structure.
+func TestActivityQuestionThroughEngine(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+
+	if got := say(t, d, "what did the dog do").Say; got != "The dog chased the cat." {
+		t.Fatalf("the activity question should speak the whole proposition: %q", got)
+	}
+}
+
+// The conversational probe end to end: a chasing is told and grounded, then
+// asked about from both roles, the relation defined, and the activity
+// recalled, every answer generated from a meaning structure run through the
+// one construction engine.
+func TestConversationalProbe(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+
+	if got := say(t, d, "a dog chased a cat").Say; got != "" {
+		t.Fatalf("a comprehended statement teaches silently: %q", got)
+	}
+	for _, c := range []struct{ ask, want string }{
+		{"what did the dog chase", "The dog chased the cat."},
+		{"who chased the cat", "The dog chased the cat."},
+		{"what did the dog do", "The dog chased the cat."},
+	} {
+		if got := say(t, d, c.ask).Say; got != c.want {
+			t.Fatalf("%q -> %q, want %q", c.ask, got, c.want)
+		}
+	}
+	if got := say(t, d, "what is chase").Say; !strings.HasPrefix(got, "Chase is an action.") {
+		t.Fatalf("the relation should define as an action: %q", got)
 	}
 }
 

@@ -1760,10 +1760,31 @@ read forward: the walk reaches the patient the dog chased, a meaning is built
 over the relation and the two roles, and the engine generates "the dog chased
 the cat," tense settled from the question's verb. This closes the done-when's
 last clause and the conversational probe, and establishes the engine-driven
-answer pattern. The broader retirement of the planner's other branches and the
-folding of the per-language parse fork into the one engine over each language's
-constructions remain, the long part of the slice, with the relational answer the
-first branch to cross over.
+answer pattern.
+
+More of the relational domain has since crossed onto the engine. Both role
+questions, "what did the dog chase" and "who chased the cat," and the relation
+itself asked, "what did the dog do," now build a meaning over the relation and
+its roles and speak it back through the one construction engine, all routed
+through a single entry that hands a meaning to the engine. A relation is
+first-class in answers too: "what is chase" is answered that chase is an action,
+the kind a verb names, rather than a thing. The whole probe runs end to end
+through the daemon's own handler in a test, the path the CLI marshals to, with a
+chasing told, asked about from both roles, the relation defined, and the activity
+recalled, every answer generated from a meaning structure.
+
+What remains is the long arc the fluid path names. The planner's other branches,
+definition, succession, the temporal and count answers, already build meaning
+structures (a frame or a layered message) handed to an engine (the procedural
+realizer or the construction composer), so the rigid intent-label dispatch is
+already largely gone; what is left there is each answer type's own logic, which
+is the work, not boilerplate. The per-language parse fork still stands for the
+legacy question types: the meaning-carrying comprehension path is already one
+engine over the seeded constructions, language-general by the word-order
+parameter, but folding the question parser into that one engine is
+construction-driven parsing for the open case, the same induction the next slice
+opens and the part honestly unsolved at large. So the relational answer and its
+neighbors have crossed; the legacy question fork waits on induction.
 
 ## Step 33: Discourse on the workspace field
 

@@ -115,15 +115,8 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
 	}
-	m := grammar.Meaning{
-		Relation: grammar.Term{Phrase: rel.Content},
-		Roles: map[string]grammar.Term{
-			knownRole:  {Phrase: definiteNP(known.Content)},
-			questioned: {Phrase: definiteNP(filler.gloss)},
-		},
-		Past: past,
-	}
-	line, ok := d.gram.Speak(frame.Lang, m)
+	line, ok := d.sayProposition(frame.Lang, rel.Content,
+		map[string]string{knownRole: known.Content, questioned: filler.gloss}, past)
 	if !ok {
 		return "", false
 	}
@@ -132,6 +125,71 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 	d.ws.excite(filler.id, exciteSpeech)
 	d.warmSpoken(known.Content)
 	return line, true
+}
+
+// planActivityQuestion answers "what did the dog do": the relation itself is
+// asked, not a role of a named one. The agent is given and the verb is the
+// generic pro-verb, so the walk reads the strongest proposition the agent
+// took part in off its role edges, and the engine speaks the whole clause
+// back, "the dog chased a cat," from a meaning structure rather than a fixed
+// reply. It returns false when the clause is not of this shape, so the older
+// handling stands.
+func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Wh != "what" || frame.Agent.Concept == nil || !proVerbDo(raw) {
+		return "", false
+	}
+	agent := frame.Agent.Concept
+	dests, err := d.walkableDests(agent.ID)
+	if err != nil || len(dests[memory.RelPatient]) == 0 {
+		return "", false
+	}
+	// walkableDests sorts each crossing by weight, so the first is the
+	// strongest proposition the agent stood as the agent of.
+	filler := dests[memory.RelPatient][0]
+	if filler.via == "" {
+		return "", false
+	}
+	line, ok := d.sayProposition(frame.Lang, filler.via,
+		map[string]string{"agent": agent.Content, "patient": filler.gloss}, frame.Past)
+	if !ok {
+		return "", false
+	}
+	d.ws.excite(filler.id, exciteSpeech)
+	d.warmSpoken(agent.Content)
+	return line, true
+}
+
+// proVerbDo reports whether a clause's main verb is the generic pro-verb,
+// "what did the dog do" rather than "what did the dog chase": the last word
+// is a form of "do", which stands in for the relation the question asks
+// after.
+func proVerbDo(raw string) bool {
+	tokens, _ := grammar.Tokenize(raw)
+	if len(tokens) == 0 {
+		return false
+	}
+	switch tokens[len(tokens)-1] {
+	case "do", "does":
+		return true
+	}
+	return false
+}
+
+// sayProposition builds a meaning over a relation and its roles and hands it
+// to the bidirectional engine, the one entry the relational answers speak
+// through. Each role's gloss takes the definite article an answer wants. It
+// returns false when no construction speaks the meaning, so the caller can
+// fall back.
+func (d *Daemon) sayProposition(lang, rel string, roles map[string]string, past bool) (string, bool) {
+	terms := make(map[string]grammar.Term, len(roles))
+	for role, gloss := range roles {
+		terms[role] = grammar.Term{Phrase: definiteNP(gloss)}
+	}
+	return d.gram.Speak(lang, grammar.Meaning{
+		Relation: grammar.Term{Phrase: rel},
+		Roles:    terms,
+		Past:     past,
+	})
 }
 
 // analyzeRoleQuestion reads a relational role question into the relation it

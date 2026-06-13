@@ -491,6 +491,11 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	if line, ok := d.planRoleQuestion(frame, raw); ok {
 		return line
 	}
+	// "What did the dog do" asks the relation itself: the walk reads the
+	// agent's strongest proposition and the engine speaks the whole clause.
+	if line, ok := d.planActivityQuestion(frame, raw); ok {
+		return line
+	}
 
 	// A relation carried by the verb is a qualifier in disguise: "which
 	// command follows X" asks after X, "what preceded X" asks before it.
@@ -535,14 +540,18 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	if topic.Concept != nil {
 		c := topic.Concept
 		tally, _ := d.store.GroundingTally()
+		// A relation reified as a concept is an action, the same kind a verb
+		// names, so "what is chase" answers that chase is an action and not a
+		// thing.
+		action := c.Category == "verb" || c.Category == "relation"
 		kind := "thing"
-		if c.Category == "verb" {
+		if action {
 			kind = "action"
 		}
 		kindWord := grammar.Indefinite(kind)
 		if frame.Lang == "tr" {
 			kindWord = "bir şey"
-			if c.Category == "verb" {
+			if action {
 				kindWord = "bir eylem"
 			}
 		}
