@@ -1667,7 +1667,7 @@ way perception does, the capability that gates conversation.
       roles by best fit, the feature signatures constraining it so an animate
       concept is the better agent, and writes the resulting proposition into the
       graph, grounding what was said.
-- [ ] A partial or novel utterance yields a partial meaning and a learning
+- [x] A partial or novel utterance yields a partial meaning and a learning
       signal, not a parse failure, so an unknown relation leaves its slots bound
       and itself marked to be grounded.
 - [ ] The planner's fixed answer dispatch gives way to building a meaning
@@ -1734,6 +1734,14 @@ that crosses a relation reaches the co-argument, the crossing reified relations
 left dormant now lit, and the producer that step deferred is supplied. This
 satisfies the first clause of the done-when: "a dog chased a cat" is parsed into
 chaser and chased and written as a proposition the brain can be asked about.
+
+A partial or novel utterance degrades rather than failing. An unknown verb in
+transitive position is no obstacle: it mints a candidate relation and the slots
+still bind, so "a dog blorped a cat" leaves a blorp to ground rather than a parse
+error. A role whose filler grounds in nothing leaves a partial proposition for
+what was understood and holds the gap as a learning goal, the signal
+comprehension would otherwise swallow now that it has taken over the told
+statement, behind the same curiosity gate the older path used.
 
 ## Step 33: Discourse on the workspace field
 

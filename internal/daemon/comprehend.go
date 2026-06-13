@@ -58,6 +58,20 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		d.ws.excite(patientID, exciteSpeech)
 		d.event(events.Event{Ev: "link", From: momentID, To: patientID, Rel: memory.RelPatient, Weight: comprehendWeight})
 	}
+
+	// A gap in what was bound is a learning signal, not a failure: a role
+	// whose filler grounds in nothing is held as a goal so the drives hunt
+	// it. Comprehension would otherwise swallow the gap, having understood
+	// the proposition it sat in, so the signal the older curiosity path
+	// raised is preserved here, behind the same curiosity gate.
+	if d.chem.Snapshot().Dopamine >= curiosityGate {
+		for _, role := range []string{"agent", "patient"} {
+			if t := m.Roles[role]; t.Concept == nil && t.Phrase != "" {
+				d.adoptGoal("learn", t.Phrase)
+				break
+			}
+		}
+	}
 	return true
 }
 

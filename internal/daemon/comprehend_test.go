@@ -115,6 +115,54 @@ func TestComprehendDistinctRelations(t *testing.T) {
 	}
 }
 
+// A novel verb degrades gracefully rather than failing to parse: an unknown
+// verb in transitive position becomes a candidate relation with its slots
+// bound, and the brain does not blurt a confused question about it.
+func TestComprehendUnknownVerbDegradesGracefully(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+
+	resp := say(t, d, "a dog blorped a cat")
+	if resp.Say != "" {
+		t.Fatalf("an understood novel statement should not blurt: %q", resp.Say)
+	}
+	blorp, _ := s.ConceptByTemplate("rel:en:blorp")
+	if blorp == nil || blorp.Category != "relation" {
+		t.Fatal("an unknown verb should become a candidate relation")
+	}
+	moment := resp.Observe.FragmentID
+	ag, _ := s.LinksFromRel([]uint64{moment}, memory.RelAgent)
+	pat, _ := s.LinksFromRel([]uint64{moment}, memory.RelPatient)
+	if !linksTo(ag, dog.ID) || !linksTo(pat, cat.ID) {
+		t.Fatalf("the unknown verb should still leave its slots bound: agent %+v patient %+v", ag, pat)
+	}
+}
+
+// A partial utterance yields a partial meaning and a learning signal: the
+// grounded part is written, and the role whose filler grounds in nothing is
+// held as a goal rather than dropped.
+func TestComprehendPartialHoldsTheGap(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	d.chem.SpikeDopamine(0.6) // curious enough to hold the gap
+
+	resp := say(t, d, "a dog chased a wug")
+	moment := resp.Observe.FragmentID
+
+	chase, _ := s.ConceptByTemplate("rel:en:chase")
+	if chase == nil {
+		t.Fatal("the grounded part of the proposition should still be written")
+	}
+	ag, _ := s.LinksFromRel([]uint64{moment}, memory.RelAgent)
+	if !linksTo(ag, dog.ID) {
+		t.Fatal("the dog should be the agent of the partial proposition")
+	}
+	if d.goal == nil || d.goal.topic != "wug" {
+		t.Fatalf("the unknown patient should be held as a learning goal: %+v", d.goal)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {
