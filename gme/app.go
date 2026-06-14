@@ -1,0 +1,76 @@
+package main
+
+import (
+	"context"
+
+	"gme/client"
+	"golem/wire"
+)
+
+// App is the bridge the window calls into: each method is one read against the
+// running daemon through the shared client, so the frontend reads the live graph
+// over the socket and never touches the database itself.
+type App struct {
+	ctx context.Context
+	c   *client.Client
+	err error
+}
+
+// NewApp builds the bridge, resolving the daemon's home once.
+func NewApp() *App {
+	c, err := client.New()
+	return &App{c: c, err: err}
+}
+
+func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+
+// Status reads the daemon's vital signs and workspace.
+func (a *App) Status() (*wire.StatusInfo, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.c.Status()
+}
+
+// Search recalls the moments a cue brings to mind.
+func (a *App) Search(query string) ([]*wire.FragmentInfo, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.c.Search(query)
+}
+
+// Concepts lists the concepts memory has distilled.
+func (a *App) Concepts() ([]*wire.ConceptInfo, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.c.Concepts()
+}
+
+// Audit reads the decision and edit trail.
+func (a *App) Audit() ([]*wire.AuditInfo, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.c.Audit()
+}
+
+// Graph is the whole memory graph for the window: every fragment and the links
+// among them, the same glass box the audit trail records.
+type Graph struct {
+	Fragments []*wire.FragmentInfo `json:"fragments"`
+	Links     []*wire.LinkInfo     `json:"links"`
+}
+
+// Dump reads the whole graph for inspection.
+func (a *App) Dump() (*Graph, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	frags, links, err := a.c.Dump()
+	if err != nil {
+		return nil, err
+	}
+	return &Graph{Fragments: frags, Links: links}, nil
+}
