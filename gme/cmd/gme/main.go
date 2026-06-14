@@ -1,8 +1,8 @@
-// Command gme is a separate console for GOLEM's memory. It talks to the running
-// daemon over the same unix socket the terminal does and renders what the graph
-// holds, so reading and shaping memory stays distinct from conversing with
-// GOLEM. The daemon remains the only process that touches the database; gme is a
-// client to its single brain loop.
+// Command gme is the console half of GOLEM's memory editor. It talks to the
+// running daemon over the same unix socket the terminal does and renders what
+// the graph holds, so reading and shaping memory stays distinct from conversing
+// with GOLEM. It shares its client with the GUI; the daemon stays the only
+// process that writes the database.
 package main
 
 import (
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"golem/internal/config"
+	"gme/client"
 	"golem/wire"
 )
 
@@ -32,30 +32,33 @@ func main() {
 		fmt.Print(usage)
 		return
 	}
-	home, err := config.Home()
+	c, err := client.New()
 	if err != nil {
 		fail(err)
 	}
 
 	switch args[0] {
 	case "status":
-		resp := call(home, wire.Request{Cmd: "status"})
-		printStatus(resp.Status)
+		st, err := c.Status()
+		check(c, err)
+		printStatus(st)
 
 	case "search", "recall":
 		if len(args) < 2 {
 			fail(fmt.Errorf("usage: gme search <words>"))
 		}
-		resp := call(home, wire.Request{Cmd: "recall", Query: strings.Join(args[1:], " ")})
-		if len(resp.Fragments) == 0 {
+		frags, err := c.Search(strings.Join(args[1:], " "))
+		check(c, err)
+		if len(frags) == 0 {
 			fmt.Println("nothing comes to mind.")
 			return
 		}
-		printFragments(resp.Fragments)
+		printFragments(frags)
 
 	case "concepts":
-		resp := call(home, wire.Request{Cmd: "concepts"})
-		printConcepts(resp.Concepts)
+		cs, err := c.Concepts()
+		check(c, err)
+		printConcepts(cs)
 
 	case "audit":
 		n := 20
@@ -64,16 +67,18 @@ func main() {
 				n = v
 			}
 		}
-		resp := call(home, wire.Request{Cmd: "audit"})
-		printAudit(lastN(resp.Audit, n))
+		entries, err := c.Audit()
+		check(c, err)
+		printAudit(lastN(entries, n))
 
 	case "dump":
-		resp := call(home, wire.Request{Cmd: "dump"})
-		if len(resp.Fragments) == 0 {
+		frags, _, err := c.Dump()
+		check(c, err)
+		if len(frags) == 0 {
 			fmt.Println("memory is empty.")
 			return
 		}
-		printFragments(resp.Fragments)
+		printFragments(frags)
 
 	default:
 		fmt.Print(usage)
@@ -81,17 +86,16 @@ func main() {
 	}
 }
 
-// call performs one round trip and exits with a friendly message when the
-// daemon is not listening, the same contract the terminal client keeps.
-func call(home string, req wire.Request) wire.Response {
-	resp, err := wire.Call(home, req)
-	if err != nil {
-		if _, statErr := os.Stat(wire.SocketPath(home)); os.IsNotExist(statErr) {
-			fail(fmt.Errorf("the daemon is not running; start it with: golem run"))
-		}
-		fail(err)
+// check exits with a friendly message when the daemon is not listening, the same
+// contract the terminal client keeps.
+func check(c *client.Client, err error) {
+	if err == nil {
+		return
 	}
-	return resp
+	if _, statErr := os.Stat(wire.SocketPath(c.Home)); os.IsNotExist(statErr) {
+		fail(fmt.Errorf("the daemon is not running; start it with: golem run"))
+	}
+	fail(err)
 }
 
 func fail(err error) {

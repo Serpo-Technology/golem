@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -187,6 +188,20 @@ type ObserveResult struct {
 	Bits       float64 `json:"bits"`
 	Conscious  bool    `json:"conscious"`
 	FragmentID uint64  `json:"fragment_id,omitempty"`
+}
+
+// Home resolves the daemon's state directory the same way the daemon does:
+// GOLEM_HOME when set, otherwise ~/.golem. A client uses it to find the socket
+// without depending on the daemon's configuration package.
+func Home() (string, error) {
+	if h := os.Getenv("GOLEM_HOME"); h != "" {
+		return h, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".golem"), nil
 }
 
 // SocketPath is where a home directory keeps its daemon socket.
