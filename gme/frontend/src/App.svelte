@@ -12,9 +12,10 @@
     Delete,
   } from '../wailsjs/go/main/App';
   import { wire } from '../wailsjs/go/models';
+  import Graph from './Graph.svelte';
 
-  type Tab = 'search' | 'concepts' | 'audit' | 'author';
-  let tab: Tab = 'concepts';
+  type Tab = 'graph' | 'search' | 'concepts' | 'audit' | 'author';
+  let tab: Tab = 'graph';
 
   let status: wire.StatusInfo | null = null;
   let error = '';
@@ -194,6 +195,7 @@
   {/if}
 
   <nav>
+    <button class:active={tab === 'graph'} on:click={() => (tab = 'graph')}>Graph</button>
     <button class:active={tab === 'search'} on:click={() => (tab = 'search')}>Search</button>
     <button class:active={tab === 'concepts'} on:click={() => (tab = 'concepts')}>Concepts</button>
     <button class:active={tab === 'audit'} on:click={() => (tab = 'audit')}>Audit</button>
@@ -201,7 +203,9 @@
   </nav>
 
   <section>
-    {#if tab === 'search'}
+    {#if tab === 'graph'}
+      <Graph />
+    {:else if tab === 'search'}
       <form class="searchbar" on:submit|preventDefault={runSearch}>
         <input placeholder="recall a cue..." bind:value={query} />
         <button type="submit">recall</button>
