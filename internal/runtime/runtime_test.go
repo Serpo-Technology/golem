@@ -49,11 +49,15 @@ func TestRunTimesOut(t *testing.T) {
 	}
 }
 
-// The runtime is a calculator, not a door to the machine: a program reaching
-// for the operating system fails to compile against the curated library.
+// The runtime is a calculator, not a door to the machine: a program that
+// imports the operating system is refused, os being absent from the curated
+// library the interpreter is given.
 func TestRunDeniesTheMachine(t *testing.T) {
-	res := run(t, `import "os"; os.Getpid()`, time.Second)
+	res := run(t, "package main\nimport \"os\"\nfunc main() { os.Exit(1) }", time.Second)
 	if res.OK || res.Err == "" {
-		t.Fatalf("a program reaching for os should be refused: %+v", res)
+		t.Fatalf("a program importing os should be refused: %+v", res)
+	}
+	if !strings.Contains(res.Err, "os") {
+		t.Fatalf("the refusal should name the denied import: %+v", res)
 	}
 }

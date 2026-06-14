@@ -93,7 +93,13 @@ func (Interp) Run(ctx context.Context, source string) Result {
 // function value renders to nothing and the program's printed output carries
 // the meaning instead.
 func render(v reflect.Value) string {
-	if !v.IsValid() || !v.CanInterface() || v.Kind() == reflect.Func {
+	if !v.IsValid() || !v.CanInterface() {
+		return ""
+	}
+	switch v.Kind() {
+	case reflect.Func, reflect.Ptr, reflect.UnsafePointer, reflect.Chan:
+		// A program of these kinds has no result to ground: a full program
+		// evaluates to its main function, an address is not a percept.
 		return ""
 	}
 	return fmt.Sprintf("%v", v.Interface())
