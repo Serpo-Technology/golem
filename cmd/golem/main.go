@@ -202,6 +202,22 @@ func main() {
 			tellSession(home)
 		}
 
+	case "name":
+		rest := args[1:]
+		lang := ""
+		if len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
+		}
+		if len(rest) < 2 {
+			fail(fmt.Errorf("usage: golem name [--lang <tag>] <word> <concept phrase>"))
+		}
+		resp := call(home, wire.Request{Cmd: "name", Content: rest[0], Query: strings.Join(rest[1:], " "), Lang: lang})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
 	case "recall":
 		resp := call(home, wire.Request{Cmd: "recall", Query: strings.Join(args[1:], " ")})
 		if len(resp.Fragments) == 0 {

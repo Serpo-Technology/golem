@@ -1442,6 +1442,35 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return resp, false, false
 
+	case "name":
+		// Deliberate naming: assert that a word names a grounded concept,
+		// directly, where cross-situational naming would have to infer the
+		// pointer from lived company and the attention path can land it on a
+		// warm neighbour. The concept must already be grounded; this only adds
+		// the label, the language-as-pointer move made in one operation.
+		if req.Content == "" || req.Query == "" {
+			return wire.Response{Error: "name needs a word and a concept"}, false, false
+		}
+		c := d.resolveConcept(req.Query)
+		if c == nil {
+			return wire.Response{Error: fmt.Sprintf("no concept matches %q to name", req.Query)}, false, false
+		}
+		lang := req.Lang
+		if lang == "" {
+			lang = "en"
+		}
+		w, _, err := d.store.WordNode(req.Content, lang, d.chem.Snapshot(), time.Now())
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, deliberateName); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		if err := d.store.Audit(time.Now().Unix(), "name", req.Content, c.Content); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("%q now names %s.", req.Content, c.Content)}, false, false
+
 	case "recall":
 		var seeds []*memory.Fragment
 		var mediators []*wire.FragmentInfo

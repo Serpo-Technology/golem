@@ -40,6 +40,11 @@ const (
 	namesDopamineGain = 0.75
 	namesMaxWeight    = 0.95
 	namesWriteFloor   = 0.1
+	// deliberateName is the weight of a name asserted outright through the name
+	// command, firm but below the lived ceiling so usage can still move it. It
+	// is the pointer made directly, where cross-situational naming would have
+	// to infer it from company.
+	deliberateName = 0.9
 	// A name well below the concept's firmest is a weak pointer, spoken
 	// tentatively. The gap reads the reliability spread, so it tracks
 	// how much less faithfully a word kept the concept's company, not
