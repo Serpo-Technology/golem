@@ -78,3 +78,25 @@ func TestWhatAboutAnswersTopic(t *testing.T) {
 		t.Fatalf("what about X should answer about X: %q", got)
 	}
 }
+
+// A topic is followed across turns as the sustained warm subject, and when a
+// new subject takes the field the change is noticed: the dog held while the
+// talk stays on it, the cat displacing it when the talk turns.
+func TestTopicFollowedAndChangeNoticed(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+
+	say(t, d, "what is a dog")
+	if d.topic != dog.ID {
+		t.Fatalf("the dog should be the topic: got %d want %d", d.topic, dog.ID)
+	}
+	say(t, d, "what is it")
+	if d.topic != dog.ID {
+		t.Fatalf("the topic should persist across a turn that stays on it: %d", d.topic)
+	}
+	say(t, d, "what is a cat")
+	if d.topic != cat.ID {
+		t.Fatalf("the topic should change to the cat when the talk turns: %d", d.topic)
+	}
+}

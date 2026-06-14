@@ -135,6 +135,11 @@ type Daemon struct {
 	// settled by checkGoal.
 	goal *goalState
 
+	// topic is the subject of the exchange, the dominant warm concept
+	// followed across turns; when a new one takes the field the change is
+	// noticed. Held on the daemon because a conversation outlives one turn.
+	topic uint64
+
 	// voice carries utterances to the text-to-speech effector, opened on
 	// first use when the voice is on. voiceOn and voiceName start from
 	// config and follow golem voice at runtime, owned by the brain loop
@@ -1145,6 +1150,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// cached copy; the working set rebuilds from what the morning uses.
 	d.hot.Clear()
 	d.ws.clear()
+	d.topic = 0
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
@@ -1384,6 +1390,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		d.speak(resp.Say)
 		// The exchange may have named what a held goal was hunting.
 		d.checkGoal()
+		// The turn leaves a subject behind: follow it, and notice when a new
+		// one has taken the field.
+		d.trackTopic()
 		// What do these words point at? The new fragment just bound to the
 		// recent past, so a spread from it is GOLEM's side of the exchange.
 		if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {

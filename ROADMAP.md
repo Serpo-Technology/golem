@@ -1847,7 +1847,7 @@ field needs to carry a little more of it.
       grounds, "and then" to its successor, "what about X" shifting the warm
       referent, so connectives run on the primitive already built and not a
       parser of dialogue acts.
-- [ ] A topic persists as the sustained warm region the inner loop already
+- [x] A topic persists as the sustained warm region the inner loop already
       biases toward, so a subject can be followed across turns and its change
       noticed.
 
@@ -1888,8 +1888,27 @@ make deploy walks back to make test; with nothing preceding, it admits that gap
 in those terms rather than a generic shrug. "And then" walks the other way, to
 the successor. "What about X" shifts the conversation onto X and answers about
 it. All three run on the succession walk already built, with no parser of
-dialogue acts. What remains is following a topic across turns and noticing when
-it changes.
+dialogue acts.
+
+A topic is followed across turns and its change noticed. The dominant warm
+concept is held on the daemon as the subject of the exchange, sustained on the
+decaying field the inner loop already biases toward, so a subject stays current
+across turns until something displaces it; when a new concept takes the field
+the change is recorded on the trail. The dog held while the talk stays on it,
+the cat displacing it when the talk turns. No discourse representation was
+added: the workspace is the discourse model, read a little more richly, and the
+topic is cleared with working memory at sleep, a stale subject being worse than
+none.
+
+Step 33 stands built. The workspace carries a decaying set of recent referents
+with the roles they played; a pronoun binds over that set by best fit, "it"
+finding the inanimate and "she" the animate; a follow-up reads as a walk over
+the warm proposition, "why" to the antecedent, "and then" to the successor,
+"what about X" shifting the subject; and a topic is followed across turns and
+its change noticed. None of it reads from a discourse script, and nothing
+language-specific was added, only the field and the walk read more richly. What
+stays open is gender past animacy, there being no grounded signal for it, and
+the depth of "why" past the learned antecedent, GOLEM modeling no cause.
 
 ## Step 34: The goal loop, one determination each moment
 
@@ -2234,6 +2253,17 @@ memory from a lived one when the mark is used.
   handler does not warm the workspace at all; a category is seated reliably only
   by speech (warmConcepts excites the named concept to the ceiling). A direct
   excite-by-id verb would make the seating dependable from any path.
+- Discourse is the warm field read by animacy and antecedent. The workspace is
+  the discourse model now: a pronoun binds to the recent referent that fits its
+  animacy, a topic is followed across turns and its change noticed, and a
+  follow-up walks the warm proposition (Step 33). The animacy a referent carries
+  is read from the role it last played, an agent leaning animate, a usage proxy
+  rather than a known feature, and gender past animacy ("she" against "he") is
+  not distinguished, there being no grounded signal for it. "Why" walks to the
+  learned antecedent of the warm proposition, GOLEM's grounded answer where it
+  models no cause, so it gives a correlational predecessor or admits the gap, not
+  an explanation. The set of moves is small (why, and-then, what-about); a wider
+  range of connectives is more of the same walk, lived or told.
 
 ## Open questions
 

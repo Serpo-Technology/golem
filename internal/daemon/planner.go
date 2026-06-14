@@ -391,6 +391,22 @@ func (d *Daemon) warmSpoken(template string) {
 	}
 }
 
+// trackTopic follows the subject of the exchange across turns: the dominant
+// warm concept is the topic, sustained on the decaying field the inner loop
+// already biases toward, so a subject stays current until something displaces
+// it. When a new concept takes the field the change is noticed, recorded on the
+// trail, so the shift can be seen rather than passing silently.
+func (d *Daemon) trackTopic() {
+	c := d.warmConcept(0)
+	if c == nil {
+		return
+	}
+	if d.topic != 0 && d.topic != c.ID {
+		d.event(events.Event{Ev: "topic", From: d.topic, To: c.ID})
+	}
+	d.topic = c.ID
+}
+
 // conceptDecision weighs the commands grounding a verb concept, the way
 // decide weighs the commands linked to a cue. It lets a resolved concept
 // propose without any cue text having been taught.
