@@ -2,10 +2,12 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"golem/internal/code"
 	"golem/internal/events"
 	"golem/internal/selfbuild"
 )
@@ -63,6 +65,33 @@ func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVe
 	}
 	d.auditSelfmod(ch, "staged", "candidate awaiting operator deploy: "+v.reason)
 	return res
+}
+
+// proposeRetune is a self-change born of reading the source: GOLEM reads a
+// tuning constant out of its own source, sees what it is now, and proposes a new
+// value for it. The edit is an AST-located splice of that one declaration, so
+// the change comes from understanding what is there rather than a transform
+// handed in, and it runs the same pipeline and fitness gate as any self-change.
+// A constant that is not there is declined at the reading, before any build.
+func (d *Daemon) proposeRetune(file, name, newValue, why string, fitness func() fitnessVerdict) selfbuild.Result {
+	if !d.cfg.RuntimeEnabled || d.cfg.SourcePath == "" {
+		return selfbuild.Result{Stage: "gate",
+			Err: "self-modification is closed; set runtime_enabled and source_path inside the sandbox"}
+	}
+	src, err := os.ReadFile(filepath.Join(d.cfg.SourcePath, file))
+	if err != nil {
+		return selfbuild.Result{Stage: "read", Err: err.Error()}
+	}
+	old, err := code.ConstValue(string(src), name)
+	if err != nil {
+		return selfbuild.Result{Stage: "read", Err: err.Error()}
+	}
+	ch := selfbuild.Change{
+		File:  file,
+		Why:   fmt.Sprintf("%s: retune %s from %s to %s", why, name, old, newValue),
+		Apply: func(s string) (string, error) { return code.SetConst(s, name, newValue) },
+	}
+	return d.proposeSelfChange(ch, fitness)
 }
 
 // auditSelfmod records one stage of a self-change on the trail, so the system's

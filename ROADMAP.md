@@ -2155,7 +2155,7 @@ build-and-deploy pipeline already used by hand, propose, compile, test, judge by
 fitness, swap, with backups behind it, so a bad change is caught or reverted and
 never bricks the live mind.
 
-- [ ] GOLEM can read and reason about its own source as grounded code, so a
+- [x] GOLEM can read and reason about its own source as grounded code, so a
       proposed change comes from understanding, not guesswork.
 - [x] A self-change runs the full pipeline, compile, test, fitness gate, then
       swap, and never hot-patches the running engine.
@@ -2179,26 +2179,31 @@ outcome, the change survives the pipeline and the fitness gate and swaps in, a
 regressing change is caught and reverted, and the whole event reads back off the
 trail.
 
-Status: the pipeline and the gate are built; the grounded reasoning a change
-should be proposed from arrives with the next step, so a change is run through
-the pipeline rather than yet originated by understanding. A proposed change to
-GOLEM's own source runs the build-and-deploy pipeline on an isolated copy: it
-copies the tree, applies the change there, compiles the main package to a
-candidate binary off to the side, and runs the tests, never editing the original
-or hot-patching the running engine. A clean candidate is judged by the grounded
-fitness; a change that does not improve is reverted by discarding the candidate,
-and one that fails to compile or test is rejected at the stage it died at, the
-prior standing. The pipeline stops at a vetted candidate staged under home; the
-live swap is the operator's, behind say-so, never automatic, the discipline that
-keeps a bad change from bricking the live mind. Every stage is on the trail, what
-changed and why and which outcome it earned. The capability is twice-gated: the
-runtime open and a source path set, two opt-ins. The pipeline is verified on
-representative isolated modules rather than re-run on the whole tree: because the
-gate runs the full suite on the copy, a test that itself self-builds the live
-tree recurses, which is exactly why the self-build tests work on isolated modules
-and the live repo and binary are never touched. What stays open is the grounded
-proposal of changes (the next step), the real deploy-and-measure of a candidate's
-fitness rather than a supplied verdict, and the automated swap, which stays the
+Status: built. The pipeline, the gate, and the reading a change is proposed from
+are all in place. GOLEM reads its own source through the language's own parser
+into its declarations, what each one is and shows, locates a tuning constant,
+sees the value it holds now, and proposes a new one; the edit is a splice of that
+one declaration located in the parsed tree, so the change comes from
+understanding what is there and is declined when the declaration is not. A
+proposed change to GOLEM's own source then runs the build-and-deploy pipeline on
+an isolated copy: it copies the tree, applies the change there, compiles the main
+package to a candidate binary off to the side, and runs the tests, never editing
+the original or hot-patching the running engine. A clean candidate is judged by
+the grounded fitness; a change that does not improve is reverted by discarding
+the candidate, and one that fails to compile or test is rejected at the stage it
+died at, the prior standing. The pipeline stops at a vetted candidate staged
+under home; the live swap is the operator's, behind say-so, never automatic, the
+discipline that keeps a bad change from bricking the live mind. Every stage is on
+the trail, what changed and why and which outcome it earned. The capability is
+twice-gated: the runtime open and a source path set, two opt-ins. The pipeline is
+verified on representative isolated modules rather than re-run on the whole tree:
+because the gate runs the full suite on the copy, a test that itself self-builds
+the live tree recurses, which is exactly why the self-build tests work on
+isolated modules and the live repo and binary are never touched. What stays open
+is the breadth of change a proposal can express: retuning a constant is the first
+kind GOLEM originates from reading, and richer edits over more of the syntax tree
+grow from there, alongside the real deploy-and-measure of a candidate's fitness
+in place of a supplied verdict, and the automated swap, which stays the
 operator's by design.
 
 ## Step 39: The memory editor, a grounded console
