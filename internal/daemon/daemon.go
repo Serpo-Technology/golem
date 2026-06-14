@@ -140,6 +140,12 @@ type Daemon struct {
 	// noticed. Held on the daemon because a conversation outlives one turn.
 	topic uint64
 
+	// lastMode is the determination the loop last carried out (consolidate,
+	// pursue, idle), the inertia a held goal leans on and the transition the
+	// trail records. lastPursuit paces the active mulling of a goal's topic.
+	lastMode    string
+	lastPursuit time.Time
+
 	// voice carries utterances to the text-to-speech effector, opened on
 	// first use when the voice is on. voiceOn and voiceName start from
 	// config and follow golem voice at runtime, owned by the brain loop
@@ -480,19 +486,17 @@ func (d *Daemon) Run() error {
 			d.absorbThought(cand)
 
 		case <-homeostasis.C:
+			now := time.Now()
 			d.chem.Decay()
 			d.ws.decay()
-			d.flushStorms(time.Now())
+			d.flushStorms(now)
 			if time.Since(d.lastSurprise) > d.cfg.CalmBeforeSleep() {
 				d.chem.BuildSleepPressure()
 			}
-			if d.readyToSleep() {
-				d.sleepCycle()
-			} else if d.thinking == 0 && d.mindWandering() {
-				// One think round at a time: replay run awake, bounded
-				// so the inner life never crowds sensing.
-				d.startThinkRound()
-			}
+			// One determination each moment, ranked by chemistry with idle
+			// the floor: pursue a goal, consolidate, or rest and wander. One
+			// think round at a time keeps the inner life from crowding sensing.
+			d.carryOut(d.determine(now), now)
 
 		case <-sigc:
 			fmt.Fprintln(d.out, "signal received; sleeping once, then shutting down.")

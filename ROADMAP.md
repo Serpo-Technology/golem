@@ -1924,16 +1924,16 @@ consolidating, and idling. Without it, no goal reads as a frozen state rather
 than a choice. The brain runs action selection continuously and falls to the
 default-mode network when nothing presses; idling is an output, not a gap.
 
-- [ ] Each tick determines an action over the candidates, the active goal, a
+- [x] Each tick determines an action over the candidates, the active goal, a
       pending request, consolidation pressure, and idle, ranked by chemistry,
       with idle as the floor so there is always an answer.
-- [ ] An adopted goal carries inertia, persisting against distraction until
+- [x] An adopted goal carries inertia, persisting against distraction until
       satisfied or abandoned, so the loop pursues rather than re-deciding from
       scratch every tick.
-- [ ] A salient trigger preempts, a user request above all, so the loop
+- [x] A salient trigger preempts, a user request above all, so the loop
       interrupts idle or wandering when the world demands it, noradrenaline the
       currency of urgency.
-- [ ] Idling is a first-class outcome, the default-mode wander already built,
+- [x] Idling is a first-class outcome, the default-mode wander already built,
       reached when nothing outranks it rather than as a missing case.
 
 Framing: this is the basal ganglia's job made explicit, continuous selection
@@ -1949,6 +1949,24 @@ Done when: with no task GOLEM rests and wanders rather than stalling, an adopted
 goal survives a passing distraction, a user request interrupts within a tick, and
 the transition among pursue, answer, consolidate, and rest reads off one
 arbitration with no special case for emptiness.
+
+Status: built. The top of the loop is one determination now. Each quiet tick
+ranks the autonomous candidates, consolidation under sleep pressure, a held goal
+at its urge, and idle, by chemistry and carries out the strongest, with idle the
+floor so the absence of a task is a determination to rest rather than a stall;
+the old if-ready-sleep-else-if-wandering branch and its implicit empty case are
+gone. A held goal carries inertia, lifted in the ranking when it is already the
+pursuit so a passing distraction does not unseat it, and it is actively mulled
+between wanders, a paced recall keeping its topic warm for naming and the night
+to ground. A user request is not polled in this ranking; it preempts as its own
+arrival on the loop, the select serving it the moment it lands while the inner
+life runs concurrently, so answering one never drops the held goal. Idle is the
+default-mode wander reached when nothing outranks it, resting when there is no
+warm seed to follow. The arbitration is the basal ganglia's continuous
+selection with a resting default, and a new kind of candidate needs only a way
+to enter the ranking, no new branch. What stays open is richer worth on the
+candidates than the current urges, and active pursuit that does more than recall
+the topic.
 
 ## Step 35: A runtime for the code GOLEM writes
 
