@@ -60,3 +60,57 @@ func TestComprehendUnknownFails(t *testing.T) {
 		t.Fatal("an unknown operation word should not comprehend")
 	}
 }
+
+// The code surface is real Go, read by the language's own parser, so a nested,
+// parenthesized expression comprehends to the computation its grouping means.
+func TestComprehendRealGoExpression(t *testing.T) {
+	e := testEngine()
+	c, ok := e.Comprehend("6 * (7 + 1)")
+	if !ok || c.Op != "multiply" {
+		t.Fatalf("the outer operation should be multiply: %+v ok %v", c, ok)
+	}
+	if c.Args[0].Lit != "6" || c.Args[1].Op != "add" {
+		t.Fatalf("the second operand should be the sum (7 + 1): %+v", c)
+	}
+	if c.Args[1].Args[0].Lit != "7" || c.Args[1].Args[1].Lit != "1" {
+		t.Fatalf("the inner sum should be over 7 and 1: %+v", c.Args[1])
+	}
+}
+
+// Go's own precedence shapes the tree: in "6 + 7 * 1" the product binds first,
+// so the outer operation is the sum over 6 and the product.
+func TestComprehendRespectsPrecedence(t *testing.T) {
+	e := testEngine()
+	c, ok := e.Comprehend("6 + 7 * 1")
+	if !ok || c.Op != "add" || c.Args[1].Op != "multiply" {
+		t.Fatalf("precedence should make this add(6, multiply(7, 1)): %+v ok %v", c, ok)
+	}
+}
+
+// A signed literal reads as one value, so a negative operand comprehends.
+func TestComprehendSignedLiteral(t *testing.T) {
+	e := testEngine()
+	c, ok := e.Comprehend("6 * -3")
+	if !ok || c.Op != "multiply" || c.Args[1].Lit != "-3" {
+		t.Fatalf("a signed literal should read as one value: %+v ok %v", c, ok)
+	}
+}
+
+// A nested computation generates source that carries its grouping in
+// parentheses and comprehends back to the same tree, the round trip closing for
+// a compound expression as it does for a flat one.
+func TestNestedCodeRoundTrip(t *testing.T) {
+	e := testEngine()
+	c := Computation{Op: "multiply", Args: []Computation{
+		{Lit: "6"},
+		{Op: "add", Args: []Computation{{Lit: "7"}, {Lit: "1"}}},
+	}}
+	src, ok := e.ToCode(c)
+	if !ok || src != "6 * (7 + 1)" {
+		t.Fatalf("the nested computation should parenthesize the compound operand: %q ok %v", src, ok)
+	}
+	back, ok := e.Comprehend(src)
+	if !ok || back.Op != "multiply" || back.Args[1].Op != "add" {
+		t.Fatalf("the source should comprehend back to the same tree: %+v", back)
+	}
+}
