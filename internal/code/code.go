@@ -21,6 +21,7 @@ package code
 import (
 	"go/ast"
 	"go/parser"
+	"sort"
 	"strings"
 )
 
@@ -61,6 +62,18 @@ func NewEngine(ops []Op) *Engine {
 		e.byName[o.Name] = o
 	}
 	return e
+}
+
+// Ops lists the operations the engine carries, sorted by name, so a caller can
+// enumerate the constructions the way induction by example does to find which
+// one a set of examples means.
+func (e *Engine) Ops() []Op {
+	out := make([]Op, 0, len(e.byName))
+	for _, o := range e.byName {
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // Comprehend reads a surface into its computation, the form pole run to the

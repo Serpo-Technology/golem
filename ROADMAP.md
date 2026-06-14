@@ -2052,7 +2052,7 @@ teaching surface, source is the executable form, and the run is the percept.
 - [x] Code grounds in execution, a construction's meaning tied to the effect of
       running it, so understanding a program is knowing what it does, not just
       its shape.
-- [ ] Literal-language and pseudocode teaching reach the same grounded meaning,
+- [x] Literal-language and pseudocode teaching reach the same grounded meaning,
       so a loop or a function can be taught in words, in pseudocode, or by
       example, and converge.
 
@@ -2075,19 +2075,23 @@ starter memory as construction nodes beside the rest of the grammar, each
 operation a form-meaning pair with two surfaces: the operator symbol that runs it
 and the word it is taught by. The nodes carry weight in the same store the
 grammar competition reads, so a learned operation stands or falls by the force
-the rest of the inventory does. One engine runs the language both ways:
-comprehending a surface yields the computation, so the literal "the sum of 6 and
-7" and the code "6 + 7" both land on the one tree add(6, 7), and generating from
-a computation yields either surface back, so GOLEM reads and writes the language
-from a single inventory. The computation grounds in execution: GOLEM comprehends
+the rest of the inventory does. One engine runs the language both ways. The code
+surface is real Go: an expression is read by the language's own parser, the
+innate syntax floor of this faculty the way the grammar engine is the floor for
+natural language, so a nested, parenthesized expression of any depth comprehends,
+Go's precedence shapes the tree, and generating back carries the same grouping.
+Three teaching surfaces reach one grounded meaning and converge: the words "the
+sum of 6 and 7", the code "6 + 7", and a set of examples, (6, 7) to 13 and (2, 3)
+to 5, the examples resolved by running each candidate operation and keeping the
+one whose effect matches. The computation grounds in execution: GOLEM comprehends
 a stated computation, generates the source, runs it in the Step 35 runtime, and
-grounds the result by feeding it back through perception, so what a construction
-means is the 13 it produces when it runs. The first language is arithmetic, the
-floor the fluid path grows from. What stays open is the breadth: richer
-constructs such as loops and functions, a teaching surface that induces a
-construction from worked examples, and comprehending arbitrary Go source. That
-last reach is what would let Step 38 propose a change by reading its own code;
-today a change is a transform it is handed.
+grounds the result, so what a construction means is the 13 it produces when it
+runs. Beyond a single expression, the engine reads a whole file into its
+declarations, which is what lets GOLEM reason about its own source and propose a
+change from a declaration it located. The first language is arithmetic, the floor
+the fluid path grows from. What stays open is the meaning pole past expressions:
+statements, loops, and functions, and comprehending the body of an arbitrary Go
+function into a computation, are the long arc over the one engine.
 
 ## Step 37: A grounded fitness for self-change
 
