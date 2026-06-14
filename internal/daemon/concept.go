@@ -144,6 +144,13 @@ func (d *Daemon) growAbstractions() (born int) {
 		// refreshing while its core stands, however the drift around it
 		// moves.
 		healthy := w.Count >= absMinSituations && len(core) >= absRefreshFloor && maxShare < absConcentration
+		// A word that already names a relation is a verb: its lived company is
+		// the relation's arguments, not a constellation, so abstracting it into
+		// a noun would only mint a shadow that shrouds the relation in the
+		// naming vote. Skip it, and any earlier shadow stops refreshing and decays.
+		if d.resolveRelation(w.Content) != nil {
+			continue
+		}
 		switch {
 		case c == nil:
 			if !healthy || born >= absPerNight {

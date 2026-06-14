@@ -193,6 +193,50 @@ func (d *Daemon) sayProposition(lang, rel string, roles map[string]string, past 
 	})
 }
 
+// resolveRelation finds the relation a word names, preferring it over any
+// other concept the word also points at. A verb's form can come to name a
+// spurious noun the constellation pass distilled from its arguments' company,
+// and the naming vote would return that noun; a role question needs the
+// relation, so it asks for that kind directly.
+func (d *Daemon) resolveRelation(phrase string) *memory.Fragment {
+	tokens, _ := grammar.Tokenize(phrase)
+	words, err := d.store.WordNodesByForms(tokens)
+	if err != nil || len(words) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	names, err := d.store.LinksFromRel(ids, memory.RelNames)
+	if err != nil || len(names) == 0 {
+		return nil
+	}
+	targets := make([]uint64, 0, len(names))
+	weight := make(map[uint64]float64, len(names))
+	for _, e := range names {
+		if weight[e.To] == 0 {
+			targets = append(targets, e.To)
+		}
+		weight[e.To] += e.Weight
+	}
+	frags, err := d.store.FragmentsByIDs(targets)
+	if err != nil {
+		return nil
+	}
+	var best *memory.Fragment
+	bestW := 0.0
+	for _, f := range frags {
+		if f.Category != "relation" {
+			continue
+		}
+		if best == nil || weight[f.ID] > bestW {
+			best, bestW = f, weight[f.ID]
+		}
+	}
+	return best
+}
+
 // analyzeRoleQuestion reads a relational role question into the relation it
 // asks about, the argument it gives, and which role that argument fills. The
 // verb is the content word whose lemma names a grounded relation; the other
@@ -211,7 +255,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 	}
 	verbIdx := -1
 	for i, t := range content {
-		if c := d.resolveConcept(d.gram.Lemma(lang, t)); c != nil && c.Category == "relation" {
+		if c := d.resolveRelation(d.gram.Lemma(lang, t)); c != nil {
 			verbIdx, rel, verb = i, c, t
 			break
 		}
