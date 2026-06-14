@@ -2117,20 +2117,30 @@ memory from a lived one when the mark is used.
   naming one file differently can slip past it, and two unrelated commands
   sharing an argument word serialize when they could overlap; the
   conservative direction is the safe one, but it is a heuristic.
-- Relational abstraction has no mechanism. GOLEM can form a concept from a
-  recurring constellation of concepts (Step 16), but it cannot yet reify a
-  relation itself: "capital of" or "causes", the shared structure across
-  Paris-France and Tokyo-Japan, needs the analogy and structure-mapping the
-  graph does not do. Step 31 plans the reification, the relation as a
-  slot-bearing concept a proposition binds into, leaving cross-instance
-  structure-mapping the deeper reach.
-- Language comprehension is answer-shaped. The realizer and parser cover the
-  sentence shapes GOLEM speaks and the questions it answers; open
-  comprehension is beyond them. Receiving a stated abstraction, following a
-  definition, or parsing arbitrary prose is well past today's grammar, and
-  it is the larger half of the abstraction work. Step 32 plans the
-  comprehension engine that runs the constructions backward and writes meaning
-  into the graph.
+- Relational abstraction reifies but does not structure-map. A relation is now
+  a first-class concept that grounds in the moments instantiating it (Step 31),
+  minted and named from comprehension when a proposition is told (Step 32), so
+  "chase" or a stated relation is a node a proposition binds into and the walk
+  crosses. What is still missing is the analogy across instances: seeing
+  Paris-France and Tokyo-Japan, or two separate chasings, as the same shape, the
+  structure-mapping the graph does not do. Reifying and grounding the relation is
+  the floor; generalizing one relation across its instances by structure is the
+  deeper reach left open.
+- Comprehension reads canonical argument-structure clauses; open prose is beyond
+  it. The construction engine runs the constructions backward now: a told
+  transitive or intransitive clause parses into a proposition over a relation and
+  its roles and is written into the graph (Step 32). It goes further than before,
+  though a ceiling remains.
+  Comprehension covers the seeded argument structures, a subject and a verb and
+  an object, with short noun phrases segmented by their determiners; richer noun
+  phrases, argument structures beyond agent and patient (ditransitives, obliques,
+  modifiers), and arbitrary prose still fall through to a partial meaning. Two
+  supporting parts are best-effort: the role binding favors an animate agent by a
+  fit learned from prior usage, so it is empty on the first tellings and word
+  order alone binds them, and the lemmatizer that keys a relation across its
+  inflections is regular-only, so an irregular verb keys on its surface form.
+  Receiving a stated abstraction or following a multi-clause definition is past
+  today's grammar.
 - Untrusted perception is a standing hazard for agency. Web and other
   open-world channels carry adversarial content. The gates and denylist stop
   it from triggering execution, but the hygiene that keeps it from polluting
@@ -2144,27 +2154,44 @@ memory from a lived one when the mark is used.
   resemblance still bottoms out in what was lived near: a true synonym that
   never kept the same company nor shared a surface attribute still needs a
   naming bond or a lived bridge. Breadth has to be lived or told, and the
-  answer-shaped comprehension ceiling stands above the representation either
-  way.
-- Language generation is construction-based but thinly seeded. The sentence
-  patterns now live in memory as constructions the engine fills and composes
-  (Steps 21 and 22), so a form can be taught, varied, and nested, but only a
-  handful of intents are seeded and learning new constructions from heard
-  usage is barely exercised. A taught construction can also be ungrammatical
-  until it carries its own punctuation and well-formed slots; the innate
-  slot-filling engine keeps spacing and capitalization right but does not
-  repair a malformed template. Breadth of expression, like breadth of
-  meaning, still has to be lived or told. Step 32 plans the usage-based
-  induction that grows the inventory from what is heard.
-- The realization engine has a general core, but the answers do not run on
-  it yet. Step 24 added a unification engine over a declarative grammar in
-  memory, with agreement and word order as editable nodes and composition to
-  depth, and it runs a hand-seeded grammar as a demonstrated milestone. But
-  the sentences GOLEM actually speaks still go through the procedural English
-  realizer and the constructions above it. Wiring the planner's answers onto
-  the general engine, and inducing the declarative grammar from usage rather
-  than seeding it, remain. Step 32 retires the procedural dispatch, generating
-  an answer from a meaning structure run through the one engine.
+  comprehension ceiling stands above the representation either way.
+- Construction induction is item-based bootstrap. The sentence patterns live in
+  memory as constructions the engine fills, composes, and now induces: a relation
+  told in enough propositions with varied role-fillers grows its
+  argument-structure construction during consolidation, on one footing with the
+  seed and competing by weight (Step 32). But the induction re-derives one
+  relation's argument structure from its own tellings; it does not yet generalize
+  across relations into a single abstract construction, nor induce a structure
+  the seed lacks, since comprehension only surfaces the transitive and
+  intransitive meanings to learn from. A taught construction can still be
+  ungrammatical until it carries its own punctuation and well-formed slots; the
+  engine keeps spacing and capitalization right but does not repair a malformed
+  template. Breadth of expression still has to be lived, told, or induced from
+  heard usage, slowly.
+- The bidirectional engine speaks the relational answers; the older answers
+  still go through the procedural realizer. A question about a relation's role is
+  answered now by building a meaning structure and generating it through the
+  construction engine the comprehension reads backward (Step 32), so that answer
+  comes from meaning rather than a fixed menu. The other answer types
+  (definitions, succession, counts) still build a frame or a layered message
+  handed to the procedural realizer or the construction composer, which are
+  meaning-to-engine paths but not the bidirectional one, and routing them across
+  would regress the taught-construction and copula handling they rely on. The
+  generation side also carries English morphology, so a relation comprehended in
+  Turkish is written into the graph but its relational answer is not yet
+  generated with Turkish inflection; the seeded Turkish realizer covers the older
+  answer types it speaks.
+- One parser reads every language, with small morphology left on the floor. The
+  English and Turkish parsers are a single procedure now that reads the language
+  from the seeded closed class, takes the word order from the order parameter,
+  and derives a relator's side and the role order from it, with an
+  interrogative's type and a relator's direction carried in the seed, so a third
+  verb-final language parses from its bootstrap alone (Step 32). What stays in
+  code rather than data is small and per-language: the case-suffix stripping a
+  verb-final language needs, a couple of lexical specials (the do-auxiliary, the
+  copula's past), and English as the default tongue when no marker is detected.
+  These are the language's morphology and a default on the floor; the second
+  parse function is gone, and folding the residue into the seed is a later tidy.
 - Salience weights by information, but the measure is coarse. Step 26 changed
   persistence, the relevance drive, and the walk from raw count to
   information: grounding diversity, a boost for a deliberately taught name,
