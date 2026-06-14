@@ -136,6 +136,12 @@ type Daemon struct {
 	// settled by checkGoal.
 	goal *goalState
 
+	// goalsSatisfied and goalsAbandoned tally how goals resolve, the goal
+	// loop's contribution to the grounded fitness: the share satisfied is one
+	// outcome a self-change is judged against.
+	goalsSatisfied int
+	goalsAbandoned int
+
 	// topic is the subject of the exchange, the dominant warm concept
 	// followed across turns; when a new one takes the field the change is
 	// noticed. Held on the daemon because a conversation outlives one turn.

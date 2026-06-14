@@ -186,6 +186,7 @@ func (d *Daemon) checkGoal() {
 			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 		}
 		d.chem.SpikeDopamine(goalReward)
+		d.goalsSatisfied++
 		d.goal = nil
 		return
 	}
@@ -213,6 +214,7 @@ func (d *Daemon) abandonGoal(why string) {
 	if err := d.store.Audit(time.Now().Unix(), "goal", d.goal.topic, "abandoned: "+why); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 	}
+	d.goalsAbandoned++
 	d.goal = nil
 }
 

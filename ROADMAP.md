@@ -2085,14 +2085,14 @@ currency is gameable: approval alone breeds flattery, surprise-reduction alone
 seeks boredom. This is operant learning lifted from the operation layer, where a
 fruitful thought already wears its operation's weight, up to architecture.
 
-- [ ] A change is evaluated against grounded outcomes after it lands, goal
+- [x] A change is evaluated against grounded outcomes after it lands, goal
       progress, world prediction, and trust blended, so improvement is measured,
       not assumed.
-- [ ] The currency is multi-factor and anchored in real outcomes, so no single
+- [x] The currency is multi-factor and anchored in real outcomes, so no single
       signal can be gamed into a degenerate optimum.
-- [ ] A change that fails to improve is reverted, the same reinforce-or-wear loop
+- [x] A change that fails to improve is reverted, the same reinforce-or-wear loop
       the operation weights already run, now over larger units.
-- [ ] The reason a change survived is legible, which outcome it improved, so
+- [x] The reason a change survived is legible, which outcome it improved, so
       self-improvement is auditable in the glass box rather than opaque.
 
 Framing: this is reinforcement learning's selection pressure, grounded and
@@ -2107,6 +2107,21 @@ standard GOLEM holds itself to sharpens as it lives rather than being fixed.
 Done when: a beneficial self-change is kept and a harmful one reverted on
 grounded evidence, the decision traces to the outcome it moved, and no
 single-signal exploit survives the blend.
+
+Status: built. A change is judged against a grounded snapshot taken before and
+after it lands: goal progress from the share of goals satisfied rather than
+abandoned, world prediction from the calm of low alarm, and trust from oxytocin,
+blended into one currency. A change is kept only when the blend rose past an
+epsilon and no single factor collapsed, so a degenerate optimum that buys one
+outcome by wrecking another is caught, the no-single-signal-exploit guard the
+multi-factor measure exists for. The verdict drives a keep-or-revert loop, the
+reinforce-or-wear the operation weights already run lifted to the larger unit of
+a change, with the revert supplied by the caller, the deploy pipeline of the
+next step. The reason a change survived names the outcome that moved it, so the
+decision is legible on the trail. The factors are coarse, the alarm proxy for
+prediction the roughest, and they sharpen with experience; the mechanism that
+reads and blends them is the fixed part. This couples to the goal loop, which
+generates the outcomes the fitness reads, so the two are ends of one mechanism.
 
 ## Step 38: Self-source and self-modification
 
