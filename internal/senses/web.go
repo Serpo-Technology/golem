@@ -1,6 +1,7 @@
 package senses
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -23,6 +24,10 @@ const (
 	webLinesMax  = 200     // lines per fetch; the gate and governor do the rest
 	webBodyCap   = 1 << 20 // bytes read per page
 	webFetchWait = 20 * time.Second
+	// webUserAgent identifies the reader plainly so a polite source serves its
+	// page instead of a robot-policy notice. The web sense reads named pages on a
+	// slow poll, so it names itself rather than masquerading as a browser.
+	webUserAgent = "GOLEM/0.1 (grounded learning daemon)"
 )
 
 func WebSensor(urls []string, poll time.Duration, out chan Observation, stop <-chan struct{}, dropped *atomic.Int64) {
@@ -51,13 +56,27 @@ func WebSensor(urls []string, poll time.Duration, out chan Observation, stop <-c
 }
 
 func fetchOne(client *http.Client, url string, out chan Observation, dropped *atomic.Int64) {
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		emit(out, dropped, Observation{Channel: webChannel,
+			Content: "web fetch failed: " + err.Error(), At: time.Now()})
+		return
+	}
+	req.Header.Set("User-Agent", webUserAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		emit(out, dropped, Observation{Channel: webChannel,
 			Content: "web fetch failed: " + err.Error(), At: time.Now()})
 		return
 	}
 	defer resp.Body.Close()
+	// An error response is not a page to read from: its body is a notice, not
+	// the source, so the status is recorded and the fetch ends.
+	if resp.StatusCode >= 400 {
+		emit(out, dropped, Observation{Channel: webChannel,
+			Content: fmt.Sprintf("web fetch got status %d from %s", resp.StatusCode, url), At: time.Now()})
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, webBodyCap))
 	if err != nil {
 		return
