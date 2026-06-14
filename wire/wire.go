@@ -38,6 +38,10 @@ type Request struct {
 	Mind    bool   `json:"mind,omitempty"` // teach: ground the word to a thought operation, not a command
 	Say     bool   `json:"say,omitempty"`  // teach: add a construction (Content is the intent, Command the template)
 	Arg     string `json:"arg,omitempty"`  // voice subcommand: status, on, off, use (the name rides in Content)
+	// The editor's raw surgery names a node by id and carries the new value:
+	// Content for an edit, Weight for a reweight.
+	ID     uint64  `json:"id,omitempty"`
+	Weight float64 `json:"weight,omitempty"`
 }
 
 type Response struct {
@@ -182,6 +186,7 @@ type FragmentInfo struct {
 	Category   string  `json:"category,omitempty"`
 	Activation float64 `json:"activation,omitempty"`
 	LinkCount  int     `json:"links,omitempty"`
+	Edited     bool    `json:"edited,omitempty"` // hand-touched through the editor
 }
 
 type ObserveResult struct {

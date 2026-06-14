@@ -53,6 +53,14 @@ func (h *HotTier) Put(f *Fragment) {
 	delete(h.touch, coldest)
 }
 
+// Remove drops a fragment from the working set, so a raw edit or a deletion in
+// the archive is not masked by a stale cached copy; the next recall reads it
+// fresh from cold storage.
+func (h *HotTier) Remove(id uint64) {
+	delete(h.frags, id)
+	delete(h.touch, id)
+}
+
 // Get returns a working-set fragment and counts the access as a touch.
 func (h *HotTier) Get(id uint64) (*Fragment, bool) {
 	f, ok := h.frags[id]

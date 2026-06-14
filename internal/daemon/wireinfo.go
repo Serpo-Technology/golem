@@ -17,7 +17,7 @@ func fragmentInfo(f *memory.Fragment) *wire.FragmentInfo {
 	info := &wire.FragmentInfo{
 		ID: f.ID, Channel: f.Channel, Content: f.Content, Template: f.Template,
 		Surprise: f.Surprise, Limbic: chemWire(f.Limbic), AtUnix: f.Time.Unix(), Weight: f.Weight,
-		Lang: f.Lang, Category: f.Category,
+		Lang: f.Lang, Category: f.Category, Edited: f.Edited,
 	}
 	if f.Count > 1 {
 		info.Count = f.Count

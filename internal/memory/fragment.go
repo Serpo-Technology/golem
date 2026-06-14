@@ -69,5 +69,6 @@ type Fragment struct {
 	Kind     string   // episodic, word, or concept; empty means episodic
 	Lang     string   // language tag on word nodes ("en", "tr"); empty elsewhere
 	Category string   // lemma category on concept nodes ("verb", "noun")
+	Edited   bool     // hand-touched through the editor, so a shaped memory and a lived one stay distinguishable
 	Links    []uint64 // synaptic links to other fragments (the association hook)
 }

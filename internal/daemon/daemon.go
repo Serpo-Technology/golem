@@ -1686,6 +1686,46 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return wire.Response{OK: true, Say: fmt.Sprintf("forgot %q (%d node(s) gone).", what, n)}, false, false
 
+	case "edit":
+		if req.ID == 0 {
+			return wire.Response{Error: "edit needs a fragment id"}, false, false
+		}
+		if err := d.editContent(req.ID, req.Content); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("edited #%d.", req.ID)}, false, false
+
+	case "reweight":
+		if req.ID == 0 {
+			return wire.Response{Error: "reweight needs a fragment id"}, false, false
+		}
+		if err := d.reweight(req.ID, req.Weight); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("reweighted #%d to %.2f.", req.ID, req.Weight)}, false, false
+
+	case "delete":
+		if req.ID == 0 {
+			return wire.Response{Error: "delete needs a fragment id"}, false, false
+		}
+		n, err := d.deleteNode(req.ID)
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		if n == 0 {
+			return wire.Response{Error: fmt.Sprintf("no fragment #%d to delete", req.ID)}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("deleted #%d.", req.ID)}, false, false
+
+	case "mark":
+		if req.ID == 0 {
+			return wire.Response{Error: "mark needs a fragment id"}, false, false
+		}
+		if err := d.markNode(req.ID); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("marked #%d edited.", req.ID)}, false, false
+
 	case "stop":
 		return wire.Response{OK: true}, false, true
 

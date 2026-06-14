@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS fragments (
 	count         INTEGER NOT NULL DEFAULT 1,
 	kind          TEXT    NOT NULL DEFAULT 'episodic',
 	lang          TEXT    NOT NULL DEFAULT '',
-	category      TEXT    NOT NULL DEFAULT ''
+	category      TEXT    NOT NULL DEFAULT '',
+	edited        INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS links (
 	from_id INTEGER NOT NULL,
@@ -118,6 +119,7 @@ func migrate(db *sql.DB) error {
 		{"kind", `kind TEXT NOT NULL DEFAULT 'episodic'`},
 		{"lang", `lang TEXT NOT NULL DEFAULT ''`},
 		{"category", `category TEXT NOT NULL DEFAULT ''`},
+		{"edited", `edited INTEGER NOT NULL DEFAULT 0`},
 	}
 	for _, col := range addColumns {
 		ok, err := hasColumn("fragments", col.name)
@@ -173,11 +175,11 @@ func (s *Store) Encode(f *Fragment) (uint64, error) {
 		f.Kind = KindEpisodic
 	}
 	res, err := s.db.Exec(`INSERT INTO fragments
-		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		f.Channel, f.Content, f.Template, f.Surprise,
 		f.Limbic.Dopamine, f.Limbic.Noradrenaline, f.Limbic.Serotonin,
-		f.Time.UnixNano(), f.Weight, f.Count, f.Kind, f.Lang, f.Category)
+		f.Time.UnixNano(), f.Weight, f.Count, f.Kind, f.Lang, f.Category, boolToInt(f.Edited))
 	if err != nil {
 		return 0, err
 	}
@@ -279,17 +281,19 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 }
 
 const fragmentCols = `id, channel, content, template, surprise,
-	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category`
+	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited`
 
 func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var f Fragment
 	var at int64
+	var edited int64
 	if err := rows.Scan(&f.ID, &f.Channel, &f.Content, &f.Template, &f.Surprise,
 		&f.Limbic.Dopamine, &f.Limbic.Noradrenaline, &f.Limbic.Serotonin,
-		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category); err != nil {
+		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category, &edited); err != nil {
 		return nil, err
 	}
 	f.Time = time.Unix(0, at)
+	f.Edited = edited != 0
 	return &f, nil
 }
 
@@ -322,6 +326,52 @@ func (s *Store) NodesByKind(kind string) ([]*Fragment, error) {
 func (s *Store) SetWeight(id uint64, w float64) error {
 	_, err := s.db.Exec(`UPDATE fragments SET weight = ? WHERE id = ?`, w, id)
 	return err
+}
+
+// MarkEdited records that a fragment was hand-touched through the editor, so a
+// shaped memory can be told from a lived one when the mark is used.
+func (s *Store) MarkEdited(id uint64) error {
+	_, err := s.db.Exec(`UPDATE fragments SET edited = 1 WHERE id = ?`, id)
+	return err
+}
+
+// UpdateContent splices a fragment's content and the template prediction runs
+// on, marking it edited in the same write. It is the raw scalpel the editor's
+// surgery mode uses; the caller logs every such write to the trail.
+func (s *Store) UpdateContent(id uint64, content, template string) error {
+	_, err := s.db.Exec(`UPDATE fragments SET content = ?, template = ?, edited = 1 WHERE id = ?`,
+		content, template, id)
+	return err
+}
+
+// DeleteByID removes one fragment by its id and every edge touching it,
+// reporting whether a node was there to go. It is deletion in the raw, distinct
+// from Forget's template sweep: it takes exactly the node named.
+func (s *Store) DeleteByID(id uint64) (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM links WHERE from_id = ? OR to_id = ?`, id, id); err != nil {
+		return 0, err
+	}
+	res, err := tx.Exec(`DELETE FROM fragments WHERE id = ?`, id)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // DeleteByTemplate removes every node holding a template key and the edges
