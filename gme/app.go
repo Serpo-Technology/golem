@@ -74,3 +74,52 @@ func (a *App) Dump() (*Graph, error) {
 	}
 	return &Graph{Fragments: frags, Links: links}, nil
 }
+
+// Observe files a grounded fragment through the daemon's perception pipeline, so
+// what is authored in the window is grounded exactly as a lived moment.
+func (a *App) Observe(channel, content string) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Observe(channel, content)
+}
+
+// Teach grounds a cue to a command through the daemon's teaching path.
+func (a *App) Teach(cue, command string) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Teach(cue, command)
+}
+
+// Edit splices a fragment's content by id, the daemon marking it edited.
+func (a *App) Edit(id uint64, content string) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Edit(id, content)
+}
+
+// Reweight sets a fragment's synaptic weight by id.
+func (a *App) Reweight(id uint64, weight float64) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Reweight(id, weight)
+}
+
+// Delete removes a fragment by id and the edges touching it.
+func (a *App) Delete(id uint64) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Delete(id)
+}
+
+// Mark records that a fragment was hand-touched, without otherwise changing it.
+func (a *App) Mark(id uint64) error {
+	if a.err != nil {
+		return a.err
+	}
+	return a.c.Mark(id)
+}

@@ -52,3 +52,41 @@ func (c *Client) Dump() ([]*wire.FragmentInfo, []*wire.LinkInfo, error) {
 	resp, err := c.call(wire.Request{Cmd: "dump"})
 	return resp.Fragments, resp.Links, err
 }
+
+// Observe files a grounded fragment through the daemon's perception pipeline, so
+// what the editor adds is grounded exactly as a lived moment, never a bare
+// declared symbol.
+func (c *Client) Observe(channel, content string) error {
+	_, err := c.call(wire.Request{Cmd: "observe", Channel: channel, Content: content})
+	return err
+}
+
+// Teach grounds a cue to a command through the daemon's teaching path.
+func (c *Client) Teach(cue, command string) error {
+	_, err := c.call(wire.Request{Cmd: "teach", Content: cue, Command: command})
+	return err
+}
+
+// Edit splices a fragment's content by id, the daemon marking it edited.
+func (c *Client) Edit(id uint64, content string) error {
+	_, err := c.call(wire.Request{Cmd: "edit", ID: id, Content: content})
+	return err
+}
+
+// Reweight sets a fragment's synaptic weight by id.
+func (c *Client) Reweight(id uint64, weight float64) error {
+	_, err := c.call(wire.Request{Cmd: "reweight", ID: id, Weight: weight})
+	return err
+}
+
+// Delete removes a fragment by id and the edges touching it.
+func (c *Client) Delete(id uint64) error {
+	_, err := c.call(wire.Request{Cmd: "delete", ID: id})
+	return err
+}
+
+// Mark records that a fragment was hand-touched, without otherwise changing it.
+func (c *Client) Mark(id uint64) error {
+	_, err := c.call(wire.Request{Cmd: "mark", ID: id})
+	return err
+}

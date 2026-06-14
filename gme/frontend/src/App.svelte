@@ -1,9 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Status, Search, Concepts, Audit } from '../wailsjs/go/main/App';
+  import {
+    Status,
+    Search,
+    Concepts,
+    Audit,
+    Observe,
+    Teach,
+    Edit,
+    Mark,
+    Delete,
+  } from '../wailsjs/go/main/App';
   import { wire } from '../wailsjs/go/models';
 
-  type Tab = 'search' | 'concepts' | 'audit';
+  type Tab = 'search' | 'concepts' | 'audit' | 'author';
   let tab: Tab = 'concepts';
 
   let status: wire.StatusInfo | null = null;
@@ -15,6 +25,18 @@
 
   let concepts: wire.ConceptInfo[] = [];
   let trail: wire.AuditInfo[] = [];
+
+  // Inline surgery state, one row at a time.
+  let editingId: number | null = null;
+  let editText = '';
+  let confirmDeleteId: number | null = null;
+
+  // Authoring forms.
+  let obsChannel = 'tell';
+  let obsText = '';
+  let teachCue = '';
+  let teachCmd = '';
+  let authored = '';
 
   function fail(e: any) {
     error = e && e.toString ? e.toString() : String(e);
@@ -50,6 +72,67 @@
     searched = true;
     try {
       results = await Search(query);
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  function startEdit(f: wire.FragmentInfo) {
+    editingId = f.id;
+    editText = f.content;
+    confirmDeleteId = null;
+  }
+
+  async function saveEdit(f: wire.FragmentInfo) {
+    try {
+      await Edit(f.id, editText);
+      editingId = null;
+      await runSearch();
+      await refresh();
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function doMark(f: wire.FragmentInfo) {
+    try {
+      await Mark(f.id);
+      await runSearch();
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function doDelete(f: wire.FragmentInfo) {
+    try {
+      await Delete(f.id);
+      confirmDeleteId = null;
+      await runSearch();
+      await refresh();
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function doObserve() {
+    if (!obsText) return;
+    try {
+      await Observe(obsChannel, obsText);
+      authored = `observed on ${obsChannel}.`;
+      obsText = '';
+      await refresh();
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function doTeach() {
+    if (!teachCue || !teachCmd) return;
+    try {
+      await Teach(teachCue, teachCmd);
+      authored = `grounded "${teachCue}".`;
+      teachCue = '';
+      teachCmd = '';
     } catch (e) {
       fail(e);
     }
@@ -114,6 +197,7 @@
     <button class:active={tab === 'search'} on:click={() => (tab = 'search')}>Search</button>
     <button class:active={tab === 'concepts'} on:click={() => (tab = 'concepts')}>Concepts</button>
     <button class:active={tab === 'audit'} on:click={() => (tab = 'audit')}>Audit</button>
+    <button class:active={tab === 'author'} on:click={() => (tab = 'author')}>Author</button>
   </nav>
 
   <section>
@@ -124,14 +208,28 @@
       </form>
       {#if results.length}
         <ul class="rows">
-          {#each results as f}
+          {#each results as f (f.id)}
             <li>
               <span class="id">#{f.id}</span>
               <span class="chip">{f.kind || 'episodic'}</span>
               <span class="chip ch">{f.channel}</span>
-              <span class="content">{f.content}</span>
-              {#if f.activation && f.activation < 1}
-                <span class="act">{f.activation.toFixed(2)}</span>
+              {#if editingId === f.id}
+                <input class="editbox" bind:value={editText} />
+                <button class="mini ok" on:click={() => saveEdit(f)}>save</button>
+                <button class="mini" on:click={() => (editingId = null)}>cancel</button>
+              {:else}
+                <span class="content">{f.content}</span>
+                {#if f.edited}<span class="edited">edited</span>{/if}
+                <span class="rowtools">
+                  <button class="mini" on:click={() => startEdit(f)}>edit</button>
+                  <button class="mini" on:click={() => doMark(f)}>mark</button>
+                  {#if confirmDeleteId === f.id}
+                    <button class="mini danger" on:click={() => doDelete(f)}>confirm</button>
+                    <button class="mini" on:click={() => (confirmDeleteId = null)}>no</button>
+                  {:else}
+                    <button class="mini" on:click={() => (confirmDeleteId = f.id)}>delete</button>
+                  {/if}
+                </span>
               {/if}
             </li>
           {/each}
@@ -139,7 +237,7 @@
       {:else if searched}
         <p class="empty">nothing comes to mind.</p>
       {:else}
-        <p class="empty">recall the moments a cue brings to mind.</p>
+        <p class="empty">recall the moments a cue brings to mind, then shape them in place.</p>
       {/if}
     {:else if tab === 'concepts'}
       {#if concepts.length}
@@ -176,6 +274,30 @@
       {:else}
         <p class="empty">the trail is empty.</p>
       {/if}
+    {:else if tab === 'author'}
+      <div class="author">
+        <p class="hint">
+          Authoring grounds through GOLEM's own teaching, so what you add is earned the way lived
+          experience is.
+        </p>
+        <form on:submit|preventDefault={doObserve}>
+          <label>Observe a moment</label>
+          <div class="formrow">
+            <input class="chan" placeholder="channel" bind:value={obsChannel} />
+            <input class="grow" placeholder="what happened..." bind:value={obsText} />
+            <button type="submit">observe</button>
+          </div>
+        </form>
+        <form on:submit|preventDefault={doTeach}>
+          <label>Teach a cue</label>
+          <div class="formrow">
+            <input class="chan" placeholder="cue" bind:value={teachCue} />
+            <input class="grow" placeholder="command" bind:value={teachCmd} />
+            <button type="submit">teach</button>
+          </div>
+        </form>
+        {#if authored}<p class="ok-msg">{authored}</p>{/if}
+      </div>
     {/if}
   </section>
 </main>
@@ -371,10 +493,57 @@
   .content {
     color: #d7dae0;
   }
-  .act {
+
+  .edited {
+    background: #2a2415;
+    color: #d2b85a;
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 11px;
+  }
+
+  .rowtools {
     margin-left: auto;
-    color: #6b727e;
-    font-variant-numeric: tabular-nums;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+  }
+  ul.rows li:hover .rowtools {
+    opacity: 1;
+  }
+  .mini {
+    background: #232730;
+    color: #aeb4be;
+    border: 1px solid #343a45;
+    border-radius: 5px;
+    padding: 2px 9px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .mini:hover {
+    background: #2c313b;
+  }
+  .mini.ok {
+    background: #2b6da3;
+    color: #fff;
+    border-color: #2b6da3;
+  }
+  .mini.danger {
+    background: #7a2820;
+    color: #fff;
+    border-color: #7a2820;
+  }
+  .editbox {
+    flex: 1;
+    background: #1b1e24;
+    border: 1px solid #4ca5e0;
+    border-radius: 5px;
+    color: #e6e8ec;
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  .editbox:focus {
+    outline: none;
   }
 
   .gloss {
@@ -418,6 +587,60 @@
   }
   .outcome {
     color: #9aa1ac;
+  }
+
+  .author {
+    max-width: 720px;
+  }
+  .author .hint {
+    color: #7d8590;
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+  .author label {
+    display: block;
+    color: #9aa1ac;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .author form {
+    margin-bottom: 18px;
+  }
+  .formrow {
+    display: flex;
+    gap: 8px;
+  }
+  .formrow input {
+    background: #1b1e24;
+    border: 1px solid #343a45;
+    border-radius: 6px;
+    color: #e6e8ec;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .formrow input:focus {
+    outline: none;
+    border-color: #4ca5e0;
+  }
+  .formrow input.chan {
+    width: 130px;
+  }
+  .formrow input.grow {
+    flex: 1;
+  }
+  .formrow button {
+    background: #2b6da3;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  .ok-msg {
+    color: #84c9a3;
+    font-size: 13px;
   }
 
   .empty {

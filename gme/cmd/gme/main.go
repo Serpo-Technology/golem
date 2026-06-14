@@ -18,12 +18,22 @@ import (
 
 const usage = `gme is a console for GOLEM's memory, talking to the running daemon.
 
-Usage:
+Read:
   gme status              the daemon's vital signs and workspace
   gme search <words>      the moments a cue brings to mind
   gme concepts            the concepts memory has distilled
   gme audit [n]           the last n entries of the trail (default 20)
   gme dump                every fragment the graph holds
+
+Author, grounded through teaching:
+  gme observe <channel> <text>   file a grounded moment
+  gme teach <cue> <command>      ground a cue to a command
+
+Surgery, raw and audited:
+  gme edit <id> <text>           splice a fragment's content
+  gme reweight <id> <weight>     set a fragment's weight (0 to 1)
+  gme delete <id>                remove a fragment by id
+  gme mark <id>                  mark a fragment hand-edited
 `
 
 func main() {
@@ -80,10 +90,66 @@ func main() {
 		}
 		printFragments(frags)
 
+	case "observe":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: gme observe <channel> <text>"))
+		}
+		check(c, c.Observe(args[1], strings.Join(args[2:], " ")))
+		fmt.Println("observed.")
+
+	case "teach":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: gme teach <cue> <command>"))
+		}
+		check(c, c.Teach(args[1], strings.Join(args[2:], " ")))
+		fmt.Printf("grounded %q -> %q\n", args[1], strings.Join(args[2:], " "))
+
+	case "edit":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: gme edit <id> <text>"))
+		}
+		check(c, c.Edit(mustID(args[1]), strings.Join(args[2:], " ")))
+		fmt.Printf("edited #%s\n", args[1])
+
+	case "reweight":
+		if len(args) < 3 {
+			fail(fmt.Errorf("usage: gme reweight <id> <weight>"))
+		}
+		w, err := strconv.ParseFloat(args[2], 64)
+		if err != nil {
+			fail(fmt.Errorf("a weight is a number between 0 and 1"))
+		}
+		check(c, c.Reweight(mustID(args[1]), w))
+		fmt.Printf("reweighted #%s to %.2f\n", args[1], w)
+
+	case "delete":
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: gme delete <id>"))
+		}
+		check(c, c.Delete(mustID(args[1])))
+		fmt.Printf("deleted #%s\n", args[1])
+
+	case "mark":
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: gme mark <id>"))
+		}
+		check(c, c.Mark(mustID(args[1])))
+		fmt.Printf("marked #%s edited\n", args[1])
+
 	default:
 		fmt.Print(usage)
 		os.Exit(2)
 	}
+}
+
+// mustID reads a fragment id from the command line, failing cleanly when it is
+// not a number, so surgery never lands on a misread target.
+func mustID(s string) uint64 {
+	id, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		fail(fmt.Errorf("a fragment id is a number, not %q", s))
+	}
+	return id
 }
 
 // check exits with a friendly message when the daemon is not listening, the same
@@ -140,6 +206,9 @@ func printFragments(frags []*wire.FragmentInfo) {
 			kind = "episodic"
 		}
 		line := fmt.Sprintf("#%-5d [%s/%s] %s", f.ID, kind, f.Channel, wire.Clip(f.Content, 80))
+		if f.Edited {
+			line += "  *edited"
+		}
 		if f.Activation > 0 && f.Activation < 1 {
 			line += fmt.Sprintf("  (%.2f)", f.Activation)
 		}
