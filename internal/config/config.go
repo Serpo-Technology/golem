@@ -75,6 +75,11 @@ type Config struct {
 	// are counted and collapsed into a single storm-summary moment.
 	EncodeBurst     float64 `json:"encode_burst"`
 	EncodeRefillSec float64 `json:"encode_refill_sec"`
+	// EncodeBursts overrides the encode burst per channel. A bulk channel
+	// like the web delivers a page's worth of lines at once, so it earns a
+	// larger burst to take in several sources a cycle, while a trickle
+	// channel keeps the small default.
+	EncodeBursts map[string]float64 `json:"encode_bursts"`
 	// PredictorWindows overrides the habituation window per channel. A
 	// chatty channel needs a longer memory to recognize its own long tail
 	// of recurring shapes.
@@ -182,6 +187,7 @@ func Default() Config {
 		CalibrationWarmup:   defaultCalibWarmup,
 		EncodeBurst:         6,
 		EncodeRefillSec:     2,
+		EncodeBursts:        map[string]float64{"web": 200},
 		PredictorWindows:    map[string]float64{"syslog": 8192},
 		GraduationApprovals: defaultGraduation,
 		ConflictMargin:      defaultConflictMargin,

@@ -23,7 +23,7 @@ const (
 	webChannel   = "web"
 	webLineCap   = 240
 	webLineMin   = 3
-	webLinesMax  = 200     // lines per fetch; the gate and governor do the rest
+	webLinesMax  = 50      // lines per fetch: a page's lead and early body, where the summary sits
 	webBodyCap   = 1 << 20 // bytes read per page
 	webFetchWait = 20 * time.Second
 	// webUserAgent identifies the reader plainly so a polite source serves its

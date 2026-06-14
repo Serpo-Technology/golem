@@ -399,10 +399,19 @@ func (d *Daemon) predictor(channel string) *attention.Predictor {
 	return p
 }
 
+// burstFor resolves a channel's encode burst, the per-channel override before
+// the global default, so a bulk channel like the web takes in more per cycle.
+func (d *Daemon) burstFor(channel string) float64 {
+	if b, ok := d.cfg.EncodeBursts[channel]; ok {
+		return b
+	}
+	return d.cfg.EncodeBurst
+}
+
 func (d *Daemon) governor(channel string) *tokenBucket {
 	b, ok := d.governors[channel]
 	if !ok {
-		burst := d.cfg.EncodeBurst
+		burst := d.burstFor(channel)
 		if burst < 1 {
 			burst = 1
 		}

@@ -11,6 +11,9 @@
   "calibration_warmup": 30,
   "encode_burst": 6,
   "encode_refill_sec": 2,
+  "encode_bursts": {
+    "web": 200
+  },
   "predictor_windows": {
     "syslog": 8192
   },
