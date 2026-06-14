@@ -6,18 +6,19 @@ import (
 	"golem/wire"
 )
 
-func TestLastNKeepsTheRecentTail(t *testing.T) {
+func TestRecentKeepsTheNewestHead(t *testing.T) {
+	// The daemon returns the trail newest first, so recent keeps the head.
 	trail := []*wire.AuditInfo{
-		{Cue: "a"}, {Cue: "b"}, {Cue: "c"}, {Cue: "d"},
+		{Cue: "d"}, {Cue: "c"}, {Cue: "b"}, {Cue: "a"},
 	}
-	got := lastN(trail, 2)
-	if len(got) != 2 || got[0].Cue != "c" || got[1].Cue != "d" {
-		t.Fatalf("the two most recent should remain: %+v", got)
+	got := recent(trail, 2)
+	if len(got) != 2 || got[0].Cue != "d" || got[1].Cue != "c" {
+		t.Fatalf("the two newest should remain: %+v", got)
 	}
-	if all := lastN(trail, 10); len(all) != 4 {
+	if all := recent(trail, 10); len(all) != 4 {
 		t.Fatalf("a window larger than the trail returns all: %d", len(all))
 	}
-	if none := lastN(trail, 0); len(none) != 4 {
+	if none := recent(trail, 0); len(none) != 4 {
 		t.Fatalf("a non-positive window returns all: %d", len(none))
 	}
 }

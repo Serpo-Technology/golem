@@ -79,7 +79,7 @@ func main() {
 		}
 		entries, err := c.Audit()
 		check(c, err)
-		printAudit(lastN(entries, n))
+		printAudit(recent(entries, n))
 
 	case "dump":
 		frags, _, err := c.Dump()
@@ -169,13 +169,13 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-// lastN keeps the most recent n entries of a chronological trail, the tail being
-// the latest, so a long history renders to a readable window.
-func lastN(entries []*wire.AuditInfo, n int) []*wire.AuditInfo {
+// recent keeps the n most recent entries of the trail. The daemon returns it
+// newest first, so the most recent are the head.
+func recent(entries []*wire.AuditInfo, n int) []*wire.AuditInfo {
 	if n <= 0 || len(entries) <= n {
 		return entries
 	}
-	return entries[len(entries)-n:]
+	return entries[:n]
 }
 
 func printStatus(st *wire.StatusInfo) {

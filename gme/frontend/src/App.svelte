@@ -261,7 +261,7 @@
     {:else if tab === 'audit'}
       {#if trail.length}
         <ul class="rows trail">
-          {#each [...trail].reverse() as e}
+          {#each trail as e}
             <li>
               <span class="ts">{when(e.at_unix)}</span>
               <span class="cue">{e.cue}</span>
