@@ -192,3 +192,10 @@ acxn:en:transitive	agent/np/animate rel/v patient/np	en	rel
 acxn:en:intransitive	agent/np/animate rel/v	en	rel
 acxn:tr:transitive	agent/np/animate rel/v patient/np	tr	rel
 acxn:tr:intransitive	agent/np/animate rel/v	tr	rel
+# Code constructions: the first programming language, a form-and-meaning pair
+# like any other, the operator symbol and the teaching word two surfaces of one
+# computation, grounded by running the code. The value is "symbol word".
+code:add	+ sum	en
+code:subtract	- difference	en
+code:multiply	* product	en
+code:divide	/ quotient	en

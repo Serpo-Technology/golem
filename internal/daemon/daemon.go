@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"golem/internal/attention"
+	"golem/internal/code"
 	"golem/internal/config"
 	"golem/internal/events"
 	"golem/internal/grammar"
@@ -77,6 +78,11 @@ type Daemon struct {
 	// read out of the graph and compiled for the engine, rebuilt at
 	// wake after the nightly competition with the lexicon.
 	gram *grammar.Params
+
+	// code is the programming-language faculty: code constructions compiled
+	// from the seeded nodes, comprehending a computation from a surface and
+	// generating the source to run it.
+	code *code.Engine
 
 	// governors throttle memory formation per channel, and pendingStorm
 	// counts the surprises each throttle suppressed until they can be
@@ -1372,7 +1378,19 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if req.Content == "" {
 			return wire.Response{Error: "runcode needs a program"}, false, false
 		}
-		return wire.Response{OK: true, Say: runSummary(d.runProgram(req.Content))}, false, false
+		// A computation stated as language or as an expression is comprehended
+		// to its meaning and the source generated from it, the code engine run
+		// both ways before the runtime grounds the result; anything richer is
+		// run as the program it already is.
+		src := req.Content
+		if d.code != nil {
+			if comp, ok := d.code.Comprehend(src); ok {
+				if generated, ok := d.code.ToCode(comp); ok {
+					src = generated
+				}
+			}
+		}
+		return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
 
 	case "tell":
 		if req.Content == "" {

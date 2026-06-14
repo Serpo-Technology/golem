@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"golem/internal/code"
 	"golem/internal/events"
 	"golem/internal/grammar"
 	"golem/internal/memory"
@@ -127,7 +128,27 @@ func (d *Daemon) recompileGrammar() error {
 		SetConstructions(cparams).
 		SetDecl(gparams).
 		SetArgConstructions(cparams)
+	d.code = code.NewEngine(codeOps(cparams))
 	return nil
+}
+
+// codeOps reads the code constructions out of the construction parameters into
+// the operations the code engine indexes. Each value is "<symbol> <word>", the
+// two surfaces of the operation named by the key after "code:".
+func codeOps(params []grammar.Param) []code.Op {
+	var ops []code.Op
+	for _, p := range params {
+		name, ok := strings.CutPrefix(p.Key, "code:")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(p.Value)
+		if len(fields) != 2 {
+			continue
+		}
+		ops = append(ops, code.Op{Name: name, Symbol: fields[0], Word: fields[1]})
+	}
+	return ops
 }
 
 // paramsOf reads a set of grammar or construction nodes back into the

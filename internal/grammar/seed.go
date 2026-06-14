@@ -42,12 +42,28 @@ func parseSeed() []Param {
 var seedOnce = sync.OnceValue(parseSeed)
 
 // isConstruction reports whether a seed key carries a construction rather
-// than a grammar parameter: an answer template (cxn) or an
-// argument-structure construction (acxn). Both halves of the construction
-// inventory ride the construction nodes, leaving the curriculum the engine
+// than a grammar parameter: an answer template (cxn), an argument-structure
+// construction (acxn), or a code construction (code). All of the construction
+// inventory rides the construction nodes, leaving the curriculum the engine
 // proper.
 func isConstruction(key string) bool {
-	return strings.HasPrefix(key, "cxn:") || strings.HasPrefix(key, "acxn:")
+	return strings.HasPrefix(key, "cxn:") ||
+		strings.HasPrefix(key, "acxn:") ||
+		strings.HasPrefix(key, "code:")
+}
+
+// CodeConstructions returns the programming-language half of the seed, the code
+// entries written into starter memory beside the rest. Each key is
+// "code:<name>" and the value is "<symbol> <word>", the operator and the word
+// that teach the operation, two surfaces of one computation.
+func CodeConstructions() []Param {
+	var out []Param
+	for _, p := range seedOnce() {
+		if strings.HasPrefix(p.Key, "code:") {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // Curriculum returns the grammar half of the seed, every parameter but the
