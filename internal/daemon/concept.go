@@ -60,12 +60,13 @@ const (
 // than to episodes), so recall and the inner loop reach it the same way
 // and the chain still bottoms out in concrete experience underneath.
 const (
-	absMinSituations = 3   // a constellation takes several showings to trust
-	absCoreShare     = 0.2 // a concept this reliable in the word's company is core
-	absConcentration = 0.5 // a word this faithful to one concept is a name, an abstraction is not
-	absPerNight      = 4   // abstractions mintable in one night
-	absNameWeight    = 0.8 // the word's bond to its own abstraction
-	absRefreshFloor  = 2   // a core smaller than this has dissolved; stop refreshing and let decay take it
+	absMinSituations = 3    // a constellation takes several showings to trust
+	absCoreFloor     = 0.05 // below this slice of a word's company a concept is noise, not a member
+	absCoreFraction  = 0.5  // a member must hold this fraction of the strongest member's share, so a broad category whose company spreads thin still gathers a core
+	absConcentration = 0.5  // a word this faithful to one concept is a name, an abstraction is not
+	absPerNight      = 4    // abstractions mintable in one night
+	absNameWeight    = 0.8  // the word's bond to its own abstraction
+	absRefreshFloor  = 2    // a core smaller than this has dissolved; stop refreshing and let decay take it
 )
 
 // growAbstractions runs after naming in the same consolidation pass:
@@ -101,15 +102,29 @@ func (d *Daemon) growAbstractions() (born int) {
 			concept uint64
 			share   float64
 		}
-		var core []coreShare
+		shares := make([]coreShare, 0, len(byWord[w.ID]))
 		maxShare := 0.0
 		for _, p := range byWord[w.ID] {
 			share := p.Cooc / (p.WordTotal + namesSmoothing)
+			shares = append(shares, coreShare{concept: p.Concept, share: share})
 			if share > maxShare {
 				maxShare = share
 			}
-			if share >= absCoreShare {
-				core = append(core, coreShare{concept: p.Concept, share: share})
+		}
+		// Core members are those in the same league as the strongest, above a
+		// noise floor. Judging core relative to the peak rather than against a
+		// fixed share lets a broad category, whose company spreads thin across
+		// many members, still gather a core; the old absolute bar only a narrow
+		// naming could clear left a category dissolving the more faithfully it
+		// was taught.
+		cut := absCoreFloor
+		if rel := absCoreFraction * maxShare; rel > cut {
+			cut = rel
+		}
+		var core []coreShare
+		for _, s := range shares {
+			if s.share >= cut {
+				core = append(core, s)
 			}
 		}
 		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })

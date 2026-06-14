@@ -68,7 +68,7 @@ func TestAbstractionByConstellation(t *testing.T) {
 		if len(episodes) != 1 || episodes[0].Kind != memory.KindEpisodic {
 			t.Fatalf("the chain should bottom out in lived moments: %+v", episodes)
 		}
-		if g.Weight < absCoreShare || g.Weight >= absConcentration {
+		if g.Weight < absCoreFloor || g.Weight >= absConcentration {
 			t.Fatalf("the grounding weight should be the reliability share: %.2f", g.Weight)
 		}
 	}
@@ -119,6 +119,52 @@ func TestAbstractionNeedsSpreadAndRecurrence(t *testing.T) {
 	}
 	if c, _ := s.ConceptByTemplate("abs:en:rare"); c != nil {
 		t.Fatal("one showing must not mint an abstraction")
+	}
+}
+
+// A word taught faithfully across many members abstracts even though no single
+// member dominates its company. The shares spread thin, each well under the old
+// absolute core bar, yet judged against the strongest member they still gather
+// a core, the case where a better-taught category used to fail to distil.
+func TestAbstractionFromBroadNaming(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	shapes := []string{
+		"a brass key", "a brass lantern", "a round copper coin",
+		"a small iron nail", "a steel bolt", "a tin cup",
+	}
+	members := make([][]recentMoment, len(shapes))
+	for i, shape := range shapes {
+		members[i] = feedShape(t, s, "vision", shape, 4, base.Add(time.Duration(i)*time.Minute))
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+
+	// "metal" keeps company with all six across three situations, each member
+	// holding about a sixth of the word's company, under the old 0.2 floor.
+	for i := range 3 {
+		anchors := make([]recentMoment, 0, len(members))
+		for _, m := range members {
+			anchors = append(anchors, m[i])
+		}
+		d.mintWords("metal", "en", 0, anchors, false)
+	}
+	calm(d)
+	d.growConcepts()
+
+	if born := d.growAbstractions(); born != 1 {
+		t.Fatalf("a broad category should still distil one abstraction, got %d", born)
+	}
+	abs, err := s.ConceptByTemplate("abs:en:metal")
+	if err != nil || abs == nil {
+		t.Fatalf("the broad category should mint an abstraction: %v", err)
+	}
+	grounds, err := s.LinksFromRel([]uint64{abs.ID}, memory.RelGrounds)
+	if err != nil || len(grounds) < 4 {
+		t.Fatalf("it should ground most of its members, got %d (%v)", len(grounds), err)
 	}
 }
 
