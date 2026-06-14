@@ -1411,6 +1411,20 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				return wire.Response{OK: true, Say: line}, false, false
 			}
+			// A function can also be shown rather than told: "the double of 3 is
+			// 6 and the double of 5 is 10" has its rule worked out from the pairs
+			// and kept the same way a told one is.
+			if name, ins, outs, ok := d.code.ComprehendExamples(req.Content); ok {
+				op, found := d.induceFunction(name, ins, outs)
+				if !found {
+					return wire.Response{OK: true, Say: "I could not find a rule that fits those examples."}, false, false
+				}
+				line, err := d.learnFunction(op)
+				if err != nil {
+					return wire.Response{Error: err.Error()}, false, false
+				}
+				return wire.Response{OK: true, Say: line}, false, false
+			}
 		}
 		// What is warm before the utterance is what it is about: a told word
 		// grounds in the attended concept, not only in the percept.

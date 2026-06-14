@@ -9,6 +9,31 @@ import (
 	"golem/internal/memory"
 )
 
+// induceFunction works out a function from the input/output pairs it was shown,
+// rather than being told its body: the code faculty searches the primitive
+// operations for the rule that maps every input to its output, grounding each
+// candidate in the runtime. It names the parameter the same way a told
+// definition does so the two surfaces converge, and refuses a name that would
+// shadow a seeded operation. It returns the inferred operation, false when no
+// rule fits or the runtime is closed.
+func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return code.Op{}, false
+	}
+	if name == "" || name == inducedParam || d.code.Primitive(name) {
+		return code.Op{}, false
+	}
+	body, ok := d.code.InduceBody(inducedParam, ins, outs, d.evalCode)
+	if !ok {
+		return code.Op{}, false
+	}
+	return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
+}
+
+// inducedParam is the parameter name an induced function abstracts over, the
+// same noun a told definition introduces with "a number".
+const inducedParam = "number"
+
 // learnFunction keeps a function GOLEM has just comprehended from a definition.
 // It stores the operation as a "code:<name>" construction the way the seeded
 // operations are stored, updating one already there or minting a new one, then
