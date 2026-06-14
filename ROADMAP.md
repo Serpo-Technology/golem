@@ -1837,10 +1837,10 @@ set of recent referents, no reading of "why" or "and then," no topic continuity
 past raw warmth. A conversation is a structure of references and moves, and the
 field needs to carry a little more of it.
 
-- [ ] The workspace keeps a small decaying set of recently-active concepts with
+- [x] The workspace keeps a small decaying set of recently-active concepts with
       the roles they last played, so a turn leaves referents behind, not only
       the hottest node.
-- [ ] A pronoun or bare reference binds to the best-fit member of that set, most
+- [x] A pronoun or bare reference binds to the best-fit member of that set, most
       active and feature-compatible, so "it" finds the inanimate it should and
       "she" the animate, by the signatures already carried.
 - [ ] A discourse move reads as a walk over the warm proposition, "why" to its
@@ -1866,6 +1866,21 @@ Done when: across turns "it" and "she" bind to the right warm referents, "why"
 answers about the proposition just stated by walking its grounds, the subject of
 an exchange can be followed and its change noticed, and none of it reads from a
 discourse script.
+
+Status: the referent set and pronoun binding are in. The workspace now records
+the thematic role each warm concept last played, so a turn leaves the dog behind
+as an agent and the cat as a patient, not just a hottest node. A pronoun binds
+by best fit over that set: activation is the base, and the pronoun's animacy
+shifts it, so "it" finds the inanimate and "she" the animate after "a dog chased
+a cat". The animacy a referent carries is read from the role it last played, an
+agent leaning animate and a patient inanimate, a usage-grounded proxy rather
+than a hand-listed table or a dedicated feature; with no role to read the
+binding falls back to pure warmth, so a bare "it" and "the other one" resolve
+the way they did before. The pronouns carry their preference as seed data ("it"
+inanimate, "she" and "he" animate), so a tongue's pronoun inventory stays in the
+bootstrap. Gender past animacy is not distinguished, there being no grounded
+signal for it. What remains is reading a discourse move as a walk over the warm
+proposition, and following a topic across turns.
 
 ## Step 34: The goal loop, one determination each moment
 

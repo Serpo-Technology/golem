@@ -65,6 +65,7 @@ type Frame struct {
 	At       string      // a time or place complement, preformatted by the planner
 	Last     bool        // the most recent occurrence: "last happened"
 	Pro      bool        // the patient was a pro-form; resolve it from the workspace
+	ProType  string      // the pro-form's animacy preference: animate, inanimate, or empty
 	Alt      bool        // "the other one": resolve past the warmest referent
 	Again    bool        // repetition was requested
 	Unknown  []string

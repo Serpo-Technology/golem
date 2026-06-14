@@ -50,13 +50,14 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
 	}
-	// The proposition is in the graph now; warm what it bound and record the
-	// role edges on the trail, so the write is auditable like a naming is.
+	// The proposition is in the graph now; warm what it bound, recording the
+	// role each filler played so the discourse set can read its lean, and put
+	// the role edges on the trail so the write is auditable like a naming is.
 	d.ws.excite(rel.ID, exciteSpeech)
-	d.ws.excite(agent.Concept.ID, exciteSpeech)
+	d.ws.exciteRole(agent.Concept.ID, exciteSpeech, "agent")
 	d.event(events.Event{Ev: "link", From: momentID, To: agent.Concept.ID, Rel: memory.RelAgent, Weight: comprehendWeight})
 	if patientID != 0 {
-		d.ws.excite(patientID, exciteSpeech)
+		d.ws.exciteRole(patientID, exciteSpeech, "patient")
 		d.event(events.Event{Ev: "link", From: momentID, To: patientID, Rel: memory.RelPatient, Weight: comprehendWeight})
 	}
 

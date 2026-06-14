@@ -32,7 +32,8 @@ fw:en:i	i	en	fn
 fw:en:in	in	en	fn
 fw:en:introspect	introspect	en	imp
 fw:en:is	is	en	cop
-fw:en:it	it	en	pro
+fw:en:he	he	en	pro:animate
+fw:en:it	it	en	pro:inanimate
 fw:en:know	know	en	fn
 fw:en:many	many	en	cnt
 fw:en:me	me	en	fn
@@ -54,6 +55,7 @@ fw:en:recall	recall	en	imp
 fw:en:remember	remember	en	imp
 fw:en:retry	retry	en	imp
 fw:en:run	run	en	imp
+fw:en:she	she	en	pro:animate
 fw:en:show	show	en	imp
 fw:en:sometimes	sometimes	en	adv
 fw:en:that	that	en	pro

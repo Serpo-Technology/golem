@@ -230,6 +230,9 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			flush()
 		case catPro:
 			f.Pro = true
+			if anim := p.proAnimacy(lang, tok); anim != "" {
+				f.ProType = anim
+			}
 			flush()
 		case catOth:
 			f.Alt = true

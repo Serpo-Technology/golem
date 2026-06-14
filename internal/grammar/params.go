@@ -197,6 +197,16 @@ func (p *Params) relType(lang, form string) string {
 	return form
 }
 
+// proAnimacy reads a pro-form's animacy preference from its seeded category,
+// "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
+// binding favors the referent it fits. A bare "pro" carries none.
+func (p *Params) proAnimacy(lang, form string) string {
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "pro:"); ok {
+		return spec
+	}
+	return ""
+}
+
 // whInfo reads an interrogative's type and whether it carries the copula.
 // English wh words name their own type, so "what" is read from the surface;
 // a language whose interrogative is a different form carries the type in the

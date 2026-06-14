@@ -30,6 +30,11 @@ const (
 	// sentence built around it; concepts and templates stay short on
 	// their own.
 	spokenPhraseCap = 100
+	// animacyBindBonus is how much a pro-form's animacy bends its binding:
+	// a fitting referent's activation is lifted by this share and a clashing
+	// one cut by it, enough to overtake an equally warm rival without
+	// overriding a far warmer one.
+	animacyBindBonus = 0.5
 )
 
 // resolveConcept maps a surface phrase to its strongest concept: first
@@ -284,21 +289,96 @@ func (d *Daemon) warmConceptWhere(skip int, keep func(*memory.Fragment) bool) *m
 	return nil
 }
 
-// warmTopic resolves a pro-form against working memory: "it" and "that"
-// take the warmest concept, "the other one" the one past it. The
-// workspace carrying this referent across turns is what holds a
-// conversation's thread, and resolving through it is itself a touch,
-// so the topic stays current for the turn after.
-func (d *Daemon) warmTopic(alt bool) grammar.Term {
+// warmTopic resolves a pro-form against working memory by best fit: the most
+// active concept that fits the pronoun's animacy, "it" leaning to the
+// inanimate referent and "she" to the animate, read from the role each last
+// played. With no animacy asked, or no role to read, it is the warmest, the
+// way a bare "it" and "the other one" resolved before. The workspace carrying
+// this referent across turns is what holds the thread, and resolving is itself
+// a touch, so the topic stays current for the turn after.
+func (d *Daemon) warmTopic(alt bool, animacy string) grammar.Term {
 	skip := 0
 	if alt {
 		skip = 1
 	}
-	if c := d.warmConcept(skip); c != nil {
+	if c := d.warmReferent(skip, animacy); c != nil {
 		d.ws.excite(c.ID, exciteSpeech)
 		return grammar.Term{Concept: c, Phrase: c.Content}
 	}
 	return grammar.Term{}
+}
+
+// warmReferent ranks the warm concepts for a pro-form: activation is the base,
+// and when the pronoun asks for an animacy a concept's lean shifts its score,
+// so a slightly cooler but fitting referent can win while a clear winner on
+// warmth alone still stands. Skip steps past the top, "the other one" reaching
+// the next.
+func (d *Daemon) warmReferent(skip int, animacy string) *memory.Fragment {
+	entries := d.ws.warmest(workspaceBudget)
+	if len(entries) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.id)
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	byID := make(map[uint64]*memory.Fragment, len(frags))
+	for _, f := range frags {
+		byID[f.ID] = f
+	}
+	type scored struct {
+		f     *memory.Fragment
+		score float64
+		heat  float64
+	}
+	ranked := make([]scored, 0, len(entries))
+	for _, e := range entries {
+		f := byID[e.id]
+		if f == nil || f.Kind != memory.KindConcept {
+			continue
+		}
+		score := e.heat
+		if animacy != "" {
+			score *= 1 + animacyBindBonus*d.animacyLean(f.ID, animacy)
+		}
+		ranked = append(ranked, scored{f, score, e.heat})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
+		}
+		if ranked[i].heat != ranked[j].heat {
+			return ranked[i].heat > ranked[j].heat
+		}
+		return d.ws.touchOf(ranked[i].f.ID) > d.ws.touchOf(ranked[j].f.ID)
+	})
+	if skip >= len(ranked) {
+		return nil
+	}
+	return ranked[skip].f
+}
+
+// animacyLean scores how well a concept fits a wanted animacy, from the role
+// it last played: an agent leans animate, a patient inanimate, the things that
+// act being the animate ones. The lean is positive when the concept fits the
+// pronoun, negative when it clashes, zero when no role has been seen, so the
+// binding falls back to pure warmth.
+func (d *Daemon) animacyLean(id uint64, animacy string) float64 {
+	lean := 0.0
+	switch d.ws.roleOf(id) {
+	case "agent":
+		lean = 1
+	case "patient":
+		lean = -1
+	}
+	if animacy == "inanimate" {
+		lean = -lean
+	}
+	return lean
 }
 
 // warmSpoken warms the concept behind a shape the answer actually
@@ -535,7 +615,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		topic = frame.Agent
 	}
 	if topic.Empty() && (frame.Pro || frame.Alt) {
-		topic = d.warmTopic(frame.Alt)
+		topic = d.warmTopic(frame.Alt, frame.ProType)
 	}
 	if topic.Concept != nil {
 		c := topic.Concept
@@ -781,7 +861,7 @@ func (d *Daemon) whenceAnchor(frame grammar.Frame, quals []grammar.Qualifier) gr
 		return frame.Patient
 	}
 	if frame.Agent.Empty() && (frame.Pro || frame.Alt) {
-		return d.warmTopic(frame.Alt)
+		return d.warmTopic(frame.Alt, frame.ProType)
 	}
 	return frame.Agent
 }
@@ -920,7 +1000,7 @@ func (d *Daemon) planRecall(frame grammar.Frame, chem limbic.State) string {
 	}
 	topic := frame.Patient
 	if topic.Empty() && (frame.Pro || frame.Alt) {
-		topic = d.warmTopic(frame.Alt)
+		topic = d.warmTopic(frame.Alt, frame.ProType)
 	}
 	if topic.Empty() {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},

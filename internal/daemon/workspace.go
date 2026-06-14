@@ -26,11 +26,12 @@ const (
 type workspace struct {
 	act   map[uint64]float64
 	touch map[uint64]uint64 // sequence of last excitation, for recency tie-breaks
+	role  map[uint64]string // the thematic role a concept last played, for pronoun binding
 	seq   uint64
 }
 
 func newWorkspace() *workspace {
-	return &workspace{act: make(map[uint64]float64), touch: make(map[uint64]uint64)}
+	return &workspace{act: make(map[uint64]float64), touch: make(map[uint64]uint64), role: make(map[uint64]string)}
 }
 
 // excite warms a concept, keeping whichever is higher: the new activation
@@ -63,6 +64,18 @@ func (w *workspace) excite(id uint64, amount float64) {
 	}
 	delete(w.act, coldest)
 	delete(w.touch, coldest)
+	delete(w.role, coldest)
+}
+
+// exciteRole warms a concept and records the thematic role it just played, so
+// the discourse set remembers the dog stood as agent and the cat as patient,
+// the lean a pronoun's binding reads off. A concept keeps its last role until
+// it plays a new one; a plain excite leaves the role it carried in place.
+func (w *workspace) exciteRole(id uint64, amount float64, role string) {
+	w.excite(id, amount)
+	if id != 0 && role != "" {
+		w.role[id] = role
+	}
 }
 
 // decay cools every activation a little and forgets what has faded below
@@ -73,6 +86,7 @@ func (w *workspace) decay() {
 		if a < workspaceFloor {
 			delete(w.act, id)
 			delete(w.touch, id)
+			delete(w.role, id)
 			continue
 		}
 		w.act[id] = a
@@ -88,6 +102,7 @@ func (w *workspace) cool(id uint64, keep float64) {
 		if a < workspaceFloor {
 			delete(w.act, id)
 			delete(w.touch, id)
+			delete(w.role, id)
 			return
 		}
 		w.act[id] = a
@@ -97,7 +112,13 @@ func (w *workspace) cool(id uint64, keep float64) {
 func (w *workspace) clear() {
 	w.act = make(map[uint64]float64)
 	w.touch = make(map[uint64]uint64)
+	w.role = make(map[uint64]string)
 }
+
+// roleOf reports the thematic role a warm concept last played, empty when it
+// has filled none, the lean a pronoun reads to prefer the animate or the
+// inanimate referent.
+func (w *workspace) roleOf(id uint64) string { return w.role[id] }
 
 // heat reports a concept's current activation.
 func (w *workspace) heat(id uint64) float64 { return w.act[id] }
