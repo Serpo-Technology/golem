@@ -1,0 +1,5 @@
+.git
+gme/frontend/node_modules
+gme/frontend/dist
+gme/frontend/.svelte-kit
+*.out
