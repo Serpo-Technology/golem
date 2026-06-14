@@ -4,10 +4,10 @@ import "testing"
 
 func testEngine() *Engine {
 	return NewEngine([]Op{
-		{"add", "+", "sum"},
-		{"subtract", "-", "difference"},
-		{"multiply", "*", "product"},
-	})
+		{Name: "add", Symbol: "+", Word: "sum"},
+		{Name: "subtract", Symbol: "-", Word: "difference"},
+		{Name: "multiply", Symbol: "*", Word: "product"},
+	}, nil)
 }
 
 // The literal teaching surface and the code surface both comprehend to the one

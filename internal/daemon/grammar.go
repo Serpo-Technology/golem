@@ -132,23 +132,34 @@ func (d *Daemon) recompileGrammar() error {
 	return nil
 }
 
-// codeOps reads the code constructions out of the construction parameters into
-// the operations the code engine indexes. Each value is "<symbol> <word>", the
-// two surfaces of the operation named by the key after "code:".
-func codeOps(params []grammar.Param) []code.Op {
-	var ops []code.Op
+// codeOps reads the code constructions out of the construction parameters,
+// splitting the seeded primitives from the functions learned since. A primitive
+// value is "<symbol> <word>", the operator and the word it is taught by; a
+// learned function is "func:<param> <body as code>", which the engine reads back
+// into the operation it names so the function returns after a restart.
+func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
+	var prims []code.Op
+	var defs []code.Def
 	for _, p := range params {
 		name, ok := strings.CutPrefix(p.Key, "code:")
 		if !ok {
+			continue
+		}
+		if spec, ok := strings.CutPrefix(p.Value, "func:"); ok {
+			param, body, ok := strings.Cut(spec, " ")
+			if !ok || param == "" || strings.TrimSpace(body) == "" {
+				continue
+			}
+			defs = append(defs, code.Def{Name: name, Param: param, Body: strings.TrimSpace(body)})
 			continue
 		}
 		fields := strings.Fields(p.Value)
 		if len(fields) != 2 {
 			continue
 		}
-		ops = append(ops, code.Op{Name: name, Symbol: fields[0], Word: fields[1]})
+		prims = append(prims, code.Op{Name: name, Symbol: fields[0], Word: fields[1]})
 	}
-	return ops
+	return prims, defs
 }
 
 // paramsOf reads a set of grammar or construction nodes back into the

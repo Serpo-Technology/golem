@@ -1399,6 +1399,19 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if req.Query != "" {
 			return d.tellAbout(req), false, false
 		}
+		// A function taught in language is learned as a construction, not stored
+		// as a percept: "the double of a number is the product of the number and
+		// 2" mints the operation GOLEM can then call and write. Only a genuine
+		// definition matches, so an ordinary utterance falls through to grounding.
+		if d.code != nil {
+			if op, ok := d.code.ComprehendDefinition(req.Content); ok {
+				line, err := d.learnFunction(op)
+				if err != nil {
+					return wire.Response{Error: err.Error()}, false, false
+				}
+				return wire.Response{OK: true, Say: line}, false, false
+			}
+		}
 		// What is warm before the utterance is what it is about: a told word
 		// grounds in the attended concept, not only in the percept.
 		attn := d.attentionAnchors()

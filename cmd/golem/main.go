@@ -477,7 +477,14 @@ func printStatus(st *wire.StatusInfo) {
 
 func tellOnce(home, lang, words string) {
 	resp := call(home, wire.Request{Cmd: "tell", Content: words, Lang: lang})
-	fmt.Printf("remembered as #%d (%.2f bits)\n", resp.Observe.FragmentID, resp.Observe.Bits)
+	if resp.Error != "" {
+		fail(fmt.Errorf("%s", resp.Error))
+	}
+	// A definition is learned, not stored as a percept, so it answers with a
+	// spoken line and no remembered fragment.
+	if resp.Observe != nil {
+		fmt.Printf("remembered as #%d (%.2f bits)\n", resp.Observe.FragmentID, resp.Observe.Bits)
+	}
 	if resp.Say != "" {
 		fmt.Printf("golem> %s\n", resp.Say)
 	}
