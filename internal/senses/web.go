@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 // WebSensor is the web-text sense: each watched URL is fetched on the
@@ -90,60 +92,90 @@ func fetchOne(client *http.Client, url string, out chan Observation, dropped *at
 	}
 }
 
-// StripHTML reduces a page to its visible text lines: script and style
-// bodies dropped, tags removed, the basic entities decoded, whitespace
-// collapsed, and the very short fragments (menu glyphs, separators)
-// discarded. Block-level tags break lines, so a paragraph arrives as
-// one observation.
+// skipTags name subtrees that carry the page's chrome and machinery rather than
+// its text, so their whole contents are passed over.
+var skipTags = map[string]bool{
+	"script": true, "style": true, "noscript": true, "template": true,
+	"nav": true, "header": true, "footer": true, "aside": true,
+	"form": true, "button": true, "svg": true,
+}
+
+// blockTags name elements whose end is a line break, so a paragraph or a list
+// item arrives as one line rather than running into the next.
+var blockTags = map[string]bool{
+	"p": true, "div": true, "br": true, "li": true, "tr": true, "td": true,
+	"h1": true, "h2": true, "h3": true, "h4": true, "h5": true, "h6": true,
+	"title": true, "section": true, "article": true, "blockquote": true,
+	"figcaption": true, "pre": true,
+}
+
+// StripHTML reduces a page to its readable text lines. The page is parsed into a
+// document, the main content located, the chrome and machinery subtrees passed
+// over, and the remaining text gathered block by block, so an article arrives as
+// its paragraphs and not its menu. The parser decodes entities; whitespace is
+// collapsed and the very short fragments are dropped.
 func StripHTML(page string) []string {
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		return nil
+	}
 	var b strings.Builder
-	lower := strings.ToLower(page)
-	i := 0
-	for i < len(page) {
-		if page[i] != '<' {
-			b.WriteByte(page[i])
-			i++
-			continue
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && skipTags[n.Data] {
+			return
 		}
-		// Script and style bodies are invisible: skip to the close tag.
-		skipped := false
-		for _, tag := range []string{"script", "style"} {
-			if strings.HasPrefix(lower[i+1:], tag) {
-				if end := strings.Index(lower[i:], "</"+tag); end >= 0 {
-					i += end
-				} else {
-					i = len(page)
+		if n.Type == html.TextNode {
+			b.WriteString(n.Data)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+		if n.Type == html.ElementNode && blockTags[n.Data] {
+			b.WriteByte('\n')
+		}
+	}
+	walk(mainContent(doc))
+	return cleanLines(b.String())
+}
+
+// mainContent returns the element a reader would call the body of the page: the
+// first <main> the page marks, else the first <article>, else the whole
+// document. A page with neither still sheds its chrome through the skipped tags.
+func mainContent(doc *html.Node) *html.Node {
+	var main, article *html.Node
+	var find func(*html.Node)
+	find = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "main":
+				if main == nil {
+					main = n
 				}
-				skipped = true
-				break
+			case "article":
+				if article == nil {
+					article = n
+				}
 			}
 		}
-		if skipped {
-			continue
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			find(c)
 		}
-		end := strings.IndexByte(page[i:], '>')
-		if end < 0 {
-			break
-		}
-		// A block-level boundary ends the current line of text.
-		tag := strings.TrimLeft(lower[i+1:i+end], "/")
-		for _, block := range []string{"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "title", "section", "article"} {
-			if tag == block || strings.HasPrefix(tag, block+" ") {
-				b.WriteByte('\n')
-				break
-			}
-		}
-		i += end + 1
 	}
-
-	text := b.String()
-	for entity, plain := range map[string]string{
-		"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": `"`,
-		"&#39;": "'", "&apos;": "'", "&nbsp;": " ",
-	} {
-		text = strings.ReplaceAll(text, entity, plain)
+	find(doc)
+	switch {
+	case main != nil:
+		return main
+	case article != nil:
+		return article
+	default:
+		return doc
 	}
+}
 
+// cleanLines collapses each block's whitespace, drops the very short fragments
+// (menu glyphs, separators), and caps a long line.
+func cleanLines(text string) []string {
 	var lines []string
 	for line := range strings.SplitSeq(text, "\n") {
 		line = strings.Join(strings.Fields(line), " ")

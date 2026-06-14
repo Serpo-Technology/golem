@@ -39,6 +39,33 @@ func TestWebFetchSendsUserAgentAndReadsText(t *testing.T) {
 	}
 }
 
+// The parser keeps the article and sheds the chrome: a page's main content is
+// read while its nav, header, footer, and scripts are passed over.
+func TestStripHTMLExtractsContentNotChrome(t *testing.T) {
+	page := `<html><head><title>Cat</title><style>.x{color:red}</style></head><body>
+		<nav><a>Home</a><a>Menu</a></nav>
+		<header>Site banner here</header>
+		<main>
+			<h1>Cats</h1>
+			<p>A cat is a small animal that people keep.</p>
+			<p>Cats purr when they are content.</p>
+		</main>
+		<footer>Copyright notice text</footer>
+		<script>trackUser()</script>
+	</body></html>`
+
+	joined := strings.Join(StripHTML(page), " | ")
+	if !strings.Contains(joined, "A cat is a small animal that people keep.") ||
+		!strings.Contains(joined, "Cats purr when they are content.") {
+		t.Fatalf("the article text should be extracted: %q", joined)
+	}
+	for _, chrome := range []string{"Home", "Menu", "Site banner", "Copyright", "trackUser", "color:red"} {
+		if strings.Contains(joined, chrome) {
+			t.Fatalf("chrome %q should be dropped: %q", chrome, joined)
+		}
+	}
+}
+
 // An error response is a notice, not a page: its body is never read as content,
 // only the status is recorded.
 func TestWebFetchSkipsErrorResponses(t *testing.T) {
