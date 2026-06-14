@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"golem/internal/attention"
 	"golem/internal/events"
@@ -562,6 +563,12 @@ func (d *Daemon) withFollowUp(frame grammar.Frame, answer string) string {
 		if unknown == "" || strings.Contains(spoken, strings.ToLower(unknown)) {
 			continue
 		}
+		// A bare numeral is an operand, not a word whose meaning is missing, so
+		// the answer to a computation does not trail a question after its
+		// digits. Curiosity is for the lexicon.
+		if !hasLetter(unknown) {
+			continue
+		}
 		// Asking is more than a reflex: the open question is held as a
 		// goal, and the drives keep hunting it until it resolves.
 		d.adoptGoal("learn", unknown)
@@ -631,6 +638,14 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	// follows X and precedes Y."
 	if len(quals) > 0 && !quals[0].Anchor.Empty() {
 		return d.planSuccession(frame, quals, chem)
+	}
+
+	// A computation asked is computed, not looked up: "what is the sum of 6
+	// and 7" comprehends to its meaning, runs in the runtime, and the value is
+	// spoken. With the runtime closed or the words not a computation it returns
+	// nothing and the definition path below answers.
+	if line, ok := d.planComputation(frame, raw); ok {
+		return line
 	}
 
 	// "What is X": definitions read the concept layer. A bare pro-form
@@ -709,6 +724,79 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	}
 	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 		Negate: true, Patient: grammar.Term{Phrase: "that"}}, chem)
+}
+
+// planComputation answers a computation posed as a question: "what is the sum
+// of 6 and 7" has its question lead-in stripped, comprehends to its meaning,
+// runs in the runtime, and the value is spoken. It returns false when the words
+// carry no number, are not a computation the code faculty claims, or the
+// runtime is closed, so "what is a dog" still reaches the definition path and a
+// production brain with the runtime shut answers the honest gap.
+func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool) {
+	if d.code == nil {
+		return "", false
+	}
+	phrase := stripAsk(raw)
+	// A computation grounds on number literals; without a digit the words are
+	// a definition question and the runtime is never spun.
+	if phrase == "" || !strings.ContainsAny(phrase, "0123456789") {
+		return "", false
+	}
+	comp, ok := d.code.Comprehend(phrase)
+	if !ok {
+		return "", false
+	}
+	src, ok := d.code.ToCode(comp)
+	if !ok {
+		return "", false
+	}
+	res := d.runProgram(src)
+	if res.Err != "" || res.Value == "" {
+		return "", false
+	}
+	// The value is spoken back against the phrase asked, and the run itself is
+	// already recorded on the trail, so the answer reads as a grounded act and
+	// not a stored fact.
+	connective := "is"
+	if frame.Lang == "tr" {
+		connective = "eder"
+	}
+	return upperFirst(phrase) + " " + connective + " " + res.Value + ".", true
+}
+
+// stripAsk removes a leading question lead-in so the computation surface is left
+// bare for the code faculty: "what is the sum of 6 and 7" becomes "the sum of 6
+// and 7", and "what is 6 + 7" becomes "6 + 7". A trailing question mark is
+// dropped with it.
+func stripAsk(raw string) string {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "?"))
+	low := strings.ToLower(s)
+	for _, lead := range []string{"what is the value of ", "what is ", "what's ", "what are ", "whats ", "how much is ", "how many is "} {
+		if strings.HasPrefix(low, lead) {
+			return strings.TrimSpace(s[len(lead):])
+		}
+	}
+	return s
+}
+
+// upperFirst capitalizes a leading ASCII letter so the spoken answer opens like
+// a sentence; a phrase that begins with a digit or symbol is left untouched.
+func upperFirst(s string) string {
+	if s == "" || s[0] < 'a' || s[0] > 'z' {
+		return s
+	}
+	return string(s[0]-32) + s[1:]
+}
+
+// hasLetter reports whether a token carries any letter, the mark of a word that
+// could have a meaning to learn, as opposed to a bare numeral or symbol.
+func hasLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // discourseWalk reads a follow-up as a move on the warm proposition: it takes
