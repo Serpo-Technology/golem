@@ -4,9 +4,20 @@ GOLEM replaces the "Next-Token Prediction" of an LLM with **Active Inference**. 
 
 ---
 
+## Design Principles
+
+Two commitments govern the whole system.
+
+- **The glass box.** GOLEM has weights, the way a brain has synaptic strengths, learned by local rules; the protection is legibility: every weight sits on a named edge between interpretable nodes, set by a local rule and traceable to the experience that set it, and the concept layer never holds a gradient-trained distributed vector. Auditability is the line that separates GOLEM from an LLM, and the test every other choice answers to. Pretrained weights are allowed only as sensory transducers at the edge (a vision captioner, a speech recognizer), labelled as such and kept one-way into a channel, so weights never reach the audit trail of cognition.
+- **Innate engine in code, learned parameters in the graph.** Each faculty is a fixed procedure on the floor with data that is learned, entrenched, and inspectable in memory above it. The grammar engine parses and realizes while its closed class lives in memory; the think primitive walks the graph while which walk to take is learned; the code engine runs while the operations it knows are seeded constructions. Shrinking the code floor and moving the parameters into the weighted graph is the same move repeated.
+
+Self-extension rides the same discipline. GOLEM is meant to evolve and program itself, and that capability is the demonstration. What keeps it GOLEM through that growth is that meaning stays grounded throughout: code grounded in execution, authored memory grounded by teaching, every self-change traced to a grounded outcome and auditable. From the runtime onward the whole process is meant to run inside a sealed container the operator places it in: the containment comes from outside, and the terminal and the memory editor are the separate human interfaces into it.
+
+---
+
 ## What Runs Today
 
-The build covers the whole loop the design describes: observation, memory, association, language, thought, self-directed acts, and gated action. In detail:
+The build covers the whole loop the design describes, and the self-extension above it: observation, memory, association, language understood and spoken, thought, self-directed acts, gated action, a held goal, and writing and running code it can fold back into itself under a grounded fitness. In detail:
 
 - A normalizer collapses the variable parts of each line (numbers, hex, UUIDs, timestamps, IPs, paths) so prediction runs on line shapes.
 - A forgetting frequency model scores Shannon surprise per shape. It habituates to repeated anomalies, adapts when the channel's normal drifts, and stays bounded no matter how long it runs.
@@ -55,8 +66,15 @@ The build covers the whole loop the design describes: observation, memory, assoc
 - Constructions compose: a slot can be filled by another construction, so the full definition answer is built by nesting the definition clause and the count clause into a frame no single template holds ("Make test is an action. I have seen it 4 times."). The realizer renders bottom-up, each layer choosing its construction the same way, and the composition lands on the trail as the constructions that made it, so a novel sentence reads back as its parts.
 - A general realization engine runs alongside the procedural one: a single operation, feature-structure unification, over a declarative grammar held in memory. A phrase rule names its daughters' surface order and the features that flow between them, a lexical entry gives a lemma its forms, and the engine unifies, selects, and linearizes, recursing through nested phrases so two structures combine to depth. Agreement and word order are editable nodes in `golem dump`: change the word-order rule and recompile, and the clause reorders with no change to the engine. It fails cleanly to the procedural realizer, the reliable floor beneath it.
 - Salience is information, not frequency. Consolidation scores each concept by the diversity of the contexts its experience spans, with a durability boost when a firm name was deliberately taught. An informative concept's experience is refreshed so it outlives the night while a node lived in one fixed context fades however often it recurred; a recurring shape warms its concept in proportion to its information, so noise cannot pull the inner loop above real knowledge; and the walk damps a destination by the breadth of edges that reach it, so the loop stops circling a hub everything connects to. `golem forget <what>` is the true-forget: it deletes a remembered shape and its edges outright, the concept and its episodes alike, since some traces must be destroyable rather than only demoted.
+- Language is understood and written back into the graph by one engine. A told clause parses through the same construction engine the realizer runs forward, into a proposition over a relation and its roles, and is stored. A relation, a verb like "chase" or a stated relation like "after", is a first-class concept a proposition binds into and the inner loop crosses; a relation told in enough propositions with varied fillers grows its own argument-structure construction at sleep, competing by weight with the seed. A question about a role is answered by building a meaning structure and generating it through that same engine, so the answer comes from meaning rather than a fixed menu.
+- A conversation holds its thread: the workspace is the discourse model. A pronoun binds to the recent referent whose animacy fits (read from the role it last played), the topic is followed across turns and its change noticed, and "why", "and then", and "what about" walk the warm proposition. "Why" gives the learned predecessor of what is in mind, GOLEM's grounded answer where it models no cause, a correlational antecedent or an admitted gap.
+- The top of the loop is one continuous determination. Each moment GOLEM weighs what to do, consolidate, pursue the held goal, or idle, by a basal-ganglia-style arbitration with idle as the floor, so self-direction is a standing decision the loop makes each moment, even before anything triggers it.
+- GOLEM can write and run a program. `golem compute "the sum of 6 and 7"` comprehends the computation, generates the source, runs it under a time budget in an embedded Go interpreter over a curated, computation-only slice of the standard library (os, exec, net, and syscall left out of reach), and grounds the result the way it grounds a percept. A runaway or panicking program is contained to an error it can learn from without disturbing the loop. Running code is gated shut by default and opens only with `runtime_enabled` set, the operator's switch once the whole process sits inside the sandbox.
+- Code is a language GOLEM learns. A few arithmetic operations are seeded as constructions like the rest of the grammar, each a form-meaning pair with two surfaces, the operator that runs it and the word it is taught by, read both ways by one engine: the literal "the sum of 6 and 7" and the real Go expression "6 * (7 + 1)", read by the language's own parser, land on the one computation and are grounded by running. The first language is arithmetic, the bootstrap the principle is fixed on; comprehending arbitrary source is the open arc.
+- GOLEM has a grounded measure of whether a change to itself is an improvement: goal progress (the share of goals satisfied), world-prediction calm (low alarm), and trust (oxytocin), blended into one currency, with a change kept only when the blend rises and no single factor collapses, so a degenerate optimum that buys one outcome by wrecking another is caught.
+- And it can change its own source, under that measure and never live. Given its own source path, GOLEM reads a tuning constant out of its code, proposes a new value, and runs the change through the build-and-deploy pipeline used by hand, compile, test, fitness gate, on an isolated copy, staging a vetted candidate off to the side. It never edits the live tree and never swaps the running binary; the deploy is the operator's. Every stage lands on the audit trail, and the capability is twice gated (the runtime open and a source path set), shipping closed.
 
-[ROADMAP.md](ROADMAP.md) tracks how the build got here and what stays open; the GUI memory editor below is the part still ahead of the code.
+The [GOLEM Memory Editor (GME)](#the-memory-editor-gme) is the instrument for reading and shaping this graph by hand. The [known limitations](#known-limitations) near the end mark where each faculty still falls short.
 
 ---
 
@@ -214,7 +232,7 @@ GOLEM features an automated "Sleep" phase triggered by high Serotonin and low in
 - **Language:** Go (1.25+)
 - **Concurrency:** parallel substrate, serial commitment. Sensory channels, committed execution, and the thought operations all run as `goroutines` off the loop; the `select` loop is the single serial thread that decides and writes memory, the Global Workspace and the action gate at once.
 - **Architecture:** Event-driven, non-blocking, neuro-symbolic.
-- **Dependencies:** Zero-bloat. Pure-Go libraries only (sqlite via modernc.org, fsnotify); no model weights, no frameworks, no cgo.
+- **Dependencies:** Zero-bloat. The daemon links three pure-Go libraries only (sqlite via `modernc.org`, `fsnotify`, and the `yaegi` interpreter that backs the code runtime); no model weights, no frameworks, no cgo. The memory editor's window is a separate Go module and the only part that pulls in a webview (Wails with a Svelte frontend).
 
 ---
 
@@ -226,8 +244,11 @@ the bio-mapping column says which part of the architecture table each
 package carries.
 
 ```
-cmd/golem/          the CLI: dispatch, printing, the DOT export, and the
-                    in-RAM synthetic demo
+cmd/golem/          the CLI: dispatch, printing, the DOT export, the
+                    compute verb, and the in-RAM synthetic demos
+wire/               the public socket protocol: requests, responses, the
+                    display forms of memory, and the client side of one
+                    round trip (imported by the CLI and the editor alike)
 internal/
   limbic/           the neurochemical state and its homeostasis (the limbic
                     system: dopamine, noradrenaline, serotonin, oxytocin)
@@ -247,21 +268,32 @@ internal/
                     compiled from memory, the constructions filled and
                     composed into sentences, and the general unification
                     engine over a declarative grammar (Broca and Wernicke)
+  code/             the programming-language faculty: arithmetic operations
+                    as bidirectional constructions, comprehending a
+                    computation from a surface and generating source from
+                    one, and reading real Go declarations
+  runtime/          the bounded code runtime behind a Runner seam: an
+                    embedded interpreter over a computation-only slice of
+                    the standard library
+  selfbuild/        the isolated build-test-stage pipeline for a self-change,
+                    run on a copy, never the live tree or binary
   pipeline/         shell-free execution: parse commands into argv stages or
                     refuse, run them over real pipes, derive resource claims
   events/           the structured trail, one JSON object per line, rotated
-  wire/             the socket protocol: requests, responses, display forms,
-                    and the client side of one round trip
   config/           tuning, the config file, channel trust, and the
                     destructive-pattern denylist with its matchers
   daemon/           the brain loop that owns all mutable state: encoding,
-                    association, sleep, the decision loop and its gates, the
-                    parallel action arbiter, the message planner, the
-                    workspace, the inner loop with its walk operations and
-                    acts, the drives and the held goal, the feature passes,
-                    the voice, and the demos that drive it all on throwaway
-                    homes (basal ganglia, ACC, hypothalamus, and the global
-                    workspace)
+                    association, sleep, the continuous determination at the
+                    top of the loop, the decision gates, the parallel action
+                    arbiter, the message planner, the workspace and
+                    discourse, the inner loop with its walks and acts, the
+                    drives and the held goal, the feature passes, the code
+                    runtime, the grounded fitness and self-modification, the
+                    audited raw edits, the voice, and the demos (basal
+                    ganglia, ACC, hypothalamus, and the global workspace)
+gme/                the memory editor, a separate Go module: a shared wire
+                    client, the gme console, and the GME.app window (Wails
+                    with a Svelte frontend)
 ```
 
 ---
@@ -303,6 +335,9 @@ go build -o golem ./cmd/golem
 ./golem teach --mind worry grounds stress
 ./golem teach --mind tidy act consolidate
 ./golem teach --say introspect "my mind was on {thought}"
+
+# Write and run a program (only with runtime_enabled set; see Configuration)
+./golem compute "the sum of 6 and 7"
 ./golem stop
 
 # Optional: feed your shell into GOLEM (open a new shell afterward)
@@ -311,41 +346,69 @@ go build -o golem ./cmd/golem
 
 > **Note:** GOLEM is designed to run in the background of your OS, observing and learning your patterns without the need for constant prompting.
 
+### Running the Memory Editor
+
+GME is a separate program that talks to the running daemon over the same socket. See [The Memory Editor (GME)](#the-memory-editor-gme) below for what it does.
+
+```bash
+# The console: build it and read or shape the live graph
+go -C gme build -o gme ./cmd/gme
+gme/gme status
+gme/gme search disk
+gme/gme audit
+
+# The window: a Wails desktop app (install the Wails CLI once)
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+cd gme && wails build && open build/bin/GME.app
+```
+
 ### Configuration
 
 The daemon reads `~/.golem/config.json` and writes one full of defaults on first run. [config.example.json](config.example.json) in the repository shows every field at its default, and a test pins it to the code, so the example cannot drift. The fields most worth knowing:
 
 - `channels` selects the built-in senses: `vitals` and `syslog` ship on; add `watch_dirs` for file events, `tail_files` for the reading channel, `watch_urls` for the web channel, `screen` for the frontmost app, and `voice` to speak replies (`voice_name` picks the system voice; `golem voice` adjusts both without a restart).
 - `execute_enabled` and `execute_allowlist` are two of the three execution gates and both ship closed: nothing runs for real until you switch execution on and allowlist commands by hand.
+- `runtime_enabled` gates running code GOLEM writes (the `compute` verb and self-modification) and ships off; `source_path` points GOLEM at its own source for self-modification and is empty by default. Opening either assumes the operator has placed the whole process inside a sealed container.
 - `untrusted_channels` (the web by default) marks senses whose moments encode lightly and can never cue a habit or ground an action.
 - `surprise_threshold`, `z_gate`, and `predictor_windows` tune what reaches consciousness per channel; the sleep settings pace consolidation.
 
 ---
 
-## Future Roadmap
+## The Memory Editor (GME)
 
-### Memory Editor Tool (GME)
+A glass box deserves an instrument to read and shape it. GME is that instrument: a separate program from the daemon and the terminal, talking to it over the same unix socket, so editing memory and conversing with GOLEM stay distinct. It is two faces of one client, and the daemon stays the only process that writes the database.
 
-The **GOLEM Memory Editor** is the part still ahead of the code. It is a specialized interface for the "Ghost in the Machine," providing GUI-based "Neurosurgery" on your GOLEM model.
+- **`gme`, the console.** A CLI that reads the live graph (`status`, `search`, `concepts`, `audit`, `dump`), authors through grounding (`observe`, `teach`), and performs audited raw surgery (`edit`, `reweight`, `delete`, `mark`).
+- **GME.app, the window.** A desktop app (Go + Wails, with a Svelte frontend) that opens on an **interactive graph** of the live store: the semantic core (concepts, words, and the features that ground them) drawn by default, kind filters to bring in the episodic moments and the grammar scaffold, a find box that lights matching nodes and dims the rest, and a node inspector. Tabs beside the graph search memory by cue, list the distilled concepts, tail the audit trail, and author new memories.
 
-**Features:**
+Two disciplines keep it honest:
 
-- **Fragment Inspection / Synaptic Visualization:** A graph-based GUI to see how GOLEM has linked your files, commands, and conversations. Click any memory node to see exactly what the system saw (the "Blob") and what it felt (the "Neurochemistry") when it was created.
-- **Manual Grounding / Manual Weighting:** Drag a "Linguistic Fragment" (a word) onto a "System Action" (a script) to manually teach GOLEM a new skill without training. Manually strengthen or weaken "Synaptic Links" between fragments to prioritize specific knowledge.
-  - *Example:* Drag a line between the word "Safety" and the command "Backup" to manually program a new instinct.
-- **The "Grounding" Update:** Manually edit a memory fragment and send a **Synaptic Reset** signal to GOLEM. GOLEM receives the notification, triggers a "Causal Update," and immediately re-maps all associated memories (e.g., updating a project path).
-- **Synaptic Reset:** If GOLEM is stuck in a bad habit (a "Fixed Action Pattern"), use the editor to prune that specific branch of the graph.
-- **Neuro-Injection:** A developer tool to manually spike Dopamine or Noradrenaline to test GOLEM's reaction to stress or novelty.
+- **Authoring goes through teaching.** Filling memory emits the same teaching and perception events the terminal does, so an authored concept is grounded exactly as a narrated one, never a bare declared symbol.
+- **Raw surgery is audited and marked.** A direct splice, reweight, deletion, or hand-touch runs on the brain loop like every other state change, lands on the audit trail, and optionally marks the fragment as editor-touched, so GOLEM can tell a shaped memory from a lived one. A per-fragment provenance flag carries that mark.
 
-### Neurochemical Expansion (GOLEM v2)
+GME is its own Go module, so the daemon's dependency tree stays at three direct libraries; the GUI's webview stack lives only in the editor.
 
-While the initial system uses Dopamine, Noradrenaline, and Serotonin, the **GOLEM v2** roadmap expands the neurochemical palette:
+---
 
-| Neurochemical | Biological Role | GOLEM Behavior |
-| --- | --- | --- |
-| **Acetylcholine** | Focus / Precision | Controls "Learning Rate." High Acetylcholine creates "Hard" symbolic links immediately; low creates "Soft" probabilistic links. |
-| **GABA** | Inhibition | Sensory inhibition that focuses the system on one task. |
-| **Adenosine** | Sleep Pressure | Triggers the Consolidation/Batching cycle. |
-| **Oxytocin** (built) | Alignment / Bond | Measures user trust. Denials and failed runs lower it, which raises the graduation bar everywhere, so a corrected GOLEM graduates habits more slowly and stays in confirm-first mode longer. |
-| **Cortisol** | System Stress / Resource Strain | Measures CPU/RAM/Heat levels. High Cortisol triggers "Avoidance" behaviors, like shutting down non-essential sensory channels to save the core. |
+## Known Limitations
+
+- **Execution is a modeled pipeline, not a shell.** Substitution, subshells, chaining, globbing, escapes, and descriptor redirects are refused by design; a job that needs them lives in a script the allowlist names. Pipeline success is every-stage-zero, stricter than a shell's last-stage-wins, so a head that exits nonzero when its reader stops early reads as a failed run.
+- **Effector exclusion is a string-equality heuristic.** Two paths naming one file differently can slip past it, and two unrelated commands sharing an argument word serialize when they could overlap. It errs conservative, but it is a heuristic.
+- **Comprehension reads canonical clauses, not open prose.** A told transitive or intransitive clause parses into a proposition over a relation and its roles, with short noun phrases segmented by their determiners; richer noun phrases, argument structures beyond agent and patient (ditransitives, obliques, modifiers), and arbitrary prose fall through to a partial meaning. Role binding favors an animate agent by a learned fit, so it leans on word order alone on the first tellings, and the lemmatizer that keys a relation across its inflections is regular-only.
+- **Relations are reified but not structure-mapped.** A relation grounds in the moments instantiating it, but the analogy across instances, seeing Paris-France and Tokyo-Japan or two separate chasings as the same shape, is not drawn. Generalizing one relation across its instances by structure is the deeper reach left open.
+- **The bidirectional engine speaks only the relational answers.** Definitions, succession, and counts still go through the procedural realizer or the construction composer; and a relation comprehended in Turkish is stored, but its relational answer is not yet generated with Turkish inflection.
+- **Code comprehension is an arithmetic bootstrap.** The code faculty reads and runs real Go expressions and reads a file's declarations, but the seeded language is arithmetic. Comprehending arbitrary Go (loops, functions, whole programs) is the open arc, and it is the reach that would let self-modification propose a change from reading its own logic rather than retuning a constant.
+- **Self-modification retunes constants and never deploys itself.** A self-change today reads a numeric constant from GOLEM's own source and proposes a new value; richer edits over more of the syntax tree grow from there. The pipeline builds and tests on an isolated copy and stages a candidate, and the live swap is always the operator's, by design.
+- **Resemblance is grounded, not lexical.** Two things resemble each other by shared tokens, channel, felt chemistry, or shared neighborhood; a true synonym that never kept the same company nor shared a surface attribute still needs a naming bond or a lived bridge.
+- **Salience weighs information coarsely.** The score is a channel-diversity-plus-teaching heuristic; a finer measure, the entropy of a node's whole company, is the next turn.
+- **Untrusted perception is a standing hazard.** Open-world channels (the web by default) carry adversarial content. The gates and denylist stop it from triggering execution, and untrusted channels encode lightly and can never ground an action, but keeping it from polluting memory is an ongoing policy.
+- **The graph view defaults to the semantic core.** The full store is hundreds of nodes and thousands of temporal edges, a hairball; the window draws concepts and words by default and reveals the episodic mass on demand, capped so a large graph stays responsive.
+
+## Open Directions
+
+A few things the current build does not do, kept honest.
+
+- **Comprehending arbitrary source**, which is what would let self-modification propose changes from understanding its own code rather than retuning a known constant.
+- **Structure-mapping across relations**, the analogy that sees two instances as one shape.
+- **A wider neurochemical palette.** Dopamine, noradrenaline, serotonin, and oxytocin run reward, salience, sleep pressure, and trust. A transmitter earns a place only by bending a behavior nothing already covers: a cortisol-like stress signal read from CPU, memory, and heat that sheds non-essential sensing to protect the core loop is the next worth adding when GOLEM runs ambient under load; acetylcholine (a precision / learning-rate signal) and adenosine (sleep pressure) overlap signals already present and stay out until that coarseness bites.
 
