@@ -404,9 +404,11 @@ func TestWhenWhereCountAndGaps(t *testing.T) {
 	if !strings.Contains(count.Say, "I have seen make test") || !strings.Contains(count.Say, "times") {
 		t.Fatalf("how-many should count the tally: %q", count.Say)
 	}
+	// Why walks to the antecedent in the learned sequence; make test opens it,
+	// so nothing precedes it and the admission names that gap honestly.
 	why := say(t, d, "why did make test happen")
-	if why.Say != "I do not know why yet." {
-		t.Fatalf("why has no causal model and should say so: %q", why.Say)
+	if why.Say != "I do not know what preceded make test yet." {
+		t.Fatalf("why should walk to the antecedent and admit when there is none: %q", why.Say)
 	}
 	who := say(t, d, "who ran make test")
 	if who.Say != "I do not know who yet." {

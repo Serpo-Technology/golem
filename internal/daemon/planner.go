@@ -491,6 +491,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		}
 	}
 
+	// "And then" is a move on the warm proposition, not a clause: walk its
+	// successor and speak what came next.
+	if isThenMove(raw) {
+		return d.discourseWalk(frame, "after", d.chem.Snapshot()), nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil
@@ -590,9 +596,13 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	}
 
 	switch {
-	case frame.Wh == "why", frame.Wh == "who":
-		// No causal model and no agents: the honest answer is the gap
-		// itself.
+	case frame.Wh == "why":
+		// "Why" is a move on the warm proposition: walk to what precedes it,
+		// the antecedent in the learned sequence, GOLEM's grounded answer where
+		// it has no causal model. With nothing preceding, the honest gap.
+		return d.discourseWalk(frame, "before", chem)
+	case frame.Wh == "who":
+		// No agents modeled: the honest answer is the gap itself.
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem)
 	case frame.Counting:
@@ -683,6 +693,51 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	}
 	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 		Negate: true, Patient: grammar.Term{Phrase: "that"}}, chem)
+}
+
+// discourseWalk reads a follow-up as a move on the warm proposition: it takes
+// the topic named or, lacking one, the warm referent, and walks the succession
+// relation from it, "before" for why (the antecedent) and "after" for and-then
+// (the consequent), so a connective runs on the walk already built rather than
+// a parser of dialogue acts. With no proposition in mind it is the honest gap.
+func (d *Daemon) discourseWalk(frame grammar.Frame, rel string, chem limbic.State) string {
+	topic := frame.Patient
+	if topic.Empty() {
+		topic = frame.Agent
+	}
+	if topic.Empty() {
+		topic = d.warmTopic(frame.Alt, frame.ProType)
+	}
+	if topic.Empty() {
+		wh := frame.Wh
+		if wh == "" {
+			wh = "why"
+		}
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: wh}}, chem)
+	}
+	return d.planSuccession(frame, []grammar.Qualifier{{Rel: rel, Anchor: topic}}, chem)
+}
+
+// isThenMove reports whether an utterance is the bare successor connective,
+// "then" or "and then", a discourse move asking what came next rather than a
+// clause of its own.
+func isThenMove(raw string) bool {
+	tokens, _ := grammar.Tokenize(raw)
+	if len(tokens) == 0 {
+		return false
+	}
+	hasThen := false
+	for _, t := range tokens {
+		switch t {
+		case "then":
+			hasThen = true
+		case "and":
+		default:
+			return false
+		}
+	}
+	return hasThen
 }
 
 // planSuccession answers order questions: the qualifiers pick the

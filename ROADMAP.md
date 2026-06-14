@@ -1843,7 +1843,7 @@ field needs to carry a little more of it.
 - [x] A pronoun or bare reference binds to the best-fit member of that set, most
       active and feature-compatible, so "it" finds the inanimate it should and
       "she" the animate, by the signatures already carried.
-- [ ] A discourse move reads as a walk over the warm proposition, "why" to its
+- [x] A discourse move reads as a walk over the warm proposition, "why" to its
       grounds, "and then" to its successor, "what about X" shifting the warm
       referent, so connectives run on the primitive already built and not a
       parser of dialogue acts.
@@ -1879,8 +1879,17 @@ binding falls back to pure warmth, so a bare "it" and "the other one" resolve
 the way they did before. The pronouns carry their preference as seed data ("it"
 inanimate, "she" and "he" animate), so a tongue's pronoun inventory stays in the
 bootstrap. Gender past animacy is not distinguished, there being no grounded
-signal for it. What remains is reading a discourse move as a walk over the warm
-proposition, and following a topic across turns.
+signal for it.
+
+A discourse move now reads as a walk over the warm proposition. "Why" walks to
+the antecedent in the learned sequence, the grounded answer where GOLEM models
+no cause, so after it learns make deploy follows make test, "why" about the warm
+make deploy walks back to make test; with nothing preceding, it admits that gap
+in those terms rather than a generic shrug. "And then" walks the other way, to
+the successor. "What about X" shifts the conversation onto X and answers about
+it. All three run on the succession walk already built, with no parser of
+dialogue acts. What remains is following a topic across turns and noticing when
+it changes.
 
 ## Step 34: The goal loop, one determination each moment
 
