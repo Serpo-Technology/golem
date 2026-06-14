@@ -262,15 +262,13 @@ Goal: see the graph before building the GUI that edits it.
       one JSON object per line in events.jsonl, plus replay, merge,
       sleep, approval, denial, and autonomous entries. Size-capped with
       one rotated generation, so the trail cannot quietly eat the disk.
-- [ ] GME (the GUI editor) starts only after the storage schema has
-      survived a few weeks without changing. The concept layer changed it
-      on 2026-06-11 (fragments gained kind, lang, and category; links
-      gained a rel column and a wider primary key), which restarts that
-      clock. Everything since (thought operations, grammar parameters,
-      abstractions, the act layer, the feature signatures, and the
-      sentence constructions) rides the same columns: new kind and rel
-      values and template conventions, no schema change, so the clock
-      stands.
+- [x] GME, the memory editor, is built (Step 39): a console and a window
+      over the wire protocol. The storage schema held steady from the
+      2026-06-11 concept-layer change (fragments gained kind, lang, and
+      category; links gained a rel column and a wider primary key) through
+      all the self-extension work, which rode the same columns. The
+      editor's one addition is an additive provenance column on fragments,
+      migrated in place so an older memory upgrades without loss.
 
 ## Step 8: The action layer: pipelines and parallel execution
 
@@ -2225,15 +2223,15 @@ re-introducing floating symbols: authoring emits teaching events through GOLEM's
 real grounding pipeline, so a filled-in concept is grounded exactly as a narrated
 one, only faster and visual.
 
-- [ ] Filling memory in the editor emits teaching events through the grounding
+- [x] Filling memory in the editor emits teaching events through the grounding
       pipeline, so what is authored is grounded, never a bare declared symbol.
-- [ ] A separate edit mode allows raw surgery, splicing and deletion, with every
+- [x] A separate edit mode allows raw surgery, splicing and deletion, with every
       direct write logged to the audit trail, so a raw edit is never silent.
-- [ ] A fragment can optionally be marked as edited through the editor, on the
+- [x] A fragment can optionally be marked as edited through the editor, on the
       fragment itself, so GOLEM can know which memories were hand-touched rather
       than lived and weigh them accordingly; using the mark is optional, but the
       truth is available.
-- [ ] The editor reads and renders the live graph for inspection, the same glass
+- [x] The editor reads and renders the live graph for inspection, the same glass
       box the audit trail records, so shaping memory and watching it are one tool.
 
 Framing: the editor is a console beside the terminal, not a replacement for it,
@@ -2250,6 +2248,24 @@ Done when: a concept authored in the editor is grounded indistinguishably from
 one taught at the terminal, a raw edit lands on the audit trail, a fragment
 marked as editor-touched reads back as such, and GOLEM can tell a hand-touched
 memory from a lived one when the mark is used.
+
+Status: built and tested, the read side live. The editor is two programs over
+one wire client: a console, gme, and a window, a Wails app, both talking to the
+daemon over the same socket the terminal uses and never touching the database
+themselves. Reading and rendering the live graph runs now, the window showing
+the daemon's vitals, recalling fragments by cue, listing the distilled concepts
+with the names that ground them, and tailing the audit trail. Authoring goes the
+grounded way: the editor files a moment through perception or grounds a cue
+through teaching, the same path the terminal walks, so what is added is earned
+like a lived memory. Raw surgery is the scalpel beside it: an edit splices a
+fragment's content, a reweight moves its weight, a delete takes it by id, and a
+mark records a hand-touch, each a daemon command run on the brain loop, each
+logged to the trail, and each marking the fragment edited so a shaped memory and
+a lived one stay distinguishable. The provenance is an additive column, migrated
+in place for a memory written before it, verified on an older database in the
+tests. The whole layer is built and green across the store, the daemon, and the
+app; the editing commands act on the live mind once the operator redeploys the
+daemon, the same hand that opens every other capability.
 
 ## Known limitations
 
