@@ -87,16 +87,55 @@ func (e *Engine) Comprehend(text string) (Computation, bool) {
 	return e.comprehendCode(text)
 }
 
-// comprehendLiteral reads the teaching surface "the <word> of <a> and <b>".
+// comprehendLiteral reads the teaching surface, now composed: an operand is a
+// number or another "the <word> of <A> and <B>", so a computation built from
+// many operations comprehends as one, the meaning pole read the way ToLiteral
+// writes it. The surface opens with an operation, and the parse must consume
+// every token, so a binary operation handed a third operand ("the sum of 2 and
+// 3 and 4") is the ill-formed surface it is and fails rather than dropping the
+// tail.
 func (e *Engine) comprehendLiteral(toks []string) (Computation, bool) {
-	if len(toks) != 6 || toks[0] != "the" || toks[2] != "of" || toks[4] != "and" {
+	if len(toks) == 0 || toks[0] != "the" {
 		return Computation{}, false
+	}
+	c, n, ok := e.literalOperand(toks)
+	if !ok || n != len(toks) {
+		return Computation{}, false
+	}
+	return c, true
+}
+
+// literalOperand reads one operand from the front of toks and reports how many
+// tokens it spanned. A bare token is a literal value; "the <word> of <A> and
+// <B>" is the operation its word names over two operands read the same way, the
+// recursion that lets the teaching surface nest as deep as the computation does.
+func (e *Engine) literalOperand(toks []string) (Computation, int, bool) {
+	if len(toks) == 0 {
+		return Computation{}, 0, false
+	}
+	if toks[0] != "the" {
+		return Computation{Lit: toks[0]}, 1, true
+	}
+	if len(toks) < 4 || toks[2] != "of" {
+		return Computation{}, 0, false
 	}
 	op, ok := e.byWord[toks[1]]
 	if !ok {
-		return Computation{}, false
+		return Computation{}, 0, false
 	}
-	return Computation{Op: op.Name, Args: []Computation{{Lit: toks[3]}, {Lit: toks[5]}}}, true
+	left, nl, ok := e.literalOperand(toks[3:])
+	if !ok {
+		return Computation{}, 0, false
+	}
+	rest := toks[3+nl:]
+	if len(rest) < 2 || rest[0] != "and" {
+		return Computation{}, 0, false
+	}
+	right, nr, ok := e.literalOperand(rest[1:])
+	if !ok {
+		return Computation{}, 0, false
+	}
+	return Computation{Op: op.Name, Args: []Computation{left, right}}, 3 + nl + 1 + nr, true
 }
 
 // comprehendCode reads the executable surface as real Go: the language's own

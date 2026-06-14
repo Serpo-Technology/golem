@@ -114,3 +114,48 @@ func TestNestedCodeRoundTrip(t *testing.T) {
 		t.Fatalf("the source should comprehend back to the same tree: %+v", back)
 	}
 }
+
+// The teaching surface composes: an operand can itself be an operation, so a
+// nested literal surface comprehends to the same tree a nested code surface
+// does, the meaning pole reading however deep the words go.
+func TestComprehendNestedLiteral(t *testing.T) {
+	e := testEngine()
+	c, ok := e.Comprehend("the sum of the product of 2 and 3 and 4")
+	if !ok || c.Op != "add" || c.Args[1].Lit != "4" {
+		t.Fatalf("the nested literal should comprehend to add(_, 4): %+v ok %v", c, ok)
+	}
+	if c.Args[0].Op != "multiply" || c.Args[0].Args[0].Lit != "2" || c.Args[0].Args[1].Lit != "3" {
+		t.Fatalf("the first operand should be multiply(2, 3): %+v", c.Args[0])
+	}
+	// The grouping the words carry is the grouping the source runs: (2 * 3) + 4.
+	if src, ok := e.ToCode(c); !ok || src != "(2 * 3) + 4" {
+		t.Fatalf("the nested literal should generate grouped source: %q ok %v", src, ok)
+	}
+}
+
+// A nested literal round-trips through ToLiteral: generating the surface from a
+// compound computation and comprehending it back closes on the same tree.
+func TestNestedLiteralRoundTrip(t *testing.T) {
+	e := testEngine()
+	c := Computation{Op: "add", Args: []Computation{
+		{Op: "multiply", Args: []Computation{{Lit: "2"}, {Lit: "3"}}},
+		{Lit: "4"},
+	}}
+	surface, ok := e.ToLiteral(c)
+	if !ok || surface != "the sum of the product of 2 and 3 and 4" {
+		t.Fatalf("the compound computation should generate the nested surface: %q ok %v", surface, ok)
+	}
+	back, ok := e.Comprehend(surface)
+	if !ok || back.Op != "add" || back.Args[0].Op != "multiply" {
+		t.Fatalf("the surface should comprehend back to the same tree: %+v", back)
+	}
+}
+
+// A binary operation handed a third operand is ill-formed: the parse leaves a
+// tail it cannot place, so the surface fails rather than silently dropping it.
+func TestComprehendRejectsTrailingOperand(t *testing.T) {
+	e := testEngine()
+	if c, ok := e.Comprehend("the sum of 2 and 3 and 4"); ok {
+		t.Fatalf("a third operand to a binary operation should not comprehend: %+v", c)
+	}
+}
