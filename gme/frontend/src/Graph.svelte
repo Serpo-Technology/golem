@@ -21,6 +21,12 @@
   let total = 0;
   let edgeShown = 0;
 
+  // Search highlights matching nodes among those drawn and dims the rest; a query
+  // that also matches nodes hidden behind a kind filter says how many.
+  let q = '';
+  let matchCount = 0;
+  let hiddenMatches = 0;
+
   let selected: wire.FragmentInfo | null = null;
   let editText = '';
   let confirmingDelete = false;
@@ -60,6 +66,12 @@
     { selector: 'edge[rel = "names"]', style: { 'line-color': '#3a5a44' } },
     { selector: 'edge[rel = "grounds"]', style: { 'line-color': '#4a3a5a' } },
     { selector: 'edge[rel = "feature"]', style: { 'line-color': '#46405a' } },
+    {
+      selector: 'node.match',
+      style: { 'border-color': '#e0564b', 'border-width': 3, width: 22, height: 22, 'font-size': 10, color: '#f0f2f5', 'z-index': 99 },
+    },
+    { selector: 'node.dim', style: { opacity: 0.12 } },
+    { selector: 'edge.dim', style: { opacity: 0.04 } },
   ];
 
   function elements() {
@@ -75,7 +87,7 @@
     edgeShown = edges.length;
     return [
       ...nodes.map((f) => ({
-        data: { id: String(f.id), label: clip(f.content, 22), group: kindGroup(f.kind), edited: !!f.edited },
+        data: { id: String(f.id), label: clip(f.content, 22), content: f.content, group: kindGroup(f.kind), edited: !!f.edited },
       })),
       ...edges.map((l) => ({
         data: { id: `e${l.from}_${l.to}_${l.rel || 't'}`, source: String(l.from), target: String(l.to), rel: l.rel || 'temporal' },
@@ -102,6 +114,47 @@
       if (e.target === cy) selected = null;
     });
     cy.resize();
+    applyHighlight();
+  }
+
+  // applyHighlight marks the nodes whose content matches the query and dims the
+  // rest along with the edges that do not join two matches, so a search reads as
+  // a lit subgraph. It runs without relayout, so typing stays smooth.
+  function applyHighlight() {
+    if (!cy) return;
+    const query = q.trim().toLowerCase();
+    cy.batch(() => {
+      cy.nodes().removeClass('match dim');
+      cy.edges().removeClass('dim');
+      if (!query) return;
+      cy.nodes().forEach((n: any) => {
+        const hit = String(n.data('content') || '').toLowerCase().includes(query);
+        n.addClass(hit ? 'match' : 'dim');
+      });
+      cy.edges().forEach((e: any) => {
+        if (!(e.source().hasClass('match') && e.target().hasClass('match'))) e.addClass('dim');
+      });
+    });
+    matchCount = query ? cy.nodes('.match').length : 0;
+    hiddenMatches =
+      query && graph
+        ? Math.max(0, (graph.fragments || []).filter((f) => f.content.toLowerCase().includes(query)).length - matchCount)
+        : 0;
+  }
+
+  // focusMatches zooms the view to the lit nodes and opens the inspector when the
+  // search has narrowed to one.
+  function focusMatches() {
+    if (!cy) return;
+    const m = cy.nodes('.match');
+    if (m.length) cy.animate({ fit: { eles: m, padding: 60 } }, { duration: 300 });
+    if (m.length === 1) selectNode(Number(m[0].id()));
+  }
+
+  function clearSearch() {
+    q = '';
+    applyHighlight();
+    if (cy) cy.animate({ fit: { eles: cy.elements(), padding: 20 } }, { duration: 300 });
   }
 
   function selectNode(id: number) {
@@ -178,9 +231,17 @@
     {#each GROUPS as g}
       <button class="chip" class:on={enabled.has(g)} on:click={() => toggle(g)}>{g}</button>
     {/each}
-    <span class="count">
-      {shown}{#if total > shown} of {total}{/if} nodes, {edgeShown} edges
-    </span>
+    <form class="gsearchform" on:submit|preventDefault={focusMatches}>
+      <input class="gsearch" placeholder="find in graph..." bind:value={q} on:input={applyHighlight} />
+      {#if q}<button type="button" class="gclear" title="clear" on:click={clearSearch}>&times;</button>{/if}
+    </form>
+    {#if q}
+      <span class="mcount">
+        {matchCount} match{matchCount === 1 ? '' : 'es'}{#if hiddenMatches} (+{hiddenMatches} hidden){/if}
+      </span>
+    {:else}
+      <span class="count">{shown}{#if total > shown} of {total}{/if} nodes, {edgeShown} edges</span>
+    {/if}
     <button class="relayout" on:click={render}>relayout</button>
   </div>
 
@@ -247,6 +308,41 @@
   }
   .count {
     color: #6b727e;
+    font-size: 12px;
+    margin-left: 8px;
+  }
+  .gsearchform {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-left: 8px;
+  }
+  .gsearch {
+    background: #1b1e24;
+    border: 1px solid #343a45;
+    border-radius: 6px;
+    color: #e6e8ec;
+    padding: 4px 24px 4px 10px;
+    font-size: 12px;
+    width: 180px;
+  }
+  .gsearch:focus {
+    outline: none;
+    border-color: #4ca5e0;
+  }
+  .gclear {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    color: #6b727e;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  .mcount {
+    color: #e0a59a;
     font-size: 12px;
     margin-left: 8px;
   }
