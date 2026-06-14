@@ -11,7 +11,7 @@ import (
 	"golem/internal/grammar"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // DemoLanguage plays one synthetic day into a throwaway memory and

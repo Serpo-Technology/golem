@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // Content with quotes and backslashes cannot break out of a DOT label.

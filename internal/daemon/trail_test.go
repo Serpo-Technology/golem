@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"golem/internal/events"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 func readEvents(t *testing.T, home string) []events.Event {

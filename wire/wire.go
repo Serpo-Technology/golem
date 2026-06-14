@@ -10,10 +10,18 @@ import (
 	"net"
 	"path/filepath"
 	"time"
-
-	"golem/internal/limbic"
-	"golem/internal/memory"
 )
+
+// Chem is the wire form of the limbic chemistry: the four levels a client reads,
+// mirroring the daemon's internal state so the wire types carry no dependency on
+// it and a separate program can import them. The field names match the internal
+// shape, so the JSON is the same on both sides.
+type Chem struct {
+	Dopamine      float64
+	Noradrenaline float64
+	Serotonin     float64
+	Oxytocin      float64
+}
 
 // The CLI talks to the daemon over a unix socket with one JSON request and
 // one JSON response per connection. The daemon is the only process that
@@ -35,7 +43,7 @@ type Response struct {
 	OK        bool            `json:"ok"`
 	Error     string          `json:"error,omitempty"`
 	Status    *StatusInfo     `json:"status,omitempty"`
-	Chem      *limbic.State   `json:"chem,omitempty"`
+	Chem      *Chem           `json:"chem,omitempty"`
 	Fragments []*FragmentInfo `json:"fragments,omitempty"`
 	Links     []*LinkInfo     `json:"links,omitempty"`
 	Observe   *ObserveResult  `json:"observe,omitempty"`
@@ -130,7 +138,7 @@ type StatusInfo struct {
 	Channels       map[string]*ChannelStat `json:"channels"`
 	Sleeps         int                     `json:"sleeps"`
 	LastSleepUnix  int64                   `json:"last_sleep_unix"`
-	Chem           limbic.State            `json:"chem"`
+	Chem           Chem                    `json:"chem"`
 	PromotionBar   int                     `json:"promotion_bar"`
 	ExecuteEnabled bool                    `json:"execute_enabled"`
 	AllowlistSize  int                     `json:"allowlist_size"`
@@ -159,35 +167,20 @@ type ChannelStat struct {
 // results: 1.0 marks a direct match, lower values mark moments reached
 // through the link graph. LinkCount is the fragment's degree, set on dump.
 type FragmentInfo struct {
-	ID         uint64       `json:"id"`
-	Channel    string       `json:"channel"`
-	Content    string       `json:"content"`
-	Template   string       `json:"template"`
-	Surprise   float64      `json:"surprise"`
-	Limbic     limbic.State `json:"limbic"`
-	AtUnix     int64        `json:"at_unix"`
-	Weight     float64      `json:"weight"`
-	Count      int          `json:"count,omitempty"` // above 1 the fragment is a prototype
-	Kind       string       `json:"kind,omitempty"`  // word and concept nodes; empty means episodic
-	Lang       string       `json:"lang,omitempty"`
-	Category   string       `json:"category,omitempty"`
-	Activation float64      `json:"activation,omitempty"`
-	LinkCount  int          `json:"links,omitempty"`
-}
-
-func NewFragmentInfo(f *memory.Fragment) *FragmentInfo {
-	info := &FragmentInfo{
-		ID: f.ID, Channel: f.Channel, Content: f.Content, Template: f.Template,
-		Surprise: f.Surprise, Limbic: f.Limbic, AtUnix: f.Time.Unix(), Weight: f.Weight,
-		Lang: f.Lang, Category: f.Category,
-	}
-	if f.Count > 1 {
-		info.Count = f.Count
-	}
-	if f.Kind != "" && f.Kind != memory.KindEpisodic {
-		info.Kind = f.Kind
-	}
-	return info
+	ID         uint64  `json:"id"`
+	Channel    string  `json:"channel"`
+	Content    string  `json:"content"`
+	Template   string  `json:"template"`
+	Surprise   float64 `json:"surprise"`
+	Limbic     Chem    `json:"limbic"`
+	AtUnix     int64   `json:"at_unix"`
+	Weight     float64 `json:"weight"`
+	Count      int     `json:"count,omitempty"` // above 1 the fragment is a prototype
+	Kind       string  `json:"kind,omitempty"`  // word and concept nodes; empty means episodic
+	Lang       string  `json:"lang,omitempty"`
+	Category   string  `json:"category,omitempty"`
+	Activation float64 `json:"activation,omitempty"`
+	LinkCount  int     `json:"links,omitempty"`
 }
 
 type ObserveResult struct {

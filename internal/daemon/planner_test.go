@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // feedSequence plays the ordered pair (first, then second) n times, each

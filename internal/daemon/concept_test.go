@@ -8,7 +8,7 @@ import (
 
 	"golem/internal/attention"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // feedShape encodes n occurrences of one shape, minutes apart, and

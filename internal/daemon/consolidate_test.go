@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // Five occurrences of one shape collapse to a prototype and an exemplar:

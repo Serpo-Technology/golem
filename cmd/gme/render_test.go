@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 func TestLastNKeepsTheRecentTail(t *testing.T) {

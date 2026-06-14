@@ -17,7 +17,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 func startTestDaemon(t *testing.T) (home string, done chan error) {

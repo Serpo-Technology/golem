@@ -10,7 +10,7 @@ import (
 	"golem/internal/attention"
 	"golem/internal/config"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 func TestAllowlisted(t *testing.T) {

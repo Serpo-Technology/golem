@@ -9,7 +9,7 @@ import (
 
 	"golem/internal/events"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The sparse feature layer hangs under the concept nodes: each concept
@@ -574,13 +574,13 @@ func (d *Daemon) featureSeeds(query string) ([]*memory.Fragment, []*wire.Fragmen
 		if !matchedFeatures[f.ID] {
 			continue
 		}
-		info := wire.NewFragmentInfo(f)
+		info := fragmentInfo(f)
 		info.Activation = 0.8
 		mediators = append(mediators, info)
 	}
 	if concepts, err := d.store.FragmentsByIDs(conceptIDs); err == nil {
 		for _, c := range concepts {
-			info := wire.NewFragmentInfo(c)
+			info := fragmentInfo(c)
 			info.Activation = 0.8
 			mediators = append(mediators, info)
 		}

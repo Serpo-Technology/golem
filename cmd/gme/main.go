@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"golem/internal/config"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 const usage = `gme is a console for GOLEM's memory, talking to the running daemon.

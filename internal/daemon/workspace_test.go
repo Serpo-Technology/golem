@@ -6,7 +6,7 @@ import (
 
 	"golem/internal/attention"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // Activation fades across ticks and vanishes below the floor, so working

@@ -7,7 +7,7 @@ import (
 
 	"golem/internal/config"
 	"golem/internal/events"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The voice is the first effector after the hands: the realizer's

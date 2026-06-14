@@ -12,7 +12,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The message planner sits above the grammar and decides what to say: it

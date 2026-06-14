@@ -9,7 +9,7 @@ import (
 	"golem/internal/attention"
 	"golem/internal/config"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // seedGraduatedHabit writes a graduated pair into a fresh store before the

@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // recallSeeds is the recall faculty's core, shared by the CLI verb and

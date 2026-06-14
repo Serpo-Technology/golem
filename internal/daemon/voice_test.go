@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"golem/internal/config"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // golem voice flips the runtime switch, picks the speaking voice, and

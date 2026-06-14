@@ -12,7 +12,7 @@ import (
 
 	"golem/internal/config"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 
 	"golem/internal/daemon"
 )

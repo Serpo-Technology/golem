@@ -11,7 +11,7 @@ import (
 	"golem/internal/grammar"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The concept layer is GOLEM's semantic hub: an amodal node between the
@@ -713,13 +713,13 @@ func (d *Daemon) semanticSeeds(query string) ([]*memory.Fragment, []*wire.Fragme
 
 	var mediators []*wire.FragmentInfo
 	for _, w := range words {
-		info := wire.NewFragmentInfo(w)
+		info := fragmentInfo(w)
 		info.Activation = 0.9
 		mediators = append(mediators, info)
 	}
 	if concepts, err := d.store.FragmentsByIDs(cids); err == nil {
 		for _, c := range concepts {
-			info := wire.NewFragmentInfo(c)
+			info := fragmentInfo(c)
 			info.Activation = 0.9
 			mediators = append(mediators, info)
 		}

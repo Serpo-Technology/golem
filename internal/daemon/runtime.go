@@ -10,7 +10,7 @@ import (
 	"golem/internal/memory"
 	"golem/internal/runtime"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The code runtime is GOLEM reaching for the machine's own strength: it writes

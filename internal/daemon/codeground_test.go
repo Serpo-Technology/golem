@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The code constructions are seeded into memory like the rest of the grammar,

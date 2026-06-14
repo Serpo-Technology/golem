@@ -9,7 +9,7 @@ import (
 	"golem/internal/grammar"
 	"golem/internal/limbic"
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The faculties are acts: recall, ground, consolidate, speak, propose,

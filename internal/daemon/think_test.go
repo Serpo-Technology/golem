@@ -10,7 +10,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // settleChem drains the alarm a day of encodes leaves behind, the way

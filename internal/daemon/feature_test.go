@@ -8,7 +8,7 @@ import (
 	"golem/internal/attention"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // diskDay distils one syslog shape into a concept with a grown

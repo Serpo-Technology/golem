@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // renderDOT lays the memory graph out for graphviz: one node per fragment

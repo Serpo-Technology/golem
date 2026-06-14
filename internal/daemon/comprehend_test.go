@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // groundNoun seeds a concept and a word that names it, so the planner's

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"golem/internal/memory"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // constellationDay builds two concrete concepts from lived shapes and

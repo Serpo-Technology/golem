@@ -12,7 +12,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // The inner loop is replay run while awake. When perception is quiet and

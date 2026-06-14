@@ -8,7 +8,7 @@ import (
 
 	"golem/internal/config"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // DemoConsolidate feeds one synthetic day into a throwaway memory

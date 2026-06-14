@@ -32,7 +32,7 @@ import (
 	"golem/internal/pipeline"
 	"golem/internal/runtime"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // Daemon is the long-running form of GOLEM: the same observe/encode/sleep
@@ -1091,7 +1091,7 @@ func (d *Daemon) spread(seeds []*memory.Fragment) ([]*wire.FragmentInfo, error) 
 	}
 	out := make([]*wire.FragmentInfo, 0, len(frags))
 	for _, f := range frags {
-		info := wire.NewFragmentInfo(f)
+		info := fragmentInfo(f)
 		info.Activation = act[f.ID]
 		out = append(out, info)
 	}
@@ -1344,7 +1344,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			Channels:       d.stats,
 			Sleeps:         d.sleeps,
 			LastSleepUnix:  d.lastSleep.Unix(),
-			Chem:           d.chem.Snapshot(),
+			Chem:           chemWire(d.chem.Snapshot()),
 			PromotionBar:   d.promotionBar(),
 			ExecuteEnabled: d.cfg.ExecuteEnabled,
 			AllowlistSize:  len(d.cfg.ExecuteAllowlist),
@@ -1364,7 +1364,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		return wire.Response{OK: true, Concepts: infos}, false, false
 
 	case "chem":
-		chem := d.chem.Snapshot()
+		chem := chemWire(d.chem.Snapshot())
 		return wire.Response{OK: true, Chem: &chem}, false, false
 
 	case "observe":
@@ -1461,7 +1461,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		infos := make([]*wire.FragmentInfo, 0, len(seeds)+len(mediators))
 		for _, f := range seeds {
-			info := wire.NewFragmentInfo(f)
+			info := fragmentInfo(f)
 			info.Activation = 1.0
 			infos = append(infos, info)
 		}
@@ -1483,7 +1483,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		degrees, _ := d.store.LinkCounts()
 		infos := make([]*wire.FragmentInfo, 0, len(frags))
 		for _, f := range frags {
-			info := wire.NewFragmentInfo(f)
+			info := fragmentInfo(f)
 			info.LinkCount = degrees[f.ID]
 			infos = append(infos, info)
 		}

@@ -9,7 +9,7 @@ import (
 
 	"golem/internal/config"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // DemoExecute shows real execution under its three gates, using

@@ -8,7 +8,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/senses"
-	"golem/internal/wire"
+	"golem/wire"
 )
 
 // A recall that has to reach the archive promotes its findings into the
