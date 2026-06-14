@@ -119,6 +119,15 @@ type Config struct {
 	// precondition GOLEM trusts rather than enforces. Editing this file and
 	// restarting is the only way to open it.
 	RuntimeEnabled bool `json:"runtime_enabled"`
+	// SourcePath points GOLEM at its own source tree for self-modification.
+	// Empty keeps self-modification off; setting it is a second opt-in on top
+	// of runtime_enabled, the operator deciding GOLEM may read and rebuild its
+	// own source. The pipeline never edits this tree and never swaps the live
+	// binary; it works on a copy and stages a candidate.
+	SourcePath string `json:"source_path"`
+	// MainPackage is the package the self-build compiles to the candidate
+	// binary, the brain's entry point.
+	MainPackage string `json:"main_package"`
 	// AutoCueCooldownSec is the minimum gap between automatic firings of
 	// the same graduated cue, so a storm of matching observations cannot
 	// run one habit over and over.
@@ -179,6 +188,8 @@ func Default() Config {
 		LateralInhibition:   defaultLateralInhibition,
 		ExecuteEnabled:      false,
 		RuntimeEnabled:      false,
+		SourcePath:          "",
+		MainPackage:         "./cmd/golem",
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
 		ExecuteParallel:     defaultExecuteParallel,

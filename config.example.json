@@ -30,6 +30,8 @@
   "lateral_inhibition": 0.6,
   "execute_enabled": false,
   "runtime_enabled": false,
+  "source_path": "",
+  "main_package": "./cmd/golem",
   "execute_allowlist": [],
   "execute_timeout_sec": 30,
   "execute_parallel": 4,

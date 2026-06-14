@@ -2138,11 +2138,11 @@ never bricks the live mind.
 
 - [ ] GOLEM can read and reason about its own source as grounded code, so a
       proposed change comes from understanding, not guesswork.
-- [ ] A self-change runs the full pipeline, compile, test, fitness gate, then
+- [x] A self-change runs the full pipeline, compile, test, fitness gate, then
       swap, and never hot-patches the running engine.
-- [ ] A change that fails compile, test, or fitness is rejected and the prior
+- [x] A change that fails compile, test, or fitness is rejected and the prior
       binary stands, the backup the floor under every swap.
-- [ ] Every self-modification is on the audit trail, what changed, why proposed,
+- [x] Every self-modification is on the audit trail, what changed, why proposed,
       which outcome it improved, so the system's growth is readable.
 
 Framing: this is the keystone of the self-extending GOLEM, and it earns its place
@@ -2159,6 +2159,28 @@ Done when: GOLEM proposes a change to its own source that improves a grounded
 outcome, the change survives the pipeline and the fitness gate and swaps in, a
 regressing change is caught and reverted, and the whole event reads back off the
 trail.
+
+Status: the pipeline and the gate are built; the grounded reasoning a change
+should be proposed from arrives with the next step, so a change is run through
+the pipeline rather than yet originated by understanding. A proposed change to
+GOLEM's own source runs the build-and-deploy pipeline on an isolated copy: it
+copies the tree, applies the change there, compiles the main package to a
+candidate binary off to the side, and runs the tests, never editing the original
+or hot-patching the running engine. A clean candidate is judged by the grounded
+fitness; a change that does not improve is reverted by discarding the candidate,
+and one that fails to compile or test is rejected at the stage it died at, the
+prior standing. The pipeline stops at a vetted candidate staged under home; the
+live swap is the operator's, behind say-so, never automatic, the discipline that
+keeps a bad change from bricking the live mind. Every stage is on the trail, what
+changed and why and which outcome it earned. The capability is twice-gated: the
+runtime open and a source path set, two opt-ins. The pipeline is verified on
+representative isolated modules rather than re-run on the whole tree: because the
+gate runs the full suite on the copy, a test that itself self-builds the live
+tree recurses, which is exactly why the self-build tests work on isolated modules
+and the live repo and binary are never touched. What stays open is the grounded
+proposal of changes (the next step), the real deploy-and-measure of a candidate's
+fitness rather than a supplied verdict, and the automated swap, which stays the
+operator's by design.
 
 ## Step 39: The memory editor, a grounded console
 
