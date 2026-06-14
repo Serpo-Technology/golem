@@ -122,7 +122,34 @@ func (e *Engine) Comprehend(text string) (Computation, bool) {
 	if c, ok := e.comprehendLiteral(strings.Fields(text)); ok {
 		return c, true
 	}
+	if c, ok := e.comprehendSpoken(text); ok {
+		return c, true
+	}
 	return e.comprehendCode(text)
+}
+
+// spokenOps maps the words a person says an operator with to the symbol that
+// runs it, the pseudocode register of the same operations: "6 plus 7" is read
+// as "6 + 7" and "3 times 4" as "3 * 4".
+var spokenOps = map[string]string{"plus": "+", "minus": "-", "times": "*", "over": "/"}
+
+// comprehendSpoken reads the operator words into their symbols and lets the Go
+// parser take it from there, so a computation spoken in words carries the same
+// precedence and grouping the symbols would. With no operator word present it
+// declines, so the code path reads a plain expression unchanged.
+func (e *Engine) comprehendSpoken(text string) (Computation, bool) {
+	toks := strings.Fields(text)
+	replaced := false
+	for i, t := range toks {
+		if sym, ok := spokenOps[strings.ToLower(t)]; ok {
+			toks[i] = sym
+			replaced = true
+		}
+	}
+	if !replaced {
+		return Computation{}, false
+	}
+	return e.comprehendCode(strings.Join(toks, " "))
 }
 
 // comprehendLiteral reads the teaching surface, composed: an operand is a number
