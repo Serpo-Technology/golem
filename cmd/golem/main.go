@@ -54,6 +54,9 @@ Usage:
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
+  golem compute <program>         run a small Go program or expression and
+                                  ground its result; the runtime is closed
+                                  until runtime_enabled is set in config.json
   golem concepts                  list what GOLEM has abstracted: each
                                   concept, its words, and its grounding
   golem teach <cue> <command>     ground a cue to a command by hand; repeat
@@ -206,6 +209,13 @@ func main() {
 			return
 		}
 		printFragments(resp.Fragments)
+
+	case "compute":
+		if len(args) < 2 {
+			fail(fmt.Errorf("usage: golem compute <program>"))
+		}
+		resp := call(home, wire.Request{Cmd: "runcode", Content: strings.Join(args[1:], " ")})
+		fmt.Println(resp.Say)
 
 	case "dump":
 		resp := call(home, wire.Request{Cmd: "dump"})

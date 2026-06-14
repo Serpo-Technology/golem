@@ -29,6 +29,7 @@ import (
 	"golem/internal/limbic"
 	"golem/internal/memory"
 	"golem/internal/pipeline"
+	"golem/internal/runtime"
 	"golem/internal/senses"
 	"golem/internal/wire"
 )
@@ -145,6 +146,11 @@ type Daemon struct {
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
 	lastMode    string
 	lastPursuit time.Time
+
+	// runner runs the code GOLEM writes, the runtime.Runner seam: nil falls to
+	// the embedded interpreter, and a compiling toolchain stands here when
+	// GOLEM comes to rebuild itself.
+	runner runtime.Runner
 
 	// voice carries utterances to the text-to-speech effector, opened on
 	// first use when the voice is on. voiceOn and voiceName start from
@@ -1355,6 +1361,12 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		res := d.process(senses.Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false, true)
 		return wire.Response{OK: true, Observe: &res}, false, false
+
+	case "runcode":
+		if req.Content == "" {
+			return wire.Response{Error: "runcode needs a program"}, false, false
+		}
+		return wire.Response{OK: true, Say: runSummary(d.runProgram(req.Content))}, false, false
 
 	case "tell":
 		if req.Content == "" {

@@ -29,6 +29,7 @@
   "conflict_margin": 0.15,
   "lateral_inhibition": 0.6,
   "execute_enabled": false,
+  "runtime_enabled": false,
   "execute_allowlist": [],
   "execute_timeout_sec": 30,
   "execute_parallel": 4,

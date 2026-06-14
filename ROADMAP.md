@@ -1984,12 +1984,12 @@ shut, and it opens only once the whole process is placed inside the sealed
 container the operator runs it in, the containment a precondition GOLEM trusts
 rather than enforces.
 
-- [ ] GOLEM can compose a program and execute it, the result returned as a
+- [x] GOLEM can compose a program and execute it, the result returned as a
       percept it can ground, through an interpreter or the toolchain it carries.
-- [ ] A program it runs is bounded, a time and resource budget and a recovered
+- [x] A program it runs is bounded, a time and resource budget and a recovered
       panic, so a bad program fails to a contained error GOLEM learns from rather
       than wedging its own loop.
-- [ ] The executed program is an artifact, written to the graph and the audit
+- [x] The executed program is an artifact, written to the graph and the audit
       trail, so what GOLEM ran is as readable as what it thought, the glass box
       extended rather than pierced.
 
@@ -2008,6 +2008,26 @@ Done when: GOLEM writes and runs a small program, grounds its result, and a
 runaway or panicking program is contained to an error it can learn from without
 disturbing the loop, the whole running inside the sandbox the operator placed it
 in.
+
+Status: built. The runtime is one capability behind a small Runner seam, so the
+engine that carries it out can change without the caller: an embedded Go
+interpreter runs the snippets a tool needs over a curated, computation-only
+slice of the standard library, with os, exec, net, and syscall left out of
+reach, and a compiling toolchain can stand behind the same seam when GOLEM comes
+to rebuild itself. A run is bounded by a time budget and a recovered panic, the
+program in its own goroutine so an overrun is contained to a timeout the caller
+learns from rather than blocking the loop; a true runaway leaks that goroutine
+until the process ends, which the operator's container is the backstop for, the
+hard resource bound being the operator's hand and not the runtime's. The program
+is an artifact, its source written to the graph and the run to the trail, and
+its result is grounded by feeding it back through perception on a code channel,
+so what GOLEM ran is as readable as what it thought. Running code GOLEM wrote is
+gated shut by default and opens only with runtime_enabled set, the operator's
+switch once the whole process sits in the sandbox. A program is reached by golem
+compute today; making it an act the goal loop selects, and grounding which
+programs are worth writing, is the next step. What stays open is hard resource
+bounding in-process (the interpreter cannot kill a runaway) and the toolchain
+backend for self-build.
 
 ## Step 36: Ground programming as a learned language
 

@@ -113,6 +113,12 @@ type Config struct {
 	// Actions whose resource claims collide serialize regardless of the
 	// cap; this bounds only the genuinely independent ones.
 	ExecuteParallel int `json:"execute_parallel"`
+	// RuntimeEnabled is the gate on running code GOLEM wrote. Off by default,
+	// like ExecuteEnabled: the runtime opens only once the operator has placed
+	// the whole process inside the sealed container, the containment a
+	// precondition GOLEM trusts rather than enforces. Editing this file and
+	// restarting is the only way to open it.
+	RuntimeEnabled bool `json:"runtime_enabled"`
 	// AutoCueCooldownSec is the minimum gap between automatic firings of
 	// the same graduated cue, so a storm of matching observations cannot
 	// run one habit over and over.
@@ -172,6 +178,7 @@ func Default() Config {
 		ConflictMargin:      defaultConflictMargin,
 		LateralInhibition:   defaultLateralInhibition,
 		ExecuteEnabled:      false,
+		RuntimeEnabled:      false,
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
 		ExecuteParallel:     defaultExecuteParallel,
