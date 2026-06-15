@@ -53,25 +53,32 @@ func (d *Daemon) recordThreadProp(rel string, agent, patient uint64, agentGloss,
 	}
 }
 
-// threadFiller returns the co-argument the current thread has established for a
-// relation and a known argument, its id and gloss, or zero when the thread set
-// none. The gloss lets the answer be spoken even when the walk, in a trained
-// graph, has pruned the fresh proposition out of its candidates: the thumb on
-// the scale that lets "what about the dog" answer with the bird just mentioned
-// and not the cat worn into the weights.
-func (d *Daemon) threadFiller(rel string, knownID uint64, questioned string) (uint64, string) {
+// threadFillers returns every distinct co-argument the current thread has
+// established for a relation and a known argument, newest first, each with its
+// gloss. A role answer reads from it directly, so what the exchange set down is
+// named in full and a fresh claim is never lost behind the strongest memory
+// even when the walk, in a trained graph, has pruned it from its candidates.
+func (d *Daemon) threadFillers(rel string, knownID uint64, questioned string) []walkDest {
+	var out []walkDest
+	seen := map[uint64]bool{}
 	for _, p := range d.threadProps {
-		if p.rel != rel {
+		var id uint64
+		var gloss string
+		switch {
+		case questioned == "patient" && p.rel == rel && p.agent == knownID:
+			id, gloss = p.patient, p.patientGloss
+		case questioned == "agent" && p.rel == rel && p.patient == knownID:
+			id, gloss = p.agent, p.agentGloss
+		default:
 			continue
 		}
-		if questioned == "patient" && p.agent == knownID {
-			return p.patient, p.patientGloss
+		if id == 0 || seen[id] {
+			continue
 		}
-		if questioned == "agent" && p.patient == knownID {
-			return p.agent, p.agentGloss
-		}
+		seen[id] = true
+		out = append(out, walkDest{id: id, gloss: gloss})
 	}
-	return 0, ""
+	return out
 }
 
 // completeRoleEllipsis answers an elliptical follow-up to a role question by

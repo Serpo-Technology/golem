@@ -140,3 +140,20 @@ func TestDiscourseSaliencePrefersFreshProposition(t *testing.T) {
 		t.Fatalf("the freshly established proposition should win the thread: %q", got)
 	}
 }
+
+// The answer composes beyond one clause: with two chases established this
+// exchange, "what did the dog chase" coordinates both rather than naming a
+// single co-argument.
+func TestRoleAnswerCoordinatesThreadPropositions(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "mouse"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog chased a mouse")
+
+	got := say(t, d, "what did the dog chase").Say
+	if !strings.Contains(got, "cat") || !strings.Contains(got, "mouse") || !strings.Contains(got, " and ") {
+		t.Fatalf("the answer should coordinate both established chases: %q", got)
+	}
+}

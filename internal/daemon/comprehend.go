@@ -118,46 +118,44 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	if err != nil {
 		return "", false
 	}
-	// Discourse salience: a co-argument the current exchange established is
-	// preferred over the globally strongest, so "what about the dog" answers with
-	// the bird just mentioned and not the cat worn into the weights. With nothing
-	// set down this turn, the strongest memory stands.
-	salientID, salientGloss := d.threadFiller(rel.Content, known.ID, questioned)
-	var filler *walkDest
-	for i := range dests[cross] {
-		if dests[cross][i].via != rel.Content {
-			continue
+	// The answer is the thread's established co-arguments, newest first: "what
+	// did the dog chase" after two tellings names both, and a fresh claim is
+	// never lost behind the strongest memory. With nothing set down this exchange
+	// the walk's strongest stands, so a cold question still reads the graph.
+	fillers := d.threadFillers(rel.Content, known.ID, questioned)
+	if len(fillers) == 0 {
+		for i := range dests[cross] {
+			if dests[cross][i].via == rel.Content {
+				fillers = []walkDest{dests[cross][i]}
+				break
+			}
 		}
-		if salientID != 0 && dests[cross][i].id == salientID {
-			filler = &dests[cross][i]
-			break
-		}
-		if filler == nil {
-			filler = &dests[cross][i]
-		}
-	}
-	// The thread established a co-argument the walk did not surface, a fresh
-	// proposition out-competed in a trained graph: speak it from the thread
-	// directly, so what was just said still wins.
-	if salientID != 0 && (filler == nil || filler.id != salientID) {
-		filler = &walkDest{id: salientID, gloss: salientGloss}
 	}
 	// The relation and its tense are the thread an elliptical follow-up inherits.
 	d.lastRole = &roleContext{rel: rel, knownRole: knownRole, verb: verb, past: past}
-	if filler == nil {
+	if len(fillers) == 0 {
 		// The relation is known but nothing filled the questioned role: the
 		// honest answer is the gap, spoken through the older admission.
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
 	}
+	// Coordinate the co-arguments into one phrase, "the cat and the mouse", each
+	// made definite on its own so the conjunction reads naturally, the freer
+	// answer composed from several propositions rather than fixed to one clause.
+	parts := make([]string, len(fillers))
+	for i, f := range fillers {
+		parts[i] = definiteNP(f.gloss)
+	}
 	line, ok := d.sayProposition(frame.Lang, rel.Content,
-		map[string]string{knownRole: known.Content, questioned: filler.gloss}, past)
+		map[string]string{knownRole: known.Content, questioned: strings.Join(parts, " and ")}, past)
 	if !ok {
 		return "", false
 	}
-	// The answer's referent becomes the warmest, so the conversational thread
-	// follows what was just said.
-	d.ws.excite(filler.id, exciteSpeech)
+	// The answer's referents become warm, so the conversational thread follows
+	// what was just said.
+	for _, f := range fillers {
+		d.ws.excite(f.id, exciteSpeech)
+	}
 	d.warmSpoken(known.Content)
 	return line, true
 }
