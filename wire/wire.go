@@ -61,9 +61,9 @@ type Response struct {
 	Voice     *VoiceInfo      `json:"voice,omitempty"`
 }
 
-// VoiceInfo is the wire form of the speech effector's state: whether
-// replies are spoken and which system voice speaks them (empty means
-// the system default).
+// VoiceInfo is the wire form of the voice state: whether spoken replies are
+// emitted as say events for an external speaker, and the voice an adapter
+// should prefer (empty leaves the choice to the adapter).
 type VoiceInfo struct {
 	Enabled bool   `json:"enabled"`
 	Name    string `json:"name,omitempty"`
