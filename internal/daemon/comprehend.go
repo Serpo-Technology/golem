@@ -185,20 +185,36 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	if err != nil || len(dests[memory.RelPatient]) == 0 {
 		return "", false
 	}
-	// walkableDests sorts each crossing by weight, so the first is the
-	// strongest proposition the agent stood as the agent of.
-	filler := dests[memory.RelPatient][0]
-	if filler.via == "" {
+	// "What did the dog do" reports the dog's activities across relations, not a
+	// single one: the strongest co-argument of each distinct relation it took
+	// part in, spoken in turn. walkableDests sorts by weight, so the relations
+	// come strongest first; the first clause names the agent and the rest carry
+	// it as "it", so several propositions read as one report.
+	seen := map[string]bool{}
+	var clauses []string
+	for i := range dests[memory.RelPatient] {
+		dst := dests[memory.RelPatient][i]
+		if dst.via == "" || seen[dst.via] {
+			continue
+		}
+		seen[dst.via] = true
+		subject := agent.Content
+		if len(clauses) > 0 {
+			subject = "it"
+		}
+		line, ok := d.sayProposition(frame.Lang, dst.via,
+			map[string]string{"agent": subject, "patient": dst.gloss}, frame.Past)
+		if !ok {
+			continue
+		}
+		clauses = append(clauses, line)
+		d.ws.excite(dst.id, exciteSpeech)
+	}
+	if len(clauses) == 0 {
 		return "", false
 	}
-	line, ok := d.sayProposition(frame.Lang, filler.via,
-		map[string]string{"agent": agent.Content, "patient": filler.gloss}, frame.Past)
-	if !ok {
-		return "", false
-	}
-	d.ws.excite(filler.id, exciteSpeech)
 	d.warmSpoken(agent.Content)
-	return line, true
+	return strings.Join(clauses, " "), true
 }
 
 // proVerbDo reports whether a clause's main verb is the generic pro-verb,

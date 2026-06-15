@@ -311,6 +311,26 @@ func TestActivityQuestionThroughEngine(t *testing.T) {
 	}
 }
 
+// "What did the dog do" reports activities across relations: with the dog both
+// chasing and fetching, the answer names both, the later clause carrying the
+// agent as "it", rather than collapsing to a single relation.
+func TestActivityQuestionCoordinatesRelations(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "ball"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog fetched a ball")
+
+	got := say(t, d, "what did the dog do").Say
+	if !strings.Contains(got, "chased") || !strings.Contains(got, "fetched") {
+		t.Fatalf("the activity answer should report both relations: %q", got)
+	}
+	if !strings.Contains(got, "cat") || !strings.Contains(got, "ball") {
+		t.Fatalf("the activity answer should name both co-arguments: %q", got)
+	}
+}
+
 // The conversational probe end to end: a chasing is told and grounded, then
 // asked about from both roles, the relation defined, and the activity
 // recalled, every answer generated from a meaning structure run through the
