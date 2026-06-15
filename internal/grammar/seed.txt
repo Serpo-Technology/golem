@@ -215,3 +215,4 @@ suffix:tr:verbpast	DI	tr
 suffix:tr:aorist	Ir	tr
 surface:tr:proverb	yaptı yapar	tr
 fw:tr:neyi	neyi	tr	wh:what
+suffix:tr:verbneg	mA	tr

@@ -139,3 +139,23 @@ func TestTurkishRealize(t *testing.T) {
 		t.Fatalf("Turkish count form wrong: %q", got)
 	}
 }
+
+// A learned Turkish verb with no seeded paradigm conjugates by the regular
+// rules across tense and polarity, the floor under generation.
+func TestRegularTurkishConjugation(t *testing.T) {
+	p := Builtin()
+	cases := []struct {
+		past, neg bool
+		want      string
+	}{
+		{true, false, "kovaladı"},
+		{true, true, "kovalamadı"},
+		{false, false, "kovalar"},
+		{false, true, "kovalamaz"},
+	}
+	for _, c := range cases {
+		if got := finiteVerbTR(p, "kovala", c.past, c.neg, false); got != c.want {
+			t.Fatalf("kovala past=%v neg=%v: got %q want %q", c.past, c.neg, got, c.want)
+		}
+	}
+}

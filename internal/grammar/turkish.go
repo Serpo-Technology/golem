@@ -241,11 +241,18 @@ type verbTR struct {
 }
 
 // regularVerbTR conjugates a learned verb with no seeded paradigm by the
-// regular rules: the past is the stem plus -DI (kovala -> kovaladı), and the
-// aorist is -r after a vowel or -Ir otherwise (kovalar). The suffix recipes are
-// data; this runs the regular floor for a verb the curriculum never spelled
-// principal parts for.
-func regularVerbTR(p *Params, stem string, past bool) string {
+// regular rules: the past is the stem plus -DI ("kovala" -> "kovaladı"), the
+// negative inserts -mA ("kovalamadı"), the aorist is -r after a vowel or -Ir
+// otherwise ("kovalar"), and its negative is -mAz ("kovalamaz"). The suffix
+// recipes are data; this runs the regular floor for a verb the curriculum never
+// spelled principal parts for.
+func regularVerbTR(p *Params, stem string, past, negate bool) string {
+	if negate {
+		stem += applySuffixTR(stem, p.suffix("verbneg", "mA"))
+		if !past {
+			return stem + "z" // aorist negative: -mAz
+		}
+	}
 	if past {
 		return stem + applySuffixTR(stem, p.suffix("verbpast", "DI"))
 	}
@@ -257,7 +264,7 @@ func regularVerbTR(p *Params, stem string, past bool) string {
 
 func finiteVerbTR(p *Params, base string, past, negate, hedge bool) string {
 	if _, seeded := p.verbsTR[base]; !seeded {
-		return regularVerbTR(p, base, past) // a learned verb: the regular paradigm
+		return regularVerbTR(p, base, past, negate) // a learned verb: the regular paradigm
 	}
 	v := p.verbTurkish(base)
 	switch {

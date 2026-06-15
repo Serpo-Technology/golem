@@ -702,7 +702,13 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			}
 			return answer
 		}
-		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {
+		// A concept's content is the English caption it distilled from, so the
+		// pointer "X names <caption>" cannot be spoken in another tongue without
+		// splicing English in. In a non-English answer the definition is firm
+		// instead (its kind), so "what is köpek" reads "Köpek bir şey" rather than
+		// leaking "a brown dog".
+		nonEnglish := frame.Lang != "" && frame.Lang != "en"
+		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) && !nonEnglish {
 			// The asked word and the concept differ: name the pointer. Greedy
 			// early naming bonds bystander words too, so a word that names the
 			// concept far more weakly than its firmest name is spoken as a
@@ -727,7 +733,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		// that made it.
 		msg := grammar.Message{Intent: "described", Slots: map[string]grammar.Filler{
 			"defn": {Sub: &grammar.Message{Intent: "definition",
-				Slots: grammar.TextSlots(map[string]string{"subject": c.Content, "kind": kindWord})}},
+				Slots: grammar.TextSlots(map[string]string{"subject": d.conceptName(c.ID, c.Content, frame.Lang), "kind": kindWord})}},
 		}}
 		if n := tally[c.ID]; n > 0 {
 			msg.Slots["count"] = grammar.Filler{Sub: &grammar.Message{Intent: "seen_count",
@@ -738,7 +744,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		}
 		// With no constructions the innate realizer assembles the same
 		// answer, so the engine stays the floor under the learned patterns.
-		parts := []string{d.definitionClause(frame.Lang, c.Content, kindWord, chem)}
+		parts := []string{d.definitionClause(frame.Lang, d.conceptName(c.ID, c.Content, frame.Lang), kindWord, chem)}
 		if n := tally[c.ID]; n > 0 {
 			parts = append(parts, d.countClause(frame.Lang, n, chem))
 		}

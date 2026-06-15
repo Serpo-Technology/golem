@@ -148,16 +148,26 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 // reply. It returns false when the clause is not of this shape, so the older
 // handling stands.
 func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, bool) {
-	if frame.Wh != "what" || frame.Agent.Concept == nil || !d.proVerbDo(frame.Lang, raw) {
+	if frame.Wh != "what" || !d.proVerbDo(frame.Lang, raw) {
 		return "", false
 	}
-	agent := frame.Agent.Concept
+	agent := d.activityAgent(frame, raw)
+	if agent == nil {
+		return "", false
+	}
+	// The tense is the pro-verb's: "what did the dog do" is past, "what does the
+	// dog do" present, read from the last word's tense so a Turkish "ne yaptı"
+	// answers in the past where "ne yapar" would not.
+	past := frame.Past
+	if tokens, _ := grammar.Tokenize(raw); len(tokens) > 0 {
+		past = past || d.gram.VerbPast(frame.Lang, tokens[len(tokens)-1])
+	}
 	// "What did the dog do" reports the dog's activities across the relations it
 	// took part in: the same gather and renderer, filtered to the agent role with
 	// no single relation, so each relation becomes a clause and the agent is
 	// carried as "it" after the first.
 	facts := d.gatherFacts(agent, "agent", "")
-	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, frame.Past, false)
+	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, past, false)
 	if !ok {
 		return "", false
 	}
@@ -199,6 +209,27 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 	}
 	d.warmSpoken(focus.Content)
 	return strings.Join(parts, " "), true
+}
+
+// activityAgent finds whose activity "what did X do" asks after: the frame's
+// agent when the parser bound one, else the first content word that names a
+// concept, so a tongue whose "X ne yaptı" shape the frame parser does not bind
+// an agent for still reaches its agent. The wh-word and the pro-verb name no
+// concept, so they are skipped without a special case.
+func (d *Daemon) activityAgent(frame grammar.Frame, raw string) *memory.Fragment {
+	if frame.Agent.Concept != nil {
+		return frame.Agent.Concept
+	}
+	tokens, _ := grammar.Tokenize(raw)
+	for _, t := range tokens {
+		if !d.gram.IsContentWord(frame.Lang, t) {
+			continue
+		}
+		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+			return c
+		}
+	}
+	return nil
 }
 
 // proVerbDo reports whether a clause's main verb is the tongue's generic
