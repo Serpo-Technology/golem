@@ -338,10 +338,11 @@ func definiteNP(gloss string) string {
 
 // relationConcept resolves the relation a proposition binds into, minting it
 // when the verb is new. A relation is a concept like any other, grounded,
-// named, and weighted, but it lives under a key that marks it a relation and
-// carries the role slots its instances fill. The verb's lemma names it, so a
-// later telling resolves to the same relation rather than minting a second,
-// and a noun that happens to share the surface is not mistaken for it.
+// named, and weighted; the verb's lemma names it, so a later telling resolves
+// to the same relation rather than minting a second, and a noun that happens to
+// share the surface is not mistaken for it. The lemma's concept is found across
+// tongues: a verb reaches its relation through naming edges, not a per-language
+// key, so once two tongues are bound to one relation they both reach it.
 func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragment, error) {
 	if rel.Concept != nil && rel.Concept.Category == "relation" {
 		return rel.Concept, nil
@@ -355,6 +356,22 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 	}
 	if lang == "" {
 		lang = "en"
+	}
+	// A relation this verb already names, in any tongue, is the one to reuse.
+	if c := d.resolveRelation(lemma); c != nil {
+		return c, nil
+	}
+	// A verb new to this tongue binds to the relation just spoken of: a relation
+	// warm in mind and not yet named here takes this word as its name in this
+	// tongue rather than spawning a parallel relation. This is attention
+	// grounding on the relation side, the same ostensive path a noun takes when
+	// it is named for what is held in mind, so chase discussed in one tongue and
+	// told again in another is the one relation and the thread survives the
+	// change of tongue. A relation already named here keeps its name, so two
+	// distinct verbs of one tongue stay two relations.
+	if warm := d.warmestRelation(); warm != nil && !d.relationNamedIn(warm.ID, lang) {
+		d.nameRelationInTongue(warm, lemma, lang)
+		return warm, nil
 	}
 	tpl := "rel:" + lang + ":" + lemma
 	if c, err := d.store.ConceptByTemplate(tpl); err != nil || c != nil {
@@ -374,13 +391,80 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 		return nil, err
 	}
 	d.event(events.Event{Ev: "concept", ID: c.ID, Tpl: tpl, Outcome: "relation"})
-	// The verb's lemma names the relation, so the next telling resolves here.
-	if w, _, err := d.store.WordNode(lemma, lang, d.chem.Snapshot(), now); err == nil {
-		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, opNameWeight); err == nil {
-			d.event(events.Event{Ev: "name", From: w.ID, To: c.ID, Rel: memory.RelNames, Weight: opNameWeight})
+	d.nameRelationInTongue(c, lemma, lang)
+	return c, nil
+}
+
+// warmestRelation returns the warmest relation concept held in the workspace
+// above the attention gate, the relation a verb new to a tongue binds to so it
+// names what was just spoken of. Raw warmth is the signal, how present the
+// relation is, regardless of any members it might subsume.
+func (d *Daemon) warmestRelation() *memory.Fragment {
+	warm := d.ws.warmest(workspaceBudget)
+	ids := make([]uint64, 0, len(warm))
+	heat := make(map[uint64]float64, len(warm))
+	for _, e := range warm {
+		if e.heat < attentionGroundingGate {
+			continue
+		}
+		ids = append(ids, e.id)
+		heat[e.id] = e.heat
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	var best *memory.Fragment
+	for _, f := range frags {
+		if f.Category != "relation" {
+			continue
+		}
+		if best == nil || heat[f.ID] > heat[best.ID] {
+			best = f
 		}
 	}
-	return c, nil
+	return best
+}
+
+// relationNamedIn reports whether a word of the given tongue already names the
+// relation. It is the guard on attention binding: a tongue that already speaks
+// the relation does not give it a second word from warmth, so two verbs of one
+// tongue stay two relations, while a tongue with no name for it yet may give it
+// its first.
+func (d *Daemon) relationNamedIn(relID uint64, lang string) bool {
+	namers, err := d.store.LinksToRel([]uint64{relID}, memory.RelNames)
+	if err != nil || len(namers) == 0 {
+		return false
+	}
+	ids := make([]uint64, 0, len(namers))
+	for _, e := range namers {
+		ids = append(ids, e.From)
+	}
+	words, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return false
+	}
+	for _, w := range words {
+		if w.Lang == lang {
+			return true
+		}
+	}
+	return false
+}
+
+// nameRelationInTongue bonds a verb's word in one tongue to the relation it
+// names, the naming edge a later telling in that tongue resolves through.
+func (d *Daemon) nameRelationInTongue(rel *memory.Fragment, lemma, lang string) {
+	w, _, err := d.store.WordNode(lemma, lang, d.chem.Snapshot(), time.Now())
+	if err != nil {
+		return
+	}
+	if err := d.store.SetLinkRel(w.ID, rel.ID, memory.RelNames, opNameWeight); err == nil {
+		d.event(events.Event{Ev: "name", From: w.ID, To: rel.ID, Rel: memory.RelNames, Weight: opNameWeight})
+	}
 }
 
 // roleFit scores a concept's affinity for a thematic role from what has

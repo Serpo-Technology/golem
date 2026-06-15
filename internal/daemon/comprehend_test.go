@@ -134,6 +134,71 @@ func TestComprehendDistinctRelations(t *testing.T) {
 	}
 }
 
+// A relation warmed by talk in one tongue lends its identity to its first verb
+// in another. Telling a proposition in Turkish while the chase relation is warm
+// from English binds the Turkish verb to the one chase relation rather than
+// minting a parallel one, so a question in either tongue reaches the same
+// proposition. The conceptual thread survives the change of tongue, language
+// kept separate from reasoning.
+func TestRelationUnifiesAcrossTonguesByWarmth(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	// The same concepts are named in Turkish too, the way a noun is shared.
+	addName := func(form, lang string, conceptID uint64) {
+		w, _, err := s.WordNode(form, lang, d.chem.Snapshot(), time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(w.ID, conceptID, memory.RelNames, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addName("köpek", "tr", dog.ID)
+	addName("kedi", "tr", cat.ID)
+
+	// Establish and warm the chase relation in English.
+	say(t, d, "a dog chased a cat")
+	chase, _ := s.ConceptByTemplate("rel:en:chase")
+	if chase == nil {
+		t.Fatal("English should mint the chase relation")
+	}
+
+	// Tell the same in Turkish while chase is warm: the Turkish verb binds to it.
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+
+	if parallel, _ := s.ConceptByTemplate("rel:tr:kovala"); parallel != nil {
+		t.Fatalf("no parallel Turkish relation should be minted: %+v", parallel)
+	}
+	if got := d.resolveRelation("kovala"); got == nil || got.ID != chase.ID {
+		t.Fatalf("the Turkish verb should name the one chase relation: %+v", got)
+	}
+	if !d.relationNamedIn(chase.ID, "tr") || !d.relationNamedIn(chase.ID, "en") {
+		t.Fatal("the one chase relation should be named in both tongues")
+	}
+}
+
+// Warmth does not merge two verbs of one tongue: a relation already spoken in a
+// tongue keeps its name there, so a second English verb is its own relation
+// even with the first still warm.
+func TestRelationWarmthDoesNotMergeSameTongue(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "ball")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog fetched a ball")
+
+	chase, _ := s.ConceptByTemplate("rel:en:chase")
+	fetch, _ := s.ConceptByTemplate("rel:en:fetch")
+	if chase == nil || fetch == nil {
+		t.Fatal("both verbs should mint relations")
+	}
+	if chase.ID == fetch.ID {
+		t.Fatal("two verbs of one tongue stay two relations even when one is warm")
+	}
+}
+
 // A novel verb degrades gracefully rather than failing to parse: an unknown
 // verb in transitive position becomes a candidate relation with its slots
 // bound, and the brain does not blurt a confused question about it.
