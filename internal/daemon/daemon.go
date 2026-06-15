@@ -1459,18 +1459,19 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				return wire.Response{OK: true, Say: line}, false, false
 			}
 		}
-		// What is warm before the utterance is what it is about: a told word
-		// grounds in the attended concept, not only in the percept.
+		// What is warm before the utterance is captured now, to ground the words
+		// in once the planner has read the clause.
 		attn := d.attentionAnchors()
 		res := d.process(senses.Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
 			return wire.Response{Error: "the words could not be stored; check the daemon log"}, false, false
 		}
-		// The words themselves enter the lexicon and keep company with the
-		// moments the utterance bound to and with whatever was held in mind;
-		// speaking warms what the words already name.
-		anchors := append(d.recentWithin(time.Now(), res.FragmentID), attn...)
-		words := d.mintWords(req.Content, req.Lang, res.FragmentID, anchors, false)
+		// The words enter the lexicon and keep company with the recent moments
+		// the utterance bound to. Grounding them in what was merely held in mind
+		// waits until the clause is read: a told word grounds in the attended
+		// concept, but a proposition's words bind to their roles instead, so an
+		// argument is not named after the co-arguments warm beside it.
+		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentWithin(time.Now(), res.FragmentID), false)
 		d.warmConcepts(words, exciteSpeech)
 		resp := wire.Response{OK: true, Observe: &res}
 		// The grammar reads the utterance's force and the planner
@@ -1486,6 +1487,14 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
+		// Now ground the words in what was held in mind, unless the clause was a
+		// proposition: comprehension bound its arguments to their roles, so its
+		// words must not also be named after whatever else was warm. Any other
+		// utterance, a bare naming or a definition, grounds its words in the
+		// attended concept the way attention grounding intends.
+		if !d.momentBoundRoles(res.FragmentID) {
+			d.bindAttention(words, attn)
+		}
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)
 		// The exchange may have named what a held goal was hunting.

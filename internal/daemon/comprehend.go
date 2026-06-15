@@ -84,6 +84,15 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	return true
 }
 
+// momentBoundRoles reports whether a moment carries the role edges of a
+// proposition, the agent comprehension bound to it. It tells the tell handler
+// the utterance was understood as a proposition, whose words ground in their
+// roles rather than in what was merely warm beside them.
+func (d *Daemon) momentBoundRoles(momentID uint64) bool {
+	edges, err := d.store.LinksFromRel([]uint64{momentID}, memory.RelAgent)
+	return err == nil && len(edges) > 0
+}
+
 // planRoleQuestion answers a question about a role of a relation by walking
 // the proposition graph and generating the answer through the engine, rather
 // than selecting a reply from a fixed menu. "What did the dog chase" asks for

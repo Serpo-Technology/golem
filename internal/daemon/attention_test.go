@@ -46,6 +46,51 @@ func TestAttentionGroundsToldWord(t *testing.T) {
 	}
 }
 
+// A proposition's words bind to their roles, not to whatever is warm: an
+// argument is not named after a co-argument or a bystander held in mind. A
+// clause told while an unrelated category is warm leaves its words unbound to
+// that category, where a bare naming (the test above) would ground in it.
+func TestPropositionWordsSkipAttentionGrounding(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-2 * time.Hour)
+	for i := range 4 {
+		d.recent = nil
+		d.process(senses.Observation{Channel: "vision", Content: "a four legged animal",
+			At: base.Add(time.Duration(i) * time.Minute)}, true, true)
+	}
+	d.recent = nil
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	animal, _ := s.ConceptByTemplate(attention.Normalize("a four legged animal"))
+	if animal == nil {
+		t.Fatal("the category should distil")
+	}
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "mouse")
+
+	// Tell the proposition several times with the unrelated category warm each
+	// time, the shape that would otherwise bond its words to the category.
+	for range 3 {
+		d.ws.clear()
+		d.recent = nil
+		d.ws.excite(animal.ID, exciteSpeech)
+		say(t, d, "a dog chased a mouse")
+		calm(d)
+		d.growConcepts()
+	}
+
+	// The agent word stays its own name and took no bond toward the warm category.
+	if c := d.resolveConcept("dog"); c == nil || c.ID != dog.ID {
+		t.Fatalf("a proposition's agent word should stay its own name: %+v", c)
+	}
+	if w := edgeWeightRel(t, s, wordID(t, s, "dog"), animal.ID, "names"); w != 0 {
+		t.Fatalf("a proposition's word must not be named toward the warm bystander: %.2f", w)
+	}
+}
+
 // A word warmed by accident in one scene does not stick: with the binding
 // seen only once, cross-situational reliability lets it fade rather than
 // becoming a new junk name.

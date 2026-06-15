@@ -464,6 +464,30 @@ func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []rece
 	return d.mintWordsScaled(utterance, lang, tellID, anchors, deliberate, 1.0)
 }
 
+// bindAttention grounds already-minted words in what was held in mind, the
+// attention anchors captured before the utterance. It is the half of word
+// minting held back from a proposition: a proposition's words bind to their
+// roles, so an argument word is not also named after the co-arguments that
+// happened to be warm. A bare naming or a definition has no roles and grounds
+// here, the way attention grounding intends.
+func (d *Daemon) bindAttention(words []*memory.Fragment, anchors []recentMoment) {
+	if len(anchors) == 0 {
+		return
+	}
+	w := linkBaseWeight + linkDopamineGain*d.chem.Snapshot().Dopamine
+	for _, word := range words {
+		for _, a := range anchors {
+			if a.id == word.ID {
+				continue
+			}
+			if err := d.store.Link(word.ID, a.id, w); err != nil {
+				continue
+			}
+			d.store.Link(a.id, word.ID, w)
+		}
+	}
+}
+
 // mintWordsScaled is mintWords with the bond weight scaled by the source's
 // trust, so a word read on an untrusted channel bonds lightly and entrenches
 // only by recurring across reads.
