@@ -269,6 +269,17 @@ func (d *Daemon) resolveRelation(phrase string) *memory.Fragment {
 	return best
 }
 
+// namesRelation reports whether a word form names a relation, directly or
+// through its lemma. The relation is keyed on the lemma, so an inflected
+// surface ("chased") reaches it only through its lemma; checking both
+// recognizes every inflection of a verb as the verb. It is the one test the
+// abstraction pass and the naming pass share, so a verb is treated the same
+// way wherever the constellation machinery would otherwise read its arguments
+// as its company.
+func (d *Daemon) namesRelation(content, lang string) bool {
+	return d.resolveRelation(content) != nil || d.resolveRelation(d.gram.Lemma(lang, content)) != nil
+}
+
 // analyzeRoleQuestion reads a relational role question into the relation it
 // asks about, the argument it gives, and which role that argument fills. The
 // verb is the content word whose lemma names a grounded relation; the other

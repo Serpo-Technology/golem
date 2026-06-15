@@ -144,14 +144,12 @@ func (d *Daemon) growAbstractions() (born int) {
 		// refreshing while its core stands, however the drift around it
 		// moves.
 		healthy := w.Count >= absMinSituations && len(core) >= absRefreshFloor && maxShare < absConcentration
-		// A word that already names a relation is a verb, and so is every
-		// inflection of one: its lived company is the relation's arguments, not a
-		// constellation, so abstracting it into a noun would only mint a shadow
-		// that shrouds the relation in the naming vote. The relation is keyed on
-		// the lemma, so an inflected surface ("chased") reaches it only through
-		// its lemma; check both. Skip it, and any earlier shadow stops refreshing
-		// and decays.
-		if d.resolveRelation(w.Content) != nil || d.resolveRelation(d.gram.Lemma(w.Lang, w.Content)) != nil {
+		// A word that names a relation is a verb, every inflection of it too: its
+		// lived company is the relation's arguments, not a constellation, so
+		// abstracting it into a noun would only mint a shadow that shrouds the
+		// relation in the naming vote. Skip it, and any earlier shadow stops
+		// refreshing and decays.
+		if d.namesRelation(w.Content, w.Lang) {
 			continue
 		}
 		switch {
@@ -252,8 +250,41 @@ func (d *Daemon) growConcepts() (born, named int) {
 		return born, 0
 	}
 	conceptTotal := map[uint64]float64{}
+	wordIDs := make([]uint64, 0, len(pairs))
+	conceptIDs := make([]uint64, 0, len(pairs))
+	seenWord := map[uint64]bool{}
+	seenConcept := map[uint64]bool{}
 	for _, p := range pairs {
 		conceptTotal[p.Concept] += p.Cooc
+		if !seenWord[p.Word] {
+			seenWord[p.Word] = true
+			wordIDs = append(wordIDs, p.Word)
+		}
+		if !seenConcept[p.Concept] {
+			seenConcept[p.Concept] = true
+			conceptIDs = append(conceptIDs, p.Concept)
+		}
+	}
+	// A verb names its relation, not the arguments it keeps company with. A word
+	// that names a relation, then, does not also name a noun: its bond to an
+	// argument concept is cleared so the naming vote stays on the relation rather
+	// than drifting to the nouns the verb took. relConcept marks which targets
+	// are the relation itself, the one bond such a word keeps.
+	verbWord := map[uint64]bool{}
+	if wfrags, err := d.store.FragmentsByIDs(wordIDs); err == nil {
+		for _, wf := range wfrags {
+			if d.namesRelation(wf.Content, wf.Lang) {
+				verbWord[wf.ID] = true
+			}
+		}
+	}
+	relConcept := map[uint64]bool{}
+	if cfrags, err := d.store.FragmentsByIDs(conceptIDs); err == nil {
+		for _, cf := range cfrags {
+			if cf.Category == "relation" {
+				relConcept[cf.ID] = true
+			}
+		}
 	}
 	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
 	for _, p := range pairs {
@@ -270,6 +301,13 @@ func (d *Daemon) growConcepts() (born, named int) {
 		w := math.Sqrt(pcw*pwc) * gain
 		if w > namesMaxWeight {
 			w = namesMaxWeight
+		}
+		// A verb's bond to an argument noun is no name: clear it so the vote
+		// stays on the relation. A standing bond is set down to nothing, a new
+		// one never written, while the verb keeps its bond to the relation
+		// itself.
+		if verbWord[p.Word] && !relConcept[p.Concept] {
+			w = 0
 		}
 		if p.Existing == 0 && w < namesWriteFloor {
 			continue

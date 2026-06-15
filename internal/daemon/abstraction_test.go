@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/attention"
 	"golem/internal/memory"
 	"golem/wire"
 )
@@ -132,6 +133,55 @@ func TestAbstractionSkipsInflectedRelationVerb(t *testing.T) {
 	}
 	if abs, _ := s.ConceptByTemplate("abs:en:trouble"); abs == nil {
 		t.Fatal("the ordinary word over the same company should still abstract")
+	}
+}
+
+// A verb names its relation, not the arguments it keeps company with. The
+// naming pass clears a relation-word's bond to an argument noun while leaving
+// its bond to the relation, so however often the verb is taught through
+// propositions the naming vote stays on the relation and does not drift to the
+// nouns the verb took.
+func TestNamingClearsVerbToArgumentBond(t *testing.T) {
+	d, s := testDaemon(t)
+	disk, _ := constellationDay(t, d, s)
+	now := time.Now()
+
+	rel, err := s.Encode(&memory.Fragment{Kind: memory.KindConcept, Content: "chase",
+		Template: "rel:en:chase", Category: "relation", Time: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := s.WordNode("chase", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(w.ID, rel, memory.RelNames, opNameWeight); err != nil {
+		t.Fatal(err)
+	}
+
+	argConcept, err := s.ConceptByTemplate(attention.Normalize("Disk full on /dev/disk1s9"))
+	if err != nil || argConcept == nil {
+		t.Fatalf("the argument concept should exist: %v", err)
+	}
+	argID := argConcept.ID
+
+	// The verb keeps company with the argument across situations, the shape that
+	// would otherwise bond it to the noun, and a stale bond already stands.
+	for i := range 3 {
+		d.mintWords("chase", "en", 0, []recentMoment{disk[i]}, false)
+	}
+	if err := s.SetLinkRel(w.ID, argID, memory.RelNames, 0.5); err != nil {
+		t.Fatal(err)
+	}
+
+	calm(d)
+	d.growConcepts()
+
+	if got := edgeWeightRel(t, s, w.ID, rel, memory.RelNames); got <= 0 {
+		t.Fatalf("the verb should keep naming its relation, got %.2f", got)
+	}
+	if got := edgeWeightRel(t, s, w.ID, argID, memory.RelNames); got != 0 {
+		t.Fatalf("the verb's bond to an argument noun should be cleared, got %.2f", got)
 	}
 }
 
