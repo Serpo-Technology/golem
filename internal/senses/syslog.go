@@ -3,17 +3,22 @@ package senses
 import (
 	"bufio"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
 )
 
-// SyslogSensor follows the macOS unified log at error level and feeds each
-// line in as an observation. This is the channel that leans hardest on the
-// normalizer: real log lines are saturated with PIDs, addresses, and
-// timestamps. The subprocess is restarted with backoff if it dies, and
-// content is capped so a pathological line cannot bloat memory.
+// SyslogSensor follows the system log at error level and feeds each line in as
+// an observation. This is the channel that leans hardest on the normalizer:
+// real log lines are saturated with PIDs, addresses, and timestamps. The
+// source is per platform, the unified log on macOS and the journal on Linux;
+// the subprocess is restarted with backoff if it dies, and content is capped so
+// a pathological line cannot bloat memory. A host with neither stays dark.
 func SyslogSensor(out chan Observation, stop <-chan struct{}, dropped *atomic.Int64) {
+	if logStreamCommand() == nil {
+		return // no system log to follow on this platform
+	}
 	for {
 		runLogStream(out, stop, dropped)
 		select {
@@ -24,11 +29,26 @@ func SyslogSensor(out chan Observation, stop <-chan struct{}, dropped *atomic.In
 	}
 }
 
+// logStreamCommand builds the per-platform follow-the-errors command, nil where
+// there is none. macOS streams the unified log; Linux follows the systemd
+// journal at error priority, with -o cat dropping the metadata so the
+// normalizer sees the message itself.
+func logStreamCommand() *exec.Cmd {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("/usr/bin/log", "stream", "--style", "compact",
+			"--predicate", "messageType == error OR messageType == fault")
+	case "linux":
+		return exec.Command("journalctl", "-f", "-n", "0", "-p", "err", "-o", "cat")
+	}
+	return nil
+}
+
 func runLogStream(out chan Observation, stop <-chan struct{}, dropped *atomic.Int64) {
-	// The predicate keeps the stream to genuine errors and faults; the
-	// --level flag does not reliably narrow a stream this way.
-	cmd := exec.Command("/usr/bin/log", "stream", "--style", "compact",
-		"--predicate", "messageType == error OR messageType == fault")
+	cmd := logStreamCommand()
+	if cmd == nil {
+		return
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return

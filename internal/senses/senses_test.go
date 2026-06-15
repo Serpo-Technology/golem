@@ -55,3 +55,26 @@ func TestVitalsBands(t *testing.T) {
 		t.Errorf("diskBand(5) = %q", got)
 	}
 }
+
+// The vitals readings are parsed per platform; the parsers read either form.
+func TestVitalsCrossPlatformParsers(t *testing.T) {
+	if f, ok := parseLoadavgFirst("0.52 0.58 0.59 1/890 12345\n"); !ok || f != 0.52 {
+		t.Errorf("linux loadavg = %v %v", f, ok)
+	}
+	if f, ok := parseLoadavgFirst("{ 1.84 1.74 1.71 }\n"); !ok || f != 1.84 {
+		t.Errorf("darwin loadavg = %v %v", f, ok)
+	}
+	meminfo := "MemTotal:       16384000 kB\nMemFree:         1000000 kB\nMemAvailable:    8192000 kB\n"
+	if pct, ok := memAvailablePctFrom(meminfo); !ok || pct != 50 {
+		t.Errorf("memAvailablePctFrom = %v %v, want 50", pct, ok)
+	}
+	if _, ok := memAvailablePctFrom("MemFree: 100 kB\n"); ok {
+		t.Error("missing MemTotal/MemAvailable should not parse")
+	}
+	if got := memBandLinux(50); got != "memory pressure normal" {
+		t.Errorf("memBandLinux(50) = %q", got)
+	}
+	if got := memBandLinux(5); got != "memory pressure critical" {
+		t.Errorf("memBandLinux(5) = %q", got)
+	}
+}
