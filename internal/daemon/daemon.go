@@ -159,6 +159,11 @@ type Daemon struct {
 	// each turn arrives in.
 	lastRole *roleContext
 
+	// threadProps are the propositions the current exchange has set down, the
+	// discourse memory recall leans toward so what was just said wins over what
+	// is worn deepest into the graph, without changing the long-term weight.
+	threadProps []threadProp
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -1200,6 +1205,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.ws.clear()
 	d.topic = 0
 	d.lastRole = nil
+	d.threadProps = nil
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)

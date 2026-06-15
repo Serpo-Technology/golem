@@ -50,9 +50,14 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
 	}
-	// The proposition is in the graph now; warm what it bound, recording the
-	// role each filler played so the discourse set can read its lean, and put
-	// the role edges on the trail so the write is auditable like a naming is.
+	// The proposition is in the graph now; the exchange remembers it set this
+	// down, so a later "what about X" leans on what was just said.
+	if patientID != 0 {
+		d.recordThreadProp(rel.Content, agent.Concept.ID, patientID)
+	}
+	// Warm what it bound, recording the role each filler played so the discourse
+	// set can read its lean, and put the role edges on the trail so the write is
+	// auditable like a naming is.
 	d.ws.excite(rel.ID, exciteSpeech)
 	d.ws.exciteRole(agent.Concept.ID, exciteSpeech, "agent")
 	d.event(events.Event{Ev: "link", From: momentID, To: agent.Concept.ID, Rel: memory.RelAgent, Weight: comprehendWeight})
@@ -111,11 +116,22 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	if err != nil {
 		return "", false
 	}
+	// Discourse salience: a co-argument the current exchange established is
+	// preferred over the globally strongest, so "what about the dog" answers with
+	// the bird just mentioned and not the cat worn into the weights. With nothing
+	// set down this turn, the strongest memory stands.
+	salient := d.threadFiller(rel.Content, known.ID, questioned)
 	var filler *walkDest
 	for i := range dests[cross] {
-		if dests[cross][i].via == rel.Content {
+		if dests[cross][i].via != rel.Content {
+			continue
+		}
+		if salient != 0 && dests[cross][i].id == salient {
 			filler = &dests[cross][i]
 			break
+		}
+		if filler == nil {
+			filler = &dests[cross][i]
 		}
 	}
 	// The relation and its tense are the thread an elliptical follow-up inherits.

@@ -121,3 +121,22 @@ func TestRoleEllipsisInheritsRelation(t *testing.T) {
 		t.Fatalf("the follow-up should inherit chase and walk it from the dog: %q", follow)
 	}
 }
+
+// Recall leans toward what the exchange just established: the dog chasing the
+// cat is drilled in, but with the bird set down this turn, "what did the dog
+// chase" answers with the bird, the fresh claim winning the conversation
+// without the long-term weight being touched.
+func TestDiscourseSaliencePrefersFreshProposition(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "bird"} {
+		groundNoun(t, d, n)
+	}
+	for range 4 {
+		say(t, d, "a dog chased a cat")
+	}
+	say(t, d, "a dog chased a bird")
+
+	if got := say(t, d, "what did the dog chase").Say; !strings.Contains(got, "bird") {
+		t.Fatalf("the freshly established proposition should win the thread: %q", got)
+	}
+}

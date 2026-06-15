@@ -24,6 +24,50 @@ type roleContext struct {
 	past      bool
 }
 
+// threadProp is a proposition the current exchange has set down: a relation
+// between an agent and a patient. Recall leans toward it, so a fresh claim wins
+// the conversation without rewriting the long-term weight it would take many
+// tellings to earn. It is how the talk prefers what was just said over what is
+// worn deepest into the graph.
+type threadProp struct {
+	rel     string
+	agent   uint64
+	patient uint64
+}
+
+const threadPropCap = 16
+
+// recordThreadProp remembers a proposition the exchange just established, newest
+// first, keeping only the last few so an old turn does not haunt a new one.
+func (d *Daemon) recordThreadProp(rel string, agent, patient uint64) {
+	if rel == "" || agent == 0 || patient == 0 {
+		return
+	}
+	d.threadProps = append([]threadProp{{rel: rel, agent: agent, patient: patient}}, d.threadProps...)
+	if len(d.threadProps) > threadPropCap {
+		d.threadProps = d.threadProps[:threadPropCap]
+	}
+}
+
+// threadFiller returns the co-argument the current thread has established for a
+// relation and a known argument, or zero when the thread set none. It is the
+// thumb on the scale that lets "what about the dog" answer with the bird just
+// mentioned and not the cat worn into the weights.
+func (d *Daemon) threadFiller(rel string, knownID uint64, questioned string) uint64 {
+	for _, p := range d.threadProps {
+		if p.rel != rel {
+			continue
+		}
+		if questioned == "patient" && p.agent == knownID {
+			return p.patient
+		}
+		if questioned == "agent" && p.patient == knownID {
+			return p.agent
+		}
+	}
+	return 0
+}
+
 // completeRoleEllipsis answers an elliptical follow-up to a role question by
 // inheriting its relation and asking it of a new referent: after "what did the
 // cat chase", "what about the dog" walks chase from the dog. The relation and
