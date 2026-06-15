@@ -514,6 +514,16 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return d.discourseWalk(frame, "after", d.chem.Snapshot()), nil
 	}
 
+	// An elliptical follow-up to a role question inherits its relation and asks
+	// it of a new referent: "what about the dog" after "what did the cat chase"
+	// walks chase from the dog. The thread is read and cleared here; a role
+	// answer below re-sets it, so a further "what about the bird" can follow.
+	thread := d.lastRole
+	d.lastRole = nil
+	if ans, ok := d.completeRoleEllipsis(frame, raw, thread); ok {
+		return ans, nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil

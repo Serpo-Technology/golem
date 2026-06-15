@@ -94,6 +94,14 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 	if rel == nil || known == nil {
 		return "", false
 	}
+	return d.answerRole(frame, rel, known, knownRole, verb)
+}
+
+// answerRole walks a relation from the named argument to the questioned role and
+// speaks the proposition, the shared body of a role question asked in full and
+// one inherited by an elliptical follow-up. It leaves the relation as the
+// discourse thread so "what about X" can ask the same of another referent.
+func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, knownRole, verb string) (string, bool) {
 	questioned, cross := "patient", memory.RelPatient
 	if knownRole == "patient" {
 		questioned, cross = "agent", memory.RelAgent
@@ -110,6 +118,8 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 			break
 		}
 	}
+	// The relation and its tense are the thread an elliptical follow-up inherits.
+	d.lastRole = &roleContext{rel: rel, knownRole: knownRole, verb: verb, past: past}
 	if filler == nil {
 		// The relation is known but nothing filled the questioned role: the
 		// honest answer is the gap, spoken through the older admission.

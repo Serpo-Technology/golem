@@ -153,6 +153,12 @@ type Daemon struct {
 	// noticed. Held on the daemon because a conversation outlives one turn.
 	topic uint64
 
+	// lastRole is the thread a role question leaves behind: the relation it
+	// asked about, so an elliptical follow-up can ask the same of a new
+	// referent. It is meaning, not text, so the thread holds whatever language
+	// each turn arrives in.
+	lastRole *roleContext
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -1193,6 +1199,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.hot.Clear()
 	d.ws.clear()
 	d.topic = 0
+	d.lastRole = nil
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)

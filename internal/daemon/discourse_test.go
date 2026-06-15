@@ -100,3 +100,24 @@ func TestTopicFollowedAndChangeNoticed(t *testing.T) {
 		t.Fatalf("the topic should change to the cat when the talk turns: %d", d.topic)
 	}
 }
+
+// An elliptical follow-up to a role question inherits its relation: after "what
+// did the cat chase", "what about the dog" asks chase of the dog, walking the
+// same relation from a new referent rather than dropping back to a definition.
+func TestRoleEllipsisInheritsRelation(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"cat", "mouse", "dog", "bird"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a cat chased a mouse")
+	say(t, d, "a dog chased a bird")
+
+	first := say(t, d, "what did the cat chase").Say
+	if !strings.Contains(first, "cat") || !strings.Contains(first, "mouse") {
+		t.Fatalf("the role question should answer from the cat's proposition: %q", first)
+	}
+	follow := say(t, d, "what about the dog").Say
+	if !strings.Contains(follow, "dog") || !strings.Contains(follow, "bird") {
+		t.Fatalf("the follow-up should inherit chase and walk it from the dog: %q", follow)
+	}
+}
