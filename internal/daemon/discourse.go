@@ -30,42 +30,48 @@ type roleContext struct {
 // tellings to earn. It is how the talk prefers what was just said over what is
 // worn deepest into the graph.
 type threadProp struct {
-	rel     string
-	agent   uint64
-	patient uint64
+	rel          string
+	agent        uint64
+	patient      uint64
+	agentGloss   string
+	patientGloss string
 }
 
 const threadPropCap = 16
 
 // recordThreadProp remembers a proposition the exchange just established, newest
-// first, keeping only the last few so an old turn does not haunt a new one.
-func (d *Daemon) recordThreadProp(rel string, agent, patient uint64) {
+// first, keeping only the last few so an old turn does not haunt a new one. The
+// glosses are kept too, so the answer can be spoken from the thread even when
+// the walk has dropped the proposition.
+func (d *Daemon) recordThreadProp(rel string, agent, patient uint64, agentGloss, patientGloss string) {
 	if rel == "" || agent == 0 || patient == 0 {
 		return
 	}
-	d.threadProps = append([]threadProp{{rel: rel, agent: agent, patient: patient}}, d.threadProps...)
+	d.threadProps = append([]threadProp{{rel: rel, agent: agent, patient: patient, agentGloss: agentGloss, patientGloss: patientGloss}}, d.threadProps...)
 	if len(d.threadProps) > threadPropCap {
 		d.threadProps = d.threadProps[:threadPropCap]
 	}
 }
 
 // threadFiller returns the co-argument the current thread has established for a
-// relation and a known argument, or zero when the thread set none. It is the
-// thumb on the scale that lets "what about the dog" answer with the bird just
-// mentioned and not the cat worn into the weights.
-func (d *Daemon) threadFiller(rel string, knownID uint64, questioned string) uint64 {
+// relation and a known argument, its id and gloss, or zero when the thread set
+// none. The gloss lets the answer be spoken even when the walk, in a trained
+// graph, has pruned the fresh proposition out of its candidates: the thumb on
+// the scale that lets "what about the dog" answer with the bird just mentioned
+// and not the cat worn into the weights.
+func (d *Daemon) threadFiller(rel string, knownID uint64, questioned string) (uint64, string) {
 	for _, p := range d.threadProps {
 		if p.rel != rel {
 			continue
 		}
 		if questioned == "patient" && p.agent == knownID {
-			return p.patient
+			return p.patient, p.patientGloss
 		}
 		if questioned == "agent" && p.patient == knownID {
-			return p.agent
+			return p.agent, p.agentGloss
 		}
 	}
-	return 0
+	return 0, ""
 }
 
 // completeRoleEllipsis answers an elliptical follow-up to a role question by

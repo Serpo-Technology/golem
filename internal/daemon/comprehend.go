@@ -43,8 +43,10 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		return false
 	}
 	var patientID uint64
+	var patientGloss string
 	if patient := m.Roles["patient"]; patient.Concept != nil {
 		patientID = patient.Concept.ID
+		patientGloss = patient.Concept.Content
 	}
 	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patientID, comprehendWeight); err != nil {
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
@@ -53,7 +55,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// The proposition is in the graph now; the exchange remembers it set this
 	// down, so a later "what about X" leans on what was just said.
 	if patientID != 0 {
-		d.recordThreadProp(rel.Content, agent.Concept.ID, patientID)
+		d.recordThreadProp(rel.Content, agent.Concept.ID, patientID, agent.Concept.Content, patientGloss)
 	}
 	// Warm what it bound, recording the role each filler played so the discourse
 	// set can read its lean, and put the role edges on the trail so the write is
@@ -120,19 +122,25 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	// preferred over the globally strongest, so "what about the dog" answers with
 	// the bird just mentioned and not the cat worn into the weights. With nothing
 	// set down this turn, the strongest memory stands.
-	salient := d.threadFiller(rel.Content, known.ID, questioned)
+	salientID, salientGloss := d.threadFiller(rel.Content, known.ID, questioned)
 	var filler *walkDest
 	for i := range dests[cross] {
 		if dests[cross][i].via != rel.Content {
 			continue
 		}
-		if salient != 0 && dests[cross][i].id == salient {
+		if salientID != 0 && dests[cross][i].id == salientID {
 			filler = &dests[cross][i]
 			break
 		}
 		if filler == nil {
 			filler = &dests[cross][i]
 		}
+	}
+	// The thread established a co-argument the walk did not surface, a fresh
+	// proposition out-competed in a trained graph: speak it from the thread
+	// directly, so what was just said still wins.
+	if salientID != 0 && (filler == nil || filler.id != salientID) {
+		filler = &walkDest{id: salientID, gloss: salientGloss}
 	}
 	// The relation and its tense are the thread an elliptical follow-up inherits.
 	d.lastRole = &roleContext{rel: rel, knownRole: knownRole, verb: verb, past: past}
