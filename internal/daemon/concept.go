@@ -187,8 +187,60 @@ func (d *Daemon) growAbstractions() (born int) {
 		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, absNameWeight); err != nil {
 			fmt.Fprintf(d.out, "abstraction naming error: %v\n", err)
 		}
+		// The percept the abstraction leans on most is its bridge across tongues:
+		// the other words that name that percept name the generalization too, so a
+		// tongue taught the percept but not enough to abstract on its own thinner
+		// exposure still reaches the concept the propositions attach to. This is
+		// reuse across tongues for nouns, the echo of the one relation a verb of
+		// either tongue binds to: a word that names what an abstraction grounds in
+		// names the abstraction.
+		var dom coreShare
+		for _, cs := range core {
+			if cs.share > dom.share {
+				dom = cs
+			}
+		}
+		if dom.concept != 0 {
+			d.inheritGroundingNames(c, dom.concept, w.ID)
+		}
 	}
 	return born
+}
+
+// inheritGroundingNames carries the names of an abstraction's dominant grounding
+// percept onto the abstraction across tongues. Each word that names the percept
+// firmly (half the firmest namer's weight, the core-membership bar reused) comes
+// to name the abstraction, scaled by how firmly it names the percept, so a second
+// tongue's word reaches the generalization through the percept both tongues
+// pointed at rather than having to distil one on its own. The anchor word already
+// names the abstraction directly and is left untouched; a faint namer of the
+// percept stays out, so noise in the percept's company does not spread upward.
+func (d *Daemon) inheritGroundingNames(abstraction *memory.Fragment, percept, anchorWord uint64) {
+	namers, err := d.store.LinksToRel([]uint64{percept}, memory.RelNames)
+	if err != nil || len(namers) == 0 {
+		return
+	}
+	peak := 0.0
+	for _, e := range namers {
+		if e.Weight > peak {
+			peak = e.Weight
+		}
+	}
+	if peak <= 0 {
+		return
+	}
+	for _, e := range namers {
+		if e.From == anchorWord || e.Weight < peak*absCoreFraction {
+			continue
+		}
+		weight := absNameWeight * e.Weight / peak
+		if weight > absNameWeight {
+			weight = absNameWeight
+		}
+		if err := d.store.SetLinkRel(e.From, abstraction.ID, memory.RelNames, weight); err != nil {
+			fmt.Fprintf(d.out, "abstraction cross-name error: %v\n", err)
+		}
+	}
 }
 
 // lemmaCategory derives a concept's syntactic category from its grounding

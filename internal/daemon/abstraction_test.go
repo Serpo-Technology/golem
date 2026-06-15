@@ -85,6 +85,63 @@ func TestAbstractionByConstellation(t *testing.T) {
 	}
 }
 
+// An abstraction's dominant grounding percept is its bridge across tongues: a
+// word that names the percept firmly comes to name the abstraction too, scaled
+// by how firmly it names the percept, so a tongue taught the percept but not
+// enough to distil its own abstraction still reaches the concept the facts
+// attach to. The anchor word is left untouched and a faint co-namer stays out,
+// so noise in the percept's company does not spread upward.
+func TestAbstractionInheritsGroundingNamesAcrossTongues(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	concept := func(content, tpl string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+			Template: tpl, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	percept := concept("a white rabbit", "a white rabbit")
+	abs := concept("rabbit", "abs:en:rabbit")
+	if err := s.SetLinkRel(abs.ID, percept.ID, memory.RelGrounds, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	name := func(form, lang string, weight float64) uint64 {
+		w, _, err := s.WordNode(form, lang, d.chem.Snapshot(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(w.ID, percept.ID, memory.RelNames, weight); err != nil {
+			t.Fatal(err)
+		}
+		return w.ID
+	}
+	en := name("rabbit", "en", 0.8)  // the anchor, the firmest namer of the percept
+	tr := name("tavşan", "tr", 0.6)  // a second tongue that named the percept ostensively
+	noise := name("cat", "en", 0.1)  // a faint co-namer that must not inherit
+	// The anchor already names the abstraction directly, as growAbstractions sets it.
+	if err := s.SetLinkRel(en, abs.ID, memory.RelNames, absNameWeight); err != nil {
+		t.Fatal(err)
+	}
+
+	d.inheritGroundingNames(abs, percept.ID, en)
+
+	// The second tongue's word now names the abstraction, scaled to its share of
+	// the firmest namer (0.8 * 0.6/0.8 = 0.6), so it beats its bare-percept edge.
+	if got := edgeWeightRel(t, s, tr, abs.ID, memory.RelNames); got < 0.59 || got > 0.61 {
+		t.Fatalf("the second tongue should inherit the abstraction at ~0.6, got %.3f", got)
+	}
+	// The faint namer stays out (0.1 < 0.5*0.8), so percept noise does not climb.
+	if got := edgeWeightRel(t, s, noise, abs.ID, memory.RelNames); got != 0 {
+		t.Fatalf("a faint co-namer must not inherit, got %.3f", got)
+	}
+	// The anchor's own naming is untouched.
+	if got := edgeWeightRel(t, s, en, abs.ID, memory.RelNames); got != absNameWeight {
+		t.Fatalf("the anchor's naming should be unchanged at %.2f, got %.3f", absNameWeight, got)
+	}
+}
+
 // An inflected form of a relation verb keeps company with the verb's
 // arguments in every telling, which would otherwise distil a noun shadowing
 // the relation in the naming vote. The relation is keyed on the lemma, so the
