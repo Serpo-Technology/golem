@@ -211,3 +211,7 @@ surface:en:proverb	do does	en
 surface:tr:coord	ve	tr
 surface:tr:pronoun.agent	o	tr
 surface:tr:pronoun.patient	onu	tr
+suffix:tr:verbpast	DI	tr
+suffix:tr:aorist	Ir	tr
+surface:tr:proverb	yaptı yapar	tr
+fw:tr:neyi	neyi	tr	wh:what

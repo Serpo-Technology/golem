@@ -82,7 +82,7 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 			if verb == "" {
 				return "", false
 			}
-			parts = append(parts, finiteVerb(p, verb, false, m.Roles["agent"].Plural, m.Past))
+			parts = append(parts, p.conjugate(lang, verb, m.Roles["agent"].Plural, m.Past))
 			continue
 		}
 		filler := m.Roles[s.Role]
@@ -92,6 +92,16 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 		parts = append(parts, p.renderFiller(lang, s.Role, filler))
 	}
 	return sentence(strings.Join(parts, " "), "."), true
+}
+
+// conjugate inflects a relation's verb for the tongue: the Turkish morphology
+// for Turkish, the English for the rest. The morphology is per-language code
+// (vowel harmony is not a string), but the words it works on come from data.
+func (p *Params) conjugate(lang, base string, plural, past bool) string {
+	if lang == "tr" {
+		return finiteVerbTR(p, base, past, false, false)
+	}
+	return finiteVerb(p, base, false, plural, past)
 }
 
 // renderFiller speaks a role's filler from the tongue's data: a referent in
@@ -108,7 +118,7 @@ func (p *Params) renderFiller(lang, role string, t Term) string {
 	}
 	mark := func(np string) string {
 		if t.Definite {
-			return p.definiteNP(lang, np)
+			return p.definiteNP(lang, role, np)
 		}
 		return np
 	}
@@ -127,19 +137,21 @@ func (p *Params) renderFiller(lang, role string, t Term) string {
 	return strings.Join(parts, " "+coord+" ")
 }
 
-// definiteNP gives a noun phrase the tongue's definite marking, unless the
-// phrase already carries a determiner or the term was not marked definite. A
-// tongue with no article (Turkish marks the definite object by case) prepends
-// nothing.
-func (p *Params) definiteNP(lang, np string) string {
-	if np == "" {
+// definiteNP gives a noun phrase the tongue's definite marking. A tongue with a
+// definite article prepends it; Turkish has none and marks the definite OBJECT
+// by the accusative case ("kedi" -> "kediyi"), the subject staying nominative.
+// A phrase already carrying a determiner is left alone.
+func (p *Params) definiteNP(lang, role, np string) string {
+	if np == "" || hasDeterminer(np) {
 		return np
 	}
-	art := p.Article(lang)
-	if art == "" || hasDeterminer(np) {
-		return np
+	if art := p.Article(lang); art != "" {
+		return art + " " + np
 	}
-	return art + " " + np
+	if lang == "tr" && role == "patient" {
+		return accusativeCommonTR(p, np)
+	}
+	return np
 }
 
 // hasDeterminer reports whether a phrase already opens with a determiner or a
@@ -394,6 +406,11 @@ func (p *Params) selectArgByArity(lang string, n int) (ArgConstruction, bool) {
 func (p *Params) verbPast(lang, surface string) bool {
 	if h, ok := p.hap(lang, surface); ok {
 		return h.past
+	}
+	if lang == "tr" {
+		// A Turkish verb is past when it carries the -DI suffix the stemmer
+		// strips, so "kovaladı" reads past while the aorist "kovalar" does not.
+		return turkishVerbStem(surface) != surface
 	}
 	if lang == "en" || lang == "" {
 		for _, v := range p.verbs {

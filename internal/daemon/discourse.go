@@ -115,6 +115,18 @@ func (d *Daemon) conceptName(id uint64, content, lang string) string {
 	return best
 }
 
+// relationName is a relation's verb in a tongue: the firmest word naming the
+// relation there, found from the relation's content, so a Turkish answer
+// conjugates "kovala" where an English one conjugates "chase". It falls back to
+// the content when no name in the tongue is found.
+func (d *Daemon) relationName(content, lang string) string {
+	rel := d.resolveRelation(content)
+	if rel == nil {
+		return content
+	}
+	return d.conceptName(rel.ID, content, lang)
+}
+
 // gatherFacts collects what is salient about a focus: the propositions it takes
 // part in, freshly established ones from the discourse thread winning over the
 // entrenched memory. role filters to the role the focus plays ("" for either),
@@ -213,7 +225,7 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 		} else {
 			roles["agent"], roles["patient"] = co, focus
 		}
-		if line, ok := d.gram.Speak(lang, grammar.Meaning{Relation: grammar.Term{Phrase: k.rel}, Roles: roles, Past: past}); ok {
+		if line, ok := d.gram.Speak(lang, grammar.Meaning{Relation: grammar.Term{Phrase: d.relationName(k.rel, lang)}, Roles: roles, Past: past}); ok {
 			clauses = append(clauses, line)
 		}
 	}

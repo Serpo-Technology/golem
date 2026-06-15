@@ -205,6 +205,12 @@ func accusativeTR(p *Params, w string) string {
 	return w + "'" + applySuffixTR(w, p.get().suffix("accusative", "(y)I"))
 }
 
+// accusativeCommonTR is the accusative of an ordinary (not proper) noun, so no
+// apostrophe: "kedi" -> "kediyi", "fare" -> "fareyi".
+func accusativeCommonTR(p *Params, w string) string {
+	return w + applySuffixTR(w, p.get().suffix("accusative", "(y)I"))
+}
+
 // copulaTR attaches -DIr to a (Turkish) predicate noun: "eylemdir",
 // "şeydir". No apostrophe: these are GOLEM's own words.
 func copulaTR(p *Params, w string) string {
@@ -234,7 +240,25 @@ type verbTR struct {
 	aorist, aoristNeg, past, pastNeg, potential, hedgedPast string
 }
 
+// regularVerbTR conjugates a learned verb with no seeded paradigm by the
+// regular rules: the past is the stem plus -DI (kovala -> kovaladı), and the
+// aorist is -r after a vowel or -Ir otherwise (kovalar). The suffix recipes are
+// data; this runs the regular floor for a verb the curriculum never spelled
+// principal parts for.
+func regularVerbTR(p *Params, stem string, past bool) string {
+	if past {
+		return stem + applySuffixTR(stem, p.suffix("verbpast", "DI"))
+	}
+	if endsVowelTR(stem) {
+		return stem + "r"
+	}
+	return stem + applySuffixTR(stem, p.suffix("aorist", "Ir"))
+}
+
 func finiteVerbTR(p *Params, base string, past, negate, hedge bool) string {
+	if _, seeded := p.verbsTR[base]; !seeded {
+		return regularVerbTR(p, base, past) // a learned verb: the regular paradigm
+	}
 	v := p.verbTurkish(base)
 	switch {
 	case hedge && past:

@@ -40,6 +40,24 @@ func TestSpeakRendersSurfaceFromData(t *testing.T) {
 	}
 }
 
+// A Turkish clause is rendered with Turkish morphology: the definite object
+// takes the accusative ("kedi" -> "kediyi"), the verb conjugates to the past
+// ("kovala" -> "kovaladı"), and the verb closes the clause. The subject stays
+// nominative. The verb here is one the curriculum never spelled, so it runs the
+// regular paradigm.
+func TestSpeakTurkishCasesAndConjugates(t *testing.T) {
+	p := Builtin()
+	tr, ok := p.Speak("tr", Meaning{
+		Relation: Term{Phrase: "kovala"},
+		Roles: map[string]Term{
+			"agent":   {Phrase: "köpek", Definite: true},
+			"patient": {Phrase: "kedi", Definite: true},
+		}, Past: true})
+	if !ok || tr != "Köpek kediyi kovaladı." {
+		t.Fatalf("turkish clause should case the object and conjugate the verb: %q", tr)
+	}
+}
+
 // The transitive construction runs meaning to form: a proposition of a
 // relation over an agent and a patient lays out in the language's word
 // order and the verb is conjugated by the morphology engine, so the brain
