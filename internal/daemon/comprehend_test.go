@@ -408,6 +408,67 @@ func TestComprehendTurkishProposition(t *testing.T) {
 	}
 }
 
+// A yes/no question is settled against the graph, not asserted. With the dog's
+// chase of the cat grounded, "did the dog chase the cat" affirms it and "did
+// the dog chase the mouse" denies it, the denial running do-support's negative.
+// And asking is not telling: the mouse question writes no proposition, so the
+// dog still chased only the cat afterward.
+func TestPolarQuestionAffirmsAndDenies(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "mouse"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+
+	if got := say(t, d, "did the dog chase the cat").Say; got != "Yes, the dog chased the cat." {
+		t.Fatalf("a held proposition should affirm: %q", got)
+	}
+	if got := say(t, d, "did the dog chase the mouse").Say; got != "No, the dog did not chase the mouse." {
+		t.Fatalf("an unheld proposition should deny: %q", got)
+	}
+	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
+		t.Fatalf("a polar question must not assert; the dog still chased only the cat: %q", got)
+	}
+}
+
+// A polar question is about the proposition the asker states, in the direction
+// they state it. With the mouse the one that chased the cat, "did the cat chase
+// the mouse" asks the reverse, which never happened: the answer is no, the
+// learned role history not silently swapping the question into the chase that
+// did occur. Word order fixes the agent in a yes/no question.
+func TestPolarQuestionRespectsAskedDirection(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "a mouse chased a cat")
+
+	if got := say(t, d, "did the mouse chase the cat").Say; got != "Yes, the mouse chased the cat." {
+		t.Fatalf("the proposition as it happened should affirm: %q", got)
+	}
+	if got := say(t, d, "did the cat chase the mouse").Say; got != "No, the cat did not chase the mouse." {
+		t.Fatalf("the reverse proposition should deny, not swap into the chase that happened: %q", got)
+	}
+}
+
+// The same check answers in Turkish: the trailing particle "mı" marks the polar
+// clause, the answer affirms with "evet" or denies with "hayır", and the denial
+// conjugates the negative "kovalamadı" the morphology forms by rule, the object
+// taking the accusative either way.
+func TestPolarQuestionTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "köpek", "tr")
+	groundNounLang(t, d, "kedi", "tr")
+	groundNounLang(t, d, "fare", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+
+	if got := sayLang(t, d, "tr", "köpek kediyi kovaladı mı").Say; got != "Evet, köpek kediyi kovaladı." {
+		t.Fatalf("a held proposition should affirm in Turkish: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "köpek fareyi kovaladı mı").Say; got != "Hayır, köpek fareyi kovalamadı." {
+		t.Fatalf("an unheld proposition should deny in Turkish: %q", got)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

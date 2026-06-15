@@ -284,6 +284,34 @@ func (d *Daemon) completeRoleEllipsis(frame grammar.Frame, raw string, thread *r
 	return d.answerRole(frame, thread.rel, known, thread.knownRole, thread.verb)
 }
 
+// polarClause reads a yes/no question into the bare clause it asks about and
+// whether the utterance is one. English leads with an auxiliary ("did the dog
+// chase the cat"), Turkish closes with the question particle ("köpek kediyi
+// kovaladı mı"). The marker is removed so the rest comprehends as a proposition
+// to check against the graph; pastAux carries the English auxiliary's tense, the
+// Turkish tense riding on the verb itself.
+func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "?"))
+	tokens := strings.Fields(s)
+	if len(tokens) < 3 {
+		return "", false, false
+	}
+	if lang == "tr" {
+		switch strings.ToLower(tokens[len(tokens)-1]) {
+		case "mı", "mi", "mu", "mü":
+			return strings.Join(tokens[:len(tokens)-1], " "), false, true
+		}
+		return "", false, false
+	}
+	switch strings.ToLower(tokens[0]) {
+	case "did":
+		return strings.Join(tokens[1:], " "), true, true
+	case "does":
+		return strings.Join(tokens[1:], " "), false, true
+	}
+	return "", false, false
+}
+
 // describeReferent reads the focus of an open request to say what is known
 // about something, the noun in "tell me about the dog" or "describe a cat",
 // with any article dropped. It returns false when the turn is not such a

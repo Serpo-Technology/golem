@@ -211,6 +211,91 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 	return strings.Join(parts, " "), true
 }
 
+// planPolar answers a yes/no question by checking the proposition it states
+// against the graph rather than asserting it. "Did the dog chase the cat" and
+// "köpek kediyi kovaladı mı" each strip their question marker, comprehend the
+// bare clause into a proposition, and read whether the graph holds it: the
+// answer affirms or denies through the same construction, "Yes, the dog chased
+// the cat" or "Hayır, köpek kediyi kovalamadı", the denial running the negative
+// morphology a "no" needs. It returns false when the utterance is not a polar
+// question or its proposition grounds in nothing, so the older handling stands
+// and nothing is written as a fact.
+func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
+	clause, pastAux, ok := polarClause(frame.Lang, raw)
+	if !ok {
+		return "", false
+	}
+	// A polar question asks about a directed proposition: "did the cat chase the
+	// mouse" is a question about the cat chasing the mouse, not the mouse chasing
+	// the cat. The asker's word order fixes which referent is agent, so role-fit
+	// is given no say here; letting it reorder by learned animacy would answer a
+	// different question than the one asked.
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	if !ok {
+		return "", false
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	if agent.Concept == nil || patient.Concept == nil {
+		return "", false // not a two-place proposition grounded in known referents
+	}
+	rel := d.resolveRelation(m.Relation.Phrase)
+	if rel == nil {
+		// The referents are known but the relation is not, so the proposition
+		// cannot hold. Deny it plainly rather than fall through and mint the verb,
+		// which would assert a question as a fact.
+		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
+	}
+	// English carries the tense on the auxiliary it led with; Turkish on the verb
+	// the particle trailed, read back by Comprehend. Either way the answer matches.
+	past := pastAux || m.Past
+	holds := d.propositionHolds(agent.Concept, rel.Content, patient.Concept.ID)
+	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, holds), true
+}
+
+// propositionHolds reads whether the graph holds a proposition: that the agent
+// stands in the relation to the patient. It crosses the same role edges every
+// answer walks, the agent's co-arguments under the relation, and reports whether
+// the patient is among them, so a polar question is settled against grounded
+// memory and not a fixed table. The gather is unranked, so a true but faint
+// proposition is found where a salience-capped answer might not have spoken it.
+func (d *Daemon) propositionHolds(agent *memory.Fragment, relContent string, patientID uint64) bool {
+	for _, f := range d.gatherFacts(agent, "agent", relContent) {
+		if f.coID == patientID {
+			return true
+		}
+	}
+	return false
+}
+
+// answerPolar speaks a yes/no answer: the affirmation word the tongue carries,
+// then the proposition spoken back through the same construction, affirmed when
+// the graph holds it and denied when it does not. The word and the clause both
+// come from the tongue's data, the denial running the negative morphology so a
+// "no" reads "the dog did not chase the cat" or "köpek kediyi kovalamadı".
+func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past, holds bool) string {
+	word := d.gram.Word(lang, "yes")
+	if !holds {
+		word = d.gram.Word(lang, "no")
+	}
+	clause, ok := d.gram.Speak(lang, grammar.Meaning{
+		Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: d.conceptName(agent.ID, agent.Content, lang), Definite: true},
+			"patient": {Phrase: d.conceptName(patient.ID, patient.Content, lang), Definite: true},
+		},
+		Past:   past,
+		Negate: !holds,
+	})
+	if !ok {
+		// No construction bound the proposition; the bare affirmation still answers.
+		return upperFirst(word) + "."
+	}
+	if word == "" {
+		return clause
+	}
+	return upperFirst(word) + ", " + lowerFirst(clause)
+}
+
 // activityAgent finds whose activity "what did X do" asks after: the frame's
 // agent when the parser bound one, else the first content word that names a
 // concept, so a tongue whose "X ne yaptı" shape the frame parser does not bind

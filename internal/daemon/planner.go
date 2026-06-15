@@ -531,6 +531,14 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return line, nil
 	}
 
+	// A yes/no question is checked, not asserted: "did the dog chase the cat"
+	// reads whether the graph holds the proposition and answers yes or no. It
+	// runs before the force switch so a polar clause is never written as a fact,
+	// whether it carried a question mark or not.
+	if line, ok := d.planPolar(frame, raw); ok {
+		return line, nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil
@@ -818,6 +826,16 @@ func upperFirst(s string) string {
 		return s
 	}
 	return string(s[0]-32) + s[1:]
+}
+
+// lowerFirst lowercases a leading ASCII letter, the inverse of upperFirst, so a
+// clause the engine already capitalized can follow an affirmation word inside
+// one sentence: "Yes, the dog ..." carries "The dog ..." as its tail.
+func lowerFirst(s string) string {
+	if s == "" || s[0] < 'A' || s[0] > 'Z' {
+		return s
+	}
+	return string(s[0]+32) + s[1:]
 }
 
 // hasLetter reports whether a token carries any letter, the mark of a word that

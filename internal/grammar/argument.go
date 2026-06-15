@@ -56,6 +56,7 @@ type Meaning struct {
 	Relation Term            // the predicate; the relation the roles bind into
 	Roles    map[string]Term // thematic role -> filler
 	Past     bool            // the clause is about a settled moment
+	Negate   bool            // the relation is denied, "did not chase"
 	Lang     string          // the language it arrived in, or speaks back
 }
 
@@ -82,7 +83,7 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 			if verb == "" {
 				return "", false
 			}
-			parts = append(parts, p.conjugate(lang, verb, m.Roles["agent"].Plural, m.Past))
+			parts = append(parts, p.conjugate(lang, verb, m.Roles["agent"].Plural, m.Past, m.Negate))
 			continue
 		}
 		filler := m.Roles[s.Role]
@@ -95,11 +96,23 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 }
 
 // conjugate inflects a relation's verb for the tongue: the Turkish morphology
-// for Turkish, the English for the rest. The morphology is per-language code
-// (vowel harmony is not a string), but the words it works on come from data.
-func (p *Params) conjugate(lang, base string, plural, past bool) string {
+// for Turkish, the English for the rest, and the negative in either. The
+// morphology is per-language code (vowel harmony and do-support are not
+// strings), but the words it works on come from data.
+func (p *Params) conjugate(lang, base string, plural, past, negate bool) string {
 	if lang == "tr" {
-		return finiteVerbTR(p, base, past, false, false)
+		return finiteVerbTR(p, base, past, negate, false)
+	}
+	if negate {
+		// English denies with do-support: "did not chase", "does not chase".
+		switch {
+		case past:
+			return "did not " + base
+		case plural:
+			return "do not " + base
+		default:
+			return "does not " + base
+		}
 	}
 	return finiteVerb(p, base, false, plural, past)
 }

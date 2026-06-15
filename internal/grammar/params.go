@@ -306,6 +306,10 @@ func (p *Params) ProVerbs(lang string) []string {
 	return strings.Fields(p.surfaceWord(lang, "proverb"))
 }
 
+// Word returns a tongue's surface word by name (yes, no, ...), so a caller
+// reads the word from the tongue's data rather than spelling it.
+func (p *Params) Word(lang, name string) string { return p.surfaceWord(lang, name) }
+
 // suffix returns a suffix recipe by name, with the curriculum shape as
 // the fallback.
 func (p *Params) suffix(name, fallback string) string {

@@ -216,3 +216,7 @@ suffix:tr:aorist	Ir	tr
 surface:tr:proverb	yaptı yapar	tr
 fw:tr:neyi	neyi	tr	wh:what
 suffix:tr:verbneg	mA	tr
+surface:en:yes	yes	en
+surface:en:no	no	en
+surface:tr:yes	evet	tr
+surface:tr:no	hayır	tr

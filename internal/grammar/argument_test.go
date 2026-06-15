@@ -58,6 +58,32 @@ func TestSpeakTurkishCasesAndConjugates(t *testing.T) {
 	}
 }
 
+// A denied proposition speaks through the same construction, the negative
+// formed by each tongue's morphology: English do-support ("did not chase") and
+// the Turkish negative suffix folded into the conjugation ("kovalamadı"). The
+// negation is the meaning's, so one flag drives both tongues.
+func TestSpeakRendersNegation(t *testing.T) {
+	p := Builtin()
+	en, ok := p.Speak("en", Meaning{
+		Relation: Term{Phrase: "chase"},
+		Roles: map[string]Term{
+			"agent":   {Phrase: "the dog"},
+			"patient": {Phrase: "the cat"},
+		}, Past: true, Negate: true})
+	if !ok || en != "The dog did not chase the cat." {
+		t.Fatalf("english denial should use do-support: %q", en)
+	}
+	tr, ok := p.Speak("tr", Meaning{
+		Relation: Term{Phrase: "kovala"},
+		Roles: map[string]Term{
+			"agent":   {Phrase: "köpek", Definite: true},
+			"patient": {Phrase: "kedi", Definite: true},
+		}, Past: true, Negate: true})
+	if !ok || tr != "Köpek kediyi kovalamadı." {
+		t.Fatalf("turkish denial should suffix the negative onto the verb: %q", tr)
+	}
+}
+
 // The transitive construction runs meaning to form: a proposition of a
 // relation over an agent and a patient lays out in the language's word
 // order and the verb is conjugated by the morphology engine, so the brain
