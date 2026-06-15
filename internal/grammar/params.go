@@ -352,6 +352,29 @@ func (p *Params) VerbPast(lang, surface string) bool {
 	return p.get().verbPast(lang, surface)
 }
 
+// StemCandidates lists the base forms an inflected surface might reduce to: the
+// verb lemma and, for a cased tongue, the case stems (with a softened stop
+// hardened). The surface itself is excluded. The minting path tries these to
+// reinforce a known base rather than store a fresh node per inflection, so the
+// lexicon keys on the lemma; resolving each candidate filters the wrong
+// reductions, since a mangled stem names nothing.
+func (p *Params) StemCandidates(lang, surface string) []string {
+	p = p.get()
+	seen := map[string]bool{surface: true}
+	var out []string
+	add := func(s string) {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	add(p.verbLemma(lang, surface))
+	for _, s := range p.caseStems(lang, surface) {
+		add(s)
+	}
+	return out
+}
+
 // ContentTokens returns the distinct open-class words of an utterance,
 // the ones eligible to become word nodes and point at concepts.
 func (p *Params) ContentTokens(s string) []string {

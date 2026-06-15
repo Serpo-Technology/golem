@@ -503,6 +503,23 @@ func TestRenderFactsDedupsRepeatedName(t *testing.T) {
 	}
 }
 
+// Minting keys a word on its lemma: an inflected object reinforces the base
+// concept's word rather than spawning a shadow node per inflection, so the
+// lexicon does not accrete "kediyi" beside "kedi" (which over repetition would
+// distil a shadow concept).
+func TestMintingReducesAccusativeToLemma(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNounLang(t, d, "köpek", "tr")
+	groundNounLang(t, d, "kedi", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+	if w, _ := s.WordNodesByForms([]string{"kediyi"}); len(w) > 0 {
+		t.Fatalf("the accusative kediyi should reduce to kedi, not mint its own word node")
+	}
+	if w, _ := s.WordNodesByForms([]string{"kedi"}); len(w) == 0 {
+		t.Fatal("the base kedi should be in the lexicon")
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

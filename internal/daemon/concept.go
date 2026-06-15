@@ -504,6 +504,38 @@ func (d *Daemon) readVocabulary(content string, fragID uint64) {
 	d.mintWordsScaled(content, "en", fragID, nil, false, untrustedNameScale)
 }
 
+// lemmatizeForms reduces each content form to a known morphological base before
+// minting, so an inflection ("kediyi", "chased") reinforces the word that names
+// its base ("kedi", "chase") rather than minting a separate node that shadows
+// it. The lexicon then keys on the lemma, the way comprehension already resolves
+// inflections to it. Forms that collapse to one base are merged; a base, or a
+// word new to the brain, keeps its surface.
+func (d *Daemon) lemmatizeForms(lang string, forms []string) []string {
+	seen := map[string]bool{}
+	out := forms[:0:0]
+	for _, f := range forms {
+		base := d.baseForMint(lang, f)
+		if !seen[base] {
+			seen[base] = true
+			out = append(out, base)
+		}
+	}
+	return out
+}
+
+// baseForMint returns the form to mint for a content token: the first
+// morphological reduction that already names a concept (so an inflection keys
+// on its lemma), else the surface. Resolving each candidate is what tells a real
+// stem from a mangled one, a mangled stem names nothing, so the surface stands.
+func (d *Daemon) baseForMint(lang, tok string) string {
+	for _, cand := range d.gram.StemCandidates(lang, tok) {
+		if d.resolveConcept(cand) != nil {
+			return cand
+		}
+	}
+	return tok
+}
+
 // mintWords stores or refreshes word nodes for the content words of an
 // utterance and binds each to the tell moment and to the moments the
 // utterance bound to, so the night's naming pass can see which
@@ -550,6 +582,8 @@ func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors 
 	forms := d.gram.ContentTokensLang(lang, utterance)
 	if deliberate {
 		forms = grammar.AllTokens(utterance)
+	} else {
+		forms = d.lemmatizeForms(lang, forms)
 	}
 	if len(forms) == 0 {
 		return nil
