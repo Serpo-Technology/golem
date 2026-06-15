@@ -1466,13 +1466,6 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if res.FragmentID == 0 {
 			return wire.Response{Error: "the words could not be stored; check the daemon log"}, false, false
 		}
-		// The words enter the lexicon and keep company with the recent moments
-		// the utterance bound to. Grounding them in what was merely held in mind
-		// waits until the clause is read: a told word grounds in the attended
-		// concept, but a proposition's words bind to their roles instead, so an
-		// argument is not named after the co-arguments warm beside it.
-		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentWithin(time.Now(), res.FragmentID), false)
-		d.warmConcepts(words, exciteSpeech)
 		resp := wire.Response{OK: true, Observe: &res}
 		// The grammar reads the utterance's force and the planner
 		// decides the reply: an answer, an admission, or a staged
@@ -1487,11 +1480,17 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
-		// Now ground the words in what was held in mind, unless the clause was a
-		// proposition: comprehension bound its arguments to their roles, so its
-		// words must not also be named after whatever else was warm. Any other
-		// utterance, a bare naming or a definition, grounds its words in the
-		// attended concept the way attention grounding intends.
+		// The words enter the lexicon only after the clause is read, so an
+		// inflection keys on the lemma comprehension has by now established: a
+		// verb's surface ("kovaladı") reinforces the relation word ("kovala")
+		// instead of minting a node before its lemma is a concept. They keep
+		// company with the recent moments the utterance bound to.
+		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentWithin(time.Now(), res.FragmentID), false)
+		d.warmConcepts(words, exciteSpeech)
+		// Grounding the words in what was merely held in mind waits on the force:
+		// a told word grounds in the attended concept, but a proposition's words
+		// bound to their roles already, so an argument is not also named after the
+		// co-arguments warm beside it.
 		if !d.momentBoundRoles(res.FragmentID) {
 			d.bindAttention(words, attn)
 		}

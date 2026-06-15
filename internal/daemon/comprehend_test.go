@@ -520,6 +520,23 @@ func TestMintingReducesAccusativeToLemma(t *testing.T) {
 	}
 }
 
+// On a relation's first telling the verb's inflection no longer leaves a stray
+// word node. Minting runs after comprehension establishes the relation, so
+// "chased" keys on the lemma "chase" the proposition just minted, rather than
+// storing a surface node before its lemma is a concept.
+func TestFirstTellingVerbKeysOnLemma(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	if w, _ := s.WordNodesByForms([]string{"chased"}); len(w) > 0 {
+		t.Fatal("the inflected verb should reduce to its lemma on first telling, not mint 'chased'")
+	}
+	if w, _ := s.WordNodesByForms([]string{"chase"}); len(w) == 0 {
+		t.Fatal("the lemma 'chase' should be in the lexicon, naming the relation")
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {
