@@ -524,6 +524,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Tell me about X" is the open request: say what the focus is and what it
+	// has been part of, the same walk and renderer the focused questions are
+	// filters of, here with no filter.
+	if line, ok := d.planDescribe(frame, raw); ok {
+		return line, nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil

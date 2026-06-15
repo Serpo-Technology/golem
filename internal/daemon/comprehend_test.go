@@ -331,6 +331,26 @@ func TestActivityQuestionCoordinatesRelations(t *testing.T) {
 	}
 }
 
+// "Tell me about X" is the open case of the one generator: with no filter it
+// says what the focus is and the propositions it took part in, the same walk
+// the role and activity questions narrow.
+func TestDescribeFocusReportsIdentityAndFacts(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "ball"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog fetched a ball")
+
+	got := say(t, d, "tell me about the dog").Say
+	if !strings.Contains(got, "chased") || !strings.Contains(got, "fetched") {
+		t.Fatalf("describe should report the dog's activities across relations: %q", got)
+	}
+	if !strings.Contains(got, "cat") || !strings.Contains(got, "ball") {
+		t.Fatalf("describe should name the co-arguments: %q", got)
+	}
+}
+
 // The conversational probe end to end: a chasing is told and grounded, then
 // asked about from both roles, the relation defined, and the activity
 // recalled, every answer generated from a meaning structure run through the

@@ -118,52 +118,23 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 // one inherited by an elliptical follow-up. It leaves the relation as the
 // discourse thread so "what about X" can ask the same of another referent.
 func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, knownRole, verb string) (string, bool) {
-	questioned, cross := "patient", memory.RelPatient
-	if knownRole == "patient" {
-		questioned, cross = "agent", memory.RelAgent
-	}
 	past := frame.Past || d.gram.VerbPast(frame.Lang, verb)
-	dests, err := d.walkableDests(known.ID)
-	if err != nil {
-		return "", false
-	}
-	// The answer is the thread's established co-arguments, newest first: "what
-	// did the dog chase" after two tellings names both, and a fresh claim is
-	// never lost behind the strongest memory. With nothing set down this exchange
-	// the walk's strongest stands, so a cold question still reads the graph.
-	fillers := d.threadFillers(rel.Content, known.ID, questioned)
-	if len(fillers) == 0 {
-		for i := range dests[cross] {
-			if dests[cross][i].via == rel.Content {
-				fillers = []walkDest{dests[cross][i]}
-				break
-			}
-		}
-	}
 	// The relation and its tense are the thread an elliptical follow-up inherits.
 	d.lastRole = &roleContext{rel: rel, knownRole: knownRole, verb: verb, past: past}
-	if len(fillers) == 0 {
+	// The answer is the focus's propositions for this relation, fresh thread
+	// claims winning over the entrenched memory and the co-arguments coordinated
+	// into one clause: "the dog chased the cat and the mouse". The same walk and
+	// renderer every answer uses, here filtered to the one relation asked.
+	facts := d.gatherFacts(known, knownRole, rel.Content)
+	line, ok := d.renderFacts(frame.Lang, known.Content, facts, past)
+	if !ok {
 		// The relation is known but nothing filled the questioned role: the
 		// honest answer is the gap, spoken through the older admission.
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
 	}
-	// Coordinate the co-arguments into one phrase, "the cat and the mouse", each
-	// made definite on its own so the conjunction reads naturally, the freer
-	// answer composed from several propositions rather than fixed to one clause.
-	parts := make([]string, len(fillers))
-	for i, f := range fillers {
-		parts[i] = definiteNP(f.gloss)
-	}
-	line, ok := d.sayProposition(frame.Lang, rel.Content,
-		map[string]string{knownRole: known.Content, questioned: strings.Join(parts, " and ")}, past)
-	if !ok {
-		return "", false
-	}
-	// The answer's referents become warm, so the conversational thread follows
-	// what was just said.
-	for _, f := range fillers {
-		d.ws.excite(f.id, exciteSpeech)
+	for _, f := range facts {
+		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(known.Content)
 	return line, true
@@ -181,40 +152,53 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 		return "", false
 	}
 	agent := frame.Agent.Concept
-	dests, err := d.walkableDests(agent.ID)
-	if err != nil || len(dests[memory.RelPatient]) == 0 {
+	// "What did the dog do" reports the dog's activities across the relations it
+	// took part in: the same gather and renderer, filtered to the agent role with
+	// no single relation, so each relation becomes a clause and the agent is
+	// carried as "it" after the first.
+	facts := d.gatherFacts(agent, "agent", "")
+	line, ok := d.renderFacts(frame.Lang, agent.Content, facts, frame.Past)
+	if !ok {
 		return "", false
 	}
-	// "What did the dog do" reports the dog's activities across relations, not a
-	// single one: the strongest co-argument of each distinct relation it took
-	// part in, spoken in turn. walkableDests sorts by weight, so the relations
-	// come strongest first; the first clause names the agent and the rest carry
-	// it as "it", so several propositions read as one report.
-	seen := map[string]bool{}
-	var clauses []string
-	for i := range dests[memory.RelPatient] {
-		dst := dests[memory.RelPatient][i]
-		if dst.via == "" || seen[dst.via] {
-			continue
-		}
-		seen[dst.via] = true
-		subject := agent.Content
-		if len(clauses) > 0 {
-			subject = "it"
-		}
-		line, ok := d.sayProposition(frame.Lang, dst.via,
-			map[string]string{"agent": subject, "patient": dst.gloss}, frame.Past)
-		if !ok {
-			continue
-		}
-		clauses = append(clauses, line)
-		d.ws.excite(dst.id, exciteSpeech)
-	}
-	if len(clauses) == 0 {
-		return "", false
+	for _, f := range facts {
+		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(agent.Content)
-	return strings.Join(clauses, " "), true
+	return line, true
+}
+
+// planDescribe answers an open "tell me about X": it says what the focus is and
+// then what is salient about it, its identity followed by the propositions it
+// took part in, gathered by the one walk with no filter and spoken through the
+// one renderer. It is the general case the role and activity questions are
+// filters of. It returns false when the turn is not such a request or the focus
+// names nothing GOLEM knows.
+func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
+	ref, ok := describeReferent(raw)
+	if !ok {
+		return "", false
+	}
+	focus := d.resolveConcept(ref)
+	if focus == nil {
+		return "", false
+	}
+	chem := d.chem.Snapshot()
+	kind := "thing"
+	if focus.Category == "verb" || focus.Category == "relation" {
+		kind = "action"
+	}
+	parts := []string{d.definitionClause(frame.Lang, focus.Content, grammar.Indefinite(kind), chem)}
+	if facts := d.gatherFacts(focus, "", ""); len(facts) > 0 {
+		if line, ok := d.renderFacts(frame.Lang, "it", facts, true); ok {
+			parts = append(parts, line)
+		}
+		for _, f := range facts {
+			d.ws.excite(f.coID, exciteSpeech)
+		}
+	}
+	d.warmSpoken(focus.Content)
+	return strings.Join(parts, " "), true
 }
 
 // proVerbDo reports whether a clause's main verb is the generic pro-verb,

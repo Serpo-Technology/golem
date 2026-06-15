@@ -53,32 +53,127 @@ func (d *Daemon) recordThreadProp(rel string, agent, patient uint64, agentGloss,
 	}
 }
 
-// threadFillers returns every distinct co-argument the current thread has
-// established for a relation and a known argument, newest first, each with its
-// gloss. A role answer reads from it directly, so what the exchange set down is
-// named in full and a fresh claim is never lost behind the strongest memory
-// even when the walk, in a trained graph, has pruned it from its candidates.
-func (d *Daemon) threadFillers(rel string, knownID uint64, questioned string) []walkDest {
-	var out []walkDest
-	seen := map[uint64]bool{}
+// The generator answers by walking the graph and the thread for what is salient
+// about a focus concept, then speaking the propositions it gathers. One walk
+// feeds every answer: a role question filters it to one relation, an activity
+// question takes them all, a definition leads with the identity and adds a fresh
+// fact, an open "tell me about X" applies no filter. The walk is a chain over
+// meaning, not words, so the answer is composed from grounded propositions and
+// rendered at the language edge, never authored.
+
+// focusFact is one grounded thing about a focus concept: a relation it takes
+// part in, the role the focus plays in it, and the co-argument filling the
+// other role. The thread and the walk both yield these.
+type focusFact struct {
+	rel       string
+	focusRole string // "agent" or "patient": the role the focus plays
+	coGloss   string
+	coID      uint64
+}
+
+const (
+	factCoArgCap  = 4 // co-arguments coordinated within one clause
+	factClauseCap = 3 // relation clauses joined in one answer
+)
+
+// gatherFacts collects what is salient about a focus: the propositions it takes
+// part in, freshly established ones from the discourse thread winning over the
+// entrenched memory. role filters to the role the focus plays ("" for either),
+// rel to one relation ("" for any). A relation the thread spoke of this
+// exchange is reported from the thread and not diluted by the entrenched
+// crossings; a relation only the long-term graph holds is read from the walk.
+// The result is salience-ordered, thread first, and deduped by relation, role,
+// and co-argument.
+func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFact {
+	wantRole := func(r string) bool { return role == "" || role == r }
+	wantRel := func(r string) bool { return rel == "" || rel == r }
+	type key struct {
+		rel, role string
+		id        uint64
+	}
+	seen := map[key]bool{}
+	var out []focusFact
+	threadCovered := map[string]bool{} // rel|role the thread has spoken of
+	add := func(rl, frole, gloss string, id uint64) {
+		if id == 0 || rl == "" || !wantRole(frole) || !wantRel(rl) {
+			return
+		}
+		k := key{rl, frole, id}
+		if seen[k] {
+			return
+		}
+		seen[k] = true
+		out = append(out, focusFact{rel: rl, focusRole: frole, coGloss: gloss, coID: id})
+	}
 	for _, p := range d.threadProps {
-		var id uint64
-		var gloss string
-		switch {
-		case questioned == "patient" && p.rel == rel && p.agent == knownID:
-			id, gloss = p.patient, p.patientGloss
-		case questioned == "agent" && p.rel == rel && p.patient == knownID:
-			id, gloss = p.agent, p.agentGloss
-		default:
-			continue
+		if p.agent == focus.ID {
+			add(p.rel, "agent", p.patientGloss, p.patient)
+			threadCovered[p.rel+"|agent"] = true
 		}
-		if id == 0 || seen[id] {
-			continue
+		if p.patient == focus.ID {
+			add(p.rel, "patient", p.agentGloss, p.agent)
+			threadCovered[p.rel+"|patient"] = true
 		}
-		seen[id] = true
-		out = append(out, walkDest{id: id, gloss: gloss})
+	}
+	dests, err := d.walkableDests(focus.ID)
+	if err != nil {
+		return out
+	}
+	for _, dst := range dests[memory.RelPatient] { // the focus as agent, reaching its patients
+		if !threadCovered[dst.via+"|agent"] {
+			add(dst.via, "agent", dst.gloss, dst.id)
+		}
+	}
+	for _, dst := range dests[memory.RelAgent] { // the focus as patient, reaching its agents
+		if !threadCovered[dst.via+"|patient"] {
+			add(dst.via, "patient", dst.gloss, dst.id)
+		}
 	}
 	return out
+}
+
+// renderFacts speaks a gathered set as coordinated clauses: the co-arguments of
+// one relation join in a single clause ("chased the cat and the mouse"), and
+// clauses of different relations follow in turn, the focus named once and then
+// carried as "it". The focus fills its role and the co-arguments the other. The
+// caps keep an answer from running on. It returns false when nothing renders.
+func (d *Daemon) renderFacts(lang, focusGloss string, facts []focusFact, past bool) (string, bool) {
+	type key struct{ rel, role string }
+	var order []key
+	coargs := map[key][]string{}
+	for _, f := range facts {
+		k := key{f.rel, f.focusRole}
+		if _, ok := coargs[k]; !ok {
+			if len(order) >= factClauseCap {
+				continue
+			}
+			order = append(order, k)
+		}
+		if len(coargs[k]) < factCoArgCap {
+			coargs[k] = append(coargs[k], definiteNP(f.coGloss))
+		}
+	}
+	var clauses []string
+	for _, k := range order {
+		focusTerm := focusGloss
+		if len(clauses) > 0 {
+			focusTerm = "it"
+		}
+		roles := map[string]string{}
+		coord := strings.Join(coargs[k], " and ")
+		if k.role == "agent" {
+			roles["agent"], roles["patient"] = focusTerm, coord
+		} else {
+			roles["agent"], roles["patient"] = coord, focusTerm
+		}
+		if line, ok := d.sayProposition(lang, k.rel, roles, past); ok {
+			clauses = append(clauses, line)
+		}
+	}
+	if len(clauses) == 0 {
+		return "", false
+	}
+	return strings.Join(clauses, " "), true
 }
 
 // threadFactClause speaks what the exchange just established about a concept, a
@@ -89,21 +184,19 @@ func (d *Daemon) threadFillers(rel string, knownID uint64, questioned string) []
 // generator reports only what was set down. It returns false when the thread
 // holds nothing about the concept.
 func (d *Daemon) threadFactClause(lang string, c *memory.Fragment) (string, bool) {
+	var fresh []focusFact
 	for _, p := range d.threadProps {
-		var roles map[string]string
 		switch c.ID {
 		case p.agent:
-			roles = map[string]string{"agent": "it", "patient": p.patientGloss}
+			fresh = append(fresh, focusFact{rel: p.rel, focusRole: "agent", coGloss: p.patientGloss, coID: p.patient})
 		case p.patient:
-			roles = map[string]string{"agent": p.agentGloss, "patient": "it"}
-		default:
-			continue
+			fresh = append(fresh, focusFact{rel: p.rel, focusRole: "patient", coGloss: p.agentGloss, coID: p.agent})
 		}
-		if line, ok := d.sayProposition(lang, p.rel, roles, true); ok {
-			return line, true
+		if len(fresh) > 0 {
+			break // the freshest fact only, spoken as one clause
 		}
 	}
-	return "", false
+	return d.renderFacts(lang, "it", fresh, true)
 }
 
 // completeRoleEllipsis answers an elliptical follow-up to a role question by
@@ -128,6 +221,28 @@ func (d *Daemon) completeRoleEllipsis(frame grammar.Frame, raw string, thread *r
 	// past, so the follow-up about the dog is past too.
 	frame.Past = frame.Past || thread.past
 	return d.answerRole(frame, thread.rel, known, thread.knownRole, thread.verb)
+}
+
+// describeReferent reads the focus of an open request to say what is known
+// about something, the noun in "tell me about the dog" or "describe a cat",
+// with any article dropped. It returns false when the turn is not such a
+// request.
+func describeReferent(raw string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	for _, lead := range []string{"tell me about ", "tell me of ", "describe ", "what can you tell me about ", "what do you know about "} {
+		rest, ok := strings.CutPrefix(s, lead)
+		if !ok {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		for _, art := range []string{"a ", "an ", "the "} {
+			rest = strings.TrimPrefix(rest, art)
+		}
+		if rest = strings.TrimSpace(rest); rest != "" {
+			return rest, true
+		}
+	}
+	return "", false
 }
 
 // aboutReferent reads the referent of an elliptical follow-up, the noun in "what
