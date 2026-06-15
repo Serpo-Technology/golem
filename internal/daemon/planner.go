@@ -52,11 +52,7 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 		names, err := d.store.LinksFromRel(ids, memory.RelNames)
 		if err == nil && len(names) > 0 {
 			votes := map[uint64]float64{}
-			cands := make([]uint64, 0, len(names))
 			for _, e := range names {
-				if votes[e.To] == 0 {
-					cands = append(cands, e.To)
-				}
 				votes[e.To] += e.Weight
 			}
 			var best uint64
@@ -66,28 +62,8 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 					best, bestW = id, w
 				}
 			}
-			frags, err := d.store.FragmentsByIDs(cands)
-			if err != nil {
-				return nil
-			}
-			byID := make(map[uint64]*memory.Fragment, len(frags))
-			for _, f := range frags {
-				byID[f.ID] = f
-			}
-			// When the strongest name is a word-shadow abstraction, attention
-			// settles which grounded sense is meant: a concept warm in mind, named
-			// by the same word, wins over the shadow its own name distilled. So a
-			// noun taught in a fresh tongue reaches the grounded concept warmed by
-			// talk of it across the tongue, while a word whose strongest name is
-			// already a grounded concept is left untouched, its sense not
-			// second-guessed by whatever else is warm.
-			if w := byID[best]; w != nil && d.isWordShadow(w) {
-				if warm := d.warmestGrounded(cands, byID); warm != 0 {
-					best = warm
-				}
-			}
-			if f := byID[best]; f != nil {
-				return f
+			if frags, err := d.store.FragmentsByIDs([]uint64{best}); err == nil && len(frags) == 1 {
+				return frags[0]
 			}
 		}
 	}
@@ -95,66 +71,6 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 		return concepts[0]
 	}
 	return nil
-}
-
-// isWordShadow reports whether a concept is a word-echo: an abstraction a word
-// distilled from its own saying, grounded only in utterance, with no perceptual
-// experience under it. Such a shadow can outweigh the grounded concept the word
-// should name, so attention is allowed to overrule it. A real abstraction
-// (grounded in members or percepts) is not a shadow and stands. The perceptual
-// check runs only for abstractions, so a plain grounded concept costs nothing.
-func (d *Daemon) isWordShadow(f *memory.Fragment) bool {
-	if !strings.HasPrefix(f.Template, "abs:") {
-		return false
-	}
-	return !d.groundedInPerception(f.ID)
-}
-
-// groundedInPerception reports whether any episode a concept grounds in is a
-// lived percept rather than speech or thought, the line between a thing
-// experienced and a word merely said.
-func (d *Daemon) groundedInPerception(conceptID uint64) bool {
-	grounds, err := d.store.LinksFromRel([]uint64{conceptID}, memory.RelGrounds)
-	if err != nil || len(grounds) == 0 {
-		return false
-	}
-	epIDs := make([]uint64, 0, len(grounds))
-	for _, e := range grounds {
-		epIDs = append(epIDs, e.To)
-	}
-	eps, err := d.store.FragmentsByIDs(epIDs)
-	if err != nil {
-		return false
-	}
-	for _, e := range eps {
-		if e.Channel != "tell" && e.Channel != "thought" {
-			return true
-		}
-	}
-	return false
-}
-
-// warmestGrounded returns the warmest grounded concept among a word's named
-// candidates, above the attention gate, skipping the word-shadow abstractions
-// the override is reaching past. Zero when none is held in mind, so the cold
-// vote stands.
-func (d *Daemon) warmestGrounded(cands []uint64, byID map[uint64]*memory.Fragment) uint64 {
-	var warm uint64
-	heat := attentionGroundingGate
-	for _, id := range cands {
-		f := byID[id]
-		if f == nil || d.isWordShadow(f) {
-			continue
-		}
-		h := d.ws.heat(id)
-		if h < attentionGroundingGate {
-			continue
-		}
-		if warm == 0 || h > heat || (h == heat && id > warm) {
-			warm, heat = id, h
-		}
-	}
-	return warm
 }
 
 // namingContrast measures how firmly a phrase names a concept against the
