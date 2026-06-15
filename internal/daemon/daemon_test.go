@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"math"
@@ -90,6 +91,74 @@ func TestDaemonListensOnTCP(t *testing.T) {
 	}
 	if resp.Status == nil || resp.Status.Channels["testlog"] == nil {
 		t.Fatalf("the tcp-fed observation should reach the brain: %+v", resp.Status)
+	}
+}
+
+// A subscriber receives the daemon's events as they happen over the same TCP
+// transport, the output stream an external speaker reads to voice what GOLEM
+// says on its own. The events keep flowing while voice is toggled, so the
+// subscriber catches one once it has registered.
+func TestDaemonStreamsEvents(t *testing.T) {
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := probe.Addr().String()
+	probe.Close()
+
+	cfg := config.Default()
+	cfg.SleepIntervalSec = 3600
+	cfg.Channels = config.ChannelsConfig{}
+	cfg.ListenTCP = addr
+	startTestDaemonWith(t, t.TempDir(), cfg)
+
+	var conn net.Conn
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if conn, err = net.Dial("tcp", addr); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("dial tcp: %v", err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte(`{"cmd":"subscribe"}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+
+	// Keep emitting events so the subscriber, once registered, catches one.
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		on := true
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			arg := "off"
+			if on {
+				arg = "on"
+			}
+			on = !on
+			wire.CallAddr("tcp", addr, wire.Request{Cmd: "voice", Arg: arg})
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	r := bufio.NewReader(conn)
+	for {
+		line, err := r.ReadBytes('\n')
+		if err != nil {
+			t.Fatalf("reading event stream: %v", err)
+		}
+		if strings.Contains(string(line), `"ev":"voice"`) {
+			return // an event reached the subscriber over TCP
+		}
 	}
 }
 

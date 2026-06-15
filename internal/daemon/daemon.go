@@ -18,6 +18,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -189,6 +190,13 @@ type Daemon struct {
 	// netListeners holds any transport beyond the unix socket, a TCP address
 	// for transducers outside the process, closed alongside it at shutdown.
 	netListeners []net.Listener
+
+	// subs are the open event-stream subscribers (a speaker outside the
+	// process, say), fed each event as it happens. The mutex guards the set,
+	// touched by the brain loop on fan-out and by connection goroutines on
+	// subscribe and disconnect.
+	subsMu sync.Mutex
+	subs   map[chan events.Event]struct{}
 }
 
 // actionRun is one command in flight and the claims it holds.
@@ -214,10 +222,13 @@ const waitingCap = 16
 // event stamps and appends one line to the structured trail. A write
 // error closes the trail rather than spamming the daemon log.
 func (d *Daemon) event(ev events.Event) {
+	ev.At = time.Now().UnixMilli()
+	// Offer it to any live subscriber first, so an external speaker hears it
+	// even on a brain whose diary could not open.
+	d.fanout(ev)
 	if d.events == nil {
 		return
 	}
-	ev.At = time.Now().UnixMilli()
 	if err := d.events.Append(ev); err != nil {
 		fmt.Fprintf(d.out, "event log failed, closing it: %v\n", err)
 		d.events.Close()
@@ -800,6 +811,13 @@ func (d *Daemon) serveConn(conn net.Conn) {
 	resp := wire.Response{}
 	if err := json.Unmarshal(line, &req); err != nil {
 		resp.Error = "bad request: " + err.Error()
+	} else if req.Cmd == "subscribe" {
+		// A subscription holds the connection open and streams events as they
+		// happen, the output channel a speaker reads; it never goes through the
+		// request queue and outlasts the request deadline.
+		conn.SetDeadline(time.Time{})
+		d.streamEvents(conn)
+		return
 	} else {
 		reply := make(chan wire.Response, 1)
 		select {
