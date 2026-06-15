@@ -40,5 +40,6 @@
   "execute_parallel": 4,
   "auto_cue_cooldown_sec": 60,
   "web_poll_sec": 900,
-  "untrusted_channels": ["web"]
+  "untrusted_channels": ["web"],
+  "listen_tcp": ""
 }

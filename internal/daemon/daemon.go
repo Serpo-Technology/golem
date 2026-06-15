@@ -186,6 +186,10 @@ type Daemon struct {
 	// events is the structured trail (nil when it could not open; the
 	// brain never dies for its diary).
 	events *events.Log
+
+	// netListeners holds any transport beyond the unix socket, a TCP address
+	// for transducers outside the process, closed alongside it at shutdown.
+	netListeners []net.Listener
 }
 
 // actionRun is one command in flight and the claims it holds.
@@ -491,6 +495,21 @@ func (d *Daemon) Run() error {
 		return err
 	}
 	go d.acceptLoop(listener)
+
+	// A TCP transport, when configured, serves the same protocol across a
+	// container boundary so external senses and a speaker can reach the brain.
+	if addr := strings.TrimSpace(d.cfg.ListenTCP); addr != "" {
+		tcp, err := net.Listen("tcp", addr)
+		if err != nil {
+			listener.Close()
+			os.Remove(sock)
+			d.store.Close()
+			return err
+		}
+		d.netListeners = append(d.netListeners, tcp)
+		go d.acceptLoop(tcp)
+		fmt.Fprintf(d.out, "golem also listening on tcp %s\n", tcp.Addr())
+	}
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
@@ -1244,6 +1263,9 @@ func (d *Daemon) flushModels() {
 func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	close(d.stop)
 	listener.Close()
+	for _, l := range d.netListeners {
+		l.Close()
+	}
 
 	// Every in-flight command finishes and its outcome is recorded before
 	// the final consolidation, so stopping cannot lose a result; queued

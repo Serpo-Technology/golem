@@ -144,6 +144,14 @@ type Config struct {
 	// cue a habit or anchor the grounding of an action. Omitted, the
 	// list is the web channel.
 	UntrustedChannels []string `json:"untrusted_channels"`
+	// ListenTCP, when set, makes the daemon serve the same wire protocol on
+	// a TCP address in addition to the unix socket, so transducers outside
+	// the process (a microphone bridge, a captioner, a speaker) reach it
+	// across a container boundary. Empty leaves only the socket. Bind it to a
+	// container interface ("0.0.0.0:7777") and publish it to host loopback
+	// only ("127.0.0.1:7777:7777"), since a reachable brain can be told and
+	// asked to act.
+	ListenTCP string `json:"listen_tcp"`
 }
 
 type ChannelsConfig struct {

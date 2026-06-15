@@ -54,6 +54,45 @@ func startTestDaemonWith(t *testing.T, home string, cfg config.Config) (string, 
 	return "", nil
 }
 
+// The daemon serves the same protocol over TCP when configured, so a
+// transducer outside the process, across a container boundary, can feed a
+// sense and read a reply without the unix socket.
+func TestDaemonListensOnTCP(t *testing.T) {
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := probe.Addr().String()
+	probe.Close()
+
+	cfg := config.Default()
+	cfg.SleepIntervalSec = 3600
+	cfg.Channels = config.ChannelsConfig{}
+	cfg.ListenTCP = addr
+	startTestDaemonWith(t, t.TempDir(), cfg)
+
+	// The TCP listener comes up just after the unix socket; retry briefly.
+	deadline := time.Now().Add(2 * time.Second)
+	var resp wire.Response
+	for time.Now().Before(deadline) {
+		if _, err = wire.CallAddr("tcp", addr, wire.Request{Cmd: "observe",
+			Channel: "testlog", Content: "hello over tcp"}); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("observe over tcp never succeeded: %v", err)
+	}
+	resp, err = wire.CallAddr("tcp", addr, wire.Request{Cmd: "status"})
+	if err != nil {
+		t.Fatalf("status over tcp failed: %v", err)
+	}
+	if resp.Status == nil || resp.Status.Channels["testlog"] == nil {
+		t.Fatalf("the tcp-fed observation should reach the brain: %+v", resp.Status)
+	}
+}
+
 func TestDaemonEndToEnd(t *testing.T) {
 	home, done := startTestDaemon(t)
 

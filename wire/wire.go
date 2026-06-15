@@ -214,8 +214,16 @@ func SocketPath(home string) string { return filepath.Join(home, "golem.sock") }
 
 // Call performs one request round trip against the daemon's socket.
 func Call(home string, req Request) (Response, error) {
+	return CallAddr("unix", SocketPath(home), req)
+}
+
+// CallAddr performs one request round trip against any transport the daemon
+// serves, the unix socket or a TCP address, so a process outside the daemon
+// (a sense bridge, a speaker) speaks the same protocol over the network. The
+// wire is one JSON request and one JSON reply, newline-delimited.
+func CallAddr(network, addr string, req Request) (Response, error) {
 	var resp Response
-	conn, err := net.DialTimeout("unix", SocketPath(home), 2*time.Second)
+	conn, err := net.DialTimeout(network, addr, 2*time.Second)
 	if err != nil {
 		return resp, err
 	}
