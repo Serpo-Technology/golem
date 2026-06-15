@@ -23,22 +23,7 @@
     "syslog": false,
     "watch_dirs": [],
     "tail_files": [],
-    "watch_urls": [
-      "https://en.wikipedia.org/wiki/Encyclopedia",
-      "https://en.wikipedia.org/wiki/Wikipedia",
-      "https://en.wikipedia.org/wiki/Artificial_intelligence",
-      "https://en.wikipedia.org/wiki/Strange_loop",
-      "https://en.wikipedia.org/wiki/Markov_blanket",
-      "https://en.wikipedia.org/wiki/Thought",
-      "https://en.wikipedia.org/wiki/World_Wide_Web",
-      "https://en.wikipedia.org/wiki/HTML",
-      "https://en.wikipedia.org/wiki/Go_(programming_language)",
-      "https://en.wikipedia.org/wiki/Programming_language",
-      "https://en.wikipedia.org/wiki/Language",
-      "https://en.wikipedia.org/wiki/English_language",
-      "https://en.wikipedia.org/wiki/Turkish_language",
-      "https://en.wikipedia.org/wiki/Grammar"
-    ],
+    "watch_urls": [],
     "screen": false,
     "voice": false,
     "voice_name": "Samantha"
