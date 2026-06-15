@@ -25,8 +25,8 @@
     "tail_files": [],
     "watch_urls": [],
     "screen": false,
-    "voice": false,
-    "voice_name": "Samantha"
+    "voice": true,
+    "voice_name": ""
   },
   "graduation_approvals": 3,
   "conflict_margin": 0.15,
@@ -42,5 +42,6 @@
   "web_poll_sec": 900,
   "untrusted_channels": [
     "web"
-  ]
+  ],
+  "listen_tcp": "0.0.0.0:7777"
 }
