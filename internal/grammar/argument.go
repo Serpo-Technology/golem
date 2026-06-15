@@ -243,7 +243,15 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	// role, so it is not unseated by another that has merely been an agent more
 	// often: "a dog chased a rabbit" stays the dog chasing, not the reverse.
 	orderAgentMisplaced := fit(ta.Concept, a) <= fit(ta.Concept, b)
-	if orderAgentMisplaced && swapped > asIs+bestFitMargin {
+	// And the swap must promote a clearly better agent. A heavily grounded
+	// concept fits both roles highly through its feature kin, so on a trained
+	// graph the order's agent can read as fitting the patient role by a hair
+	// while still being the strongest available agent. Requiring the order's
+	// patient to out-fit it for the agent role keeps the order standing in that
+	// near tie: the dog stays the chaser because it is the better chaser, not
+	// because its phrase came first.
+	candidateBetterAgent := fit(tb.Concept, a) > fit(ta.Concept, a)+bestFitMargin
+	if orderAgentMisplaced && candidateBetterAgent && swapped > asIs+bestFitMargin {
 		m.Roles[a], m.Roles[b] = tb, ta
 	}
 }

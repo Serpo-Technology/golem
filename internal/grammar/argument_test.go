@@ -230,6 +230,49 @@ func TestComprehendKeepsOrderAgentOverHistory(t *testing.T) {
 	}
 }
 
+// On a trained graph a heavily grounded concept fits both roles highly through
+// its feature kin, so the order's agent can read as fitting the patient role by
+// a hair while remaining the strongest available agent. The order must still
+// stand: "a dog chased a rabbit" stays the dog chasing even when the dog's
+// patient fit just edges its agent fit, because the dog out-fits the rabbit for
+// the agent role. These fit values mirror what a trained brain produced live.
+func TestComprehendKeepsOrderAgentInNearTie(t *testing.T) {
+	p := Builtin()
+	dog := &memory.Fragment{ID: 1, Content: "dog"}
+	rabbit := &memory.Fragment{ID: 2, Content: "rabbit"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "dog":
+			return dog
+		case "rabbit":
+			return rabbit
+		}
+		return nil
+	}
+	// The dog fits both roles highly (patient a hair above agent through kin);
+	// the rabbit is a weaker agent and a poor patient. The dog is the better
+	// agent, so the order holds.
+	fit := func(c *memory.Fragment, role string) float64 {
+		switch {
+		case c.ID == dog.ID && role == "agent":
+			return 2.513
+		case c.ID == dog.ID:
+			return 2.541
+		case c.ID == rabbit.ID && role == "agent":
+			return 2.227
+		default:
+			return 0.831
+		}
+	}
+	m, ok := p.Comprehend("en", "a dog chased a rabbit", resolve, fit)
+	if !ok {
+		t.Fatal("should comprehend")
+	}
+	if m.Roles["agent"].Concept != dog || m.Roles["patient"].Concept != rabbit {
+		t.Fatalf("the order's agent should stand in a near tie when it is the better agent: %+v", m.Roles)
+	}
+}
+
 // The same construction both says and understands: a meaning generated to a
 // surface string comprehends back into the same roles over the same relation,
 // the round trip through one inventory read each way that is the whole point.
