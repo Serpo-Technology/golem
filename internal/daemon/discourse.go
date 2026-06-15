@@ -76,6 +76,45 @@ const (
 	factClauseCap = 3 // relation clauses joined in one answer
 )
 
+// conceptName is a concept's speakable face in a tongue: the firmest word that
+// names it there, so an answer says "the dog" or, in Turkish, "köpek" rather
+// than the raw percept caption the concept distilled from. It falls back to the
+// concept's own content when no word of the tongue names it, so a concept known
+// only by its shape still speaks.
+func (d *Daemon) conceptName(id uint64, content, lang string) string {
+	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelNames)
+	if err != nil || len(edges) == 0 {
+		return content
+	}
+	weight := map[uint64]float64{}
+	for _, e := range edges {
+		if e.Weight > weight[e.From] {
+			weight[e.From] = e.Weight
+		}
+	}
+	ids := make([]uint64, 0, len(weight))
+	for wid := range weight {
+		ids = append(ids, wid)
+	}
+	words, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return content
+	}
+	best, bestW := "", 0.0
+	for _, w := range words {
+		if w.Kind != memory.KindWord || w.Lang != lang {
+			continue
+		}
+		if best == "" || weight[w.ID] > bestW {
+			best, bestW = w.Content, weight[w.ID]
+		}
+	}
+	if best == "" {
+		return content
+	}
+	return best
+}
+
 // gatherFacts collects what is salient about a focus: the propositions it takes
 // part in, freshly established ones from the discourse thread winning over the
 // entrenched memory. role filters to the role the focus plays ("" for either),
@@ -134,10 +173,18 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 
 // renderFacts speaks a gathered set as coordinated clauses: the co-arguments of
 // one relation join in a single clause ("chased the cat and the mouse"), and
-// clauses of different relations follow in turn, the focus named once and then
-// carried as "it". The focus fills its role and the co-arguments the other. The
-// caps keep an answer from running on. It returns false when nothing renders.
-func (d *Daemon) renderFacts(lang, focusGloss string, facts []focusFact, past bool) (string, bool) {
+// clauses of different relations follow in turn. A repeated subject is carried
+// as a pronoun in English ("it") and as the name again in tongues whose pronoun
+// case this generator does not yet inflect, so a Turkish answer reads cleanly
+// rather than splicing in an English "it". continuation means the focus was
+// already named just before (after a definition), so the first clause carries
+// it too. The focus fills its role and the co-arguments the other; the caps
+// keep an answer from running on. It returns false when nothing renders.
+func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, continuation bool) (string, bool) {
+	repeated := focusName
+	if lang == "" || lang == "en" {
+		repeated = "it"
+	}
 	type key struct{ rel, role string }
 	var order []key
 	coargs := map[key][]string{}
@@ -150,14 +197,14 @@ func (d *Daemon) renderFacts(lang, focusGloss string, facts []focusFact, past bo
 			order = append(order, k)
 		}
 		if len(coargs[k]) < factCoArgCap {
-			coargs[k] = append(coargs[k], definiteNP(f.coGloss))
+			coargs[k] = append(coargs[k], definiteNP(d.conceptName(f.coID, f.coGloss, lang)))
 		}
 	}
 	var clauses []string
 	for _, k := range order {
-		focusTerm := focusGloss
-		if len(clauses) > 0 {
-			focusTerm = "it"
+		focusTerm := focusName
+		if continuation || len(clauses) > 0 {
+			focusTerm = repeated
 		}
 		roles := map[string]string{}
 		coord := strings.Join(coargs[k], " and ")
@@ -196,7 +243,9 @@ func (d *Daemon) threadFactClause(lang string, c *memory.Fragment) (string, bool
 			break // the freshest fact only, spoken as one clause
 		}
 	}
-	return d.renderFacts(lang, "it", fresh, true)
+	// A continuation of the definition that just named the concept, so it is
+	// carried as a pronoun (English) or named again (other tongues).
+	return d.renderFacts(lang, d.conceptName(c.ID, c.Content, lang), fresh, true, true)
 }
 
 // completeRoleEllipsis answers an elliptical follow-up to a role question by

@@ -126,7 +126,7 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	// into one clause: "the dog chased the cat and the mouse". The same walk and
 	// renderer every answer uses, here filtered to the one relation asked.
 	facts := d.gatherFacts(known, knownRole, rel.Content)
-	line, ok := d.renderFacts(frame.Lang, known.Content, facts, past)
+	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), facts, past, false)
 	if !ok {
 		// The relation is known but nothing filled the questioned role: the
 		// honest answer is the gap, spoken through the older admission.
@@ -157,7 +157,7 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	// no single relation, so each relation becomes a clause and the agent is
 	// carried as "it" after the first.
 	facts := d.gatherFacts(agent, "agent", "")
-	line, ok := d.renderFacts(frame.Lang, agent.Content, facts, frame.Past)
+	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, frame.Past, false)
 	if !ok {
 		return "", false
 	}
@@ -188,9 +188,9 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 	if focus.Category == "verb" || focus.Category == "relation" {
 		kind = "action"
 	}
-	parts := []string{d.definitionClause(frame.Lang, focus.Content, grammar.Indefinite(kind), chem)}
+	parts := []string{d.definitionClause(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), grammar.Indefinite(kind), chem)}
 	if facts := d.gatherFacts(focus, "", ""); len(facts) > 0 {
-		if line, ok := d.renderFacts(frame.Lang, "it", facts, true); ok {
+		if line, ok := d.renderFacts(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), facts, true, true); ok {
 			parts = append(parts, line)
 		}
 		for _, f := range facts {
