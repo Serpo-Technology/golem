@@ -273,6 +273,47 @@ func TestComprehendKeepsOrderAgentInNearTie(t *testing.T) {
 	}
 }
 
+// Even when the co-argument genuinely out-fits the order's agent for the agent
+// role, the order stands unless the co-argument is the better agent by a clear
+// multiple: on a trained graph feature kin lifts every animate filler, so a
+// central concept edges ahead as an agent without being the right subject. These
+// fit values are what a trained brain produced for "a dog chased a cat", where
+// the cat, the most-grounded animal, out-fits the dog as an agent yet the dog is
+// the chaser.
+func TestComprehendKeepsOrderAgentWhenCoArgEdgesAhead(t *testing.T) {
+	p := Builtin()
+	dog := &memory.Fragment{ID: 1, Content: "dog"}
+	cat := &memory.Fragment{ID: 2, Content: "cat"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "dog":
+			return dog
+		case "cat":
+			return cat
+		}
+		return nil
+	}
+	fit := func(c *memory.Fragment, role string) float64 {
+		switch {
+		case c.ID == dog.ID && role == "agent":
+			return 2.513
+		case c.ID == dog.ID:
+			return 2.541
+		case c.ID == cat.ID && role == "agent":
+			return 3.215
+		default:
+			return 1.990
+		}
+	}
+	m, ok := p.Comprehend("en", "a dog chased a cat", resolve, fit)
+	if !ok {
+		t.Fatal("should comprehend")
+	}
+	if m.Roles["agent"].Concept != dog || m.Roles["patient"].Concept != cat {
+		t.Fatalf("the order's agent should stand when the co-argument only edges ahead: %+v", m.Roles)
+	}
+}
+
 // The same construction both says and understands: a meaning generated to a
 // surface string comprehends back into the same roles over the same relation,
 // the round trip through one inventory read each way that is the whole point.

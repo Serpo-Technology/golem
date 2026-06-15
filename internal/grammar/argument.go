@@ -161,6 +161,15 @@ func (p *Params) layout(lang string, c ArgConstruction) []ArgSlot {
 // reassigns the roles. Equal fits leave position standing.
 const bestFitMargin = 0.2
 
+// bestFitAgentFactor is how much better an agent the order's patient must be
+// before it unseats the order's agent: half again, not a fixed step. Feature
+// kin lifts every animate filler's agent fit on a trained graph, so a fixed
+// margin a fresh brain clears is swamped once the numbers are large; a multiple
+// holds the bar proportional. "a dog chased a cat" keeps the dog as agent even
+// when the cat has edged ahead, while "a rock chased a dog" still yields the
+// agent role to the dog the order stranded.
+const bestFitAgentFactor = 1.5
+
 // Comprehend runs the argument-structure constructions form to meaning, the
 // one engine reversed. The utterance's surface spans fill the
 // construction's slots in the language's word order, the same layout
@@ -246,11 +255,12 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	// And the swap must promote a clearly better agent. A heavily grounded
 	// concept fits both roles highly through its feature kin, so on a trained
 	// graph the order's agent can read as fitting the patient role by a hair
-	// while still being the strongest available agent. Requiring the order's
-	// patient to out-fit it for the agent role keeps the order standing in that
-	// near tie: the dog stays the chaser because it is the better chaser, not
-	// because its phrase came first.
-	candidateBetterAgent := fit(tb.Concept, a) > fit(ta.Concept, a)+bestFitMargin
+	// while still being a strong agent, and a co-argument can edge it for the
+	// agent role without being the right subject. Requiring the order's patient
+	// to out-fit it by half again keeps the order standing in that near tie: the
+	// dog stays the chaser because the order named it, not undone by the cat
+	// nosing ahead as an agent.
+	candidateBetterAgent := fit(tb.Concept, a) > fit(ta.Concept, a)*bestFitAgentFactor
 	if orderAgentMisplaced && candidateBetterAgent && swapped > asIs+bestFitMargin {
 		m.Roles[a], m.Roles[b] = tb, ta
 	}
