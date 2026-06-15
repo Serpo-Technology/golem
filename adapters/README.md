@@ -41,13 +41,19 @@ python3 adapters/golem-listen.py --lang tr
 
 # a voice: speak every say event with the host's text-to-speech
 python3 adapters/golem-speak.py
+
+# the host's senses: feed this machine's load, logs, and active window in
+python3 adapters/golem-senses.py
 ```
 
 `golem-listen.py` turns stdin (a keyboard, a speech recognizer, a captioner with
 `--observe`) into tells and observations. `golem-speak.py` turns the say stream
 into speech with whatever the host speaks through (`say`, `espeak`, `spd-say`,
-or `--cmd`). Write your own in any language: open the TCP socket, send a line,
-read a line.
+or `--cmd`). `golem-senses.py` samples this machine's vital signs, system log,
+and frontmost window and feeds them as observations, the host senses a
+containerized brain cannot reach itself; the readings and bands match the
+in-binary senses, so the brain sees the same shapes either way. Write your own
+in any language: open the TCP socket, send a line, read a line.
 
 ## Safety
 
