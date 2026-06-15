@@ -225,6 +225,15 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	// The shape is a yes/no question, so from here it is always answered, never
+	// passed on to be written as a fact: a question that fell through to the
+	// statement path would assert its own words, and a marker like the Turkish
+	// "mı" stripped above would be minted as a noun. When the clause cannot be
+	// resolved into a known proposition, the honest answer is the gap.
+	gap := func() (string, bool) {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
+	}
 	// A polar question asks about a directed proposition: "did the cat chase the
 	// mouse" is a question about the cat chasing the mouse, not the mouse chasing
 	// the cat. The asker's word order fixes which referent is agent, so role-fit
@@ -232,17 +241,16 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// different question than the one asked.
 	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
 	if !ok {
-		return "", false
+		return gap()
 	}
 	agent, patient := m.Roles["agent"], m.Roles["patient"]
 	if agent.Concept == nil || patient.Concept == nil {
-		return "", false // not a two-place proposition grounded in known referents
+		return gap() // a referent grounds in nothing; admit rather than guess
 	}
 	rel := d.resolveRelation(m.Relation.Phrase)
 	if rel == nil {
 		// The referents are known but the relation is not, so the proposition
-		// cannot hold. Deny it plainly rather than fall through and mint the verb,
-		// which would assert a question as a fact.
+		// cannot hold. Deny it plainly.
 		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
 	}
 	// English carries the tense on the auxiliary it led with; Turkish on the verb

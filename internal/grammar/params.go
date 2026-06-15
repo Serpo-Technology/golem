@@ -247,7 +247,17 @@ func (p *Params) hap(lang, form string) (hapEntry, bool) {
 // isFunctionWord reports whether a form belongs to the working closed
 // class, the set ContentTokens keeps out of the lexicon.
 func (p *Params) isFunctionWord(form string) bool {
-	return p.category("en", form) != ""
+	return p.isFunctionWordLang("en", form)
+}
+
+// isFunctionWordLang is isFunctionWord aware of the utterance's tongue: a form
+// is closed class when it is one in that tongue or in English, so a Turkish
+// particle ("mı") is kept out of the lexicon when a Turkish clause is tokenized
+// rather than minted as a content word for want of an English category. Without
+// this a question particle accrues naming mass on every asking until it
+// outweighs its own seed and turns into a spurious noun.
+func (p *Params) isFunctionWordLang(lang, form string) bool {
+	return p.category(lang, form) != "" || p.category("en", form) != ""
 }
 
 // verb returns a verb's principal parts, regular by rule when memory
@@ -345,12 +355,19 @@ func (p *Params) VerbPast(lang, surface string) bool {
 // ContentTokens returns the distinct open-class words of an utterance,
 // the ones eligible to become word nodes and point at concepts.
 func (p *Params) ContentTokens(s string) []string {
+	return p.ContentTokensLang("en", s)
+}
+
+// ContentTokensLang is ContentTokens for an utterance in a known tongue, so the
+// tongue's closed class is filtered too. The minting path passes the told
+// language; the default keeps English for callers that have no tongue in hand.
+func (p *Params) ContentTokensLang(lang, s string) []string {
 	p = p.get()
 	tokens, _ := Tokenize(s)
 	seen := map[string]bool{}
 	var out []string
 	for _, tok := range tokens {
-		if len(tok) < 2 || p.isFunctionWord(tok) || seen[tok] {
+		if len(tok) < 2 || p.isFunctionWordLang(lang, tok) || seen[tok] {
 			continue
 		}
 		seen[tok] = true

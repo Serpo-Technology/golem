@@ -547,7 +547,7 @@ func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors 
 	if lang == "" {
 		lang = "en"
 	}
-	forms := d.gram.ContentTokens(utterance)
+	forms := d.gram.ContentTokensLang(lang, utterance)
 	if deliberate {
 		forms = grammar.AllTokens(utterance)
 	}

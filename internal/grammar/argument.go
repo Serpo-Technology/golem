@@ -293,13 +293,19 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 		}
 		// A noun phrase resolves on its surface, and on its case-stripped form
 		// when the surface names nothing, so a case-marked Turkish object
-		// ("kediyi") reaches the concept its stem names ("kedi"). An unmarked
-		// word is left as it is.
+		// ("kediyi") reaches the concept its stem names ("kedi"). The stem may
+		// also need its softened stop hardened back ("köpeği" -> "köpeğ" ->
+		// "köpek"), tried after the literal stem so a word genuinely ending in
+		// the voiced consonant resolves first. An unmarked word is left as it is.
 		filler := Term{Concept: resolve(span), Phrase: span}
 		if filler.Concept == nil {
-			if base := p.stripCase(lang, span); base != span {
+			for _, base := range p.caseStems(lang, span) {
+				if base == span {
+					continue
+				}
 				if c := resolve(base); c != nil {
 					filler = Term{Concept: c, Phrase: base}
+					break
 				}
 			}
 		}

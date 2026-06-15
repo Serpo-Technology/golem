@@ -84,6 +84,64 @@ func TestSpeakRendersNegation(t *testing.T) {
 	}
 }
 
+// Turkish consonant softening round-trips a stop-final stem through the
+// accusative. Generation voices "köpek" to "köpeği" for the definite object,
+// and comprehension hardens it back so a köpek-as-object clause grounds the
+// dog. A vowel-final object keeps its buffer y ("kediyi"), unchanged.
+func TestTurkishAccusativeSofteningRoundTrip(t *testing.T) {
+	p := Builtin()
+	tr, ok := p.Speak("tr", Meaning{
+		Relation: Term{Phrase: "kovala"},
+		Roles: map[string]Term{
+			"agent":   {Phrase: "kedi", Definite: true},
+			"patient": {Phrase: "köpek", Definite: true},
+		}, Past: true})
+	if !ok || tr != "Kedi köpeği kovaladı." {
+		t.Fatalf("the stop-final object should soften to köpeği: %q", tr)
+	}
+	dog := &memory.Fragment{ID: 1, Content: "köpek"}
+	kedi := &memory.Fragment{ID: 2, Content: "kedi"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "köpek":
+			return dog
+		case "kedi":
+			return kedi
+		}
+		return nil
+	}
+	m, ok := p.Comprehend("tr", "kedi köpeği kovaladı", resolve, nil)
+	if !ok {
+		t.Fatal("the clause should comprehend")
+	}
+	if m.Roles["agent"].Concept != kedi {
+		t.Fatalf("kedi should be the agent: %+v", m.Roles["agent"])
+	}
+	if m.Roles["patient"].Concept != dog {
+		t.Fatalf("köpeği should harden to köpek and ground the dog: %+v", m.Roles["patient"])
+	}
+}
+
+// Tokenizing for the lexicon filters the utterance tongue's closed class, not
+// only English: the Turkish question particle "mı" is kept out of the content
+// words so it is never minted as a noun, while the open-class words stay.
+func TestContentTokensFilterTongueFunctionWords(t *testing.T) {
+	p := Builtin()
+	got := p.ContentTokensLang("tr", "köpek kediyi kovaladı mı")
+	köpek := false
+	for _, tok := range got {
+		if tok == "mı" {
+			t.Fatalf("the Turkish particle mı should be filtered: %v", got)
+		}
+		if tok == "köpek" {
+			köpek = true
+		}
+	}
+	if !köpek {
+		t.Fatalf("an open-class word should survive tokenizing: %v", got)
+	}
+}
+
 // The transitive construction runs meaning to form: a proposition of a
 // relation over an agent and a patient lays out in the language's word
 // order and the verb is conjugated by the morphology engine, so the brain

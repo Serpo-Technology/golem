@@ -469,6 +469,40 @@ func TestPolarQuestionTurkish(t *testing.T) {
 	}
 }
 
+// A yes/no question is never written as a fact, even when it cannot be
+// answered. Asking about an ungrounded referent admits the gap rather than
+// falling through to the statement path, which would mint the unknown noun and
+// the stripped Turkish "mı" particle as concepts. A non-empty admission proves
+// planPolar consumed the utterance as a question.
+func TestPolarQuestionNeverAsserts(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "köpek", "tr")
+	groundNounLang(t, d, "kedi", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+	if got := sayLang(t, d, "tr", "köpek tavşanı kovaladı mı").Say; got == "" {
+		t.Fatal("an unanswerable polar question should admit the gap, not fall through and assert")
+	}
+}
+
+// An answer coordinates each distinct co-argument name once. Two concepts a
+// split left under one name, or one thing two tongues name alike, must read
+// "the dog chased the rabbit", not "the rabbit and the rabbit".
+func TestRenderFactsDedupsRepeatedName(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	facts := []focusFact{
+		{rel: "chase", focusRole: "agent", coGloss: "rabbit", coID: 9001},
+		{rel: "chase", focusRole: "agent", coGloss: "rabbit", coID: 9002},
+	}
+	line, ok := d.renderFacts("en", d.conceptName(dog.ID, dog.Content, "en"), facts, true, false)
+	if !ok {
+		t.Fatal("the facts should render")
+	}
+	if strings.Count(line, "rabbit") != 1 {
+		t.Fatalf("a repeated co-argument name should be coordinated once: %q", line)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

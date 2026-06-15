@@ -52,6 +52,27 @@ func (p *Params) stripCase(lang, phrase string) string {
 	return strings.Join(words, " ")
 }
 
+// caseStems lists the base forms a case-marked span might reduce to: the
+// literal case-stripped stem and, for Turkish, that stem with its final
+// consonant hardened back from the softening the suffix applied ("köpeği" ->
+// "köpeğ" -> "köpek"). The caller resolves each in turn and keeps the first
+// that names a concept, so a stem that genuinely ends in the voiced consonant
+// is reached by the literal form before the hardened candidate is tried.
+func (p *Params) caseStems(lang, span string) []string {
+	base := p.stripCase(lang, span)
+	out := []string{base}
+	if lang == "tr" {
+		words := strings.Fields(base)
+		if len(words) > 0 {
+			if hard := unsoftenFinalTR(words[len(words)-1]); hard != words[len(words)-1] {
+				words[len(words)-1] = hard
+				out = append(out, strings.Join(words, " "))
+			}
+		}
+	}
+	return out
+}
+
 // stripCaseAccTR removes the accusative a definite object wears, as well as
 // the ablative and locative an anchor may carry, so "kediyi" resolves to
 // "kedi". The accusative is the high vowel, with the buffer y after a vowel
@@ -156,6 +177,69 @@ func endsVowelTR(w string) bool {
 	return ok
 }
 
+// polysyllabicTR reports whether a stem carries more than one vowel, the
+// condition under which Turkish softens a final stop before a vowel suffix; a
+// monosyllable keeps its stop ("at" -> "atı", not "adı").
+func polysyllabicTR(w string) bool {
+	n := 0
+	for _, r := range strings.ToLower(w) {
+		if _, ok := vowelsTR[r]; ok {
+			n++
+		}
+	}
+	return n > 1
+}
+
+// softenFinalTR voices a polysyllabic stem's final stop when a vowel attaches
+// to it, Turkish consonant softening: p/ç/t/k -> b/c/d/ğ, so "köpek" before the
+// accusative vowel surfaces "köpeğ" ("köpeği") and "kitap" "kitab" ("kitabı").
+// A vowel-final or other-consonant-final stem, and any monosyllable, is left
+// alone, as the rule spares them.
+func softenFinalTR(w string) string {
+	r := []rune(w)
+	if len(r) == 0 || !polysyllabicTR(w) {
+		return w
+	}
+	switch r[len(r)-1] {
+	case 'p':
+		r[len(r)-1] = 'b'
+	case 'ç':
+		r[len(r)-1] = 'c'
+	case 't':
+		r[len(r)-1] = 'd'
+	case 'k':
+		r[len(r)-1] = 'ğ'
+	default:
+		return w
+	}
+	return string(r)
+}
+
+// unsoftenFinalTR reverses softenFinalTR for comprehension, hardening a final
+// voiced consonant back to the stop the suffix softened ("köpeğ" -> "köpek").
+// It is offered as a candidate stem only, the caller resolving it against the
+// lexicon, so a word that genuinely ends in the voiced consonant ("dağ") is
+// unharmed when its literal stem resolves first.
+func unsoftenFinalTR(w string) string {
+	r := []rune(w)
+	if len(r) == 0 {
+		return w
+	}
+	switch r[len(r)-1] {
+	case 'b':
+		r[len(r)-1] = 'p'
+	case 'c':
+		r[len(r)-1] = 'ç'
+	case 'd':
+		r[len(r)-1] = 't'
+	case 'ğ':
+		r[len(r)-1] = 'k'
+	default:
+		return w
+	}
+	return string(r)
+}
+
 // dOrT picks the suffix-initial consonant by assimilation.
 func dOrT(w string) string {
 	if endsVoicelessTR(w) {
@@ -206,9 +290,16 @@ func accusativeTR(p *Params, w string) string {
 }
 
 // accusativeCommonTR is the accusative of an ordinary (not proper) noun, so no
-// apostrophe: "kedi" -> "kediyi", "fare" -> "fareyi".
+// apostrophe: "kedi" -> "kediyi", "fare" -> "fareyi", "köpek" -> "köpeği". When
+// the vowel attaches straight onto a consonant-final stem, that stem's final
+// stop softens; a vowel-final stem takes the buffer y and keeps its shape.
 func accusativeCommonTR(p *Params, w string) string {
-	return w + applySuffixTR(w, p.get().suffix("accusative", "(y)I"))
+	recipe := p.get().suffix("accusative", "(y)I")
+	stem := w
+	if !endsVowelTR(w) {
+		stem = softenFinalTR(w)
+	}
+	return stem + applySuffixTR(w, recipe)
 }
 
 // copulaTR attaches -DIr to a (Turkish) predicate noun: "eylemdir",

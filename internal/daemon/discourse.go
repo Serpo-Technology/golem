@@ -205,7 +205,20 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 			order = append(order, k)
 		}
 		if len(coargs[k]) < factCoArgCap {
-			coargs[k] = append(coargs[k], d.conceptName(f.coID, f.coGloss, lang))
+			// Two concepts a split left under one name, or one concept two tongues
+			// name alike, would otherwise list the name twice ("the cat and the
+			// cat"). Coordinate each distinct name once.
+			name := d.conceptName(f.coID, f.coGloss, lang)
+			seen := false
+			for _, had := range coargs[k] {
+				if had == name {
+					seen = true
+					break
+				}
+			}
+			if !seen {
+				coargs[k] = append(coargs[k], name)
+			}
 		}
 	}
 	var clauses []string
