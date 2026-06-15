@@ -1,10 +1,44 @@
 package grammar
 
 import (
+	"strings"
 	"testing"
 
 	"golem/internal/memory"
 )
+
+// Speak renders an answer's surface from the tongue's data, not from literals:
+// a given referent takes the tongue's pronoun, a definite one its article,
+// coordinated co-arguments its coordinator. English reads "It chased the cat
+// and the mouse"; Turkish carries its own pronoun and coordinator and no
+// English article, the surface words all read from the seed.
+func TestSpeakRendersSurfaceFromData(t *testing.T) {
+	p := Builtin()
+	en, ok := p.Speak("en", Meaning{
+		Relation: Term{Phrase: "chase"},
+		Roles: map[string]Term{
+			"agent":   {Given: true},
+			"patient": {Phrase: "cat", With: []string{"mouse"}, Definite: true},
+		}, Past: true})
+	if !ok || en != "It chased the cat and the mouse." {
+		t.Fatalf("english surface should come from data: %q (%v)", en, ok)
+	}
+	tr, ok := p.Speak("tr", Meaning{
+		Relation: Term{Phrase: "kovala"},
+		Roles: map[string]Term{
+			"agent":   {Phrase: "köpek", Definite: true},
+			"patient": {Phrase: "kedi", With: []string{"fare"}, Definite: true},
+		}, Past: true})
+	if !ok {
+		t.Fatal("turkish should speak")
+	}
+	if strings.Contains(tr, " the ") || strings.Contains(tr, " and ") {
+		t.Fatalf("turkish should carry no english article or coordinator: %q", tr)
+	}
+	if !strings.Contains(tr, "ve") {
+		t.Fatalf("turkish should coordinate with its own word: %q", tr)
+	}
+}
 
 // The transitive construction runs meaning to form: a proposition of a
 // relation over an agent and a patient lays out in the language's word

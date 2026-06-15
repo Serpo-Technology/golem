@@ -28,9 +28,16 @@ type Term struct {
 	Concept *memory.Fragment // nil when nothing grounds the phrase
 	Phrase  string
 	Plural  bool
+	// The generation flags a meaning carries so Speak renders the surface from
+	// the tongue's data rather than the caller pre-rendering it. Definite asks
+	// for the tongue's definite marking, Given for the pronoun a referent in
+	// play takes, and With holds further co-arguments coordinated with this one.
+	Definite bool
+	Given    bool
+	With     []string
 }
 
-func (t Term) Empty() bool { return t.Concept == nil && t.Phrase == "" }
+func (t Term) Empty() bool { return t.Concept == nil && t.Phrase == "" && !t.Given }
 
 // Speak is the term's surface form for realization: the concept's gloss
 // when grounded, the raw phrase when not.

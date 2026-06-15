@@ -148,7 +148,7 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 // reply. It returns false when the clause is not of this shape, so the older
 // handling stands.
 func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, bool) {
-	if frame.Wh != "what" || frame.Agent.Concept == nil || !proVerbDo(raw) {
+	if frame.Wh != "what" || frame.Agent.Concept == nil || !d.proVerbDo(frame.Lang, raw) {
 		return "", false
 	}
 	agent := frame.Agent.Concept
@@ -201,37 +201,22 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 	return strings.Join(parts, " "), true
 }
 
-// proVerbDo reports whether a clause's main verb is the generic pro-verb,
-// "what did the dog do" rather than "what did the dog chase": the last word
-// is a form of "do", which stands in for the relation the question asks
-// after.
-func proVerbDo(raw string) bool {
+// proVerbDo reports whether a clause's main verb is the tongue's generic
+// pro-verb, "what did the dog do" rather than "what did the dog chase": the
+// last word is one of the tongue's pro-verbs, which stands in for the relation
+// the question asks after. The pro-verbs are read from the tongue's data.
+func (d *Daemon) proVerbDo(lang, raw string) bool {
 	tokens, _ := grammar.Tokenize(raw)
 	if len(tokens) == 0 {
 		return false
 	}
-	switch tokens[len(tokens)-1] {
-	case "do", "does":
-		return true
+	last := tokens[len(tokens)-1]
+	for _, pv := range d.gram.ProVerbs(lang) {
+		if last == pv {
+			return true
+		}
 	}
 	return false
-}
-
-// sayProposition builds a meaning over a relation and its roles and hands it
-// to the bidirectional engine, the one entry the relational answers speak
-// through. Each role's gloss takes the definite article an answer wants. It
-// returns false when no construction speaks the meaning, so the caller can
-// fall back.
-func (d *Daemon) sayProposition(lang, rel string, roles map[string]string, past bool) (string, bool) {
-	terms := make(map[string]grammar.Term, len(roles))
-	for role, gloss := range roles {
-		terms[role] = grammar.Term{Phrase: definiteNP(gloss)}
-	}
-	return d.gram.Speak(lang, grammar.Meaning{
-		Relation: grammar.Term{Phrase: rel},
-		Roles:    terms,
-		Past:     past,
-	})
 }
 
 // resolveRelation finds the relation a word names, preferring it over any
@@ -331,19 +316,6 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		return rel, known, "patient", verb // the wh-word is the subject; the known argument is the patient
 	}
 	return rel, known, "agent", verb // an argument precedes the verb; the wh-word is the object
-}
-
-// definiteNP gives a concept's gloss the definite article an answer wants,
-// unless the gloss already carries a determiner, so a bare "dog" speaks as
-// "the dog" while "a dog" is left alone.
-func definiteNP(gloss string) string {
-	lead, _, _ := strings.Cut(gloss, " ")
-	switch lead {
-	case "a", "an", "the", "this", "that", "my", "your", "its",
-		"it", "they", "he", "she", "we", "you", "i":
-		return gloss // a determiner or a pronoun is already definite
-	}
-	return "the " + gloss
 }
 
 // relationConcept resolves the relation a proposition binds into, minting it

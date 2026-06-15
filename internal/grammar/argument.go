@@ -89,9 +89,69 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 		if filler.Empty() {
 			return "", false
 		}
-		parts = append(parts, filler.Speak())
+		parts = append(parts, p.renderFiller(lang, s.Role, filler))
 	}
 	return sentence(strings.Join(parts, " "), "."), true
+}
+
+// renderFiller speaks a role's filler from the tongue's data: a referent in
+// play takes the tongue's pronoun for the role, a definite one its definite
+// marking, and coordinated co-arguments its coordinator. With no flags it is
+// the filler's bare surface, so a caller that pre-rendered its phrase is
+// unchanged. This is where the answer surface a tongue carries is applied,
+// rather than spelled into the generator.
+func (p *Params) renderFiller(lang, role string, t Term) string {
+	if t.Given {
+		if pr := p.Pronoun(lang, role); pr != "" {
+			return pr
+		}
+	}
+	mark := func(np string) string {
+		if t.Definite {
+			return p.definiteNP(lang, np)
+		}
+		return np
+	}
+	head := mark(t.Speak())
+	if len(t.With) == 0 {
+		return head
+	}
+	parts := []string{head}
+	for _, w := range t.With {
+		parts = append(parts, mark(w))
+	}
+	coord := p.Coordinator(lang)
+	if coord == "" {
+		return strings.Join(parts, " ")
+	}
+	return strings.Join(parts, " "+coord+" ")
+}
+
+// definiteNP gives a noun phrase the tongue's definite marking, unless the
+// phrase already carries a determiner or the term was not marked definite. A
+// tongue with no article (Turkish marks the definite object by case) prepends
+// nothing.
+func (p *Params) definiteNP(lang, np string) string {
+	if np == "" {
+		return np
+	}
+	art := p.Article(lang)
+	if art == "" || hasDeterminer(np) {
+		return np
+	}
+	return art + " " + np
+}
+
+// hasDeterminer reports whether a phrase already opens with a determiner or a
+// pronoun, so the definite marker is not stacked onto one.
+func hasDeterminer(np string) bool {
+	lead, _, _ := strings.Cut(np, " ")
+	switch lead {
+	case "a", "an", "the", "this", "that", "my", "your", "its",
+		"it", "they", "he", "she", "we", "you", "i", "o", "onu":
+		return true
+	}
+	return false
 }
 
 // selectArg picks the construction whose argument roles are exactly the

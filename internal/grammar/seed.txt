@@ -199,3 +199,15 @@ code:add	+ sum	en
 code:subtract	- difference	en
 code:multiply	* product	en
 code:divide	/ quotient	en
+
+# Surface words a tongue renders an answer with: the definite marker, the
+# coordinator that joins co-arguments, the pronoun a given referent takes by
+# role, and the pro-verbs of "what did X do". The engine reads these rather
+# than carrying any answer surface in its code.
+surface:en:article	the	en
+surface:en:coord	and	en
+surface:en:pronoun	it	en
+surface:en:proverb	do does	en
+surface:tr:coord	ve	tr
+surface:tr:pronoun.agent	o	tr
+surface:tr:pronoun.patient	onu	tr

@@ -181,10 +181,6 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 // it too. The focus fills its role and the co-arguments the other; the caps
 // keep an answer from running on. It returns false when nothing renders.
 func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, continuation bool) (string, bool) {
-	repeated := focusName
-	if lang == "" || lang == "en" {
-		repeated = "it"
-	}
 	type key struct{ rel, role string }
 	var order []key
 	coargs := map[key][]string{}
@@ -197,23 +193,27 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 			order = append(order, k)
 		}
 		if len(coargs[k]) < factCoArgCap {
-			coargs[k] = append(coargs[k], definiteNP(d.conceptName(f.coID, f.coGloss, lang)))
+			coargs[k] = append(coargs[k], d.conceptName(f.coID, f.coGloss, lang))
 		}
 	}
 	var clauses []string
 	for _, k := range order {
-		focusTerm := focusName
+		names := coargs[k]
+		// The meaning is language-free: the focus and the coordinated
+		// co-arguments are named, marked definite or given, and the engine
+		// renders the article, coordinator, and pronoun from the tongue's data.
+		co := grammar.Term{Phrase: names[0], With: names[1:], Definite: true}
+		focus := grammar.Term{Phrase: focusName, Definite: true}
 		if continuation || len(clauses) > 0 {
-			focusTerm = repeated
+			focus = grammar.Term{Given: true} // already in play; the tongue's pronoun
 		}
-		roles := map[string]string{}
-		coord := strings.Join(coargs[k], " and ")
+		roles := map[string]grammar.Term{}
 		if k.role == "agent" {
-			roles["agent"], roles["patient"] = focusTerm, coord
+			roles["agent"], roles["patient"] = focus, co
 		} else {
-			roles["agent"], roles["patient"] = coord, focusTerm
+			roles["agent"], roles["patient"] = co, focus
 		}
-		if line, ok := d.sayProposition(lang, k.rel, roles, past); ok {
+		if line, ok := d.gram.Speak(lang, grammar.Meaning{Relation: grammar.Term{Phrase: k.rel}, Roles: roles, Past: past}); ok {
 			clauses = append(clauses, line)
 		}
 	}

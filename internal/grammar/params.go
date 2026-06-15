@@ -51,6 +51,11 @@ type Params struct {
 	// argcxns holds the argument-structure constructions the bidirectional
 	// engine runs, keyed by language; set by SetArgConstructions.
 	argcxns map[string][]ArgConstruction
+	// surface holds the words a tongue renders an answer's surface with: the
+	// definite marker, the coordinator, the pronoun a given referent takes by
+	// role, the pro-verbs. Keyed lang then name, so the engine reads them rather
+	// than carrying any in its code.
+	surface map[string]map[string]string
 }
 
 func sortedKeys[V any](m map[string]V) []string {
@@ -83,6 +88,7 @@ func Compile(entries []Param, lexMass map[string]float64) *Params {
 		verbsTR:    map[string]verbTR{},
 		verbFinals: map[string]bool{},
 		suffixes:   map[string]string{},
+		surface:    map[string]map[string]string{},
 	}
 	for _, e := range entries {
 		kind, lang, name, ok := splitKey(e.Key)
@@ -123,6 +129,8 @@ func Compile(entries []Param, lexMass map[string]float64) *Params {
 			p.verbFinals[lang] = e.Value == "sov"
 		case "suffix":
 			p.suffixes[name] = e.Value
+		case "surface":
+			ensure(p.surface, lang)[name] = e.Value
 		}
 	}
 	return p
@@ -267,6 +275,35 @@ func (p *Params) verbTurkish(base string) verbTR {
 // verb closes the clause (SOV).
 func (p *Params) verbFinal(lang string) bool {
 	return p.verbFinals[lang]
+}
+
+// surfaceWord reads a tongue's surface word by name, empty when the tongue
+// seeds none, so the engine and the generator carry no answer surface of their
+// own.
+func (p *Params) surfaceWord(lang, name string) string {
+	return p.get().surface[lang][name]
+}
+
+// Article returns a tongue's definite marker, the word an answer prepends to a
+// definite noun phrase. Empty when the tongue marks definiteness otherwise (the
+// Turkish accusative), so nothing is prepended.
+func (p *Params) Article(lang string) string { return p.surfaceWord(lang, "article") }
+
+// Coordinator returns the word a tongue joins coordinated co-arguments with.
+func (p *Params) Coordinator(lang string) string { return p.surfaceWord(lang, "coord") }
+
+// Pronoun returns the pronoun a referent already in play takes in a role, by
+// role first ("pronoun.agent") then the tongue's default ("pronoun").
+func (p *Params) Pronoun(lang, role string) string {
+	if pr := p.surfaceWord(lang, "pronoun."+role); pr != "" {
+		return pr
+	}
+	return p.surfaceWord(lang, "pronoun")
+}
+
+// ProVerbs returns a tongue's generic pro-verbs, the verbs of "what did X do".
+func (p *Params) ProVerbs(lang string) []string {
+	return strings.Fields(p.surfaceWord(lang, "proverb"))
 }
 
 // suffix returns a suffix recipe by name, with the curriculum shape as
