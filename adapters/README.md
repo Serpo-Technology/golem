@@ -33,8 +33,12 @@ The daemon serves newline-delimited JSON over the unix socket and, when
 Publish the brain's TCP port to host loopback only, then point the adapters at it.
 
 ```
+# seed the runtime folder once: a config and, if you have one, a brain
+cp teaching/clean-room-code.json runtime/config.json
+# cp <a snapshot>.db runtime/memory.db
+
 docker run -d --name golem-brain -p 127.0.0.1:7777:7777 \
-  -v "$PWD/teaching/clean-room-code.json:/root/.golem/config.json" golem:latest golem run
+  -v "$PWD/runtime:/root/.golem" golem:latest golem run
 
 # ears + console: type, or pipe a recognizer in
 python3 adapters/golem-listen.py --lang tr

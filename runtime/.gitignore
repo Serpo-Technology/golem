@@ -1,0 +1,6 @@
+# This folder is mounted into the container as /root/.golem: the brain
+# (memory.db), the live config, the event trail, and the socket live here.
+# The folder is tracked so the mount point exists in the repo; its contents
+# are the machine's own state and are not.
+*
+!.gitignore
