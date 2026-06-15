@@ -686,6 +686,15 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 				kindWord = "bir eylem"
 			}
 		}
+		// A definition carries a fresh fact when the exchange just set one down:
+		// what the concept did or had done to it this turn is appended, read from
+		// the thread so the generator only reports what was established.
+		withFact := func(answer string) string {
+			if fact, ok := d.threadFactClause(frame.Lang, c); ok {
+				return answer + " " + fact
+			}
+			return answer
+		}
 		if topic.Phrase != "" && !strings.EqualFold(topic.Phrase, c.Content) {
 			// The asked word and the concept differ: name the pointer. Greedy
 			// early naming bonds bystander words too, so a word that names the
@@ -702,7 +711,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			if n := tally[c.ID]; n > 0 && !tentative {
 				parts = append(parts, d.countClause(frame.Lang, n, chem))
 			}
-			return strings.Join(parts, " ")
+			return withFact(strings.Join(parts, " "))
 		}
 		// A firm definition, composed: the definition clause, and when
 		// experience stands behind the concept the count clause nests beside
@@ -718,7 +727,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 				Slots: grammar.TextSlots(map[string]string{"object": "it", "count": grammar.TimesWord(n)})}}
 		}
 		if line, ok := d.compose(frame.Lang, msg); ok {
-			return line
+			return withFact(line)
 		}
 		// With no constructions the innate realizer assembles the same
 		// answer, so the engine stays the floor under the learned patterns.
@@ -726,7 +735,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		if n := tally[c.ID]; n > 0 {
 			parts = append(parts, d.countClause(frame.Lang, n, chem))
 		}
-		return strings.Join(parts, " ")
+		return withFact(strings.Join(parts, " "))
 	}
 	if topic.Phrase != "" {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},

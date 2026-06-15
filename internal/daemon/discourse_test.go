@@ -157,3 +157,31 @@ func TestRoleAnswerCoordinatesThreadPropositions(t *testing.T) {
 		t.Fatalf("the answer should coordinate both established chases: %q", got)
 	}
 }
+
+// A definition carries a fact the exchange just established: asked what a dog is
+// right after "a dog chased a cat", the answer adds what the dog did this turn,
+// read from the thread, the freer generator reporting a fresh fact beside the
+// definition rather than the definition alone.
+func TestDefinitionCarriesThreadFact(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+
+	got := say(t, d, "what is a dog").Say
+	if !strings.Contains(got, "chased") || !strings.Contains(got, "cat") {
+		t.Fatalf("the definition should carry the fresh chase fact: %q", got)
+	}
+}
+
+// With nothing established about the concept this exchange, the definition
+// stands alone: the generator appends only a fact the thread actually holds.
+func TestDefinitionWithoutThreadIsBare(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+
+	got := say(t, d, "what is a dog").Say
+	if strings.Contains(got, "chased") {
+		t.Fatalf("a bare definition should not invent a fact: %q", got)
+	}
+}

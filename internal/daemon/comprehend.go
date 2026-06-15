@@ -339,8 +339,9 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 func definiteNP(gloss string) string {
 	lead, _, _ := strings.Cut(gloss, " ")
 	switch lead {
-	case "a", "an", "the", "this", "that", "my", "your", "its":
-		return gloss
+	case "a", "an", "the", "this", "that", "my", "your", "its",
+		"it", "they", "he", "she", "we", "you", "i":
+		return gloss // a determiner or a pronoun is already definite
 	}
 	return "the " + gloss
 }

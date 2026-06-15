@@ -81,6 +81,31 @@ func (d *Daemon) threadFillers(rel string, knownID uint64, questioned string) []
 	return out
 }
 
+// threadFactClause speaks what the exchange just established about a concept, a
+// proposition it took part in, so a definition can carry a fresh fact: asked
+// what a dog is right after "a dog chased a cat", the answer adds "It chased a
+// black cat". The concept fills its role as "it"; the co-argument keeps its
+// gloss. The fact is read from the discourse thread, never composed, so the
+// generator reports only what was set down. It returns false when the thread
+// holds nothing about the concept.
+func (d *Daemon) threadFactClause(lang string, c *memory.Fragment) (string, bool) {
+	for _, p := range d.threadProps {
+		var roles map[string]string
+		switch c.ID {
+		case p.agent:
+			roles = map[string]string{"agent": "it", "patient": p.patientGloss}
+		case p.patient:
+			roles = map[string]string{"agent": p.agentGloss, "patient": "it"}
+		default:
+			continue
+		}
+		if line, ok := d.sayProposition(lang, p.rel, roles, true); ok {
+			return line, true
+		}
+	}
+	return "", false
+}
+
 // completeRoleEllipsis answers an elliptical follow-up to a role question by
 // inheriting its relation and asking it of a new referent: after "what did the
 // cat chase", "what about the dog" walks chase from the dog. The relation and
