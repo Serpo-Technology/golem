@@ -84,6 +84,57 @@ func TestAbstractionByConstellation(t *testing.T) {
 	}
 }
 
+// An inflected form of a relation verb keeps company with the verb's
+// arguments in every telling, which would otherwise distil a noun shadowing
+// the relation in the naming vote. The relation is keyed on the lemma, so the
+// guard must reach it through the inflection's lemma: "chased" is skipped
+// because "chase" names a relation, while an ordinary word over the same
+// company still abstracts.
+func TestAbstractionSkipsInflectedRelationVerb(t *testing.T) {
+	d, s := testDaemon(t)
+	disk, deploy := constellationDay(t, d, s)
+	now := time.Now()
+
+	rel, err := s.Encode(&memory.Fragment{Kind: memory.KindConcept, Content: "chase",
+		Template: "rel:en:chase", Category: "relation", Time: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := s.WordNode("chase", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(w.ID, rel, memory.RelNames, opNameWeight); err != nil {
+		t.Fatal(err)
+	}
+	// The inflected surface reaches the relation only through its lemma; the
+	// guard relies on that, so assert it before leaning on it.
+	if got := d.resolveRelation(d.gram.Lemma("en", "chased")); got == nil || got.ID != rel {
+		t.Fatalf("the inflection should resolve to the relation through its lemma: %+v", got)
+	}
+
+	// Both words keep the same company across three situations, the shape that
+	// distils a constellation. "chased" is the verb's inflection and must be
+	// skipped; "trouble" is an ordinary word and must still abstract, proving the
+	// pass ran and the company was abstraction-worthy.
+	for i := range 3 {
+		d.mintWords("chased", "en", 0, []recentMoment{disk[i], deploy[i]}, false)
+		d.mintWords("trouble", "en", 0, []recentMoment{disk[i], deploy[i]}, false)
+	}
+	calm(d)
+	d.growConcepts()
+
+	if born := d.growAbstractions(); born != 1 {
+		t.Fatalf("only the ordinary word should abstract, got %d", born)
+	}
+	if abs, _ := s.ConceptByTemplate("abs:en:chased"); abs != nil {
+		t.Fatalf("an inflection of a relation verb must not mint a shadow noun: %+v", abs)
+	}
+	if abs, _ := s.ConceptByTemplate("abs:en:trouble"); abs == nil {
+		t.Fatal("the ordinary word over the same company should still abstract")
+	}
+}
+
 // wordID resolves a word node's id by form.
 func wordID(t *testing.T, s *memory.Store, form string) uint64 {
 	t.Helper()

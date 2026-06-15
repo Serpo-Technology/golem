@@ -144,11 +144,14 @@ func (d *Daemon) growAbstractions() (born int) {
 		// refreshing while its core stands, however the drift around it
 		// moves.
 		healthy := w.Count >= absMinSituations && len(core) >= absRefreshFloor && maxShare < absConcentration
-		// A word that already names a relation is a verb: its lived company is
-		// the relation's arguments, not a constellation, so abstracting it into
-		// a noun would only mint a shadow that shrouds the relation in the
-		// naming vote. Skip it, and any earlier shadow stops refreshing and decays.
-		if d.resolveRelation(w.Content) != nil {
+		// A word that already names a relation is a verb, and so is every
+		// inflection of one: its lived company is the relation's arguments, not a
+		// constellation, so abstracting it into a noun would only mint a shadow
+		// that shrouds the relation in the naming vote. The relation is keyed on
+		// the lemma, so an inflected surface ("chased") reaches it only through
+		// its lemma; check both. Skip it, and any earlier shadow stops refreshing
+		// and decays.
+		if d.resolveRelation(w.Content) != nil || d.resolveRelation(d.gram.Lemma(w.Lang, w.Content)) != nil {
 			continue
 		}
 		switch {
