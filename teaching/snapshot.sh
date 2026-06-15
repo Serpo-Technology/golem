@@ -29,6 +29,14 @@ case "$cmd" in
     src=${2:?usage: snapshot.sh restore <file>}
     docker stop "$CONTAINER" >/dev/null
     docker cp "$src" "$CONTAINER:/root/.golem/memory.db"
+    # The previous brain's write-ahead log, applied to the restored database,
+    # corrupts it (sqlite reports "disk image is malformed"). Overwrite the WAL
+    # and shared-memory files with empty ones; sqlite rebuilds them clean on
+    # start.
+    empty=$(mktemp); : > "$empty"
+    docker cp "$empty" "$CONTAINER:/root/.golem/memory.db-wal"
+    docker cp "$empty" "$CONTAINER:/root/.golem/memory.db-shm"
+    rm -f "$empty"
     docker start "$CONTAINER" >/dev/null
     printf 'restored %s\n' "$(basename "$src")"
     ;;
