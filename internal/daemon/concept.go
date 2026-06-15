@@ -401,14 +401,32 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 	return out
 }
 
+// readVocabulary mints the words of a line read on an untrusted channel into the
+// lexicon at the untrusted scale. It is the bridge that lets reading teach
+// vocabulary while the trust model keeps what is read from cueing a habit or
+// anchoring a command: a word grows familiar by recurring across the watched
+// sources, never by appearing once. The words bond to the line they were read
+// in, so the night's naming pass can ground them from the company they keep.
+func (d *Daemon) readVocabulary(content string, fragID uint64) {
+	d.mintWordsScaled(content, "en", fragID, nil, false, untrustedNameScale)
+}
+
 // mintWords stores or refreshes word nodes for the content words of an
 // utterance and binds each to the tell moment and to the moments the
 // utterance bound to, so the night's naming pass can see which
 // experiences the words kept company with. A deliberate labeling (tell
 // --about) mints every word, closed class included: an explicit label
 // may claim a form the grammar holds, and sustained usage of that kind
-// is what can out-weigh a seeded parameter.
+// is what can out-weigh a seeded parameter. The bond is at full trust;
+// mintWordsScaled lets a reading channel bond more lightly.
 func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []recentMoment, deliberate bool) []*memory.Fragment {
+	return d.mintWordsScaled(utterance, lang, tellID, anchors, deliberate, 1.0)
+}
+
+// mintWordsScaled is mintWords with the bond weight scaled by the source's
+// trust, so a word read on an untrusted channel bonds lightly and entrenches
+// only by recurring across reads.
+func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors []recentMoment, deliberate bool, scale float64) []*memory.Fragment {
 	if lang == "" {
 		lang = "en"
 	}
@@ -420,7 +438,10 @@ func (d *Daemon) mintWords(utterance, lang string, tellID uint64, anchors []rece
 		return nil
 	}
 	da := d.chem.Snapshot().Dopamine
-	w := linkBaseWeight + linkDopamineGain*da
+	// The bond a word earns is scaled by the source's trust: a word read on an
+	// untrusted channel bonds lightly, so it entrenches only by recurring across
+	// many reads and a word from a single page fades.
+	w := (linkBaseWeight + linkDopamineGain*da) * scale
 	var words []*memory.Fragment
 	for _, form := range forms {
 		word, minted, err := d.store.WordNode(form, lang, d.chem.Snapshot(), time.Now())

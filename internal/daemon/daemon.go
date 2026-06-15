@@ -270,6 +270,11 @@ type recentMoment struct {
 // channel: half a memory, gone in half the nights.
 const untrustedWeight = 0.5
 
+// untrustedNameScale is how lightly a word read on an untrusted channel bonds,
+// so reading grows the vocabulary only by recurrence: a word met across many of
+// the watched sources entrenches, while a word from one page fades.
+const untrustedNameScale = 0.5
+
 // Association tuning. Link strength rides on dopamine, repetition of a
 // template pair earns a bonus and a reward spike, and recall both rewards
 // the chemistry and strengthens the paths it walked.
@@ -494,7 +499,13 @@ func (d *Daemon) Run() error {
 	for {
 		select {
 		case o := <-d.obs:
-			d.process(o, false, true)
+			res := d.process(o, false, true)
+			// Reading grows the vocabulary: an untrusted text channel mints the
+			// words it took in, lightly, so the lexicon learns from the page
+			// without the page gaining the authority to act.
+			if res.FragmentID != 0 && d.cfg.Untrusted(o.Channel) {
+				d.readVocabulary(o.Content, res.FragmentID)
+			}
 
 		case r := <-d.reqs:
 			resp, deferred, quit := d.handle(r.req, r.reply)
