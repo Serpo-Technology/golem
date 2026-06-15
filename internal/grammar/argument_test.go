@@ -195,6 +195,41 @@ func TestComprehendBestFitPrefersAnimateAgent(t *testing.T) {
 	}
 }
 
+// A filler that has merely been an agent more often does not unseat a perfectly
+// good agent the order named first: "a dog chased a rabbit" stays the dog
+// chasing the rabbit even when the rabbit's agent history is the larger.
+func TestComprehendKeepsOrderAgentOverHistory(t *testing.T) {
+	p := Builtin()
+	dog := &memory.Fragment{ID: 1, Content: "dog"}
+	rabbit := &memory.Fragment{ID: 2, Content: "rabbit"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "dog":
+			return dog
+		case "rabbit":
+			return rabbit
+		}
+		return nil
+	}
+	// Both are good agents; the rabbit's history is larger, as on a trained brain.
+	fit := func(c *memory.Fragment, role string) float64 {
+		if role != "agent" {
+			return 0.3
+		}
+		if c.ID == rabbit.ID {
+			return 1.5
+		}
+		return 1.0
+	}
+	m, ok := p.Comprehend("en", "a dog chased a rabbit", resolve, fit)
+	if !ok {
+		t.Fatal("should comprehend")
+	}
+	if m.Roles["agent"].Concept != dog || m.Roles["patient"].Concept != rabbit {
+		t.Fatalf("the order's agent should stand against a larger history: %+v", m.Roles)
+	}
+}
+
 // The same construction both says and understands: a meaning generated to a
 // surface string comprehends back into the same roles over the same relation,
 // the round trip through one inventory read each way that is the whole point.

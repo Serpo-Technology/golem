@@ -237,7 +237,13 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	}
 	asIs := fit(ta.Concept, a) + fit(tb.Concept, b)
 	swapped := fit(tb.Concept, a) + fit(ta.Concept, b)
-	if swapped > asIs+bestFitMargin {
+	// The word order is overruled only when the filler it seated as agent is no
+	// better suited to that role than to patient, an inanimate or stranded
+	// concept. A perfectly good agent the order named first prefers the agent
+	// role, so it is not unseated by another that has merely been an agent more
+	// often: "a dog chased a rabbit" stays the dog chasing, not the reverse.
+	orderAgentMisplaced := fit(ta.Concept, a) <= fit(ta.Concept, b)
+	if orderAgentMisplaced && swapped > asIs+bestFitMargin {
 		m.Roles[a], m.Roles[b] = tb, ta
 	}
 }
