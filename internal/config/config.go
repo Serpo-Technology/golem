@@ -43,81 +43,116 @@ var denylist = []string{
 }
 
 // Config is everything a running GOLEM can be tuned with. It lives at
-// <home>/config.json and is created with defaults on first run.
+// <home>/config.json and is created with defaults on first run. The fields
+// are grouped by what they govern: attention, memory formation, sleep,
+// senses, action, self-build, and the network the brain is reached over.
 type Config struct {
+	// Attention and consciousness: what an observation must clear to be
+	// noticed, and how a concept held in mind colours what is noticed next.
+
 	// SurpriseThreshold is the absolute floor (in bits) below which an
 	// observation can never reach consciousness.
 	SurpriseThreshold float64 `json:"surprise_threshold"`
+	// ZGate is how many deviations above its own channel's running mean a
+	// surprise must sit to reach consciousness once the channel is warmed up.
+	ZGate float64 `json:"z_gate"`
+	// CalibrationWarmup is the number of observations before the relative
+	// ZGate applies; until then the absolute SurpriseThreshold stands alone.
+	CalibrationWarmup int `json:"calibration_warmup"`
 	// PredictorWindow is the habituation timescale per channel, in
 	// observations.
 	PredictorWindow float64 `json:"predictor_window"`
+	// PredictorWindows overrides the habituation window per channel. A chatty
+	// channel needs a longer memory to recognize its own long tail of
+	// recurring shapes.
+	PredictorWindows map[string]float64 `json:"predictor_windows"`
+	// LateralInhibition is how strongly a warmed concept damps the concepts
+	// it grounds in, so a category held in mind quiets its members instead of
+	// being swamped by them and a name taught over categories can settle on
+	// the categories. Gentle by default; 0 turns the damping off and
+	// attention is plain warmth.
+	LateralInhibition float64 `json:"lateral_inhibition"`
+
+	// Memory formation: the refractory that bounds how fast moments encode,
+	// so a burst of surprise cannot flood the store.
+
+	// EncodeBurst and EncodeRefillSec are the per-channel refractory on memory
+	// formation: a channel may encode EncodeBurst fragments back to back, then
+	// earns one more per EncodeRefillSec. Surprises beyond that are counted and
+	// collapsed into a single storm-summary moment.
+	EncodeBurst     float64 `json:"encode_burst"`
+	EncodeRefillSec float64 `json:"encode_refill_sec"`
+	// EncodeBursts overrides the encode burst per channel. A bulk channel like
+	// the web delivers a page's worth of lines at once, so it earns a larger
+	// burst to take in several sources a cycle, while a trickle channel keeps
+	// the small default.
+	EncodeBursts map[string]float64 `json:"encode_bursts"`
+
+	// Sleep and consolidation: when the daemon rests to replay, merge, and
+	// forget.
+
 	// SleepPressureGate is the serotonin level at which sleep can start.
 	SleepPressureGate float64 `json:"sleep_pressure_gate"`
 	// InputSilenceSec is how long all input must pause before sleep.
 	InputSilenceSec float64 `json:"input_silence_sec"`
-	// CalmBeforeSleepSec is how long after the last surprise sleep
-	// pressure starts building.
+	// CalmBeforeSleepSec is how long after the last surprise sleep pressure
+	// starts building.
 	CalmBeforeSleepSec float64 `json:"calm_before_sleep_sec"`
 	// SleepIntervalSec is the minimum gap between consolidation nights.
 	SleepIntervalSec float64 `json:"sleep_interval_sec"`
-	// NightlyDecay and PruneFloor govern consolidation.
+	// NightlyDecay is how much every weight fades each night; PruneFloor is the
+	// weight below which a faded fragment is dropped.
 	NightlyDecay float64 `json:"nightly_decay"`
 	PruneFloor   float64 `json:"prune_floor"`
-	// ZGate is how many deviations above its own channel's running mean a
-	// surprise must sit to reach consciousness once the channel is warmed
-	// up. CalibrationWarmup is the number of observations before the
-	// relative gate applies.
-	ZGate             float64 `json:"z_gate"`
-	CalibrationWarmup int     `json:"calibration_warmup"`
-	// EncodeBurst and EncodeRefillSec are the per-channel refractory on
-	// memory formation: a channel may encode EncodeBurst fragments back to
-	// back, then earns one more per EncodeRefillSec. Surprises beyond that
-	// are counted and collapsed into a single storm-summary moment.
-	EncodeBurst     float64 `json:"encode_burst"`
-	EncodeRefillSec float64 `json:"encode_refill_sec"`
-	// EncodeBursts overrides the encode burst per channel. A bulk channel
-	// like the web delivers a page's worth of lines at once, so it earns a
-	// larger burst to take in several sources a cycle, while a trickle
-	// channel keeps the small default.
-	EncodeBursts map[string]float64 `json:"encode_bursts"`
-	// PredictorWindows overrides the habituation window per channel. A
-	// chatty channel needs a longer memory to recognize its own long tail
-	// of recurring shapes.
-	PredictorWindows map[string]float64 `json:"predictor_windows"`
-	// Channels selects which built-in sensors the daemon runs. External
-	// senses (the shell hook, scripts) need no entry here; anything can
-	// feed any channel through golem observe.
+
+	// Senses and channels: which built-in sensors the daemon runs, and how the
+	// open-world ones are treated. A transducer outside the process can feed
+	// any channel through golem observe and needs no entry here.
+
+	// Channels selects which built-in sensors the daemon runs.
 	Channels ChannelsConfig `json:"channels"`
+	// WebPollSec is how often each watched URL is fetched.
+	WebPollSec float64 `json:"web_poll_sec"`
+	// UntrustedChannels lists open-world senses whose content may be
+	// adversarial: their moments encode at reduced weight and can never cue a
+	// habit or anchor the grounding of an action. Omitted, the list is the web
+	// channel.
+	UntrustedChannels []string `json:"untrusted_channels"`
+
+	// Action and execution: how a cue graduates to a habit, and the gates on
+	// actually running commands.
+
 	// GraduationApprovals is how many consistent approvals promote a
 	// cue-and-command pair from confirm-to-execute to autonomous. A single
 	// denial or failed run demotes it.
 	GraduationApprovals int `json:"graduation_approvals"`
-	// ConflictMargin is the ACC veto threshold: if the top two candidate
-	// actions sit within this fraction of each other, GOLEM asks instead
-	// of choosing.
+	// ConflictMargin is the veto threshold: if the top two candidate actions
+	// sit within this fraction of each other, GOLEM asks instead of choosing.
 	ConflictMargin float64 `json:"conflict_margin"`
-	// LateralInhibition is how strongly a warmed concept damps the
-	// concepts it grounds in, so a category held in mind quiets its
-	// members instead of being swamped by them and a name taught over
-	// categories can settle on the categories. Gentle by default; 0
-	// turns the damping off and attention is plain warmth.
-	LateralInhibition float64 `json:"lateral_inhibition"`
-	// ExecuteEnabled is the master switch for actually running commands.
-	// Off by default: until it is on, every approved or graduated action
-	// is a dry run. Turning it on requires editing this file and
-	// restarting; nothing can enable it from a single command.
+	// AutoCueCooldownSec is the minimum gap between automatic firings of the
+	// same graduated cue, so a storm of matching observations cannot run one
+	// habit over and over.
+	AutoCueCooldownSec float64 `json:"auto_cue_cooldown_sec"`
+	// ExecuteEnabled is the master switch for actually running commands. Off by
+	// default: until it is on, every approved or graduated action is a dry run.
+	// Turning it on requires editing this file and restarting; nothing can
+	// enable it from a single command.
 	ExecuteEnabled bool `json:"execute_enabled"`
-	// ExecuteAllowlist is the set of commands cleared to run for real,
-	// matched by exact command or whole-word prefix ("go build" clears
-	// "go build ./..." but not "google-chrome"). Empty means nothing runs,
-	// even with the master switch on. The denylist always overrides this.
+	// ExecuteAllowlist is the set of commands cleared to run for real, matched
+	// by exact command or whole-word prefix ("go build" clears "go build ./..."
+	// but not "google-chrome"). Empty means nothing runs, even with the master
+	// switch on. The denylist always overrides this.
 	ExecuteAllowlist []string `json:"execute_allowlist"`
 	// ExecuteTimeoutSec bounds how long a single command may run.
 	ExecuteTimeoutSec float64 `json:"execute_timeout_sec"`
-	// ExecuteParallel caps how many committed actions may run at once.
-	// Actions whose resource claims collide serialize regardless of the
-	// cap; this bounds only the genuinely independent ones.
+	// ExecuteParallel caps how many committed actions may run at once. Actions
+	// whose resource claims collide serialize regardless of the cap; this
+	// bounds only the genuinely independent ones.
 	ExecuteParallel int `json:"execute_parallel"`
+
+	// Self-build: the gates on GOLEM running and rewriting its own code, each a
+	// deliberate opt-in on top of the last.
+
 	// RuntimeEnabled is the gate on running code GOLEM wrote. Off by default,
 	// like ExecuteEnabled: the runtime opens only once the operator has placed
 	// the whole process inside the sealed container, the containment a
@@ -133,91 +168,98 @@ type Config struct {
 	// MainPackage is the package the self-build compiles to the candidate
 	// binary, the brain's entry point.
 	MainPackage string `json:"main_package"`
-	// AutoCueCooldownSec is the minimum gap between automatic firings of
-	// the same graduated cue, so a storm of matching observations cannot
-	// run one habit over and over.
-	AutoCueCooldownSec float64 `json:"auto_cue_cooldown_sec"`
-	// WebPollSec is how often each watched URL is fetched.
-	WebPollSec float64 `json:"web_poll_sec"`
-	// UntrustedChannels lists open-world senses whose content may be
-	// adversarial: their moments encode at reduced weight and can never
-	// cue a habit or anchor the grounding of an action. Omitted, the
-	// list is the web channel.
-	UntrustedChannels []string `json:"untrusted_channels"`
-	// ListenTCP, when set, makes the daemon serve the same wire protocol on
-	// a TCP address in addition to the unix socket, so transducers outside
-	// the process (a microphone bridge, a captioner, a speaker) reach it
-	// across a container boundary. Empty leaves only the socket. Bind it to a
-	// container interface ("0.0.0.0:7777") and publish it to host loopback
-	// only ("127.0.0.1:7777:7777"), since a reachable brain can be told and
-	// asked to act.
+
+	// Network: how a transducer outside the process reaches the brain.
+
+	// ListenTCP, when set, makes the daemon serve the same wire protocol on a
+	// TCP address in addition to the unix socket, so transducers outside the
+	// process (a microphone bridge, a captioner, a speaker) reach it across a
+	// container boundary. Empty leaves only the socket. Bind it to a container
+	// interface ("0.0.0.0:7777") and publish it to host loopback only
+	// ("127.0.0.1:7777:7777"), since a reachable brain can be told and asked to
+	// act.
 	ListenTCP string `json:"listen_tcp"`
 }
 
+// ChannelsConfig selects the daemon's built-in sensors. Each samples the host
+// the daemon runs on; a containerized brain leaves these off and is fed the
+// host's senses by an adapter through golem observe instead.
 type ChannelsConfig struct {
 	// Synthetic runs the demo's burst-and-quiet log generator, useful for
 	// soak tests against a live daemon.
 	Synthetic bool `json:"synthetic"`
-	// Vitals samples cpu load, memory pressure, and disk space into bands
-	// and reports band changes.
+	// Vitals samples cpu load, memory pressure, and disk space into bands and
+	// reports band changes (sysctl on macOS, /proc on Linux).
 	Vitals bool `json:"vitals"`
-	// Syslog follows the macOS unified log at error level.
+	// Syslog follows the system log at error level: the unified log on macOS,
+	// the systemd journal on Linux.
 	Syslog bool `json:"syslog"`
 	// WatchDirs lists directories (not recursive) for file events.
 	WatchDirs []string `json:"watch_dirs"`
-	// TailFiles lists files whose appended lines arrive as observations
-	// on the reading channel, distinct from the file-event sense.
+	// TailFiles lists files whose appended lines arrive as observations on the
+	// reading channel, distinct from the file-event sense.
 	TailFiles []string `json:"tail_files"`
-	// WatchURLs lists pages fetched periodically; their stripped text
-	// arrives on the web channel, which is untrusted by default.
+	// WatchURLs lists pages fetched periodically; their stripped text arrives
+	// on the web channel, which is untrusted by default.
 	WatchURLs []string `json:"watch_urls"`
-	// Screen reports the frontmost application as a symbolic stream on
-	// the screen channel.
+	// Screen reports the frontmost application as a symbolic stream on the
+	// screen channel (System Events on macOS, the X11 active window on Linux);
+	// a headless host or a container has none.
 	Screen bool `json:"screen"`
-	// Voice renders spoken replies through the system text-to-speech.
+	// Voice emits each spoken reply as a say event for an external speaker to
+	// render; the brain runs no text-to-speech of its own.
 	Voice bool `json:"voice"`
-	// VoiceName picks which system voice speaks; empty means the system
-	// default. golem voice adjusts both voice fields at runtime.
+	// VoiceName names the voice an external speaker should prefer; empty leaves
+	// the choice to the adapter. golem voice adjusts both voice fields at
+	// runtime.
 	VoiceName string `json:"voice_name"`
 }
 
 func Default() Config {
 	return Config{
-		SurpriseThreshold:   defaultSurpriseThreshold,
-		PredictorWindow:     defaultPredictorWindow,
-		SleepPressureGate:   defaultSleepPressureGate,
-		InputSilenceSec:     defaultInputSilenceSec,
-		CalmBeforeSleepSec:  defaultCalmSec,
-		SleepIntervalSec:    defaultSleepIntervalSec,
-		NightlyDecay:        defaultNightlyDecay,
-		PruneFloor:          defaultPruneFloor,
-		ZGate:               defaultZGate,
-		CalibrationWarmup:   defaultCalibWarmup,
-		EncodeBurst:         6,
-		EncodeRefillSec:     2,
-		EncodeBursts:        map[string]float64{"web": 200},
-		PredictorWindows:    map[string]float64{"syslog": 8192},
-		GraduationApprovals: defaultGraduation,
-		ConflictMargin:      defaultConflictMargin,
-		LateralInhibition:   defaultLateralInhibition,
-		ExecuteEnabled:      false,
-		RuntimeEnabled:      false,
-		SourcePath:          "",
-		MainPackage:         "./cmd/golem",
-		ExecuteAllowlist:    []string{},
-		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
-		ExecuteParallel:     defaultExecuteParallel,
-		AutoCueCooldownSec:  defaultAutoCueCooldown,
-		WebPollSec:          defaultWebPollSec,
-		UntrustedChannels:   []string{"web"},
+		// Attention.
+		SurpriseThreshold: defaultSurpriseThreshold,
+		ZGate:             defaultZGate,
+		CalibrationWarmup: defaultCalibWarmup,
+		PredictorWindow:   defaultPredictorWindow,
+		PredictorWindows:  map[string]float64{"syslog": 8192},
+		LateralInhibition: defaultLateralInhibition,
+		// Memory formation.
+		EncodeBurst:     6,
+		EncodeRefillSec: 2,
+		EncodeBursts:    map[string]float64{"web": 200},
+		// Sleep and consolidation.
+		SleepPressureGate:  defaultSleepPressureGate,
+		InputSilenceSec:    defaultInputSilenceSec,
+		CalmBeforeSleepSec: defaultCalmSec,
+		SleepIntervalSec:   defaultSleepIntervalSec,
+		NightlyDecay:       defaultNightlyDecay,
+		PruneFloor:         defaultPruneFloor,
+		// Senses and channels.
 		Channels: ChannelsConfig{
 			Vitals:    true,
 			Syslog:    true,
 			WatchDirs: []string{},
 			TailFiles: []string{},
 			WatchURLs: []string{},
-			VoiceName: "Samantha",
+			VoiceName: "",
 		},
+		WebPollSec:        defaultWebPollSec,
+		UntrustedChannels: []string{"web"},
+		// Action and execution.
+		GraduationApprovals: defaultGraduation,
+		ConflictMargin:      defaultConflictMargin,
+		AutoCueCooldownSec:  defaultAutoCueCooldown,
+		ExecuteEnabled:      false,
+		ExecuteAllowlist:    []string{},
+		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
+		ExecuteParallel:     defaultExecuteParallel,
+		// Self-build.
+		RuntimeEnabled: false,
+		SourcePath:     "",
+		MainPackage:    "./cmd/golem",
+		// Network: only the unix socket until an address is set.
+		ListenTCP: "",
 	}
 }
 
