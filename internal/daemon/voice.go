@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"golem/internal/config"
@@ -10,70 +9,24 @@ import (
 	"golem/wire"
 )
 
-// The voice is the first effector after the hands: the realizer's
-// sentences rendered to speech through the system text-to-speech. Pure
-// output, no change to cognition: speaking never encodes, never warms
-// the workspace, and never blocks the brain loop. Sentences queue and
-// speak one at a time; when the mouth is busy past its small backlog, a
-// reply is simply not voiced, because speech that arrives a minute late
-// is worse than silence.
+// The voice is pure output, and the brain does not render it. Speaking a
+// sentence is emitting a "say" event that carries the words; a transducer
+// outside the process reads the event stream and voices them with whatever
+// the platform speaks through. This keeps the speaker the host's to choose
+// and the brain identical on every machine, the same separation perception
+// already has, where a captioner outside the process feeds the senses.
+// Emitting never encodes, never warms the workspace, never blocks the loop.
 //
-// Whether the voice is on and which system voice speaks are runtime
-// state, adjusted over the socket by golem voice and persisted to the
-// config file so a restart keeps the choice.
+// Whether the voice is on and which voice an adapter should prefer are runtime
+// state, adjusted over the socket by golem voice and persisted to the config.
 
-// sayCommand builds the speech subprocess; tests stub it. An empty
-// voice name leaves the system default in charge.
-var sayCommand = func(text, voice string) *exec.Cmd {
-	args := []string{}
-	if voice != "" {
-		args = append(args, "-v", voice)
-	}
-	args = append(args, "--", text)
-	return exec.Command("/usr/bin/say", args...)
-}
-
-// utterance is one queued sentence with the voice chosen at queueing
-// time, so the speaking goroutine never reads loop-owned state.
-type utterance struct {
-	text  string
-	voice string
-}
-
-// speak queues one sentence for the voice when the voice is on. Called
-// only from the brain loop.
+// speak emits one sentence as a say event when the voice is on, for an external
+// speaker to render. Called only from the brain loop.
 func (d *Daemon) speak(text string) {
 	if !d.voiceOn || text == "" {
 		return
 	}
-	if d.voice == nil {
-		d.voice = make(chan utterance, 8)
-		// The say builder is captured here, on the loop, so the
-		// speaking goroutine reads no shared state afterwards.
-		go d.voiceLoop(sayCommand)
-	}
-	select {
-	case d.voice <- utterance{text: text, voice: d.voiceName}:
-		d.event(events.Event{Ev: "say", Tpl: wire.Clip(text, 120)})
-	default:
-	}
-}
-
-// voiceLoop speaks the queue one sentence at a time until the daemon
-// stops.
-func (d *Daemon) voiceLoop(say func(text, voice string) *exec.Cmd) {
-	for {
-		select {
-		case <-d.stop:
-			return
-		case u := <-d.voice:
-			if err := say(u.text, u.voice).Run(); err != nil {
-				// A machine without the speech command stays mute
-				// without complaint; the reply was still written.
-				return
-			}
-		}
-	}
+	d.event(events.Event{Ev: "say", Tpl: wire.Clip(text, 240)})
 }
 
 // handleVoice is the runtime control surface of the speech effector:

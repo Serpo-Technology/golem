@@ -1,11 +1,14 @@
 package daemon
 
 import (
-	"os/exec"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"golem/internal/attention"
+	"golem/internal/events"
 	"golem/internal/memory"
 	"golem/internal/senses"
 )
@@ -99,33 +102,32 @@ func TestUntrustedChannelEncodesLight(t *testing.T) {
 	}
 }
 
-// The voice is gated by its runtime switch and never blocks: with the
-// switch off nothing is queued, with it on the reply drains through the
-// speech command.
+// The voice is gated by its runtime switch and is pure output: off, speaking
+// emits nothing; on, the reply is offered as a say event for an external
+// speaker to render, never run by the brain itself.
 func TestVoiceSpeaksOnlyWhenConfigured(t *testing.T) {
 	d, _ := testDaemon(t)
+	d.home = t.TempDir()
+	log, err := events.Open(d.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { log.Close() })
+	d.events = log
+	saidLines := func() string {
+		raw, _ := os.ReadFile(filepath.Join(d.home, "events.jsonl"))
+		return string(raw)
+	}
 
 	d.speak("never spoken")
-	if d.voice != nil {
-		t.Fatal("a silent configuration must not open the voice")
+	if strings.Contains(saidLines(), `"ev":"say"`) {
+		t.Fatal("a silent configuration must not emit a say event")
 	}
-
-	spoken := make(chan string, 4)
-	orig := sayCommand
-	sayCommand = func(text, voice string) *exec.Cmd {
-		spoken <- text
-		return exec.Command("/usr/bin/true")
-	}
-	defer func() { sayCommand = orig }()
 
 	d.voiceOn = true
 	d.speak("After make test, make deploy usually follows.")
-	select {
-	case got := <-spoken:
-		if got != "After make test, make deploy usually follows." {
-			t.Fatalf("unexpected utterance: %q", got)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("the configured voice should speak")
+	out := saidLines()
+	if !strings.Contains(out, `"ev":"say"`) || !strings.Contains(out, "make deploy usually follows") {
+		t.Fatalf("the configured voice should offer the sentence as a say event: %s", out)
 	}
 }

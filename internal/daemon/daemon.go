@@ -175,11 +175,10 @@ type Daemon struct {
 	// GOLEM comes to rebuild itself.
 	runner runtime.Runner
 
-	// voice carries utterances to the text-to-speech effector, opened on
-	// first use when the voice is on. voiceOn and voiceName start from
-	// config and follow golem voice at runtime, owned by the brain loop
-	// like every other mutable state.
-	voice     chan utterance
+	// voiceOn gates whether spoken replies are emitted as say events for an
+	// external speaker; voiceName is the voice an adapter should prefer. Both
+	// start from config and follow golem voice at runtime, owned by the brain
+	// loop like every other mutable state.
 	voiceOn   bool
 	voiceName string
 

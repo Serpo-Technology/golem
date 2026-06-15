@@ -1,28 +1,33 @@
 package daemon
 
 import (
-	"os/exec"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"golem/internal/config"
+	"golem/internal/events"
 	"golem/wire"
 )
 
-// golem voice flips the runtime switch, picks the speaking voice, and
-// persists both to the config file so a restart agrees with the menu.
+// golem voice flips the runtime switch, picks the preferred voice, and
+// persists both to the config so a restart agrees with the menu. Speaking is
+// emit-only now: a sample is a say event for an external speaker to render,
+// not a subprocess the brain runs.
 func TestVoiceControl(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.home = t.TempDir()
-
-	spoken := make(chan string, 4)
-	orig := sayCommand
-	sayCommand = func(text, voice string) *exec.Cmd {
-		spoken <- voice + "|" + text
-		return exec.Command("/usr/bin/true")
+	log, err := events.Open(d.home)
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer func() { sayCommand = orig }()
+	t.Cleanup(func() { log.Close() })
+	d.events = log
+	saidSamples := func() int {
+		raw, _ := os.ReadFile(filepath.Join(d.home, "events.jsonl"))
+		return strings.Count(string(raw), `"ev":"say"`)
+	}
 
 	resp := d.handleVoice(wire.Request{Arg: "status"})
 	if !resp.OK || resp.Voice == nil || resp.Voice.Enabled {
@@ -36,23 +41,18 @@ func TestVoiceControl(t *testing.T) {
 		t.Fatalf("voice on did not persist: %v %+v", err, cfg.Channels)
 	}
 
+	// Choosing a voice while on emits one say event (the sample), not a process.
 	if resp = d.handleVoice(wire.Request{Arg: "use", Content: "Yelda"}); !resp.OK || resp.Voice.Name != "Yelda" {
 		t.Fatalf("voice use failed: %+v", resp)
 	}
-	select {
-	case got := <-spoken:
-		if !strings.HasPrefix(got, "Yelda|") {
-			t.Fatalf("the sample should speak in the chosen voice, got %q", got)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("choosing a voice while on should speak a sample")
+	if saidSamples() != 1 {
+		t.Fatalf("choosing a voice while on should emit one say event, got %d", saidSamples())
 	}
 	if cfg, _ := config.Load(d.home); cfg.Channels.VoiceName != "Yelda" {
 		t.Fatal("voice name did not persist")
 	}
 
-	// An empty name returns to the system default; a malformed one is
-	// refused outright.
+	// An empty name returns to the default; a malformed one is refused.
 	if resp = d.handleVoice(wire.Request{Arg: "use", Content: ""}); !resp.OK || resp.Voice.Name != "" {
 		t.Fatalf("clearing the voice name failed: %+v", resp)
 	}
@@ -60,8 +60,14 @@ func TestVoiceControl(t *testing.T) {
 		t.Fatal("a control character in a voice name must be refused")
 	}
 
+	// Off, speaking emits nothing.
 	if resp = d.handleVoice(wire.Request{Arg: "off"}); !resp.OK || resp.Voice.Enabled {
 		t.Fatalf("voice off failed: %+v", resp)
+	}
+	before := saidSamples()
+	d.speak("this should be silent")
+	if saidSamples() != before {
+		t.Fatal("a muted voice must not emit a say event")
 	}
 	if cfg, _ := config.Load(d.home); cfg.Channels.Voice {
 		t.Fatal("voice off did not persist")
