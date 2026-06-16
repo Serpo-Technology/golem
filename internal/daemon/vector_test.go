@@ -55,41 +55,53 @@ func TestFeatureSiblingsBlendsVectors(t *testing.T) {
 	}
 }
 
-// A concept's embedding is the mean of the percepts it grounds in, so the
-// coordinate an embedder gave each percept rolls up at consolidation. A concept
-// grounding in nothing embedded stays vectorless, so the pass is a no-op until
-// percepts carry embeddings.
-func TestGrowConceptVectorsPropagates(t *testing.T) {
+// The pure-Go embedder learns concept coordinates from feature company: two
+// concepts that share features land near in the learned space, one with a
+// distinct signature lands apart. The embedder runs over GOLEM's own grounded
+// signatures, no outside model.
+func TestGrowEmbeddingsFromFeatures(t *testing.T) {
 	d, s := testDaemon(t)
-	enc := func(kind, content string) *memory.Fragment {
-		f := &memory.Fragment{Kind: kind, Channel: "vision", Content: content,
-			Template: content, Limbic: d.chem.Snapshot(), Time: time.Now()}
+	concept := func(name string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	feature := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
 		if _, err := s.Encode(f); err != nil {
 			t.Fatal(err)
 		}
 		return f
 	}
-	dog := enc(memory.KindConcept, "dog")
-	ep1 := enc(memory.KindEpisodic, "a brown dog")
-	ep2 := enc(memory.KindEpisodic, "a black dog")
-	s.SetLinkRel(dog.ID, ep1.ID, memory.RelGrounds, 1.0)
-	s.SetLinkRel(dog.ID, ep2.ID, memory.RelGrounds, 1.0)
-	s.SetVector(ep1.ID, []float32{1, 0, 0})
-	s.SetVector(ep2.ID, []float32{0, 2, 0})
+	// dog and wolf share two features; cat shares one with each; rock shares none.
+	furry, fourLegs, wild, hard := feature("furry"), feature("four-legs"), feature("wild"), feature("hard")
+	link := func(c, f *memory.Fragment, w float64) { s.SetLinkRel(c.ID, f.ID, memory.RelFeature, w) }
+	dog, wolf, cat, rock := concept("dog"), concept("wolf"), concept("cat"), concept("rock")
+	link(dog, furry, 1)
+	link(dog, fourLegs, 1)
+	link(wolf, furry, 1)
+	link(wolf, fourLegs, 1)
+	link(wolf, wild, 1)
+	link(cat, furry, 1)
+	link(cat, fourLegs, 1)
+	link(rock, hard, 1)
 
-	d.growConceptVectors()
+	d.growEmbeddings()
 
-	v, ok := s.Vector(dog.ID)
-	if !ok {
-		t.Fatal("the concept should gain an embedding from its grounding percepts")
+	vd, ok1 := s.Vector(dog.ID)
+	vw, ok2 := s.Vector(wolf.ID)
+	vr, ok3 := s.Vector(rock.ID)
+	if !ok1 || !ok2 || !ok3 {
+		t.Fatalf("every concept with features should gain an embedding: %v %v %v", ok1, ok2, ok3)
 	}
-	if v[0] != 0.5 || v[1] != 1.0 || v[2] != 0 {
-		t.Fatalf("the concept embedding should be the mean of its percepts {0.5,1,0}: %v", v)
-	}
-
-	bare := enc(memory.KindConcept, "ghost")
-	d.growConceptVectors()
-	if _, ok := s.Vector(bare.ID); ok {
-		t.Fatal("a concept with no embedded grounding should stay vectorless")
+	dogWolf := memory.Cosine(vd, vw)
+	dogRock := memory.Cosine(vd, vr)
+	if dogWolf <= dogRock {
+		t.Fatalf("dog should sit nearer wolf than rock in the learned space: dog~wolf=%.3f dog~rock=%.3f",
+			dogWolf, dogRock)
 	}
 }

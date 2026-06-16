@@ -696,56 +696,6 @@ func (d *Daemon) blendVectorSiblings(seed uint64, out []walkDest, now time.Time)
 	return out
 }
 
-// growConceptVectors lifts the vector layer from percepts to concepts: a
-// concept's embedding is the mean of the embeddings of what it grounds in, the
-// percepts a transducer placed in the space for a perceptual concept, the
-// sub-concepts for an abstraction. The associative coordinate each percept was
-// given rolls up into the concept distilled from it, so the resemblance walk has
-// concept-level neighbours to draw. It runs each night, after grounding settles,
-// so a concept's place tracks what it grounds in. With no percept embeddings,
-// the case until an embedder feeds them, this writes nothing and the concept
-// graph stands as it was. Cosine is scale-free, so the unnormalized mean serves.
-func (d *Daemon) growConceptVectors() {
-	concepts, err := d.store.Concepts()
-	if err != nil {
-		fmt.Fprintf(d.out, "concept vector error: %v\n", err)
-		return
-	}
-	for _, c := range concepts {
-		grounds, err := d.store.LinksFromRel([]uint64{c.ID}, memory.RelGrounds)
-		if err != nil || len(grounds) == 0 {
-			continue
-		}
-		var sum []float32
-		n := 0
-		for _, g := range grounds {
-			v, ok := d.store.Vector(g.To)
-			if !ok {
-				continue
-			}
-			if sum == nil {
-				sum = make([]float32, len(v))
-			}
-			if len(v) != len(sum) {
-				continue
-			}
-			for i := range v {
-				sum[i] += v[i]
-			}
-			n++
-		}
-		if n == 0 {
-			continue
-		}
-		for i := range sum {
-			sum[i] /= float32(n)
-		}
-		if err := d.store.SetVector(c.ID, sum); err != nil {
-			fmt.Fprintf(d.out, "concept vector error: %v\n", err)
-		}
-	}
-}
-
 // recencyOf scores closeness in time into (0, 1]: the just-now is 1 and
 // an hour-old moment is half as near.
 func recencyOf(now, at time.Time) float64 {

@@ -1239,9 +1239,9 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// Each concept's sparse signature rewrites from its current
 	// grounding, so resemblance stays current and auditable.
 	d.growFeatures()
-	// The vector layer lifts from percepts to the concepts they ground, so the
-	// resemblance walk gains geometric neighbours where embeddings exist.
-	d.growConceptVectors()
+	// The embedder learns each concept's place in a continuous space from its
+	// own feature company, so the resemblance walk gains geometric neighbours.
+	d.growEmbeddings()
 	// A relation told often enough, its slots filled by varied concepts,
 	// induces an argument-structure construction grown from that usage.
 	born += d.growConstructions()
@@ -1316,7 +1316,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	d.growConcepts()
 	d.growAbstractions()
 	d.growFeatures()
-	d.growConceptVectors()
+	d.growEmbeddings()
 	d.growConstructions()
 	d.grammarCompetition()
 	d.flushModels()
@@ -1466,14 +1466,6 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				fmt.Fprintf(d.out, "media store error: %v\n", err)
 			} else if err := d.store.SetMedia(res.FragmentID, hash, req.Mime); err != nil {
 				fmt.Fprintf(d.out, "media reference error: %v\n", err)
-			}
-		}
-		// An embedder outside the process places the percept in a space; the
-		// coordinate rides along and is stored beside the moment, the associative
-		// substrate the symbolic graph reasons against.
-		if len(req.Embedding) > 0 && res.FragmentID != 0 {
-			if err := d.store.SetVector(res.FragmentID, req.Embedding); err != nil {
-				fmt.Fprintf(d.out, "embedding store error: %v\n", err)
 			}
 		}
 		return wire.Response{OK: true, Observe: &res}, false, false

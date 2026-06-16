@@ -6,6 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/traefik/yaegi v0.16.1
 	golang.org/x/net v0.56.0
+	gonum.org/v1/gonum v0.17.0
 	modernc.org/sqlite v1.52.0
 )
 
