@@ -224,3 +224,5 @@ surface:en:probably	probably	en
 surface:tr:probably	muhtemelen	tr
 surface:en:ifso	if so	en
 surface:tr:ifso	öyleyse	tr
+surface:en:asisaid	as I said	en
+surface:tr:asisaid	dediğim gibi	tr

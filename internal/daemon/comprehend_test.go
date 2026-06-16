@@ -658,8 +658,8 @@ func TestHypothesisEntertainsWithoutAsserting(t *testing.T) {
 	if got := say(t, d, "never mind").Say; got != "All right." {
 		t.Fatalf("a release should be acknowledged: %q", got)
 	}
-	if got := say(t, d, "did the coyote chase the cat").Say; got != "No, the coyote did not chase the cat." {
-		t.Fatalf("after release the supposition should no longer bear: %q", got)
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "As I said, no, the coyote did not chase the cat." {
+		t.Fatalf("after release the supposition should no longer bear, and GOLEM stands by the denial it gave: %q", got)
 	}
 }
 
@@ -832,8 +832,10 @@ func TestEarnedBeliefSurvivesSleep(t *testing.T) {
 	}
 
 	// Waking from the saved brain, the belief is in mind again and still a guess,
-	// never mistaken for something observed.
+	// never mistaken for something observed. A new morning is a new exchange, so
+	// the night's claim log is cleared the way sleep clears it.
 	d.held.clear()
+	d.claims = nil
 	d.loadBeliefs()
 	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
 		t.Fatalf("a promoted belief should survive and still read as a guess: %q", got)
@@ -872,6 +874,40 @@ func TestObservationRetiresBelief(t *testing.T) {
 	}
 	if got := say(t, d, "did the wolf chase the cat").Say; got != "Yes, the wolf chased the cat." {
 		t.Fatalf("the observed fact should now answer plainly: %q", got)
+	}
+}
+
+// GOLEM keeps a record of its own claims: a re-asked question is noted as already
+// answered, and a claim it affirmed is stood by rather than quietly contradicted
+// within the exchange, the honesty rail carried into the conversation.
+func TestPolarRecordsAndStandsByClaim(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("the first answer is a fresh hedged guess: %q", got)
+	}
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "As I said, probably, the wolf chased the cat." {
+		t.Fatalf("a re-asked claim should be noted as already said: %q", got)
+	}
+	// Were the brain to lose the inference and a denial be computed, GOLEM stands
+	// by the claim it gave rather than flip on it within the exchange.
+	rel := d.resolveRelation("chase")
+	if rel == nil {
+		t.Fatal("the chase relation should resolve")
+	}
+	if got := d.answerPolar("en", wolf, rel, cat, true, beliefUnknown, false); got != "As I said, probably, the wolf chased the cat." {
+		t.Fatalf("GOLEM should hold its prior affirmation, not contradict it: %q", got)
 	}
 }
 

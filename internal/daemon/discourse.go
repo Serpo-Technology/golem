@@ -43,6 +43,78 @@ const threadPropCap = 16
 // so a long conversation can step back a few topics without hoarding every one.
 const topicTrailCap = 8
 
+// claim is a proposition GOLEM has asserted this exchange and how firmly: whether
+// it said the proposition holds (affirmed) or not (denied), and whether it said so
+// firmly ("Yes") or as a guess ("Probably"). It is the speaker's-side record of
+// the discourse, so GOLEM can stand by what it committed to.
+type claim struct {
+	rel            string
+	agent, patient uint64
+	affirmed       bool
+	hedged         bool
+}
+
+const claimsCap = 16
+
+// recallClaim returns GOLEM's standing claim about a proposition this exchange, or
+// nil when it has made none, so a fresh assertion can be checked against it.
+func (d *Daemon) recallClaim(rel string, agent, patient uint64) *claim {
+	for i := range d.claims {
+		if c := &d.claims[i]; c.rel == rel && c.agent == agent && c.patient == patient {
+			return c
+		}
+	}
+	return nil
+}
+
+// recordClaim sets down what GOLEM has just asserted, one standing entry per
+// proposition (the latest commitment), newest first and capped, so a re-assertion
+// updates rather than piles up.
+func (d *Daemon) recordClaim(rel string, agent, patient uint64, affirmed, hedged bool) {
+	if rel == "" || agent == 0 || patient == 0 {
+		return
+	}
+	if c := d.recallClaim(rel, agent, patient); c != nil {
+		c.affirmed, c.hedged = affirmed, hedged
+		return
+	}
+	d.claims = append([]claim{{rel: rel, agent: agent, patient: patient, affirmed: affirmed, hedged: hedged}}, d.claims...)
+	if len(d.claims) > claimsCap {
+		d.claims = d.claims[:claimsCap]
+	}
+}
+
+// claimFacts records the propositions a fact answer asserts as firm affirmations,
+// and reports whether GOLEM had already claimed them all firmly this exchange, so
+// a re-asked question can be noted as already answered. A fact that only firms up
+// a prior guess is not "as I said": it is an upgrade.
+func (d *Daemon) claimFacts(focus *memory.Fragment, facts []focusFact) (allPrior bool) {
+	allPrior = len(facts) > 0
+	for _, f := range facts {
+		agent, patient := focus.ID, f.coID
+		if f.focusRole == "patient" {
+			agent, patient = f.coID, focus.ID
+		}
+		if prior := d.recallClaim(f.rel, agent, patient); prior == nil || !prior.affirmed || prior.hedged {
+			allPrior = false
+		}
+		d.recordClaim(f.rel, agent, patient, true, false)
+	}
+	return allPrior
+}
+
+// ackIfSaid prefixes an answer with the tongue's "as I said" when GOLEM is
+// repeating a claim it already made, so a re-asked question is noted rather than
+// replayed cold. With no such word seeded, the answer stands plain.
+func (d *Daemon) ackIfSaid(lang, line string, said bool) string {
+	if said {
+		if as := d.gram.Word(lang, "asisaid"); as != "" {
+			return upperFirst(as) + ", " + lowerFirst(line)
+		}
+	}
+	return line
+}
+
 // recordThreadProp remembers a proposition the exchange just established, newest
 // first, keeping only the last few so an old turn does not haunt a new one. The
 // glosses are kept too, so the answer can be spoken from the thread even when

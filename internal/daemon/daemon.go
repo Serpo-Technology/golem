@@ -198,6 +198,12 @@ type Daemon struct {
 	// the reply lit up. Set while planning a turn, read and cleared by trackTopic.
 	turnFocus uint64
 
+	// claims are the propositions GOLEM has asserted this exchange and how firmly,
+	// the speaker's-side record of the discourse to threadProps's listener side:
+	// what it has committed to, so it can stand by a claim, note having said it,
+	// and not quietly contradict itself. Cleared at sleep with the rest.
+	claims []claim
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -1324,6 +1330,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.threadProps = nil
 	d.topicTrail = nil
 	d.turnFocus = 0
+	d.claims = nil
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)

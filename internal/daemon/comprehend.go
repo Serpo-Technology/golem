@@ -158,6 +158,7 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(known.Content)
+	d.claimFacts(known, facts) // record what this answer asserts, so a later question stays consistent with it
 	// A supposition that adds to what was observed trails the observed clause, the
 	// focus carried as a pronoun and the conditional lead marking it contingent.
 	if supposed, ok := d.heldRoleGuess(frame, known, knownRole, rel.Content, past, true); ok {
@@ -212,6 +213,7 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(agent.Content)
+	d.claimFacts(agent, facts) // record what this answer asserts, for consistency with later questions
 	if supposed, ok := d.heldRoleGuess(frame, agent, "agent", "", past, true); ok {
 		return line + " " + supposed, true
 	}
@@ -255,6 +257,7 @@ func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) st
 		for _, f := range facts {
 			d.ws.excite(f.coID, exciteSpeech)
 		}
+		d.claimFacts(focus, facts) // a description asserts these facts too; record them
 	} else if guess, ok := d.inferRole(frame, focus, "agent", "", true, true); ok {
 		// Nothing observed about the focus: offer what a near neighbour does as a
 		// hedged guess at what this one likely does, the property counterpart of
@@ -842,6 +845,7 @@ func (d *Daemon) volunteerRemark(lang string) (string, bool) {
 	}
 	d.held.markVoiced(p.id)
 	d.ws.excite(p.patient, exciteSpeech)
+	d.recordClaim(p.rel, p.agent, p.patient, true, true) // a volunteered belief is a hedged claim
 	return line, true
 }
 
@@ -942,6 +946,33 @@ func (d *Daemon) kindGuessClause(frame grammar.Frame, c *memory.Fragment, action
 // dog"), so it is never mistaken for something GOLEM believes outright. Word and
 // clause both come from the tongue's data.
 func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool) string {
+	// What GOLEM is about to commit to, weighed against what it has already said
+	// this exchange. A supposition is contingent, so it is neither recorded nor
+	// held against: it never becomes a claim GOLEM stands by.
+	acked := false
+	if !supposed {
+		affirm := belief == beliefObserved || belief == beliefInferred
+		hedged := belief == beliefInferred
+		if prior := d.recallClaim(rel.Content, agent.ID, patient.ID); prior != nil {
+			if prior.affirmed && !affirm {
+				// GOLEM affirmed this proposition earlier and nothing told this
+				// exchange overturns it; it stands by its claim rather than quietly
+				// contradict itself, at the confidence it first gave.
+				affirm, hedged = true, prior.hedged
+				if hedged {
+					belief = beliefInferred
+				} else {
+					belief = beliefObserved
+				}
+			}
+			// The same claim again, at the same confidence, is noted as such; a guess
+			// that has firmed into a known fact ("probably" -> "yes") is an upgrade
+			// stated plainly, not a repetition.
+			acked = prior.affirmed == affirm && prior.hedged == hedged
+		}
+		d.recordClaim(rel.Content, agent.ID, patient.ID, affirm, hedged)
+	}
+
 	var word string
 	negate := false
 	switch belief {
@@ -962,21 +993,22 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		Past:   past,
 		Negate: negate,
 	})
-	if !ok {
+	var answer string
+	switch {
+	case !ok:
 		// No construction bound the proposition; the bare word still answers.
-		return upperFirst(word) + "."
+		answer = upperFirst(word) + "."
+	case belief == beliefInferred && supposed && d.gram.Word(lang, "ifso") != "":
+		// A guess that leans on a supposition follows only if the supposition does:
+		// the conditional lead carries that, the hedge still marking it a guess.
+		answer = upperFirst(d.gram.Word(lang, "ifso")) + ", " + lowerFirst(word) + " " + lowerFirst(clause)
+	case word == "":
+		answer = clause
+	default:
+		answer = upperFirst(word) + ", " + lowerFirst(clause)
 	}
-	// A guess that leans on a supposition follows only if the supposition does:
-	// the conditional lead carries that, the hedge still marking it a guess.
-	if belief == beliefInferred && supposed {
-		if cond := d.gram.Word(lang, "ifso"); cond != "" {
-			return upperFirst(cond) + ", " + lowerFirst(word) + " " + lowerFirst(clause)
-		}
-	}
-	if word == "" {
-		return clause
-	}
-	return upperFirst(word) + ", " + lowerFirst(clause)
+	// Asked again, GOLEM notes it has already answered rather than replaying it cold.
+	return d.ackIfSaid(lang, answer, acked)
 }
 
 // activityAgent finds whose activity "what did X do" asks after: the frame's
