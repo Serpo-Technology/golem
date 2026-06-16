@@ -103,6 +103,75 @@ func (d *Daemon) claimFacts(focus *memory.Fragment, facts []focusFact) (allPrior
 	return allPrior
 }
 
+// openQuestion is a question raised this exchange that GOLEM could not answer: the
+// relation it was asked about, the concept it was asked about, and the role that
+// concept plays (the other role is the gap). Held so a later telling that fills the
+// gap can be connected back to the question that wanted it.
+type openQuestion struct {
+	rel       string
+	known     uint64
+	knownRole string
+}
+
+const openQuestionCap = 8
+
+// recordOpenQuestion remembers a question GOLEM admitted it could not answer, one
+// entry per distinct question, so the answer can be volunteered when it arrives.
+func (d *Daemon) recordOpenQuestion(rel string, known uint64, knownRole string) {
+	if known == 0 || knownRole == "" {
+		return
+	}
+	for _, q := range d.openQuestions {
+		if q.rel == rel && q.known == known && q.knownRole == knownRole {
+			return
+		}
+	}
+	d.openQuestions = append([]openQuestion{{rel: rel, known: known, knownRole: knownRole}}, d.openQuestions...)
+	if len(d.openQuestions) > openQuestionCap {
+		d.openQuestions = d.openQuestions[:openQuestionCap]
+	}
+}
+
+// resolveOpenQuestions checks a freshly told proposition against the questions left
+// open, and when it answers one, removes it and renders the answer GOLEM can now
+// give, so a telling that fills a gap is followed up rather than passing silently.
+// It returns the empty string when nothing open is answered.
+func (d *Daemon) resolveOpenQuestions(lang, rel string, agent, patient uint64) string {
+	for i, q := range d.openQuestions {
+		if q.rel != "" && q.rel != rel {
+			continue
+		}
+		answered := (q.knownRole == "agent" && q.known == agent && patient != 0) ||
+			(q.knownRole == "patient" && q.known == patient)
+		if !answered {
+			continue
+		}
+		d.openQuestions = append(d.openQuestions[:i], d.openQuestions[i+1:]...)
+		return d.followUpAnswer(lang, q)
+	}
+	return ""
+}
+
+// followUpAnswer speaks the answer to a question that was open, now that GOLEM can,
+// led by the tongue's "now I know" so the telling is heard as the answer to what
+// was asked rather than an echo of what was just said.
+func (d *Daemon) followUpAnswer(lang string, q openQuestion) string {
+	frags, err := d.store.FragmentsByIDs([]uint64{q.known})
+	if err != nil || len(frags) != 1 {
+		return ""
+	}
+	known := frags[0]
+	facts := d.gatherFacts(known, q.knownRole, q.rel)
+	line, ok := d.renderFacts(lang, d.conceptName(known.ID, known.Content, lang), facts, true, false)
+	if !ok {
+		return ""
+	}
+	if now := d.gram.Word(lang, "nowknow"); now != "" {
+		return upperFirst(now) + " " + lowerFirst(line)
+	}
+	return line
+}
+
 // ackIfSaid prefixes an answer with the tongue's "as I said" when GOLEM is
 // repeating a claim it already made, so a re-asked question is noted rather than
 // replayed cold. With no such word seeded, the answer stands plain.

@@ -1099,6 +1099,32 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// A question GOLEM cannot answer is held open, and a later telling that fills the
+// gap is followed up with the answer rather than received in silence, so the talk
+// connects what was asked to what it learns.
+func TestOpenQuestionFollowedUp(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "spoon")
+	say(t, d, "a dog chased a cat") // establishes the chase relation
+	// The spoon resembles nothing that chased, so the question has no answer yet.
+	say(t, d, "what did the spoon chase")
+	if len(d.openQuestions) == 0 {
+		t.Fatal("a question GOLEM could not answer should be held open")
+	}
+	if got := say(t, d, "a spoon chased a cat").Say; got != "Now I know the spoon chased the cat." {
+		t.Fatalf("a telling that fills the gap should be followed up: %q", got)
+	}
+	if len(d.openQuestions) != 0 {
+		t.Fatal("the answered question should no longer be open")
+	}
+	// A telling that answers nothing open passes in silence, as before.
+	if got := say(t, d, "a cat chased a mouse").Say; got != "" {
+		t.Fatalf("an ordinary telling should stay silent: %q", got)
+	}
+}
+
 // The topic follows the subject a turn raised and keeps it across a turn that
 // raises none, and a displaced subject is kept on the trail to return to: the
 // memory a conversation holds so it stays on a thread and can step back to one.

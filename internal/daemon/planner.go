@@ -702,7 +702,9 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		// proposition is taught, not queried, so the curiosity question is
 		// held back for the verb it just grounded.
 		if d.comprehendStatement(frame, raw, momentID) {
-			return "", nil
+			// A statement teaches in silence, unless it answered a question left open,
+			// in which case GOLEM follows up with the answer it can now give.
+			return d.followUp, nil
 		}
 		// A statement teaches; GOLEM only speaks up when curiosity about
 		// an unknown word wins, and an asked question is held as a goal.

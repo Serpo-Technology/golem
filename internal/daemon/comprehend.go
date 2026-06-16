@@ -27,6 +27,7 @@ const comprehendWeight = 0.8
 // or whose subject grounds in nothing, writes nothing and returns false, so
 // the planner falls back to its older handling.
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {
+	d.followUp = "" // set only when this telling answers a question left open
 	if momentID == 0 {
 		return false
 	}
@@ -54,6 +55,9 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		return false
 	}
 	d.noteFocus(agent.Concept) // a told proposition leaves its subject as the topic
+	// If this telling answers a question GOLEM had to leave open, it follows up
+	// with the answer it can now give rather than receiving the fact in silence.
+	d.followUp = d.resolveOpenQuestions(frame.Lang, rel.Content, agent.Concept.ID, patientID)
 	// The proposition is in the graph now; the exchange remembers it set this
 	// down, so a later "what about X" leans on what was just said.
 	if patientID != 0 {
@@ -149,8 +153,10 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 			d.warmSpoken(known.Content)
 			return guess, true
 		}
-		// The relation is known but nothing filled the questioned role: the
-		// honest answer is the gap, spoken through the older admission.
+		// The relation is known but nothing filled the questioned role: the honest
+		// answer is the gap, spoken through the older admission, and the question is
+		// held open so a later telling that fills it can be followed up.
+		d.recordOpenQuestion(rel.Content, known.ID, knownRole)
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
 	}

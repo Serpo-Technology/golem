@@ -204,6 +204,14 @@ type Daemon struct {
 	// and not quietly contradict itself. Cleared at sleep with the rest.
 	claims []claim
 
+	// openQuestions are the questions raised this exchange that GOLEM could not
+	// answer, held so it can follow up when the answer later arrives. Cleared at
+	// sleep. followUp carries a resolution back to the planner: when a told
+	// proposition answers an open question, GOLEM speaks the answer on that turn
+	// rather than staying silent.
+	openQuestions []openQuestion
+	followUp      string
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -1331,6 +1339,8 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.topicTrail = nil
 	d.turnFocus = 0
 	d.claims = nil
+	d.openQuestions = nil
+	d.followUp = ""
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)
