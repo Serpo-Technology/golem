@@ -47,6 +47,14 @@ func (c *Client) Audit() ([]*wire.AuditInfo, error) {
 	return resp.Audit, err
 }
 
+// Cognition reads GOLEM's reasoning state: how richly its concepts resemble one
+// another, and what it believes and has kept, the view for watching a brain grow
+// rich enough to reason.
+func (c *Client) Cognition() (*wire.CognitionInfo, error) {
+	resp, err := c.call(wire.Request{Cmd: "cognition"})
+	return resp.Cognition, err
+}
+
 // Dump reads the whole graph: every fragment and the links among them.
 func (c *Client) Dump() ([]*wire.FragmentInfo, []*wire.LinkInfo, error) {
 	resp, err := c.call(wire.Request{Cmd: "dump"})

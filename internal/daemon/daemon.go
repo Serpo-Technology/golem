@@ -1475,6 +1475,13 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return wire.Response{OK: true, Concepts: infos}, false, false
 
+	case "cognition":
+		info, err := d.cognitionInfo()
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Cognition: info}, false, false
+
 	case "chem":
 		chem := chemWire(d.chem.Snapshot())
 		return wire.Response{OK: true, Chem: &chem}, false, false

@@ -63,6 +63,7 @@ type Response struct {
 	Habits    []*HabitInfo    `json:"habits,omitempty"`
 	Audit     []*AuditInfo    `json:"audit,omitempty"`
 	Concepts  []*ConceptInfo  `json:"concepts,omitempty"`
+	Cognition *CognitionInfo  `json:"cognition,omitempty"`
 	Say       string          `json:"say,omitempty"` // a sentence GOLEM built in reply
 	Voice     *VoiceInfo      `json:"voice,omitempty"`
 }
@@ -87,6 +88,42 @@ type ConceptInfo struct {
 	Grounded int      `json:"grounded"`
 	Heat     float64  `json:"heat,omitempty"`
 	Features []string `json:"features,omitempty"`
+}
+
+// CognitionInfo is the wire form of GOLEM's reasoning state: how richly its
+// concepts resemble one another, the gate every inference rides, and what it
+// currently believes and has come to keep, the inferred layer that lives beside
+// the observed graph. It is the view for watching a brain grow rich enough to
+// reason: when resemblance crosses the floor, the guesses begin.
+type CognitionInfo struct {
+	Concepts    int                `json:"concepts"`
+	Features    int                `json:"features"`
+	Floor       float64            `json:"floor"`       // the resemblance an inference must cross to fire
+	AboveFloor  int                `json:"above_floor"` // concept pairs whose resemblance crosses it
+	Resemblance []*ResemblancePair `json:"resemblance,omitempty"`
+	Held        []*BeliefInfo      `json:"held,omitempty"`     // working-memory beliefs and suppositions
+	Promoted    []*BeliefInfo      `json:"promoted,omitempty"` // long-term beliefs kept across the night
+}
+
+// ResemblancePair is two concepts and how strongly they resemble each other by
+// shared features, the stronger of the two directions.
+type ResemblancePair struct {
+	A      string  `json:"a"`
+	B      string  `json:"b"`
+	Weight float64 `json:"weight"`
+}
+
+// BeliefInfo is the wire form of one inferred proposition GOLEM holds: who it is
+// about, how firmly, how far from observation, and how it is held.
+type BeliefInfo struct {
+	Agent   string  `json:"agent"`
+	Rel     string  `json:"rel"`
+	Patient string  `json:"patient"`
+	Conf    float64 `json:"conf"`
+	Depth   int     `json:"depth"`
+	Status  string  `json:"status"`           // inferred or hypothetical
+	Voiced  bool    `json:"voiced,omitempty"`  // GOLEM has spoken it
+	Kept    bool    `json:"kept,omitempty"`    // promoted to long-term memory
 }
 
 // LinkInfo is the wire form of one association edge, set on dump so the

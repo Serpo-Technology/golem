@@ -56,6 +56,16 @@ func (a *App) Audit() ([]*wire.AuditInfo, error) {
 	return a.c.Audit()
 }
 
+// Cognition reads GOLEM's reasoning state: how richly its concepts resemble one
+// another, and what it believes and has kept, the view for watching a brain grow
+// rich enough to reason.
+func (a *App) Cognition() (*wire.CognitionInfo, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.c.Cognition()
+}
+
 // Graph is the whole memory graph for the window: every fragment and the links
 // among them, the same glass box the audit trail records.
 type Graph struct {

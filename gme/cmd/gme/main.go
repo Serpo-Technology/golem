@@ -22,6 +22,7 @@ Read:
   gme status              the daemon's vital signs and workspace
   gme search <words>      the moments a cue brings to mind
   gme concepts            the concepts memory has distilled
+  gme cognition           resemblance, beliefs: is the brain rich enough to reason
   gme audit [n]           the last n entries of the trail (default 20)
   gme dump                every fragment the graph holds
 
@@ -69,6 +70,11 @@ func main() {
 		cs, err := c.Concepts()
 		check(c, err)
 		printConcepts(cs)
+
+	case "cognition", "mind":
+		info, err := c.Cognition()
+		check(c, err)
+		printCognition(info)
 
 	case "audit":
 		n := 20
@@ -228,6 +234,55 @@ func printConcepts(cs []*wire.ConceptInfo) {
 		}
 		fmt.Printf("#%-5d %s%s  grounded %d\n", c.ID, c.Gloss, names, c.Grounded)
 	}
+}
+
+func printCognition(info *wire.CognitionInfo) {
+	if info == nil {
+		fmt.Println("no cognition.")
+		return
+	}
+	fmt.Printf("%d concepts, %d features\n", info.Concepts, info.Features)
+	fmt.Printf("resemblance: %d pair(s) cross the floor %.2f, where a guess can fire\n",
+		info.AboveFloor, info.Floor)
+	for _, p := range info.Resemblance {
+		mark := "  "
+		if p.Weight >= info.Floor {
+			mark = "* " // a pair the brain can reason across
+		}
+		fmt.Printf("  %s%-16s ~ %-16s %.2f\n", mark, p.A, p.B, p.Weight)
+	}
+	if len(info.Resemblance) == 0 {
+		fmt.Println("  no concept shares a feature with another yet.")
+	}
+	if len(info.Held) > 0 {
+		fmt.Printf("believes now (working memory), %d:\n", len(info.Held))
+		for _, b := range info.Held {
+			printBelief(b)
+		}
+	}
+	if len(info.Promoted) > 0 {
+		fmt.Printf("kept (long-term), %d:\n", len(info.Promoted))
+		for _, b := range info.Promoted {
+			printBelief(b)
+		}
+	}
+	if len(info.Held) == 0 && len(info.Promoted) == 0 {
+		fmt.Println("no beliefs held; they form as resemblance crosses the floor.")
+	}
+}
+
+func printBelief(b *wire.BeliefInfo) {
+	tags := ""
+	if b.Status == "hypothetical" {
+		tags += " supposed"
+	}
+	if b.Kept {
+		tags += " kept"
+	}
+	if b.Depth > 0 {
+		tags += fmt.Sprintf(" depth %d", b.Depth)
+	}
+	fmt.Printf("  %s %s %s  (%.2f)%s\n", b.Agent, b.Rel, b.Patient, b.Conf, tags)
 }
 
 func printAudit(entries []*wire.AuditInfo) {
