@@ -164,6 +164,11 @@ type Daemon struct {
 	// own now and then when the room is quiet, not in a stream.
 	lastVolunteer time.Time
 
+	// lastDrewTopic is the topic GOLEM last drew inferences about while idle, so
+	// it reasons about a subject once when it takes the field rather than every
+	// tick. Cleared at sleep with the topic.
+	lastDrewTopic uint64
+
 	// lastRole is the thread a role question leaves behind: the relation it
 	// asked about, so an elliptical follow-up can ask the same of a new
 	// referent. It is meaning, not text, so the thread holds whatever language
@@ -1266,6 +1271,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.ws.clear()
 	d.held.clear()
 	d.topic = 0
+	d.lastDrewTopic = 0
 	d.lastRole = nil
 	d.threadProps = nil
 	d.flushModels()

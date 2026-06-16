@@ -827,6 +827,10 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 	if time.Since(d.lastObs) < d.cfg.InputSilence() {
 		return
 	}
+	// Quiet and settled, GOLEM reasons about the subject in mind: it draws what
+	// it can conclude about the topic, building on what it already believes, so a
+	// chain of inference grows across idle rounds whether or not it is voiced.
+	d.maybeDrawAboutTopic()
 	if len(round) == 0 {
 		// A seed with nowhere to go cools without a thought, so the
 		// workspace cannot ruminate on a dead end forever.
@@ -869,6 +873,21 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 // volunteerInterval paces unprompted remarks, so initiative is an occasional
 // aside and never a stream.
 const volunteerInterval = 45 * time.Second
+
+// maybeDrawAboutTopic reasons about the subject in mind once it has taken the
+// field: GOLEM draws what it can conclude about the topic, building on what it
+// already believes, and holds the conclusions unvoiced. Drawing is cognition, not
+// speech, so it runs whether or not the voice is on; a topic is reasoned about
+// once when it arrives rather than every idle tick.
+func (d *Daemon) maybeDrawAboutTopic() {
+	if d.topic == 0 || d.topic == d.lastDrewTopic {
+		return
+	}
+	if frags, err := d.fragmentsByIDsTiered([]uint64{d.topic}); err == nil && len(frags) == 1 {
+		d.drawInferenceAbout(frags[0])
+		d.lastDrewTopic = d.topic
+	}
+}
 
 // maybeVolunteer lets GOLEM speak a conclusion of its own when the room has been
 // quiet and it holds something about the topic in mind it has not yet said. It is

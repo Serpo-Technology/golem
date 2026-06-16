@@ -698,6 +698,51 @@ func TestVolunteersHeldConclusion(t *testing.T) {
 	}
 }
 
+// Reasoning to itself, GOLEM chains a conclusion onto a conclusion it has
+// already drawn. The dog chased the cat; the wolf resembles the dog and the
+// coyote the wolf, but the coyote resembles the dog not at all. Drawing about the
+// wolf concludes it chased the cat; drawing about the coyote then reaches the cat
+// only through that held conclusion, a hop further from observation, and the
+// chained guess can be volunteered.
+func TestThinkLoopChainsInference(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	coyote := groundNoun(t, d, "coyote")
+	say(t, d, "a dog chased a cat")
+	feat := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	a, b := feat("pads"), feat("howls")
+	s.SetLinkRel(dog.ID, a.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, a.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, b.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(coyote.ID, b.ID, memory.RelFeature, 1.0)
+
+	d.drawInferenceAbout(wolf)
+	if _, ok := d.held.holds("chase", wolf.ID, cat.ID, heldInferred); !ok {
+		t.Fatal("drawing about the wolf should conclude it chased the cat")
+	}
+	d.drawInferenceAbout(coyote)
+	p := d.held.findID("chase", coyote.ID, cat.ID, heldInferred)
+	if p == nil {
+		t.Fatal("drawing about the coyote should reach the cat through the held wolf belief")
+	}
+	if p.depth != 1 {
+		t.Fatalf("the coyote's conclusion should stand one hop past the wolf's: depth %d", p.depth)
+	}
+	d.topic = coyote.ID
+	if got, ok := d.volunteerRemark("en"); !ok || got != "Probably, the coyote chased the cat." {
+		t.Fatalf("the chained conclusion should be offerable: %q (%v)", got, ok)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,

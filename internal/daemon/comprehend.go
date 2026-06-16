@@ -599,20 +599,49 @@ func (d *Daemon) inferredFacts(known *memory.Fragment, knownRole, relContent str
 	return nil, 0, false
 }
 
-// drawInferenceAbout concludes something about a concept on GOLEM's own account:
-// what it probably does, from the nearest neighbour that does it, held in mind as
-// an unvoiced belief rather than spoken. The same property inference a "tell me
-// about X" renders, here run unprompted and deposited so it can be volunteered
-// later. The conclusions are held at the resemblance they rode in on.
+// drawInferenceAbout concludes something about a concept on GOLEM's own account,
+// held in mind as an unvoiced belief rather than spoken: what the nearest
+// neighbour does, transferred to the concept that resembles it. The neighbour's
+// observed actions transfer as fresh guesses one hop from the graph; the
+// neighbour's own held beliefs transfer a hop further out, attenuated and
+// depth-bounded, so the idle loop builds a chain across rounds the way a question
+// chains within one. The conclusions ride the resemblance, the held ones their
+// support's confidence as well, and are deposited for initiative to offer.
 func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
-	facts, conf, ok := d.inferredFacts(topic, "agent", "")
-	if !ok {
+	sibs, err := d.featureSiblings(topic.ID, time.Now())
+	if err != nil {
 		return
 	}
-	for _, f := range facts {
-		d.held.add(heldProp{rel: f.rel, agent: topic.ID, patient: f.coID,
-			agentGloss: topic.Content, patientGloss: f.coGloss,
-			status: heldInferred, conf: conf, depth: 0})
+	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].weight > sibs[j].weight })
+	for _, sib := range sibs {
+		if sib.weight < inferenceFloor {
+			break
+		}
+		drew := false
+		// What the neighbour is observed to do, transferred as a fresh guess.
+		for _, f := range d.gatherFacts(&memory.Fragment{ID: sib.id}, "agent", "") {
+			if f.coID == topic.ID {
+				continue
+			}
+			d.held.add(heldProp{rel: f.rel, agent: topic.ID, patient: f.coID,
+				agentGloss: topic.Content, patientGloss: f.coGloss,
+				status: heldInferred, conf: sib.weight, depth: 0})
+			drew = true
+		}
+		// What the neighbour is only believed to do, transferred a hop further out.
+		for _, p := range d.held.byAgent(sib.id, heldInferred) {
+			if p.patient == topic.ID || p.depth >= heldMaxDepth {
+				continue
+			}
+			d.held.add(heldProp{rel: p.rel, agent: topic.ID, patient: p.patient,
+				agentGloss: topic.Content, patientGloss: p.patientGloss,
+				status: heldInferred, conf: sib.weight * p.conf * heldStepKeep, depth: p.depth + 1,
+				from: []uint64{p.id}})
+			drew = true
+		}
+		if drew {
+			return
+		}
 	}
 }
 
