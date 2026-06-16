@@ -606,6 +606,68 @@ func TestRoleQuestionInfersFromResemblance(t *testing.T) {
 	}
 }
 
+// A "tell me about X" GOLEM has observed nothing about it answers with a hedged
+// guess at what it does, from the thing it most resembles. The wolf, resembling
+// the dog that chased the cat, is described "A wolf is a thing. Probably, it
+// chased the cat." A focus with observed facts of its own is described from
+// those, never a neighbour's.
+func TestDescribeInfersProperty(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "tell me about a wolf").Say; !strings.Contains(got, "Probably, it chased the cat.") {
+		t.Fatalf("an unobserved focus should guess a property from a neighbour: %q", got)
+	}
+	if got := say(t, d, "tell me about a dog").Say; strings.Contains(got, "Probably") {
+		t.Fatalf("an observed focus should be described from its own facts: %q", got)
+	}
+}
+
+// A "what is X" GOLEM holds only the generic kind for it answers with a hedged
+// guess at what it is, from the better-known thing it resembles. The wolf, seen
+// once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
+// past "a thing" to "probably a dog". A firmly-known thing is never reclassified
+// as the thing it merely resembles.
+func TestDefinitionInfersKind(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	wolf := groundNoun(t, d, "wolf")
+	// The dog is well grounded, the wolf not at all: a prototype percept the dog
+	// rolled many sightings into, so the dog is the better-known thing.
+	moment := &memory.Fragment{Channel: "vision", Content: "a brown dog", Template: "a brown dog",
+		Count: 8, Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(moment); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(dog.ID, moment.ID, memory.RelGrounds, 1.0); err != nil {
+		t.Fatal(err)
+	}
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "what is a wolf").Say; !strings.Contains(got, "Probably, it is a dog.") {
+		t.Fatalf("a thinly-known thing should guess its kind from a near neighbour: %q", got)
+	}
+	if got := say(t, d, "what is a dog").Say; strings.Contains(got, "Probably") {
+		t.Fatalf("a firmly-known thing should not guess its kind: %q", got)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

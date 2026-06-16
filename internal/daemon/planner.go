@@ -710,6 +710,17 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			}
 			return answer
 		}
+		// A firm definition that can only call the concept a generic thing carries
+		// a hedged guess at what it is, from the better-known thing it resembles, so
+		// "what is a wolf" seen once reaches past "a thing" to "probably a dog". The
+		// guess gates itself on resemblance and grounding, a no-op for a firmly-known
+		// thing or one without a near neighbour.
+		withKind := func(answer string) string {
+			if guess, ok := d.kindGuessClause(frame, c, action, tally); ok {
+				return answer + " " + guess
+			}
+			return answer
+		}
 		// A concept's content is the English caption it distilled from, so the
 		// pointer "X names <caption>" cannot be spoken in another tongue without
 		// splicing English in. In a non-English answer the definition is firm
@@ -748,7 +759,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 				Slots: grammar.TextSlots(map[string]string{"object": "it", "count": grammar.TimesWord(n)})}}
 		}
 		if line, ok := d.compose(frame.Lang, msg); ok {
-			return withFact(line)
+			return withKind(withFact(line))
 		}
 		// With no constructions the innate realizer assembles the same
 		// answer, so the engine stays the floor under the learned patterns.
@@ -756,7 +767,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		if n := tally[c.ID]; n > 0 {
 			parts = append(parts, d.countClause(frame.Lang, n, chem))
 		}
-		return withFact(strings.Join(parts, " "))
+		return withKind(withFact(strings.Join(parts, " ")))
 	}
 	if topic.Phrase != "" {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},

@@ -131,7 +131,7 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	if !ok {
 		// Nothing observed filled the questioned role. Before admitting the gap,
 		// try a hedged guess from a near neighbour that did stand in the relation.
-		if guess, ok := d.inferRole(frame, known, knownRole, rel.Content, past); ok {
+		if guess, ok := d.inferRole(frame, known, knownRole, rel.Content, past, false); ok {
 			d.warmSpoken(known.Content)
 			return guess, true
 		}
@@ -178,7 +178,7 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	if !ok {
 		// No observed activity. Offer a hedged guess from a near neighbour before
 		// falling through to the older handling.
-		if guess, ok := d.inferRole(frame, agent, "agent", "", past); ok {
+		if guess, ok := d.inferRole(frame, agent, "agent", "", past, false); ok {
 			d.warmSpoken(agent.Content)
 			return guess, true
 		}
@@ -219,6 +219,12 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 		for _, f := range facts {
 			d.ws.excite(f.coID, exciteSpeech)
 		}
+	} else if guess, ok := d.inferRole(frame, focus, "agent", "", true, true); ok {
+		// Nothing observed about the focus: offer what a near neighbour does as a
+		// hedged guess at what this one likely does, the property counterpart of
+		// the kind guess "what is X" makes. The focus was just named, so the guess
+		// carries it as a pronoun.
+		parts = append(parts, guess)
 	}
 	d.warmSpoken(focus.Content)
 	return strings.Join(parts, " "), true
@@ -346,10 +352,12 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 // gathered facts are spoken back under the asked concept's name, and the hedge
 // marks the guess. The same gather and renderer the observed answer uses, here
 // run over a near neighbour. relContent filters to one relation, "" leaves it
-// open for "what did X do". It returns the rendered line and true when a near
-// enough neighbour had such a fact, so the caller offers the gap only when none
-// did.
-func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past bool) (string, bool) {
+// open for "what did X do". continuation carries the focus as the tongue's
+// pronoun, for a guess that trails a clause already naming it ("A wolf is a
+// thing. Probably, it chased the cat"). It returns the rendered line and true
+// when a near enough neighbour had such a fact, so the caller offers the gap
+// only when none did.
+func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past, continuation bool) (string, bool) {
 	sibs, err := d.featureSiblings(known.ID, time.Now())
 	if err != nil {
 		return "", false
@@ -373,7 +381,7 @@ func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRol
 		if len(kept) == 0 {
 			continue
 		}
-		line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, false)
+		line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, continuation)
 		if !ok {
 			continue
 		}
@@ -384,6 +392,72 @@ func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRol
 		return upperFirst(hedge) + ", " + lowerFirst(line), true
 	}
 	return "", false
+}
+
+// nearestConcept returns the concept a seed most resembles together with that
+// resemblance, the single strongest feature sibling at or above the inference
+// floor, or false when none is near enough. It is the one-neighbour read the
+// kind guess leans on, where inferRole wants the strongest neighbour that also
+// stood in a given relation.
+func (d *Daemon) nearestConcept(seed uint64) (*memory.Fragment, float64, bool) {
+	sibs, err := d.featureSiblings(seed, time.Now())
+	if err != nil {
+		return nil, 0, false
+	}
+	best := walkDest{}
+	for _, sib := range sibs {
+		if sib.weight > best.weight {
+			best = sib
+		}
+	}
+	if best.id == 0 || best.weight < inferenceFloor {
+		return nil, 0, false
+	}
+	frags, err := d.fragmentsByIDsTiered([]uint64{best.id})
+	if err != nil || len(frags) == 0 {
+		return nil, 0, false
+	}
+	return frags[0], best.weight, true
+}
+
+// kindGuessClause offers a hedged guess at what a thinly-known thing IS, from
+// the better-known thing it most resembles: "what is a wolf", seen once and
+// resembling the dog, gains "Probably, it is a dog." It fires only for a
+// generic thing, never an action, which already names its kind; only when a
+// neighbour is near enough; and only when that neighbour is better grounded
+// than the asked concept, so a thing GOLEM knows firmly is never reclassified
+// as something it merely resembles. The guess is a definition clause naming the
+// neighbour as the kind, led by the tongue's hedge and carrying the asked thing
+// as a pronoun where the tongue has a bare one.
+func (d *Daemon) kindGuessClause(frame grammar.Frame, c *memory.Fragment, action bool, tally map[uint64]int) (string, bool) {
+	if action {
+		return "", false
+	}
+	nb, _, ok := d.nearestConcept(c.ID)
+	if !ok {
+		return "", false
+	}
+	// Guess toward the better-known thing: a concept seen no more than the
+	// neighbour it resembles is the uncertain one, so the neighbour lends its
+	// identity. A thing known as well or better stands on its own.
+	if tally[c.ID] >= tally[nb.ID] {
+		return "", false
+	}
+	name := d.conceptName(nb.ID, nb.Content, frame.Lang)
+	kindWord := grammar.Indefinite(name)
+	if frame.Lang != "" && frame.Lang != "en" {
+		kindWord = "bir " + name
+	}
+	subject := d.gram.Word(frame.Lang, "pronoun")
+	if subject == "" {
+		subject = d.conceptName(c.ID, c.Content, frame.Lang)
+	}
+	clause := d.definitionClause(frame.Lang, subject, kindWord, d.chem.Snapshot())
+	hedge := d.gram.Word(frame.Lang, "probably")
+	if hedge == "" {
+		return clause, true
+	}
+	return upperFirst(hedge) + ", " + lowerFirst(clause), true
 }
 
 // answerPolar speaks a yes/no answer at the confidence GOLEM holds it. An
