@@ -197,6 +197,10 @@ type Daemon struct {
 	// subscribe and disconnect.
 	subsMu sync.Mutex
 	subs   map[chan events.Event]struct{}
+
+	// media is the content-addressed store for the raw bytes a perceptual
+	// moment was captioned from, kept so a transducer can look again.
+	media *memory.MediaStore
 }
 
 // actionRun is one command in flight and the claims it holds.
@@ -343,11 +347,17 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
+	mediaStore, err := memory.OpenMediaStore(home)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
 	d := &Daemon{
 		home:         home,
 		cfg:          cfg,
 		out:          out,
 		store:        store,
+		media:        mediaStore,
 		chem:         limbic.New(),
 		predictors:   make(map[string]*attention.Predictor),
 		calibrators:  make(map[string]*attention.Calibrator),
@@ -1444,6 +1454,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			return wire.Response{Error: "observe needs a channel and content"}, false, false
 		}
 		res := d.process(senses.Observation{Channel: req.Channel, Content: req.Content, At: time.Now()}, false, true)
+		// A captioned percept keeps the raw bytes it was distilled from in the
+		// content-addressed store and references them from the moment, so a
+		// transducer can look again; the brain still reasons only over Content.
+		if len(req.Media) > 0 && d.media != nil && res.FragmentID != 0 {
+			if hash, err := d.media.Put(req.Media); err != nil {
+				fmt.Fprintf(d.out, "media store error: %v\n", err)
+			} else if err := d.store.SetMedia(res.FragmentID, hash, req.Mime); err != nil {
+				fmt.Fprintf(d.out, "media reference error: %v\n", err)
+			}
+		}
 		return wire.Response{OK: true, Observe: &res}, false, false
 
 	case "runcode":

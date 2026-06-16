@@ -6,7 +6,9 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"mime"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -175,10 +177,25 @@ func main() {
 		}
 
 	case "observe":
-		if len(args) < 3 {
-			fail(fmt.Errorf("usage: golem observe <channel> <text>"))
+		rest := args[1:]
+		mediaPath := ""
+		if len(rest) >= 2 && rest[0] == "--media" {
+			mediaPath = rest[1]
+			rest = rest[2:]
 		}
-		resp := call(home, wire.Request{Cmd: "observe", Channel: args[1], Content: strings.Join(args[2:], " ")})
+		if len(rest) < 2 {
+			fail(fmt.Errorf("usage: golem observe [--media <file>] <channel> <text>"))
+		}
+		req := wire.Request{Cmd: "observe", Channel: rest[0], Content: strings.Join(rest[1:], " ")}
+		if mediaPath != "" {
+			data, err := os.ReadFile(mediaPath)
+			if err != nil {
+				fail(err)
+			}
+			req.Media = data
+			req.Mime = mime.TypeByExtension(filepath.Ext(mediaPath))
+		}
+		resp := call(home, req)
 		o := resp.Observe
 		if o.Conscious {
 			fmt.Printf("%.2f bits, conscious -> fragment #%d\n", o.Bits, o.FragmentID)

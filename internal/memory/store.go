@@ -90,6 +90,11 @@ CREATE TABLE IF NOT EXISTS audit (
 	cue     TEXT    NOT NULL,
 	action  TEXT    NOT NULL,
 	outcome TEXT    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS media (
+	fragment_id INTEGER PRIMARY KEY,
+	hash        TEXT    NOT NULL,
+	mime        TEXT    NOT NULL DEFAULT ''
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()

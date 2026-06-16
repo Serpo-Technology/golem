@@ -42,6 +42,12 @@ type Request struct {
 	// Content for an edit, Weight for a reweight.
 	ID     uint64  `json:"id,omitempty"`
 	Weight float64 `json:"weight,omitempty"`
+	// Media carries the raw bytes a perceptual observe was captioned from (an
+	// image, an audio clip), base64 over the wire. The daemon keeps them in the
+	// content-addressed media store and references them from the moment; the
+	// brain still reasons only over Content, the caption. Mime is the type hint.
+	Media []byte `json:"media,omitempty"`
+	Mime  string `json:"mime,omitempty"`
 }
 
 type Response struct {

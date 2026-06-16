@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math"
@@ -159,6 +161,43 @@ func TestDaemonStreamsEvents(t *testing.T) {
 		if strings.Contains(string(line), `"ev":"voice"`) {
 			return // an event reached the subscriber over TCP
 		}
+	}
+}
+
+// A captioned percept stores its raw bytes in the content-addressed media
+// store and encodes a moment over the caption, so the brain reasons over the
+// text while the bytes stay on disk for a transducer to revisit.
+func TestObserveRecordsCaptionedMedia(t *testing.T) {
+	// A short home: the unix socket path has a tight length limit on macOS, and
+	// this test's name makes t.TempDir() overrun it.
+	home, err := os.MkdirTemp("", "gm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	cfg := config.Default()
+	cfg.SleepIntervalSec = 3600
+	cfg.SurpriseThreshold = 0 // make the single percept conscious so it encodes
+	cfg.Channels = config.ChannelsConfig{}
+	startTestDaemonWith(t, home, cfg)
+
+	pixels := []byte("\x89PNG pretend pixels for a red door")
+	resp, err := wire.Call(home, wire.Request{Cmd: "observe", Channel: "vision",
+		Content: "a red door", Media: pixels, Mime: "image/png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Observe == nil || resp.Observe.FragmentID == 0 {
+		t.Fatalf("the captioned percept should encode a moment: %+v", resp.Observe)
+	}
+	sum := sha256.Sum256(pixels)
+	hash := hex.EncodeToString(sum[:])
+	m, err := memory.OpenMediaStore(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.Has(hash) {
+		t.Fatal("the captioned bytes should be in the content-addressed media store")
 	}
 }
 
