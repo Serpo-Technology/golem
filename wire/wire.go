@@ -48,6 +48,11 @@ type Request struct {
 	// brain still reasons only over Content, the caption. Mime is the type hint.
 	Media []byte `json:"media,omitempty"`
 	Mime  string `json:"mime,omitempty"`
+	// Embedding is the percept's vector from an embedder outside the process, an
+	// associative coordinate stored beside the moment so similar percepts sit
+	// near each other in a space. The brain never computes it, only measures
+	// distance with it; reasoning still runs over the caption and the graph.
+	Embedding []float32 `json:"embedding,omitempty"`
 }
 
 type Response struct {

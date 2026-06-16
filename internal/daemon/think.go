@@ -572,57 +572,128 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 // survives the resemblance.
 func (d *Daemon) featureSiblings(seed uint64, now time.Time) ([]walkDest, error) {
 	mine, err := d.store.LinksFromRel([]uint64{seed}, memory.RelFeature)
-	if err != nil || len(mine) == 0 {
-		return nil, err
-	}
-	featIDs := make([]uint64, 0, len(mine))
-	share := make(map[uint64]float64, len(mine))
-	mass := 0.0
-	for _, e := range mine {
-		featIDs = append(featIDs, e.To)
-		share[e.To] = e.Weight
-		mass += e.Weight
-	}
-	bearers, err := d.store.LinksToRel(featIDs, memory.RelFeature)
-	if err != nil {
-		return nil, err
-	}
-	overlap := map[uint64]float64{}
-	for _, e := range bearers {
-		if e.From == seed {
-			continue
-		}
-		w := e.Weight
-		if share[e.To] < w {
-			w = share[e.To]
-		}
-		overlap[e.From] += w / mass
-	}
-	ids := make([]uint64, 0, len(overlap))
-	for id, w := range overlap {
-		if w >= thinkAssocFloor {
-			ids = append(ids, id)
-		}
-	}
-	siblings, err := d.fragmentsByIDsTiered(ids)
 	if err != nil {
 		return nil, err
 	}
 	var out []walkDest
-	for _, f := range siblings {
-		if f.Kind != memory.KindConcept {
+	if len(mine) > 0 {
+		featIDs := make([]uint64, 0, len(mine))
+		share := make(map[uint64]float64, len(mine))
+		mass := 0.0
+		for _, e := range mine {
+			featIDs = append(featIDs, e.To)
+			share[e.To] = e.Weight
+			mass += e.Weight
+		}
+		bearers, err := d.store.LinksToRel(featIDs, memory.RelFeature)
+		if err != nil {
+			return nil, err
+		}
+		overlap := map[uint64]float64{}
+		for _, e := range bearers {
+			if e.From == seed {
+				continue
+			}
+			w := e.Weight
+			if share[e.To] < w {
+				w = share[e.To]
+			}
+			overlap[e.From] += w / mass
+		}
+		ids := make([]uint64, 0, len(overlap))
+		for id, w := range overlap {
+			if w >= thinkAssocFloor {
+				ids = append(ids, id)
+			}
+		}
+		siblings, err := d.fragmentsByIDsTiered(ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range siblings {
+			if f.Kind != memory.KindConcept {
+				continue
+			}
+			out = append(out, walkDest{
+				id:      f.ID,
+				gloss:   f.Content,
+				kind:    f.Kind,
+				weight:  overlap[f.ID],
+				stress:  f.Limbic.Noradrenaline,
+				recency: recencyOf(now, f.Time),
+			})
+		}
+	}
+	// The vector layer blends in: a seed with an embedding draws its nearest
+	// neighbours in the space, so resemblance is geometric where embeddings
+	// exist and shared-token where they do not. With no embeddings learned yet
+	// this adds nothing, so the symbolic resemblance stands unchanged.
+	return d.blendVectorSiblings(seed, out, now), nil
+}
+
+const (
+	vectorSiblingsCap = 8   // nearest neighbours the vector layer proposes per seed
+	vectorSimFloor    = 0.5 // a neighbour must be at least this near to count as resembling
+)
+
+// blendVectorSiblings folds the vector layer's nearest concepts into a seed's
+// resemblance set: where an embedding exists, the percepts nearest it in the
+// space join the shared-token siblings, taking the stronger weight where both
+// name the same concept. The embedder lives outside the brain, so this only
+// measures distance over coordinates it was handed. A seed with no embedding,
+// the case until embeddings are learned, passes the set through untouched, so
+// the symbolic walk is unchanged until the associative layer is populated.
+func (d *Daemon) blendVectorSiblings(seed uint64, out []walkDest, now time.Time) []walkDest {
+	vec, ok := d.store.Vector(seed)
+	if !ok {
+		return out
+	}
+	matches, err := d.store.NearestVectors(vec, memory.KindConcept, vectorSiblingsCap, seed)
+	if err != nil {
+		return out
+	}
+	at := make(map[uint64]int, len(out))
+	for i, ws := range out {
+		at[ws.id] = i
+	}
+	var want []uint64
+	for _, m := range matches {
+		if m.Score >= vectorSimFloor {
+			want = append(want, m.ID)
+		}
+	}
+	frags, err := d.fragmentsByIDsTiered(want)
+	if err != nil {
+		return out
+	}
+	byID := make(map[uint64]*memory.Fragment, len(frags))
+	for _, f := range frags {
+		byID[f.ID] = f
+	}
+	for _, m := range matches {
+		if m.Score < vectorSimFloor {
+			continue
+		}
+		f := byID[m.ID]
+		if f == nil || f.Kind != memory.KindConcept {
+			continue
+		}
+		if i, exists := at[m.ID]; exists {
+			if m.Score > out[i].weight {
+				out[i].weight = m.Score
+			}
 			continue
 		}
 		out = append(out, walkDest{
 			id:      f.ID,
 			gloss:   f.Content,
 			kind:    f.Kind,
-			weight:  overlap[f.ID],
+			weight:  m.Score,
 			stress:  f.Limbic.Noradrenaline,
 			recency: recencyOf(now, f.Time),
 		})
 	}
-	return out, nil
+	return out
 }
 
 // recencyOf scores closeness in time into (0, 1]: the just-now is 1 and

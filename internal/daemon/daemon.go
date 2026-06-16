@@ -1464,6 +1464,14 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				fmt.Fprintf(d.out, "media reference error: %v\n", err)
 			}
 		}
+		// An embedder outside the process places the percept in a space; the
+		// coordinate rides along and is stored beside the moment, the associative
+		// substrate the symbolic graph reasons against.
+		if len(req.Embedding) > 0 && res.FragmentID != 0 {
+			if err := d.store.SetVector(res.FragmentID, req.Embedding); err != nil {
+				fmt.Fprintf(d.out, "embedding store error: %v\n", err)
+			}
+		}
 		return wire.Response{OK: true, Observe: &res}, false, false
 
 	case "runcode":

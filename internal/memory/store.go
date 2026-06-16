@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS media (
 	fragment_id INTEGER PRIMARY KEY,
 	hash        TEXT    NOT NULL,
 	mime        TEXT    NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS vectors (
+	fragment_id INTEGER PRIMARY KEY,
+	vec         BLOB    NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
