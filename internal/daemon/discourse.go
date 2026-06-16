@@ -101,13 +101,28 @@ func (d *Daemon) conceptName(id uint64, content, lang string) string {
 		return content
 	}
 	best, bestW := "", 0.0
+	ownW := -1.0
 	for _, w := range words {
 		if w.Kind != memory.KindWord || w.Lang != lang {
 			continue
 		}
-		if best == "" || weight[w.ID] > bestW {
-			best, bestW = w.Content, weight[w.ID]
+		cand := weight[w.ID]
+		if w.Content == content {
+			ownW = cand // the concept's own name, the lemma of a category
 		}
+		if best == "" || cand > bestW {
+			best, bestW = w.Content, cand
+		}
+	}
+	// A concept answers to its own name. A superordinate is named by its own word
+	// and, through inheritance, by its dominant member's word, which heavy use can
+	// grow past the category's own ("cat" naming the animal abstraction above
+	// "animal"); glossing by the member would speak the category as one of its
+	// members. So when the concept's own name names it firmly, at least half as
+	// firmly as its firmest namer, it speaks by that. A percept's caption is no
+	// single word, so this only ever favors a category's lemma, never a basic name.
+	if ownW >= 0 && ownW >= 0.5*bestW {
+		return content
 	}
 	if best == "" {
 		return content

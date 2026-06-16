@@ -1024,6 +1024,45 @@ func TestResolveConceptPrefersSpecificOverInheritedAbstraction(t *testing.T) {
 	}
 }
 
+// A concept answers to its own name. A superordinate is named by its own word and,
+// through inheritance, by its dominant member's word, which heavy use can grow past
+// the category's own ("cat" naming the animal abstraction above "animal"); it should
+// still speak as the category, not as one of its members. A percept's caption is no
+// single word, so it still glosses by its firmest namer.
+func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(tpl, content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+			Template: tpl, Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	animal := mk("abs:en:animal", "animal")
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catW, _, err := s.WordNode("cat", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The category's own word names it; its dominant member's word names it more
+	// strongly through inheritance.
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.80)
+	s.SetLinkRel(catW.ID, animal.ID, memory.RelNames, 0.85)
+	if got := d.conceptName(animal.ID, "animal", "en"); got != "animal" {
+		t.Fatalf("a category should speak by its own name, not its stronger member's: %q", got)
+	}
+
+	percept := mk("a small black cat", "a small black cat")
+	s.SetLinkRel(catW.ID, percept.ID, memory.RelNames, 0.50)
+	if got := d.conceptName(percept.ID, "a small black cat", "en"); got != "cat" {
+		t.Fatalf("a percept should gloss by its firmest namer: %q", got)
+	}
+}
+
 // A basic word that has kept enough varied company can grow an "abs:en:cat"
 // shadow of its own percept; that shadow then outweighs the percept in the
 // naming vote and every clause about the cat mis-resolves. The shadow is a
