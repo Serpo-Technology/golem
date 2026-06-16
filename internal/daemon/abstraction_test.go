@@ -326,6 +326,49 @@ func TestAbstractionFromBroadNaming(t *testing.T) {
 	}
 }
 
+// A basic word does not abstract even when its company spreads like a category's.
+// "cat" kept company with the cat, the dog, and the rabbit (as a chase
+// co-participant would), enough to clear the gate, but it heads the caption of one
+// of them, so it names a thing rather than a class of things and mints no shadow.
+// The same company under "animal", which heads no member's caption, still
+// abstracts: the gate reads the word, not the company, which is identical.
+func TestAbstractionSkipsBasicLevelWord(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	shapes := []string{"a small black cat", "a small brown dog", "a gray rabbit"}
+	members := make([][]recentMoment, len(shapes))
+	for i, shape := range shapes {
+		members[i] = feedShape(t, s, "vision", shape, 4, base.Add(time.Duration(i)*time.Minute))
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	mintOverMembers := func(word string) {
+		for i := range 3 {
+			anchors := make([]recentMoment, 0, len(members))
+			for _, m := range members {
+				anchors = append(anchors, m[i])
+			}
+			d.mintWords(word, "en", 0, anchors, false)
+		}
+		calm(d)
+		d.growConcepts()
+		d.growAbstractions()
+	}
+
+	mintOverMembers("cat")
+	if abs, _ := s.ConceptByTemplate("abs:en:cat"); abs != nil {
+		t.Fatal("a basic word that heads one of its own core percepts must not abstract")
+	}
+
+	mintOverMembers("animal")
+	if abs, _ := s.ConceptByTemplate("abs:en:animal"); abs == nil {
+		t.Fatal("a superordinate over the same members, heading none, should still abstract")
+	}
+}
+
 // Recall reaches concrete experience through the constellation: the
 // query word names the abstraction, the abstraction grounds concepts,
 // and the concepts ground the moments the reply returns.

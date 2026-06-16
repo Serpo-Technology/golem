@@ -152,6 +152,19 @@ func (d *Daemon) growAbstractions() (born int) {
 		if d.namesRelation(w.Content, w.Lang) {
 			continue
 		}
+		// A basic word is a name, not a category: it abstracts nothing. When the
+		// word heads the caption of a percept in its own core ("cat" heads "a small
+		// black cat"), the constellation it gathered is its own kind standing among
+		// its neighbours, not a class above them, so no abstraction is minted and a
+		// shadow already grown stops refreshing and decays. A true superordinate
+		// ("animal") heads no member's caption and abstracts as before.
+		coreIDs := make([]uint64, 0, len(core))
+		for _, cs := range core {
+			coreIDs = append(coreIDs, cs.concept)
+		}
+		if d.headsCorePercept(w.Content, coreIDs) {
+			continue
+		}
 		switch {
 		case c == nil:
 			if !healthy || born >= absPerNight {
@@ -205,6 +218,30 @@ func (d *Daemon) growAbstractions() (born int) {
 		}
 	}
 	return born
+}
+
+// headsCorePercept reports whether a word is the head of a percept in its own
+// core: the basic kind a percept's caption ends in ("a small black cat" is a
+// cat). A word that heads one of the very percepts it would generalize is that
+// percept's name, so it labels a thing rather than a class of things, and minting
+// an abstraction from it would only shadow the percept. A category word
+// ("animal") heads no member's caption, and an adjective ("green") heads none
+// either, so neither is caught. Abstractions and relations in the core are passed
+// over: only a sensory percept's caption carries a basic-level head.
+func (d *Daemon) headsCorePercept(word string, coreIDs []uint64) bool {
+	frags, err := d.store.FragmentsByIDs(coreIDs)
+	if err != nil {
+		return false
+	}
+	for _, f := range frags {
+		if _, ok := abstractionLemma(f.Template); ok || f.Category == "relation" {
+			continue
+		}
+		if fields := strings.Fields(f.Content); len(fields) > 0 && strings.EqualFold(fields[len(fields)-1], word) {
+			return true
+		}
+	}
+	return false
 }
 
 // inheritGroundingNames carries the names of an abstraction's dominant grounding
