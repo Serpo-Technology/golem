@@ -101,8 +101,9 @@ type CognitionInfo struct {
 	Floor       float64            `json:"floor"`       // the resemblance an inference must cross to fire
 	AboveFloor  int                `json:"above_floor"` // concept pairs whose resemblance crosses it
 	Resemblance []*ResemblancePair `json:"resemblance,omitempty"`
-	Held        []*BeliefInfo      `json:"held,omitempty"`     // working-memory beliefs and suppositions
-	Promoted    []*BeliefInfo      `json:"promoted,omitempty"` // long-term beliefs kept across the night
+	Universal   []string           `json:"universal,omitempty"` // features carried by ~all concepts, named and passed over
+	Held        []*BeliefInfo      `json:"held,omitempty"`      // working-memory beliefs and suppositions
+	Promoted    []*BeliefInfo      `json:"promoted,omitempty"`  // long-term beliefs kept across the night
 }
 
 // ResemblancePair is two concepts and how strongly they resemble each other by
@@ -122,8 +123,8 @@ type BeliefInfo struct {
 	Conf    float64 `json:"conf"`
 	Depth   int     `json:"depth"`
 	Status  string  `json:"status"`           // inferred or hypothetical
-	Voiced  bool    `json:"voiced,omitempty"`  // GOLEM has spoken it
-	Kept    bool    `json:"kept,omitempty"`    // promoted to long-term memory
+	Voiced  bool    `json:"voiced,omitempty"` // GOLEM has spoken it
+	Kept    bool    `json:"kept,omitempty"`   // promoted to long-term memory
 }
 
 // LinkInfo is the wire form of one association edge, set on dump so the

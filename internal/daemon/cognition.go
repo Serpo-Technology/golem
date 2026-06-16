@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -29,7 +30,15 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 	for _, c := range concepts {
 		content[c.ID] = c.Content
 	}
-	gloss := func(id uint64) string { return d.conceptName(id, content[id], "en") }
+	// Label a concept by its own content, not by the word that names it: naming
+	// can bond many words to one concept, so naming-based labels collapse
+	// distinct concepts onto a shared name and hide what actually resembles what.
+	gloss := func(id uint64) string {
+		if c := content[id]; c != "" {
+			return c
+		}
+		return d.conceptName(id, "", "en")
+	}
 
 	// Resemblance, the stronger of the two directions for each pair, so the report
 	// shows how near the concepts sit and how many cross the floor to reason on.
@@ -60,6 +69,24 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 		pairs = pairs[:cognitionPairCap]
 	}
 
+	// The features named universal, the ones resemblance passes over, so the
+	// reader can see why a dense feature graph is not a dense resemblance.
+	var universal []string
+	if len(d.universalFeats) > 0 {
+		fids := make([]uint64, 0, len(d.universalFeats))
+		for id := range d.universalFeats {
+			fids = append(fids, id)
+		}
+		if feats, err := d.store.FragmentsByIDs(fids); err == nil {
+			sort.Slice(feats, func(i, j int) bool {
+				return d.universalFeats[feats[i].ID] > d.universalFeats[feats[j].ID]
+			})
+			for _, f := range feats {
+				universal = append(universal, fmt.Sprintf("%s %.2f", f.Content, d.universalFeats[f.ID]))
+			}
+		}
+	}
+
 	var held []*wire.BeliefInfo
 	for _, p := range d.held.props {
 		held = append(held, d.beliefInfo(p))
@@ -72,7 +99,7 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 			promoted = append(promoted, &wire.BeliefInfo{
 				Agent: d.conceptName(b.Agent, b.AgentGloss, "en"), Rel: b.Rel,
 				Patient: d.conceptName(b.Patient, b.PatGloss, "en"),
-				Conf: b.Conf, Depth: b.Depth, Status: "inferred", Kept: true})
+				Conf:    b.Conf, Depth: b.Depth, Status: "inferred", Kept: true})
 		}
 	}
 
@@ -82,6 +109,7 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 		Floor:       inferenceFloor,
 		AboveFloor:  above,
 		Resemblance: pairs,
+		Universal:   universal,
 		Held:        held,
 		Promoted:    promoted,
 	}, nil

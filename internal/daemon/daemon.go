@@ -81,6 +81,13 @@ type Daemon struct {
 	// clears at sleep.
 	held *heldStore
 
+	// universalFeats names the features carried by nearly every concept, the ones
+	// that discriminate nothing, mapped to how universal each is. The resemblance
+	// walk passes them by so a shared channel or a baseline stress cannot make
+	// every concept resemble every other. Refreshed at consolidation, loaded at
+	// boot.
+	universalFeats map[uint64]float64
+
 	// gram is the language faculty's working copy: grammar parameters
 	// read out of the graph and compiled for the engine, rebuilt at
 	// wake after the nightly competition with the lexicon.
@@ -403,6 +410,9 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 	// Conclusions a past run kept return to mind, so a believed proposition is
 	// remembered across a restart the way the graph remembers what was seen.
 	d.loadBeliefs()
+	// The features a past run named universal are passed over from the first
+	// resemblance, not from the first night.
+	d.loadUniversalFeats()
 	if events, err := events.Open(home); err == nil {
 		d.events = events
 	} else {

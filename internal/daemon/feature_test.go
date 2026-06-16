@@ -317,3 +317,53 @@ func TestFeaturesDieWithTheirConcept(t *testing.T) {
 		t.Fatalf("orphaned features must die by disconnection: %+v", feats)
 	}
 }
+
+// A feature carried by nearly every concept is named universal and passed over
+// by resemblance, so a shared channel cannot make every concept resemble every
+// other; a feature that discriminates still counts. The mark needs volume: below
+// a dozen concepts a shared feature is the trait that relates them.
+func TestUniversalFeaturesPassedOverByResemblance(t *testing.T) {
+	d, s := testDaemon(t)
+	mkConcept := func(content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision", Content: content,
+			Template: content, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	mkFeat := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	var concepts []*memory.Fragment
+	for i := 0; i < 12; i++ {
+		concepts = append(concepts, mkConcept("thing "+string(rune('a'+i))))
+	}
+	vision := mkFeat("ch:vision") // universal: on all twelve
+	cat := mkFeat("tok:cat")      // discriminating: on two
+	for _, c := range concepts {
+		s.SetLinkRel(c.ID, vision.ID, memory.RelFeature, 0.25)
+	}
+	s.SetLinkRel(concepts[0].ID, cat.ID, memory.RelFeature, 0.5)
+	s.SetLinkRel(concepts[1].ID, cat.ID, memory.RelFeature, 0.5)
+
+	d.refreshUniversalFeats(concepts)
+	if _, ok := d.universalFeats[vision.ID]; !ok {
+		t.Fatal("a feature on every concept should be named universal")
+	}
+	if _, ok := d.universalFeats[cat.ID]; ok {
+		t.Fatal("a feature on two of twelve should not be universal")
+	}
+	sibs, err := d.featureSiblings(concepts[0].ID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sibs) != 1 || sibs[0].id != concepts[1].ID {
+		t.Fatalf("only the concept sharing a non-universal feature should resemble: %+v", sibs)
+	}
+}

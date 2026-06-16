@@ -22,13 +22,15 @@ import (
 // overlap: a phrase never seen lands near the concept it resembles, and
 // the shared features can be read off to explain why.
 const (
-	featureTopK        = 12   // a signature stays sparse
-	featureShareFloor  = 0.25 // an attribute this rare in the experience is drift, not signature
-	featureMinMoments  = 2    // one moment is not clustered experience
-	featureFeelGate    = 0.5  // mean chemistry above this becomes a feel attribute
-	featureEpisodeCap  = 64   // newest grounded moments mined per concept
-	featureOverlapMin  = 2    // shared features a match needs; one shared word is coincidence
-	featureSeedConcept = 2    // concepts an overlap recall may land on
+	featureTopK          = 12   // a signature stays sparse
+	featureShareFloor    = 0.25 // an attribute this rare in the experience is drift, not signature
+	featureMinMoments    = 2    // one moment is not clustered experience
+	featureFeelGate      = 0.5  // mean chemistry above this becomes a feel attribute
+	featureEpisodeCap    = 64   // newest grounded moments mined per concept
+	featureOverlapMin    = 2    // shared features a match needs; one shared word is coincidence
+	featureSeedConcept   = 2    // concepts an overlap recall may land on
+	universalFeatureFrac = 0.8  // a feature carried by this fraction of concepts discriminates nothing
+	universalMinConcepts = 10   // below this a shared feature is the signal, not universal noise
 	// A discovered feature is a concept's conceptual company reified: a
 	// concept that recurs as the lived neighbor of several others is a
 	// shared trait in its own right, so two things resemble each other by
@@ -115,8 +117,74 @@ func (d *Daemon) growFeatures() (built int) {
 	if built > 0 {
 		d.event(events.Event{Ev: "feature", Count: built})
 	}
+	d.refreshUniversalFeats(concepts)
 	d.weighConceptInformation(concepts)
 	return built
+}
+
+// refreshUniversalFeats names the features that discriminate nothing: it counts,
+// over the signatures just written, how many concepts carry each feature, and
+// records the fraction. A feature carried by nearly all of them is universal,
+// kept in the graph but passed over by resemblance, so a shared channel or a
+// baseline stress cannot make every concept look alike. Recomputed each night,
+// so a feature stops being universal the moment it turns rare. The mark is both
+// stored, to survive a restart, and cached, for the resemblance walk to read.
+func (d *Daemon) refreshUniversalFeats(concepts []*memory.Fragment) {
+	n := len(concepts)
+	// Universality is statistical: with only a handful of concepts, a feature on
+	// most of them is the trait that relates them, not noise. Below the floor the
+	// brain names nothing universal and resemblance reads every feature.
+	if n < universalMinConcepts {
+		d.universalFeats = nil
+		if err := d.store.SetFeatureUniversal(nil); err != nil {
+			fmt.Fprintf(d.out, "universal feature clear error: %v\n", err)
+		}
+		return
+	}
+	ids := make([]uint64, 0, n)
+	for _, c := range concepts {
+		ids = append(ids, c.ID)
+	}
+	edges, err := d.store.LinksFromRel(ids, memory.RelFeature)
+	if err != nil {
+		fmt.Fprintf(d.out, "universal feature read error: %v\n", err)
+		return
+	}
+	df := map[uint64]int{}
+	for _, e := range edges {
+		df[e.To]++ // each concept carries a feature once, so an edge is one bearer
+	}
+	fracs := make(map[uint64]float64, len(df))
+	skip := map[uint64]float64{}
+	for feat, c := range df {
+		frac := float64(c) / float64(n)
+		fracs[feat] = frac
+		if frac >= universalFeatureFrac {
+			skip[feat] = frac
+		}
+	}
+	d.universalFeats = skip
+	if err := d.store.SetFeatureUniversal(fracs); err != nil {
+		fmt.Fprintf(d.out, "universal feature save error: %v\n", err)
+	}
+}
+
+// loadUniversalFeats reads the stored universality marks into the resemblance
+// walk's skip set at boot, so a brain woken from a checkpoint passes over its
+// universal features at once rather than waiting for the first night to name them.
+func (d *Daemon) loadUniversalFeats() {
+	fracs, err := d.store.FeatureUniversal()
+	if err != nil {
+		fmt.Fprintf(d.out, "universal feature load error: %v\n", err)
+		return
+	}
+	skip := map[uint64]float64{}
+	for id, frac := range fracs {
+		if frac >= universalFeatureFrac {
+			skip[id] = frac
+		}
+	}
+	d.universalFeats = skip
 }
 
 // Information, not frequency, is what should make a concept salient and

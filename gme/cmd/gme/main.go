@@ -254,6 +254,10 @@ func printCognition(info *wire.CognitionInfo) {
 	if len(info.Resemblance) == 0 {
 		fmt.Println("  no concept shares a feature with another yet.")
 	}
+	if len(info.Universal) > 0 {
+		fmt.Printf("universal features, named and passed over by resemblance: %s\n",
+			strings.Join(info.Universal, ", "))
+	}
 	if len(info.Held) > 0 {
 		fmt.Printf("believes now (working memory), %d:\n", len(info.Held))
 		for _, b := range info.Held {

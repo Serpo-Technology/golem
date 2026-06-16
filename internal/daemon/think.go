@@ -581,6 +581,13 @@ func (d *Daemon) featureSiblings(seed uint64, now time.Time) ([]walkDest, error)
 		share := make(map[uint64]float64, len(mine))
 		mass := 0.0
 		for _, e := range mine {
+			// A feature carried by nearly every concept names no resemblance, so it
+			// is passed over here, counting toward neither the overlap nor the mass
+			// it is measured against. It stays on the concept in the graph; it just
+			// does not vote on what the concept is like.
+			if _, universal := d.universalFeats[e.To]; universal {
+				continue
+			}
 			featIDs = append(featIDs, e.To)
 			share[e.To] = e.Weight
 			mass += e.Weight

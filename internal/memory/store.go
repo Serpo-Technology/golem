@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS beliefs (
 	conf        REAL    NOT NULL,
 	depth       INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (rel, agent, patient)
+);
+CREATE TABLE IF NOT EXISTS feature_universal (
+	feature_id INTEGER PRIMARY KEY,
+	frac       REAL    NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
