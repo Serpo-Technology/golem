@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 	"golem/wire"
 )
@@ -740,6 +741,60 @@ func TestThinkLoopChainsInference(t *testing.T) {
 	d.topic = coyote.ID
 	if got, ok := d.volunteerRemark("en"); !ok || got != "Probably, the coyote chased the cat." {
 		t.Fatalf("the chained conclusion should be offerable: %q (%v)", got, ok)
+	}
+}
+
+// Initiative offers a conclusion GOLEM has not reached, not a hedged restatement
+// of what it has seen. A fact the topic already observes is skipped when drawing,
+// so "what else" volunteers something new rather than "probably X" for an X it
+// could affirm outright.
+func TestDrawInferenceSkipsObservedFact(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	rabbit := groundNoun(t, d, "rabbit")
+	dog := groundNoun(t, d, "dog")
+	say(t, d, "a cat chased a mouse")  // the cat's own observed fact
+	say(t, d, "a dog chased a mouse")  // a neighbour that did the same
+	say(t, d, "a dog chased a rabbit") // and one the cat has not
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(cat.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+
+	d.drawInferenceAbout(cat)
+	if _, ok := d.held.holds("chase", cat.ID, mouse.ID, heldInferred); ok {
+		t.Fatal("an observed fact must not be re-deposited as a guess to volunteer")
+	}
+	if _, ok := d.held.holds("chase", cat.ID, rabbit.ID, heldInferred); !ok {
+		t.Fatal("a genuinely new conclusion should still be drawn")
+	}
+}
+
+// A supposition reasons across every question shape, not only yes/no: a held
+// hypothetical in which the asked concept stands in the asked role answers a
+// wh-question behind the conditional lead, so it is never taken for the observed.
+// Released, it no longer answers.
+func TestRoleQuestionReasonsUnderSupposition(t *testing.T) {
+	d, _ := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	rabbit := groundNoun(t, d, "rabbit")
+	say(t, d, "a cat chased a mouse") // establishes the chase relation
+	d.held.add(heldProp{rel: "chase", agent: cat.ID, patient: rabbit.ID,
+		agentGloss: cat.Content, patientGloss: rabbit.Content, status: heldHypothetical, conf: 1})
+
+	got, ok := d.heldRoleGuess(grammar.Frame{Lang: "en"}, cat, "agent", "chase", true, false)
+	if !ok || !strings.HasPrefix(got, "If so") || !strings.Contains(got, "rabbit") {
+		t.Fatalf("a wh-question should reason under a supposition with the conditional lead: %q (%v)", got, ok)
+	}
+
+	d.held.clearStatus(heldHypothetical)
+	if _, ok := d.heldRoleGuess(grammar.Frame{Lang: "en"}, cat, "agent", "chase", true, false); ok {
+		t.Fatal("a released supposition should no longer answer")
 	}
 }
 

@@ -136,8 +136,13 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	facts := d.gatherFacts(known, knownRole, rel.Content)
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), facts, past, false)
 	if !ok {
-		// Nothing observed filled the questioned role. Before admitting the gap,
-		// try a hedged guess from a near neighbour that did stand in the relation.
+		// Nothing observed filled the questioned role. A supposition in play is
+		// reasoned under first (the conditional answer), then a hedged guess from a
+		// near neighbour that did stand in the relation, before the gap is admitted.
+		if supposed, ok := d.heldRoleGuess(frame, known, knownRole, rel.Content, past, false); ok {
+			d.warmSpoken(known.Content)
+			return supposed, true
+		}
 		if guess, ok := d.inferRole(frame, known, knownRole, rel.Content, past, false); ok {
 			d.warmSpoken(known.Content)
 			return guess, true
@@ -151,6 +156,11 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(known.Content)
+	// A supposition that adds to what was observed trails the observed clause, the
+	// focus carried as a pronoun and the conditional lead marking it contingent.
+	if supposed, ok := d.heldRoleGuess(frame, known, knownRole, rel.Content, past, true); ok {
+		return line + " " + supposed, true
+	}
 	return line, true
 }
 
@@ -183,8 +193,12 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	facts := d.gatherFacts(agent, "agent", "")
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, past, false)
 	if !ok {
-		// No observed activity. Offer a hedged guess from a near neighbour before
-		// falling through to the older handling.
+		// No observed activity. Reason under a supposition in play, then offer a
+		// hedged guess from a near neighbour, before falling through.
+		if supposed, ok := d.heldRoleGuess(frame, agent, "agent", "", past, false); ok {
+			d.warmSpoken(agent.Content)
+			return supposed, true
+		}
 		if guess, ok := d.inferRole(frame, agent, "agent", "", past, false); ok {
 			d.warmSpoken(agent.Content)
 			return guess, true
@@ -195,6 +209,9 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 		d.ws.excite(f.coID, exciteSpeech)
 	}
 	d.warmSpoken(agent.Content)
+	if supposed, ok := d.heldRoleGuess(frame, agent, "agent", "", past, true); ok {
+		return line + " " + supposed, true
+	}
 	return line, true
 }
 
@@ -606,6 +623,60 @@ func (d *Daemon) inferredFacts(known *memory.Fragment, knownRole, relContent str
 	return nil, 0, false
 }
 
+// heldRoleGuess answers a role question from what GOLEM is supposing rather than
+// what it observed: a held hypothetical in which the asked concept stands in the
+// asked role lends its co-argument, spoken back behind the conditional lead so a
+// supposed conclusion is never taken for a believed or an observed one. It is the
+// wh counterpart of the polar "If so, probably ..." answer, so a supposition
+// reasons across every question shape and not only yes/no. relContent filters to
+// one relation, "" leaves it open ("what did X do"); continuation carries the
+// focus as a pronoun when a clause already named it. It returns false when nothing
+// supposed fills the asked role.
+func (d *Daemon) heldRoleGuess(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past, continuation bool) (string, bool) {
+	var facts []focusFact
+	for _, p := range d.held.props {
+		if p.status != heldHypothetical {
+			continue
+		}
+		if relContent != "" && p.rel != relContent {
+			continue
+		}
+		var coID uint64
+		var coGloss string
+		switch {
+		case knownRole == "agent" && p.agent == known.ID:
+			coID, coGloss = p.patient, p.patientGloss
+		case knownRole == "patient" && p.patient == known.ID:
+			coID, coGloss = p.agent, p.agentGloss
+		default:
+			continue
+		}
+		if coID == known.ID {
+			continue
+		}
+		facts = append(facts, focusFact{rel: p.rel, focusRole: knownRole, coGloss: coGloss, coID: coID})
+	}
+	if len(facts) == 0 {
+		return "", false
+	}
+	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), facts, past, continuation)
+	if !ok {
+		return "", false
+	}
+	hedge := d.gram.Word(frame.Lang, "probably")
+	cond := d.gram.Word(frame.Lang, "ifso")
+	switch {
+	case cond != "" && hedge != "":
+		return upperFirst(cond) + ", " + hedge + " " + lowerFirst(line), true
+	case cond != "":
+		return upperFirst(cond) + ", " + lowerFirst(line), true
+	case hedge != "":
+		return upperFirst(hedge) + ", " + lowerFirst(line), true
+	default:
+		return line, true
+	}
+}
+
 // drawInferenceAbout concludes something about a concept on GOLEM's own account,
 // held in mind as an unvoiced belief rather than spoken: what the nearest
 // neighbour does, transferred to the concept that resembles it. The neighbour's
@@ -620,6 +691,18 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 		return
 	}
 	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].weight > sibs[j].weight })
+	// What the topic already does observably is known, not a conclusion to draw.
+	// Gathered once, it keeps a transferred fact the topic already stands in from
+	// being deposited as a guess and later volunteered, hedged, as if GOLEM were
+	// unsure of something it has seen.
+	type coArg struct {
+		rel string
+		id  uint64
+	}
+	observed := map[coArg]bool{}
+	for _, f := range d.gatherFacts(topic, "agent", "") {
+		observed[coArg{f.rel, f.coID}] = true
+	}
 	for _, sib := range sibs {
 		if sib.weight < inferenceFloor {
 			break
@@ -627,7 +710,7 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 		drew := false
 		// What the neighbour is observed to do, transferred as a fresh guess.
 		for _, f := range d.gatherFacts(&memory.Fragment{ID: sib.id}, "agent", "") {
-			if f.coID == topic.ID {
+			if f.coID == topic.ID || observed[coArg{f.rel, f.coID}] {
 				continue
 			}
 			d.held.add(heldProp{rel: f.rel, agent: topic.ID, patient: f.coID,
@@ -637,7 +720,7 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 		}
 		// What the neighbour is only believed to do, transferred a hop further out.
 		for _, p := range d.held.byAgent(sib.id, heldInferred) {
-			if p.patient == topic.ID || p.depth >= heldMaxDepth {
+			if p.patient == topic.ID || p.depth >= heldMaxDepth || observed[coArg{p.rel, p.patient}] {
 				continue
 			}
 			d.held.add(heldProp{rel: p.rel, agent: topic.ID, patient: p.patient,
