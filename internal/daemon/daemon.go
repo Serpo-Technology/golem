@@ -1239,6 +1239,9 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// Each concept's sparse signature rewrites from its current
 	// grounding, so resemblance stays current and auditable.
 	d.growFeatures()
+	// The vector layer lifts from percepts to the concepts they ground, so the
+	// resemblance walk gains geometric neighbours where embeddings exist.
+	d.growConceptVectors()
 	// A relation told often enough, its slots filled by varied concepts,
 	// induces an argument-structure construction grown from that usage.
 	born += d.growConstructions()
@@ -1313,6 +1316,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	d.growConcepts()
 	d.growAbstractions()
 	d.growFeatures()
+	d.growConceptVectors()
 	d.growConstructions()
 	d.grammarCompetition()
 	d.flushModels()

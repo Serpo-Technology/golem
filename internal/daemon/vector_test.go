@@ -54,3 +54,42 @@ func TestFeatureSiblingsBlendsVectors(t *testing.T) {
 		t.Fatalf("a concept with no embedding and no features has no siblings: %+v", sibs2)
 	}
 }
+
+// A concept's embedding is the mean of the percepts it grounds in, so the
+// coordinate an embedder gave each percept rolls up at consolidation. A concept
+// grounding in nothing embedded stays vectorless, so the pass is a no-op until
+// percepts carry embeddings.
+func TestGrowConceptVectorsPropagates(t *testing.T) {
+	d, s := testDaemon(t)
+	enc := func(kind, content string) *memory.Fragment {
+		f := &memory.Fragment{Kind: kind, Channel: "vision", Content: content,
+			Template: content, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	dog := enc(memory.KindConcept, "dog")
+	ep1 := enc(memory.KindEpisodic, "a brown dog")
+	ep2 := enc(memory.KindEpisodic, "a black dog")
+	s.SetLinkRel(dog.ID, ep1.ID, memory.RelGrounds, 1.0)
+	s.SetLinkRel(dog.ID, ep2.ID, memory.RelGrounds, 1.0)
+	s.SetVector(ep1.ID, []float32{1, 0, 0})
+	s.SetVector(ep2.ID, []float32{0, 2, 0})
+
+	d.growConceptVectors()
+
+	v, ok := s.Vector(dog.ID)
+	if !ok {
+		t.Fatal("the concept should gain an embedding from its grounding percepts")
+	}
+	if v[0] != 0.5 || v[1] != 1.0 || v[2] != 0 {
+		t.Fatalf("the concept embedding should be the mean of its percepts {0.5,1,0}: %v", v)
+	}
+
+	bare := enc(memory.KindConcept, "ghost")
+	d.growConceptVectors()
+	if _, ok := s.Vector(bare.ID); ok {
+		t.Fatal("a concept with no embedded grounding should stay vectorless")
+	}
+}
