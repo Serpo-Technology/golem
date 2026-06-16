@@ -48,6 +48,9 @@ python3 adapters/golem-speak.py
 
 # the host's senses: feed this machine's load, logs, and active window in
 python3 adapters/golem-senses.py
+
+# coordinates: embed each caption so similar percepts sit near in a space
+captioner | python3 adapters/golem-embed.py
 ```
 
 `golem-listen.py` turns stdin (a keyboard, a speech recognizer, a captioner with
@@ -56,7 +59,12 @@ into speech with whatever the host speaks through (`say`, `espeak`, `spd-say`,
 or `--cmd`). `golem-senses.py` samples this machine's vital signs, system log,
 and frontmost window and feeds them as observations, the host senses a
 containerized brain cannot reach itself; the readings and bands match the
-in-binary senses, so the brain sees the same shapes either way. Write your own
+in-binary senses, so the brain sees the same shapes either way. `golem-embed.py`
+is the embedder transducer: it places each percept caption in a vector space and
+sends the coordinate with the `observe`, so the brain can measure resemblance as
+nearness rather than shared tokens (it computes no embedding itself). It prefers
+sentence-transformers for real semantics and falls back to a dependency-free
+hashing embedder; keep one backend per brain, since their spaces differ. Write your own
 in any language: open the TCP socket, send a line, read a line.
 
 ## Safety
