@@ -400,6 +400,9 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		store.Close()
 		return nil, err
 	}
+	// Conclusions a past run kept return to mind, so a believed proposition is
+	// remembered across a restart the way the graph remembers what was seen.
+	d.loadBeliefs()
 	if events, err := events.Open(home); err == nil {
 		d.events = events
 	} else {
@@ -1269,7 +1272,10 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// cached copy; the working set rebuilds from what the morning uses.
 	d.hot.Clear()
 	d.ws.clear()
-	d.held.clear()
+	// The night keeps the conclusions GOLEM has re-drawn often enough and clears
+	// the rest of working memory, so a believed proposition survives where a
+	// passing thought does not.
+	d.promoteBeliefs()
 	d.topic = 0
 	d.lastDrewTopic = 0
 	d.lastRole = nil

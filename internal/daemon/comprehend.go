@@ -57,6 +57,13 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// down, so a later "what about X" leans on what was just said.
 	if patientID != 0 {
 		d.recordThreadProp(rel.Content, agent.Concept.ID, patientID, agent.Concept.Content, patientGloss)
+		// What was a guess is now seen: retire any inferred belief about the same
+		// proposition, in mind and in long-term memory, so observation supersedes
+		// inference rather than standing beside it.
+		d.held.forget(rel.Content, agent.Concept.ID, patientID)
+		if err := d.store.ForgetBelief(rel.Content, agent.Concept.ID, patientID); err != nil {
+			fmt.Fprintf(d.out, "belief retire error: %v\n", err)
+		}
 	}
 	// Warm what it bound, recording the role each filler played so the discourse
 	// set can read its lean, and put the role edges on the trail so the write is
@@ -642,6 +649,45 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 		if drew {
 			return
 		}
+	}
+}
+
+// promoteBeliefs carries the night's earned conclusions into long-term memory
+// and clears the passing ones. A belief re-drawn often enough is saved to the
+// belief store and marked persistent in working memory, so it survives the sleep
+// that clears the rest. It stays in the held layer, never the observed graph, so
+// a promoted belief is still read as a guess ("probably") and never as something
+// seen ("yes"): the separation is what keeps the promotion honest.
+func (d *Daemon) promoteBeliefs() {
+	for _, p := range d.held.earned(promoteReinforce) {
+		if err := d.store.SaveBelief(memory.Belief{Rel: p.rel, Agent: p.agent, Patient: p.patient,
+			AgentGloss: p.agentGloss, PatGloss: p.patientGloss, Conf: p.conf, Depth: p.depth}); err != nil {
+			fmt.Fprintf(d.out, "belief save error: %v\n", err)
+			continue
+		}
+		// Mark the same conclusion persistent in mind, so it is kept rather than
+		// cleared when the passing thoughts are dropped below.
+		d.held.add(heldProp{rel: p.rel, agent: p.agent, patient: p.patient,
+			agentGloss: p.agentGloss, patientGloss: p.patientGloss,
+			status: heldInferred, conf: p.conf, depth: p.depth, voiced: true, persistent: true})
+	}
+	d.held.keepPersistent()
+}
+
+// loadBeliefs restores the conclusions long-term memory kept into working memory,
+// the morning after a night and the first thing on waking from a saved brain, so
+// a believed proposition is in mind again and reads as a belief. Called where the
+// workspace is rebuilt.
+func (d *Daemon) loadBeliefs() {
+	beliefs, err := d.store.Beliefs()
+	if err != nil {
+		fmt.Fprintf(d.out, "belief load error: %v\n", err)
+		return
+	}
+	for _, b := range beliefs {
+		d.held.add(heldProp{rel: b.Rel, agent: b.Agent, patient: b.Patient,
+			agentGloss: b.AgentGloss, patientGloss: b.PatGloss,
+			status: heldInferred, conf: b.Conf, depth: b.Depth, voiced: true, persistent: true})
 	}
 }
 

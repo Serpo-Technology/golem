@@ -743,6 +743,83 @@ func TestThinkLoopChainsInference(t *testing.T) {
 	}
 }
 
+// A conclusion GOLEM keeps drawing earns a place in long-term memory: it
+// survives the night that clears working memory, returns on waking, and is still
+// read as a belief, never as something seen. A conclusion drawn once does not
+// earn it.
+func TestEarnedBeliefSurvivesSleep(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	// Concluded once, it has not earned a place.
+	say(t, d, "did the wolf chase the cat")
+	if got := d.held.earned(promoteReinforce); len(got) != 0 {
+		t.Fatalf("a once-drawn conclusion should not be earned: %d", len(got))
+	}
+
+	// Re-drawn, it earns one. The night keeps it.
+	say(t, d, "did the wolf chase the cat")
+	say(t, d, "did the wolf chase the cat")
+	d.promoteBeliefs()
+	bs, err := s.Beliefs()
+	if err != nil || len(bs) != 1 || bs[0].Agent != wolf.ID || bs[0].Rel != "chase" {
+		t.Fatalf("a re-drawn conclusion should be kept in long-term memory: %+v (%v)", bs, err)
+	}
+
+	// Waking from the saved brain, the belief is in mind again and still a guess,
+	// never mistaken for something observed.
+	d.held.clear()
+	d.loadBeliefs()
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("a promoted belief should survive and still read as a guess: %q", got)
+	}
+}
+
+// When a guess is finally seen, it retires: the inferred belief leaves working
+// memory and long-term memory, and the observed fact answers plainly in its
+// place, so observation supersedes inference rather than standing beside it.
+func TestObservationRetiresBelief(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	say(t, d, "did the wolf chase the cat")
+	say(t, d, "did the wolf chase the cat")
+	say(t, d, "did the wolf chase the cat")
+	d.promoteBeliefs()
+	if bs, _ := s.Beliefs(); len(bs) != 1 {
+		t.Fatalf("the belief should be kept before it is seen: %d", len(bs))
+	}
+
+	// Now it is actually told: the guess retires, the fact stands.
+	say(t, d, "a wolf chased a cat")
+	if bs, _ := s.Beliefs(); len(bs) != 0 {
+		t.Fatalf("an observed proposition should retire the guess: %d kept", len(bs))
+	}
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Yes, the wolf chased the cat." {
+		t.Fatalf("the observed fact should now answer plainly: %q", got)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,

@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS media (
 CREATE TABLE IF NOT EXISTS vectors (
 	fragment_id INTEGER PRIMARY KEY,
 	vec         BLOB    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS beliefs (
+	rel         TEXT    NOT NULL,
+	agent       INTEGER NOT NULL,
+	patient     INTEGER NOT NULL,
+	agent_gloss TEXT    NOT NULL DEFAULT '',
+	pat_gloss   TEXT    NOT NULL DEFAULT '',
+	conf        REAL    NOT NULL,
+	depth       INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (rel, agent, patient)
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()

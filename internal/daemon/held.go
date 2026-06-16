@@ -40,6 +40,8 @@ type heldProp struct {
 	depth                    int      // derivation hops from observation; 0 is one inference from a graph fact
 	from                     []uint64 // provenance: the held props this was drawn from, empty when straight from the graph
 	voiced                   bool     // GOLEM has spoken this, so initiative does not offer it twice
+	reinforced               int      // times this conclusion has been re-drawn; enough earns it a place in long-term memory
+	persistent               bool     // promoted to long-term memory, so it neither decays nor clears at sleep
 	seq                      uint64
 }
 
@@ -49,6 +51,8 @@ const (
 	heldBudget    = 32   // propositions held at once; the coldest is evicted past it
 	heldMaxDepth  = 3     // derivation hops a chain may stand from observation before it is too thin to draw
 	heldStepKeep  = 0.85 // confidence kept per derivation step, so a chain grows less sure with length
+
+	promoteReinforce = 2 // times a conclusion must be re-drawn before a night keeps it in long-term memory
 )
 
 type heldStore struct {
@@ -68,6 +72,7 @@ func (h *heldStore) add(p heldProp) uint64 {
 	if existing := h.findID(p.rel, p.agent, p.patient, p.status); existing != nil {
 		existing.heat = 1
 		existing.seq = h.seq
+		existing.reinforced++ // re-drawing the same conclusion is what earns it a place
 		if p.conf > existing.conf {
 			existing.conf = p.conf
 		}
@@ -77,6 +82,9 @@ func (h *heldStore) add(p heldProp) uint64 {
 		}
 		if p.voiced {
 			existing.voiced = true // voicing is monotonic: once said, never re-offered
+		}
+		if p.persistent {
+			existing.persistent = true
 		}
 		return existing.id
 	}
@@ -168,14 +176,59 @@ func (h *heldStore) unvoicedAbout(agent uint64) *heldProp {
 
 // decay cools every held proposition and forgets what has faded below notice.
 // Confidence is untouched: a thought leaves mind by cooling, not by GOLEM
-// growing unsure of it. The main loop calls this on the homeostasis tick.
+// growing unsure of it. A belief promoted to long-term memory neither cools nor
+// is forgotten; it is no longer a passing thought. The main loop calls this on
+// the homeostasis tick.
 func (h *heldStore) decay() {
 	kept := h.props[:0]
 	for _, p := range h.props {
+		if p.persistent {
+			kept = append(kept, p)
+			continue
+		}
 		p.heat *= heldDecayKeep
 		if p.heat >= heldFloor {
 			kept = append(kept, p)
 		}
+	}
+	h.props = kept
+}
+
+// earned returns the inferred beliefs GOLEM has re-drawn often enough to keep:
+// the conclusions a night should carry into long-term memory rather than clear.
+// A supposition, however firmly entertained, is never earned.
+func (h *heldStore) earned(minReinforced int) []heldProp {
+	var out []heldProp
+	for _, p := range h.props {
+		if p.status == heldInferred && !p.persistent && p.reinforced >= minReinforced {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// keepPersistent drops every passing thought, leaving the promoted beliefs in
+// place: the night clears working memory but spares what has been remembered.
+func (h *heldStore) keepPersistent() {
+	kept := h.props[:0]
+	for _, p := range h.props {
+		if p.persistent {
+			kept = append(kept, p)
+		}
+	}
+	h.props = kept
+}
+
+// forget drops a held proposition outright, whatever its mode: the path a belief
+// leaves by when the observation it stood in for is finally seen, so a guess does
+// not linger once the fact is known.
+func (h *heldStore) forget(rel string, agent, patient uint64) {
+	kept := h.props[:0]
+	for _, p := range h.props {
+		if p.rel == rel && p.agent == agent && p.patient == patient {
+			continue
+		}
+		kept = append(kept, p)
 	}
 	h.props = kept
 }
