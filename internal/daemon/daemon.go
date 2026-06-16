@@ -160,6 +160,10 @@ type Daemon struct {
 	// noticed. Held on the daemon because a conversation outlives one turn.
 	topic uint64
 
+	// lastVolunteer paces unprompted remarks: GOLEM offers a conclusion of its
+	// own now and then when the room is quiet, not in a stream.
+	lastVolunteer time.Time
+
 	// lastRole is the thread a role question leaves behind: the relation it
 	// asked about, so an elliptical follow-up can ask the same of a new
 	// referent. It is meaning, not text, so the thread holds whatever language

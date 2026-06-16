@@ -662,6 +662,42 @@ func TestHypothesisEntertainsWithoutAsserting(t *testing.T) {
 	}
 }
 
+// GOLEM volunteers a conclusion it has drawn about the topic in mind, once, and
+// then has nothing more to add. The wolf resembles the dog, which chased the cat,
+// so invited to go on about the wolf, GOLEM offers that the wolf probably chased
+// the cat too, on its own account, and does not repeat it.
+func TestVolunteersHeldConclusion(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	d.topic = wolf.ID
+	got, ok := d.volunteerRemark("en")
+	if !ok || got != "Probably, the wolf chased the cat." {
+		t.Fatalf("should volunteer a drawn conclusion about the topic: %q (%v)", got, ok)
+	}
+	if line, ok := d.volunteerRemark("en"); ok {
+		t.Fatalf("a conclusion already voiced should not be volunteered again: %q", line)
+	}
+
+	// The open invitation routes here too: a fresh mind draws the conclusion and
+	// offers it.
+	d.held.clear()
+	d.topic = wolf.ID
+	if got := say(t, d, "what else").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("an invitation to go on should volunteer the conclusion: %q", got)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,

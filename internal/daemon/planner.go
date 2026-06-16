@@ -524,6 +524,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Go on", "what else": an open invitation to elaborate the topic in mind.
+	// GOLEM volunteers a conclusion it has drawn and not yet voiced.
+	if ans, ok := d.planContinue(frame, raw); ok {
+		return ans, nil
+	}
+
 	// An elliptical follow-up to a role question inherits its relation and asks
 	// it of a new referent: "what about the dog" after "what did the cat chase"
 	// walks chase from the dog. The thread is read and cleared here; a role

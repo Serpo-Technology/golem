@@ -831,6 +831,7 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 		// A seed with nowhere to go cools without a thought, so the
 		// workspace cannot ruminate on a dead end forever.
 		d.ws.cool(d.thinkSeed, thinkFatigue)
+		d.maybeVolunteer()
 		return
 	}
 	winner := round[0]
@@ -863,6 +864,28 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 	d.rememberThought(winner.content)
 	res := d.process(senses.Observation{Channel: thoughtChannel, Content: winner.content, At: time.Now()}, false, true)
 	d.noteThoughtFruit(winner, res)
+}
+
+// volunteerInterval paces unprompted remarks, so initiative is an occasional
+// aside and never a stream.
+const volunteerInterval = 45 * time.Second
+
+// maybeVolunteer lets GOLEM speak a conclusion of its own when the room has been
+// quiet and it holds something about the topic in mind it has not yet said. It is
+// rate-limited and silent when there is nothing to add, so initiative is a remark
+// now and then. The voice gates it: with the speaker off, the thought stays in.
+func (d *Daemon) maybeVolunteer() {
+	if !d.voiceOn || d.topic == 0 {
+		return
+	}
+	now := time.Now()
+	if now.Sub(d.lastObs) < d.cfg.InputSilence() || now.Sub(d.lastVolunteer) < volunteerInterval {
+		return
+	}
+	if line, ok := d.volunteerRemark("en"); ok {
+		d.speak(line)
+		d.lastVolunteer = now
+	}
 }
 
 // thoughtRuminates reports whether this exact thought re-entered perception

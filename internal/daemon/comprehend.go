@@ -341,6 +341,37 @@ func (d *Daemon) planRelease(frame grammar.Frame, raw string) (string, bool) {
 	return ack, true
 }
 
+// planContinue is the open invitation to say more: "go on", "what else", a turn
+// with no subject of its own. GOLEM volunteers what it has concluded about the
+// topic in mind and not yet said, holding the focus across the turn and choosing
+// what to add, so sustained topic and initiative meet in one move. With nothing
+// left it says so. It returns false when the turn is not an invitation to go on.
+func (d *Daemon) planContinue(frame grammar.Frame, raw string) (string, bool) {
+	if !isContinue(raw) {
+		return "", false
+	}
+	if line, ok := d.volunteerRemark(frame.Lang); ok {
+		return line, true
+	}
+	if frame.Lang == "tr" {
+		return "Hakkında ekleyecek başka bir şeyim yok.", true
+	}
+	return "I have nothing more to add about it.", true
+}
+
+// isContinue reports whether an utterance is a bare invitation to continue on the
+// topic in mind, carrying no subject of its own.
+func isContinue(raw string) bool {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	s = strings.TrimSuffix(s, ".")
+	for _, p := range []string{"go on", "tell me more", "what else", "anything else", "what else about it", "and what else", "başka", "devam et", "başka ne"} {
+		if s == p {
+			return true
+		}
+	}
+	return false
+}
+
 // supposeClause reads the clause of a supposition, the proposition after a
 // "suppose"/"imagine"/"what if" lead, with any trailing mark dropped. It returns
 // false when the utterance carries no such lead.
@@ -495,7 +526,7 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 			}
 			d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
 				agentGloss: agent.Content, patientGloss: patient.Content,
-				status: heldInferred, conf: best, depth: bestDepth, from: from})
+				status: heldInferred, conf: best, depth: bestDepth, from: from, voiced: true})
 		}
 		return beliefInferred, best
 	}
@@ -517,9 +548,32 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 // when a near enough neighbour had such a fact, so the caller offers the gap
 // only when none did.
 func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past, continuation bool) (string, bool) {
+	kept, _, ok := d.inferredFacts(known, knownRole, relContent)
+	if !ok {
+		return "", false
+	}
+	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, continuation)
+	if !ok {
+		return "", false
+	}
+	hedge := d.gram.Word(frame.Lang, "probably")
+	if hedge == "" {
+		return line, true
+	}
+	return upperFirst(hedge) + ", " + lowerFirst(line), true
+}
+
+// inferredFacts finds the propositions a concept probably stands in, from the
+// nearest neighbour that actually stands in them: the facts the strongest
+// resembling concept has in the questioned role, with the asker dropped from its
+// own co-arguments, and the resemblance they rode in on. It is the fact-finding
+// behind a wh-guess, shared so the same propositions a guess renders can also be
+// held in mind and volunteered. It returns false when no near enough neighbour
+// has such a fact.
+func (d *Daemon) inferredFacts(known *memory.Fragment, knownRole, relContent string) ([]focusFact, float64, bool) {
 	sibs, err := d.featureSiblings(known.ID, time.Now())
 	if err != nil {
-		return "", false
+		return nil, 0, false
 	}
 	// Strongest resemblance first, so the guess rides the nearest neighbour that
 	// actually stood in the relation.
@@ -530,7 +584,7 @@ func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRol
 		}
 		facts := d.gatherFacts(&memory.Fragment{ID: sib.id}, knownRole, relContent)
 		// The asked concept is not evidence that it stands in the relation to
-		// itself, so a co-argument that is the asker is dropped before rendering.
+		// itself, so a co-argument that is the asker is dropped.
 		kept := facts[:0]
 		for _, f := range facts {
 			if f.coID != known.ID {
@@ -540,17 +594,75 @@ func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRol
 		if len(kept) == 0 {
 			continue
 		}
-		line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, continuation)
-		if !ok {
-			continue
-		}
-		hedge := d.gram.Word(frame.Lang, "probably")
-		if hedge == "" {
-			return line, true
-		}
-		return upperFirst(hedge) + ", " + lowerFirst(line), true
+		return kept, sib.weight, true
 	}
-	return "", false
+	return nil, 0, false
+}
+
+// drawInferenceAbout concludes something about a concept on GOLEM's own account:
+// what it probably does, from the nearest neighbour that does it, held in mind as
+// an unvoiced belief rather than spoken. The same property inference a "tell me
+// about X" renders, here run unprompted and deposited so it can be volunteered
+// later. The conclusions are held at the resemblance they rode in on.
+func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
+	facts, conf, ok := d.inferredFacts(topic, "agent", "")
+	if !ok {
+		return
+	}
+	for _, f := range facts {
+		d.held.add(heldProp{rel: f.rel, agent: topic.ID, patient: f.coID,
+			agentGloss: topic.Content, patientGloss: f.coGloss,
+			status: heldInferred, conf: conf, depth: 0})
+	}
+}
+
+// volunteerRemark offers something GOLEM has concluded about the topic in mind
+// but not yet said, drawing a fresh conclusion when nothing is held. It is
+// initiative grounded in working memory: GOLEM speaks for itself, once per
+// conclusion, and falls silent when it has nothing left to add. It returns false
+// when there is no topic or nothing left to volunteer.
+func (d *Daemon) volunteerRemark(lang string) (string, bool) {
+	if d.topic == 0 {
+		return "", false
+	}
+	p := d.held.unvoicedAbout(d.topic)
+	if p == nil {
+		if frags, err := d.fragmentsByIDsTiered([]uint64{d.topic}); err == nil && len(frags) == 1 {
+			d.drawInferenceAbout(frags[0])
+		}
+		p = d.held.unvoicedAbout(d.topic)
+	}
+	if p == nil {
+		return "", false
+	}
+	line := d.speakHeld(lang, p)
+	if line == "" {
+		return "", false
+	}
+	d.held.markVoiced(p.id)
+	d.ws.excite(p.patient, exciteSpeech)
+	return line, true
+}
+
+// speakHeld renders a held belief as a hedged clause, the shape an inferred
+// answer takes, so a volunteered conclusion is offered as the guess it is.
+func (d *Daemon) speakHeld(lang string, p *heldProp) string {
+	clause, ok := d.gram.Speak(lang, grammar.Meaning{
+		Relation: grammar.Term{Phrase: d.relationName(p.rel, lang)},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: d.conceptName(p.agent, p.agentGloss, lang), Definite: true},
+			"patient": {Phrase: d.conceptName(p.patient, p.patientGloss, lang), Definite: true},
+		},
+		Past: true,
+	})
+	if !ok {
+		return ""
+	}
+	hedge := d.gram.Word(lang, "probably")
+	if hedge == "" {
+		return clause
+	}
+	return upperFirst(hedge) + ", " + lowerFirst(clause)
 }
 
 // nearestConcept returns the concept a seed most resembles together with that

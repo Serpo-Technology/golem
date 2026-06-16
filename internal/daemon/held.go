@@ -39,6 +39,7 @@ type heldProp struct {
 	heat                     float64  // activation; decays with time, forgotten below the floor
 	depth                    int      // derivation hops from observation; 0 is one inference from a graph fact
 	from                     []uint64 // provenance: the held props this was drawn from, empty when straight from the graph
+	voiced                   bool     // GOLEM has spoken this, so initiative does not offer it twice
 	seq                      uint64
 }
 
@@ -73,6 +74,9 @@ func (h *heldStore) add(p heldProp) uint64 {
 		if p.depth < existing.depth {
 			existing.depth = p.depth
 			existing.from = p.from
+		}
+		if p.voiced {
+			existing.voiced = true // voicing is monotonic: once said, never re-offered
 		}
 		return existing.id
 	}
@@ -130,6 +134,36 @@ func (h *heldStore) byAgent(agent uint64, status propStatus) []heldProp {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].seq > out[j].seq })
 	return out
+}
+
+// markVoiced records that GOLEM has spoken a held proposition, so initiative
+// offers it once and then moves on to what it has not yet said.
+func (h *heldStore) markVoiced(id uint64) {
+	for i := range h.props {
+		if h.props[i].id == id {
+			h.props[i].voiced = true
+			return
+		}
+	}
+}
+
+// unvoicedAbout returns the strongest belief held about a concept as agent that
+// GOLEM has not yet voiced, the conclusion it could volunteer, or nil when there
+// is nothing left to share. Only what GOLEM believes is offered, never a
+// supposition, so initiative speaks for itself and not for an entertained
+// premise.
+func (h *heldStore) unvoicedAbout(agent uint64) *heldProp {
+	var best *heldProp
+	for i := range h.props {
+		p := &h.props[i]
+		if p.agent != agent || p.status != heldInferred || p.voiced {
+			continue
+		}
+		if best == nil || p.conf > best.conf {
+			best = p
+		}
+	}
+	return best
 }
 
 // decay cools every held proposition and forgets what has faded below notice.
