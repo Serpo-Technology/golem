@@ -275,8 +275,8 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// English carries the tense on the auxiliary it led with; Turkish on the verb
 	// the particle trailed, read back by Comprehend. Either way the answer matches.
 	past := pastAux || m.Past
-	belief, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
-	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief), true
+	belief, _, supposed := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief, supposed), true
 }
 
 // planSuppose entertains a supposition without asserting it: "suppose the wolf
@@ -480,18 +480,18 @@ func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID
 // less sure. GOLEM's own standing conclusion about the very proposition counts as
 // evidence for it, so a re-ask is consistent and the belief stays warm. The
 // confidence is the resemblance the guess rode in on, attenuated once per hop.
-func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (propBelief, float64) {
+func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (belief propBelief, conf float64, supposed bool) {
 	if d.propositionHolds(agent, relContent, patient.ID) {
-		return beliefObserved, 1
+		return beliefObserved, 1, false
 	}
 	// A thing standing in a relation to itself is not a claim worth guessing, so
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {
-		return beliefUnknown, 0
+		return beliefUnknown, 0, false
 	}
 	sibs, err := d.featureSiblings(agent.ID, time.Now())
 	if err != nil {
-		return beliefUnknown, 0
+		return beliefUnknown, 0, false
 	}
 	best, bestDepth, bestFrom, bestSupposed := 0.0, 0, uint64(0), false
 	// A standing conclusion about this very proposition is evidence for it,
@@ -528,9 +528,9 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 				agentGloss: agent.Content, patientGloss: patient.Content,
 				status: heldInferred, conf: best, depth: bestDepth, from: from, voiced: true})
 		}
-		return beliefInferred, best
+		return beliefInferred, best, bestSupposed
 	}
-	return beliefUnknown, 0
+	return beliefUnknown, 0, false
 }
 
 // inferRole answers a role question GOLEM holds no observed fact for from
@@ -736,9 +736,11 @@ func (d *Daemon) kindGuessClause(frame grammar.Frame, c *memory.Fragment, action
 // unknown one denies ("No, the cat did not chase the dog"), the negative
 // morphology running for the "no"; an inferred one leads with the tongue's hedge
 // ("Probably, the wolf chased the cat") and speaks the affirmed clause, so the
-// guess is offered as a guess and never as a fact. Word and clause both come
-// from the tongue's data.
-func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief) string {
+// guess is offered as a guess and never as a fact. A guess that rode a
+// supposition is marked contingent on it ("If so, probably the cat chased the
+// dog"), so it is never mistaken for something GOLEM believes outright. Word and
+// clause both come from the tongue's data.
+func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool) string {
 	var word string
 	negate := false
 	switch belief {
@@ -762,6 +764,13 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 	if !ok {
 		// No construction bound the proposition; the bare word still answers.
 		return upperFirst(word) + "."
+	}
+	// A guess that leans on a supposition follows only if the supposition does:
+	// the conditional lead carries that, the hedge still marking it a guess.
+	if belief == beliefInferred && supposed {
+		if cond := d.gram.Word(lang, "ifso"); cond != "" {
+			return upperFirst(cond) + ", " + lowerFirst(word) + " " + lowerFirst(clause)
+		}
 	}
 	if word == "" {
 		return clause

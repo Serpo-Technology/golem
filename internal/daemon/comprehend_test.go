@@ -645,8 +645,8 @@ func TestHypothesisEntertainsWithoutAsserting(t *testing.T) {
 	if got := say(t, d, "suppose the wolf chased the cat").Say; got != "Supposing the wolf chased the cat." {
 		t.Fatalf("a supposition should be echoed back, not asserted: %q", got)
 	}
-	if got := say(t, d, "did the coyote chase the cat").Say; got != "Probably, the coyote chased the cat." {
-		t.Fatalf("under the supposition the coyote should reach the cat: %q", got)
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "If so, probably the coyote chased the cat." {
+		t.Fatalf("under the supposition the answer should be marked contingent on it: %q", got)
 	}
 	// The supposition and anything contingent on it are entertained, not believed.
 	for _, p := range d.held.props {

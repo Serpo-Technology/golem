@@ -222,3 +222,5 @@ surface:tr:yes	evet	tr
 surface:tr:no	hayır	tr
 surface:en:probably	probably	en
 surface:tr:probably	muhtemelen	tr
+surface:en:ifso	if so	en
+surface:tr:ifso	öyleyse	tr
