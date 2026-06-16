@@ -466,14 +466,59 @@ func (d *Daemon) warmSpoken(template string) {
 // it. When a new concept takes the field the change is noticed, recorded on the
 // trail, so the shift can be seen rather than passing silently.
 func (d *Daemon) trackTopic() {
-	c := d.warmConcept(0)
-	if c == nil {
+	// The subject the turn explicitly raised holds the field over a neighbour the
+	// reply happened to warm: a definition about the cat keeps the cat the topic,
+	// not the animal its answer reached for. With no subject named (an open "what
+	// else"), the dominant warm concept stands in.
+	next := d.turnFocus
+	d.turnFocus = 0
+	if next == 0 {
+		// A turn that raised no subject of its own ("what else", "go on") keeps the
+		// one already in play rather than drifting to whatever the reply left warm.
+		// Only with no topic yet does the warm field bootstrap one.
+		if d.topic != 0 {
+			return
+		}
+		if c := d.warmConcept(0); c != nil {
+			next = c.ID
+		}
+	}
+	if next == 0 || next == d.topic {
 		return
 	}
-	if d.topic != 0 && d.topic != c.ID {
-		d.event(events.Event{Ev: "topic", From: d.topic, To: c.ID})
+	if d.topic != 0 {
+		// The displaced subject goes onto the trail, newest first and distinct, so
+		// the talk can return to what it was on before.
+		d.topicTrail = append([]uint64{d.topic}, removeID(d.topicTrail, d.topic)...)
+		if len(d.topicTrail) > topicTrailCap {
+			d.topicTrail = d.topicTrail[:topicTrailCap]
+		}
 	}
-	d.topic = c.ID
+	d.topicTrail = removeID(d.topicTrail, next) // returning to a trailed subject lifts it off the trail
+	d.event(events.Event{Ev: "topic", From: d.topic, To: next})
+	d.topic = next
+}
+
+// noteFocus records the concept a turn settled on as its subject, so the topic
+// follows what the turn was about rather than what its answer warmed. The answer
+// path knows the real subject (a role question's known concept, a statement's
+// agent) where the frame's first guess may not, so the path's note wins.
+func (d *Daemon) noteFocus(c *memory.Fragment) {
+	if c != nil {
+		d.turnFocus = c.ID
+	}
+}
+
+// removeID returns the ids without any occurrence of one, in a fresh slice so the
+// input is left untouched.
+func removeID(ids []uint64, id uint64) []uint64 {
+	out := make([]uint64, 0, len(ids))
+	for _, x := range ids {
+		if x != id {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // conceptDecision weighs the commands grounding a verb concept, the way
@@ -576,6 +621,17 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		}
 	}
 
+	// The subject the turn explicitly names anchors the topic, so it follows what
+	// was raised rather than what the reply warmed: the agent is an action's
+	// subject, a definition or "what is X" names its subject as the patient. A
+	// turn that names neither (an open "what else") leaves the topic to the field.
+	d.turnFocus = 0
+	if frame.Agent.Concept != nil {
+		d.turnFocus = frame.Agent.Concept.ID
+	} else if frame.Patient.Concept != nil {
+		d.turnFocus = frame.Patient.Concept.ID
+	}
+
 	// "And then" is a move on the warm proposition, not a clause: walk its
 	// successor and speak what came next.
 	if isThenMove(raw) {
@@ -595,6 +651,18 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// "Go on", "what else": an open invitation to elaborate the topic in mind.
 	// GOLEM volunteers a conclusion it has drawn and not yet voiced.
 	if ans, ok := d.planContinue(frame, raw); ok {
+		return ans, nil
+	}
+
+	// "What have I told you": report the propositions the exchange has set down,
+	// the discourse memory read back so the talk can be asked what it has covered.
+	if ans, ok := d.planRecallSaid(frame, raw); ok {
+		return ans, nil
+	}
+
+	// "What were we talking about" (or before that): name the subject in mind, or
+	// step back to one the trail kept, so a conversation can pick up where it was.
+	if ans, ok := d.planTopicRecall(frame, raw); ok {
 		return ans, nil
 	}
 
@@ -769,6 +837,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	}
 	if topic.Concept != nil {
 		c := topic.Concept
+		d.noteFocus(c) // "what is X" keeps X the topic, not a neighbour the answer reached for
 		tally, _ := d.store.GroundingTally()
 		// A relation reified as a concept is an action, the same kind a verb
 		// names, so "what is chase" answers that chase is an action and not a

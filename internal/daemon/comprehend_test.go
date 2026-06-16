@@ -1063,6 +1063,54 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// The topic follows the subject a turn raised and keeps it across a turn that
+// raises none, and a displaced subject is kept on the trail to return to: the
+// memory a conversation holds so it stays on a thread and can step back to one.
+func TestTopicTracksFocusAndTrails(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.turnFocus = 10
+	d.trackTopic()
+	if d.topic != 10 {
+		t.Fatalf("the topic should follow the subject raised: %d", d.topic)
+	}
+	d.turnFocus = 20
+	d.trackTopic()
+	if d.topic != 20 || len(d.topicTrail) != 1 || d.topicTrail[0] != 10 {
+		t.Fatalf("a new subject takes the field and trails the old: topic=%d trail=%v", d.topic, d.topicTrail)
+	}
+	d.turnFocus = 0
+	d.trackTopic()
+	if d.topic != 20 {
+		t.Fatalf("a turn that raised no subject keeps the one in play: %d", d.topic)
+	}
+	d.turnFocus = 10
+	d.trackTopic()
+	if d.topic != 10 || len(d.topicTrail) != 1 || d.topicTrail[0] != 20 {
+		t.Fatalf("returning should re-take 10 and trail 20: topic=%d trail=%v", d.topic, d.topicTrail)
+	}
+}
+
+// "What have I told you" reads back the propositions the exchange established, the
+// discourse memory rather than the entrenched graph, so a conversation can be
+// asked what it has covered.
+func TestRecallSaidReportsEstablished(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a cat chased a mouse")
+	got, ok := d.planRecallSaid(grammar.Frame{Lang: "en"}, "what have I told you")
+	if !ok || !strings.Contains(got, "dog") || !strings.Contains(got, "cat") || !strings.Contains(got, "mouse") {
+		t.Fatalf("recall should report what the exchange established: %q (%v)", got, ok)
+	}
+	// With nothing established, the move declines so the older path can answer.
+	d.threadProps = nil
+	if _, ok := d.planRecallSaid(grammar.Frame{Lang: "en"}, "what have I told you"); ok {
+		t.Fatal("with nothing established, recall should decline")
+	}
+}
+
 // A basic word that has kept enough varied company can grow an "abs:en:cat"
 // shadow of its own percept; that shadow then outweighs the percept in the
 // naming vote and every clause about the cat mis-resolves. The shadow is a

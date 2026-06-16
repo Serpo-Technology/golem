@@ -39,6 +39,10 @@ type threadProp struct {
 
 const threadPropCap = 16
 
+// topicTrailCap bounds how many displaced subjects the talk keeps to return to,
+// so a long conversation can step back a few topics without hoarding every one.
+const topicTrailCap = 8
+
 // recordThreadProp remembers a proposition the exchange just established, newest
 // first, keeping only the last few so an old turn does not haunt a new one. The
 // glosses are kept too, so the answer can be spoken from the thread even when
@@ -288,6 +292,61 @@ func (d *Daemon) threadFactClause(lang string, c *memory.Fragment) (string, bool
 	return d.renderFacts(lang, d.conceptName(c.ID, c.Content, lang), fresh, true, true)
 }
 
+// planRecallSaid answers "what have I told you": GOLEM reports the propositions
+// the exchange has set down, grouped by their agent and spoken in the order they
+// were established, so the talk can be asked what it has covered. It reads the
+// discourse memory, never the entrenched graph, so it reports only what was said
+// this exchange. It returns false when the turn is not that question or nothing
+// has been established yet, so an empty exchange falls through to the older path.
+func (d *Daemon) planRecallSaid(frame grammar.Frame, raw string) (string, bool) {
+	if !isRecallSaid(raw) || len(d.threadProps) == 0 {
+		return "", false
+	}
+	// Oldest first, so the recall reads in the order the exchange built it.
+	var agents []uint64
+	seen := map[uint64]bool{}
+	for i := len(d.threadProps) - 1; i >= 0; i-- {
+		if a := d.threadProps[i].agent; !seen[a] {
+			seen[a] = true
+			agents = append(agents, a)
+		}
+	}
+	var clauses []string
+	for _, a := range agents {
+		var facts []focusFact
+		gloss := ""
+		for i := len(d.threadProps) - 1; i >= 0; i-- {
+			if p := d.threadProps[i]; p.agent == a {
+				facts = append(facts, focusFact{rel: p.rel, focusRole: "agent", coGloss: p.patientGloss, coID: p.patient})
+				gloss = p.agentGloss
+			}
+		}
+		if line, ok := d.renderFacts(frame.Lang, d.conceptName(a, gloss, frame.Lang), facts, true, false); ok {
+			clauses = append(clauses, line)
+		}
+	}
+	if len(clauses) == 0 {
+		return "", false
+	}
+	return strings.Join(clauses, " "), true
+}
+
+// isRecallSaid reports whether a turn asks GOLEM to report back what it has been
+// told this exchange, distinct from "what do you know about X", which describes a
+// concept from the whole graph.
+func isRecallSaid(raw string) bool {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	for _, p := range []string{
+		"what have i told you", "what did i tell you", "what have i told you so far",
+		"what have i said", "what did i say", "what do you remember",
+	} {
+		if s == p {
+			return true
+		}
+	}
+	return false
+}
+
 // completeRoleEllipsis answers an elliptical follow-up to a role question by
 // inheriting its relation and asking it of a new referent: after "what did the
 // cat chase", "what about the dog" walks chase from the dog. The relation and
@@ -360,6 +419,31 @@ func describeReferent(raw string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// isTopicRecall reports whether a turn asks what the talk is on (back=false) or
+// what it was on before the current subject (back=true). The "before" forms are
+// matched first, so "what were we talking about before" steps back rather than
+// naming the current subject.
+func isTopicRecall(raw string) (back bool, ok bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	for _, p := range []string{
+		"what were we talking about before", "what were we talking about before that",
+		"what were we discussing before", "what about before that", "and before that", "before that",
+	} {
+		if s == p {
+			return true, true
+		}
+	}
+	for _, p := range []string{
+		"what were we talking about", "what are we talking about",
+		"what were we discussing", "what are we discussing", "what is the topic", "what's the topic",
+	} {
+		if s == p {
+			return false, true
+		}
+	}
+	return false, false
 }
 
 // aboutReferent reads the referent of an elliptical follow-up, the noun in "what

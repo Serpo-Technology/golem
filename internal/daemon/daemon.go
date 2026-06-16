@@ -187,6 +187,17 @@ type Daemon struct {
 	// is worn deepest into the graph, without changing the long-term weight.
 	threadProps []threadProp
 
+	// topicTrail is the recent subjects the exchange has moved through, newest
+	// first and distinct, so a conversation can return to what it was on before
+	// the current subject took the field. Cleared at sleep with the topic.
+	topicTrail []uint64
+
+	// turnFocus is the concept the current turn is explicitly about, the subject
+	// it named rather than what the answer happened to warm. The topic follows it
+	// when set, so a subject the speaker raised holds the field over a neighbour
+	// the reply lit up. Set while planning a turn, read and cleared by trackTopic.
+	turnFocus uint64
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -1311,6 +1322,8 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.lastDrewTopic = 0
 	d.lastRole = nil
 	d.threadProps = nil
+	d.topicTrail = nil
+	d.turnFocus = 0
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)

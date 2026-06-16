@@ -53,6 +53,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
 	}
+	d.noteFocus(agent.Concept) // a told proposition leaves its subject as the topic
 	// The proposition is in the graph now; the exchange remembers it set this
 	// down, so a later "what about X" leans on what was just said.
 	if patientID != 0 {
@@ -126,6 +127,7 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 // one inherited by an elliptical follow-up. It leaves the relation as the
 // discourse thread so "what about X" can ask the same of another referent.
 func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, knownRole, verb string) (string, bool) {
+	d.noteFocus(known) // the asked-about concept is the turn's subject, the topic to keep
 	past := frame.Past || d.gram.VerbPast(frame.Lang, verb)
 	// The relation and its tense are the thread an elliptical follow-up inherits.
 	d.lastRole = &roleContext{rel: rel, knownRole: knownRole, verb: verb, past: past}
@@ -179,6 +181,7 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	if agent == nil {
 		return "", false
 	}
+	d.noteFocus(agent) // "what did X do" keeps X the topic
 	// The tense is the pro-verb's: "what did the dog do" is past, "what does the
 	// dog do" present, read from the last word's tense so a Turkish "ne yaptı"
 	// answers in the past where "ne yapar" would not.
@@ -230,6 +233,15 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 	if focus == nil {
 		return "", false
 	}
+	d.turnFocus = focus.ID // "tell me about X" makes X the subject, resolved apart from the frame
+	return d.describeConcept(frame, focus), true
+}
+
+// describeConcept says what a concept is and what it has been part of: its kind,
+// then the propositions it stands in (the thread winning over the entrenched
+// graph), or a hedged guess from a near neighbour when nothing is observed. It is
+// the renderer behind "tell me about X" and a recall of the subject in mind.
+func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) string {
 	chem := d.chem.Snapshot()
 	kind := "thing"
 	if focus.Category == "verb" || focus.Category == "relation" {
@@ -251,7 +263,37 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 		parts = append(parts, guess)
 	}
 	d.warmSpoken(focus.Content)
-	return strings.Join(parts, " "), true
+	return strings.Join(parts, " ")
+}
+
+// planTopicRecall answers a turn that asks what the talk is on, or was on before:
+// "what were we talking about" describes the subject in mind; "what about before
+// that" steps back to the subject the trail kept and returns to it, so a
+// conversation can pick up a thread it set down. It returns false when the turn is
+// not such a question, or there is no subject (or none to step back to).
+func (d *Daemon) planTopicRecall(frame grammar.Frame, raw string) (string, bool) {
+	back, ok := isTopicRecall(raw)
+	if !ok {
+		return "", false
+	}
+	var id uint64
+	if back {
+		if len(d.topicTrail) == 0 {
+			return "", false
+		}
+		id = d.topicTrail[0]
+		d.turnFocus = id // stepping back makes the prior subject the one in play again
+	} else {
+		id = d.topic
+	}
+	if id == 0 {
+		return "", false
+	}
+	frags, err := d.store.FragmentsByIDs([]uint64{id})
+	if err != nil || len(frags) != 1 {
+		return "", false
+	}
+	return d.describeConcept(frame, frags[0]), true
 }
 
 // planPolar answers a yes/no question by checking the proposition it states
@@ -290,6 +332,7 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	if agent.Concept == nil || patient.Concept == nil {
 		return gap() // a referent grounds in nothing; admit rather than guess
 	}
+	d.noteFocus(agent.Concept) // a question about the cat chasing keeps the cat the topic
 	rel := d.resolveRelation(m.Relation.Phrase)
 	if rel == nil {
 		// The referents are known but the relation is not, so the proposition
