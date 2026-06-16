@@ -309,6 +309,7 @@ func testDaemonOn(t *testing.T, s *memory.Store) *Daemon {
 		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
+		held:         newHeldStore(),
 	}
 	// The grammar trains into the test store and compiles from it, the
 	// same path a real first boot takes.

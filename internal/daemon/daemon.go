@@ -75,6 +75,12 @@ type Daemon struct {
 	// referent pool for "that one" and "do it again."
 	ws *workspace
 
+	// held is propositional working memory: the propositions GOLEM holds in
+	// mind that are not graph facts, an inference it drew or a supposition it
+	// entertains, so a chain can build on a held step. It decays with ws and
+	// clears at sleep.
+	held *heldStore
+
 	// gram is the language faculty's working copy: grammar parameters
 	// read out of the graph and compiled for the engine, rebuilt at
 	// wake after the nightly competition with the lexicon.
@@ -373,6 +379,7 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		thinkDone:    make(chan thoughtCandidate, 8),
 		hot:          memory.NewHotTier(),
 		ws:           newWorkspace(),
+		held:         newHeldStore(),
 		voiceOn:      cfg.Channels.Voice,
 		voiceName:    cfg.Channels.VoiceName,
 	}
@@ -577,6 +584,7 @@ func (d *Daemon) Run() error {
 			now := time.Now()
 			d.chem.Decay()
 			d.ws.decay()
+			d.held.decay()
 			d.flushStorms(now)
 			if time.Since(d.lastSurprise) > d.cfg.CalmBeforeSleep() {
 				d.chem.BuildSleepPressure()
@@ -1252,6 +1260,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// cached copy; the working set rebuilds from what the morning uses.
 	d.hot.Clear()
 	d.ws.clear()
+	d.held.clear()
 	d.topic = 0
 	d.lastRole = nil
 	d.threadProps = nil
@@ -1399,6 +1408,7 @@ func (d *Daemon) forget(query string) (int, string, error) {
 	}
 	d.hot.Clear()
 	d.ws.clear()
+	d.held.clear()
 	d.event(events.Event{Ev: "forget", Tpl: wire.Clip(tpl, 120), Count: n})
 	if err := d.store.Audit(time.Now().Unix(), "forget", what, fmt.Sprintf("deleted %d node(s)", n)); err != nil {
 		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
