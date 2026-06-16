@@ -612,6 +612,56 @@ func TestPolarChainsThroughHeldBelief(t *testing.T) {
 	}
 }
 
+// GOLEM can entertain a proposition it does not believe, reason under it, and
+// keep it out of memory. The dog chased the cat; the coyote resembles the wolf
+// but reaches the cat through nothing observed. Supposing the wolf chased the
+// cat opens a route: under the supposition the coyote probably chased it too. The
+// supposition never becomes a belief, and releasing it closes the route again.
+func TestHypothesisEntertainsWithoutAsserting(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	coyote := groundNoun(t, d, "coyote")
+	say(t, d, "a dog chased a cat")
+	_ = dog
+	feat := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	// The coyote resembles the wolf alone; the wolf is observed chasing nothing,
+	// so without a supposition the coyote has no route to the cat.
+	b := feat("howls")
+	s.SetLinkRel(wolf.ID, b.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(coyote.ID, b.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "No, the coyote did not chase the cat." {
+		t.Fatalf("cold, the coyote cannot reach the cat: %q", got)
+	}
+	if got := say(t, d, "suppose the wolf chased the cat").Say; got != "Supposing the wolf chased the cat." {
+		t.Fatalf("a supposition should be echoed back, not asserted: %q", got)
+	}
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "Probably, the coyote chased the cat." {
+		t.Fatalf("under the supposition the coyote should reach the cat: %q", got)
+	}
+	// The supposition and anything contingent on it are entertained, not believed.
+	for _, p := range d.held.props {
+		if p.status == heldInferred {
+			t.Fatalf("a supposition must not become a belief: %+v", p)
+		}
+	}
+	if got := say(t, d, "never mind").Say; got != "All right." {
+		t.Fatalf("a release should be acknowledged: %q", got)
+	}
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "No, the coyote did not chase the cat." {
+		t.Fatalf("after release the supposition should no longer bear: %q", got)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,

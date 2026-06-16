@@ -279,6 +279,111 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief), true
 }
 
+// planSuppose entertains a supposition without asserting it: "suppose the wolf
+// chased the cat" comprehends its clause to a proposition and holds it in working
+// memory as hypothetical, so questions reason under it while it stands and
+// nothing it implies is ever written to memory. It is the entry to GOLEM
+// reasoning about something it does not believe. The clause is comprehended with
+// word order authoritative, like a polar question, so the supposition is the one
+// posed rather than one role-fit reordered. It returns false when the utterance
+// is not a supposition, so ordinary handling stands. "Never mind" releases it.
+func (d *Daemon) planSuppose(frame grammar.Frame, raw string) (string, bool) {
+	clause, ok := supposeClause(frame.Lang, raw)
+	if !ok {
+		return "", false
+	}
+	cannot := func() (string, bool) {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true, Patient: grammar.Term{Phrase: "that"}}, d.chem.Snapshot()), true
+	}
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	if !ok {
+		return cannot()
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	if agent.Concept == nil || patient.Concept == nil {
+		return cannot()
+	}
+	rel := d.resolveRelation(m.Relation.Phrase)
+	if rel == nil {
+		return cannot()
+	}
+	past := m.Past
+	d.held.add(heldProp{rel: rel.Content, agent: agent.Concept.ID, patient: patient.Concept.ID,
+		agentGloss: agent.Concept.Content, patientGloss: patient.Concept.Content,
+		status: heldHypothetical, conf: 1, depth: 0})
+	// Echo the supposition back so it is clear what is being entertained, the
+	// same construction every proposition speaks through, marked a supposition.
+	echo, _ := d.gram.Speak(frame.Lang, grammar.Meaning{
+		Relation: grammar.Term{Phrase: d.relationName(rel.Content, frame.Lang)},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: d.conceptName(agent.Concept.ID, agent.Concept.Content, frame.Lang), Definite: true},
+			"patient": {Phrase: d.conceptName(patient.Concept.ID, patient.Concept.Content, frame.Lang), Definite: true},
+		},
+		Past: past,
+	})
+	return supposeAck(frame.Lang, echo), true
+}
+
+// planRelease ends a supposition: "never mind" drops every hypothetical held
+// under it, and with it everything that was only contingent on it, so GOLEM
+// returns to reasoning from what it believes. It leaves inferred beliefs
+// standing. It returns false when the utterance is not a release.
+func (d *Daemon) planRelease(frame grammar.Frame, raw string) (string, bool) {
+	if !isRelease(raw) {
+		return "", false
+	}
+	d.held.clearStatus(heldHypothetical)
+	ack := "All right."
+	if frame.Lang == "tr" {
+		ack = "Peki."
+	}
+	return ack, true
+}
+
+// supposeClause reads the clause of a supposition, the proposition after a
+// "suppose"/"imagine"/"what if" lead, with any trailing mark dropped. It returns
+// false when the utterance carries no such lead.
+func supposeClause(lang, raw string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	leads := []string{"suppose that ", "suppose ", "imagine that ", "imagine ", "what if "}
+	if lang == "tr" {
+		leads = []string{"diyelim ki ", "varsayalım ki "}
+	}
+	for _, lead := range leads {
+		if rest, ok := strings.CutPrefix(s, lead); ok {
+			if rest = strings.TrimSpace(rest); rest != "" {
+				return rest, true
+			}
+		}
+	}
+	return "", false
+}
+
+// isRelease reports whether an utterance ends a supposition: "never mind" and
+// its kin, kept clear of the forget faculty's words so releasing a thought never
+// deletes a concept.
+func isRelease(raw string) bool {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "."))
+	for _, p := range []string{"never mind", "nevermind", "never mind that", "boş ver", "neyse"} {
+		if s == p {
+			return true
+		}
+	}
+	return false
+}
+
+// supposeAck speaks back what is being supposed, the proposition led (English) or
+// trailed (Turkish) by the tongue's supposing word, so the entertained clause is
+// confirmed without being asserted.
+func supposeAck(lang, echo string) string {
+	echo = strings.TrimSuffix(strings.TrimSpace(echo), ".")
+	if lang == "tr" {
+		return upperFirst(echo) + " diyelim."
+	}
+	return "Supposing " + lowerFirst(echo) + "."
+}
+
 // propositionHolds reads whether the graph holds a proposition: that the agent
 // stands in the relation to the patient. It crosses the same role edges every
 // answer walks, the agent's co-arguments under the relation, and reports whether
@@ -315,14 +420,20 @@ const inferenceFloor = 0.3
 // held belief it rode, so the conclusion drawn from it records how far it stands
 // from observation and what it was drawn from, and so a chain stops before it
 // runs past heldMaxDepth.
-func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID uint64) (conf float64, depth int, from uint64, ok bool) {
+func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID uint64) (conf float64, depth int, from uint64, supposed, ok bool) {
 	if d.propositionHolds(&memory.Fragment{ID: agentID}, relContent, patientID) {
-		return 1, 0, 0, true
+		return 1, 0, 0, false, true
 	}
 	if p := d.held.findID(relContent, agentID, patientID, heldInferred); p != nil && p.depth < heldMaxDepth {
-		return p.conf * heldStepKeep, p.depth + 1, p.id, true
+		return p.conf * heldStepKeep, p.depth + 1, p.id, false, true
 	}
-	return 0, 0, 0, false
+	// A supposition supports a guess the same way a belief does while it stands,
+	// but the guess it yields is contingent on it: the supposed flag rides back so
+	// the conclusion is held as hypothetical and never written as a belief.
+	if p := d.held.findID(relContent, agentID, patientID, heldHypothetical); p != nil && p.depth < heldMaxDepth {
+		return p.conf * heldStepKeep, p.depth + 1, p.id, true, true
+	}
+	return 0, 0, 0, false, false
 }
 
 // assessProposition reads how GOLEM holds a proposition. Observed when the graph
@@ -351,32 +462,41 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	if err != nil {
 		return beliefUnknown, 0
 	}
-	best, bestDepth, bestFrom := 0.0, 0, uint64(0)
-	// A standing conclusion about this very proposition is evidence for it.
+	best, bestDepth, bestFrom, bestSupposed := 0.0, 0, uint64(0), false
+	// A standing conclusion about this very proposition is evidence for it,
+	// whether GOLEM believes it or is only supposing it.
 	if p := d.held.findID(relContent, agent.ID, patient.ID, heldInferred); p != nil {
 		best, bestDepth = p.conf, p.depth
+	}
+	if p := d.held.findID(relContent, agent.ID, patient.ID, heldHypothetical); p != nil && p.conf > best {
+		best, bestDepth, bestSupposed = p.conf, p.depth, true
 	}
 	for _, sib := range sibs {
 		// The patient itself is not evidence that the agent acts on it.
 		if sib.id == patient.ID {
 			continue
 		}
-		conf, depth, from, ok := d.propositionSupport(sib.id, relContent, patient.ID)
+		conf, depth, from, supposed, ok := d.propositionSupport(sib.id, relContent, patient.ID)
 		if !ok {
 			continue
 		}
 		if cand := sib.weight * conf; cand > best {
-			best, bestDepth, bestFrom = cand, depth, from
+			best, bestDepth, bestFrom, bestSupposed = cand, depth, from, supposed
 		}
 	}
 	if best >= inferenceFloor {
-		var from []uint64
-		if bestFrom != 0 {
-			from = []uint64{bestFrom}
+		// A conclusion drawn from fact or belief is held as a belief a later step
+		// can build on; one that leans on a supposition is left unrecorded,
+		// contingent on the supposition and gone with it.
+		if !bestSupposed {
+			var from []uint64
+			if bestFrom != 0 {
+				from = []uint64{bestFrom}
+			}
+			d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
+				agentGloss: agent.Content, patientGloss: patient.Content,
+				status: heldInferred, conf: best, depth: bestDepth, from: from})
 		}
-		d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
-			agentGloss: agent.Content, patientGloss: patient.Content,
-			status: heldInferred, conf: best, depth: bestDepth, from: from})
 		return beliefInferred, best
 	}
 	return beliefUnknown, 0
