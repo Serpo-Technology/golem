@@ -568,6 +568,44 @@ func TestPolarInfersFromResemblance(t *testing.T) {
 	}
 }
 
+// A wh-question GOLEM holds no observed answer for it answers from inference,
+// hedged, the counterpart of the polar guess and symmetric across the role
+// asked. The wolf was never seen chasing anything, but it resembles the dog,
+// which chased the cat, so "what did the wolf chase" guesses the cat; and the
+// mouse resembles the cat, which the dog chased, so "who chased the mouse"
+// guesses the dog. The resemblance proposes the neighbour, its co-argument is
+// spoken back under the asked concept's name, and the hedge marks the guess. An
+// observed role still answers plainly.
+func TestRoleQuestionInfersFromResemblance(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	mouse := groundNoun(t, d, "mouse")
+	say(t, d, "a dog chased a cat")
+	share := func(a, b *memory.Fragment, name string) {
+		feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(feat); err != nil {
+			t.Fatal(err)
+		}
+		s.SetLinkRel(a.ID, feat.ID, memory.RelFeature, 1.0)
+		s.SetLinkRel(b.ID, feat.ID, memory.RelFeature, 1.0)
+	}
+	share(dog, wolf, "predator") // the wolf resembles the dog, the chaser
+	share(cat, mouse, "prey")    // the mouse resembles the cat, the chased
+
+	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
+		t.Fatalf("an observed role should answer plainly: %q", got)
+	}
+	if got := say(t, d, "what did the wolf chase").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("agent-side inference should be a hedged guess: %q", got)
+	}
+	if got := say(t, d, "who chased the mouse").Say; got != "Probably, the dog chased the mouse." {
+		t.Fatalf("patient-side inference should be a hedged guess: %q", got)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

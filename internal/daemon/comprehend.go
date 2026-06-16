@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -128,6 +129,12 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	facts := d.gatherFacts(known, knownRole, rel.Content)
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), facts, past, false)
 	if !ok {
+		// Nothing observed filled the questioned role. Before admitting the gap,
+		// try a hedged guess from a near neighbour that did stand in the relation.
+		if guess, ok := d.inferRole(frame, known, knownRole, rel.Content, past); ok {
+			d.warmSpoken(known.Content)
+			return guess, true
+		}
 		// The relation is known but nothing filled the questioned role: the
 		// honest answer is the gap, spoken through the older admission.
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
@@ -169,6 +176,12 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	facts := d.gatherFacts(agent, "agent", "")
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, past, false)
 	if !ok {
+		// No observed activity. Offer a hedged guess from a near neighbour before
+		// falling through to the older handling.
+		if guess, ok := d.inferRole(frame, agent, "agent", "", past); ok {
+			d.warmSpoken(agent.Content)
+			return guess, true
+		}
 		return "", false
 	}
 	for _, f := range facts {
@@ -322,6 +335,55 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 		return beliefInferred, best
 	}
 	return beliefUnknown, 0
+}
+
+// inferRole answers a role question GOLEM holds no observed fact for from
+// resemblance, the wh-question counterpart of the polar guess. The concept the
+// asked one most resembles, that stood in the relation in the questioned role,
+// lends its co-argument: "what did the wolf chase", unobserved, is answered
+// "Probably, the wolf chased the cat" when the wolf resembles the dog and the
+// dog chased the cat. Resemblance proposes the neighbour, the neighbour's
+// gathered facts are spoken back under the asked concept's name, and the hedge
+// marks the guess. The same gather and renderer the observed answer uses, here
+// run over a near neighbour. relContent filters to one relation, "" leaves it
+// open for "what did X do". It returns the rendered line and true when a near
+// enough neighbour had such a fact, so the caller offers the gap only when none
+// did.
+func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past bool) (string, bool) {
+	sibs, err := d.featureSiblings(known.ID, time.Now())
+	if err != nil {
+		return "", false
+	}
+	// Strongest resemblance first, so the guess rides the nearest neighbour that
+	// actually stood in the relation.
+	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].weight > sibs[j].weight })
+	for _, sib := range sibs {
+		if sib.weight < inferenceFloor {
+			break
+		}
+		facts := d.gatherFacts(&memory.Fragment{ID: sib.id}, knownRole, relContent)
+		// The asked concept is not evidence that it stands in the relation to
+		// itself, so a co-argument that is the asker is dropped before rendering.
+		kept := facts[:0]
+		for _, f := range facts {
+			if f.coID != known.ID {
+				kept = append(kept, f)
+			}
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, false)
+		if !ok {
+			continue
+		}
+		hedge := d.gram.Word(frame.Lang, "probably")
+		if hedge == "" {
+			return line, true
+		}
+		return upperFirst(hedge) + ", " + lowerFirst(line), true
+	}
+	return "", false
 }
 
 // answerPolar speaks a yes/no answer at the confidence GOLEM holds it. An
