@@ -305,6 +305,21 @@ func (d *Daemon) planTopicRecall(frame grammar.Frame, raw string) (string, bool)
 	return d.describeConcept(frame, frags[0]), true
 }
 
+// planClarify answers a request to say more about what GOLEM just said ("what do
+// you mean"): it elaborates the subject in mind, its kind and what it has been
+// part of, rather than reading the turn as a fresh question of its own. It returns
+// false when the turn is not such a request or nothing is in mind to elaborate.
+func (d *Daemon) planClarify(frame grammar.Frame, raw string) (string, bool) {
+	if !isClarify(raw) || d.topic == 0 {
+		return "", false
+	}
+	frags, err := d.store.FragmentsByIDs([]uint64{d.topic})
+	if err != nil || len(frags) != 1 {
+		return "", false
+	}
+	return d.describeConcept(frame, frags[0]), true
+}
+
 // planPolar answers a yes/no question by checking the proposition it states
 // against the graph rather than asserting it. "Did the dog chase the cat" and
 // "köpek kediyi kovaladı mı" each strip their question marker, comprehend the

@@ -498,7 +498,13 @@ func (d *Daemon) completeRoleEllipsis(frame grammar.Frame, raw string, thread *r
 	if thread == nil {
 		return "", false
 	}
+	// A continuation ("what about the dog") and a repair ("no, I meant the dog")
+	// both inherit the last question's relation and ask it of a new referent; the
+	// difference is only what prompted the swap.
 	ref, ok := aboutReferent(raw)
+	if !ok {
+		ref, ok = meantReferent(raw)
+	}
 	if !ok {
 		return "", false
 	}
@@ -606,4 +612,44 @@ func aboutReferent(raw string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// meantReferent reads the referent of a correction, the noun in "no, I meant the
+// cat" or "I mean a dog", with any leading "no" and article dropped, so a turn
+// that repairs the subject of the last question re-asks it of the right one.
+func meantReferent(raw string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	s = strings.TrimPrefix(s, "no, ")
+	s = strings.TrimPrefix(s, "no ")
+	for _, lead := range []string{"i meant ", "i mean "} {
+		rest, ok := strings.CutPrefix(s, lead)
+		if !ok {
+			continue
+		}
+		rest = strings.TrimSpace(rest)
+		for _, art := range []string{"a ", "an ", "the "} {
+			rest = strings.TrimPrefix(rest, art)
+		}
+		if rest = strings.TrimSpace(rest); rest != "" {
+			return rest, true
+		}
+	}
+	return "", false
+}
+
+// isClarify reports whether a turn asks GOLEM to say more about what it just
+// said, so it elaborates the subject in mind rather than reading the turn as a
+// fresh question of its own.
+func isClarify(raw string) bool {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
+	s = strings.TrimSuffix(s, ".")
+	for _, p := range []string{
+		"what do you mean", "what do you mean by that", "what does that mean",
+		"explain", "say more", "elaborate", "tell me more about that",
+	} {
+		if s == p {
+			return true
+		}
+	}
+	return false
 }

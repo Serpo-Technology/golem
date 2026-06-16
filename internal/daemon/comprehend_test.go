@@ -1099,6 +1099,38 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// A correction re-asks the last question of the right referent: "no, I meant the
+// cat" after "what did the dog chase" answers about the cat, the relation inherited
+// from the thread and only the subject repaired.
+func TestRepairCorrectsReferent(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a cat chased a mouse")
+	if got := say(t, d, "what did the dog chase").Say; !strings.Contains(got, "cat") {
+		t.Fatalf("the role question should answer about the dog: %q", got)
+	}
+	if got := say(t, d, "no, I meant the cat").Say; got != "The cat chased the mouse." {
+		t.Fatalf("a correction should re-ask the question of the right referent: %q", got)
+	}
+}
+
+// "What do you mean" elaborates the subject in mind rather than reading as a fresh
+// question, so a turn can ask GOLEM to say more about what it just said.
+func TestClarifyElaboratesTopic(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "what did the dog chase") // the dog is now the subject in mind
+	got := strings.ToLower(say(t, d, "what do you mean").Say)
+	if !strings.Contains(got, "dog") || !strings.Contains(got, "thing") {
+		t.Fatalf("clarify should elaborate the subject in mind: %q", got)
+	}
+}
+
 // A question GOLEM cannot answer is held open, and a later telling that fills the
 // gap is followed up with the answer rather than received in silence, so the talk
 // connects what was asked to what it learns.

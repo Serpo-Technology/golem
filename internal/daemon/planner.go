@@ -666,6 +666,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "What do you mean": elaborate the subject in mind rather than read the turn
+	// as a question of its own.
+	if ans, ok := d.planClarify(frame, raw); ok {
+		return ans, nil
+	}
+
 	// An elliptical follow-up to a role question inherits its relation and asks
 	// it of a new referent: "what about the dog" after "what did the cat chase"
 	// walks chase from the dog. The thread is read and cleared here; a role
