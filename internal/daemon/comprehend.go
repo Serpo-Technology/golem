@@ -307,13 +307,37 @@ const (
 // an inference about the asked agent; below it, resemblance is too thin to guess on.
 const inferenceFloor = 0.3
 
+// propositionSupport reads how firmly a concept stands in a relation to a
+// patient, for an inference leaning on it. Full when the graph holds it
+// outright; attenuated when GOLEM only holds it as an inferred belief in working
+// memory, so a chain that runs through a guess is weaker than one through a
+// fact; absent otherwise. It returns the derivation depth of the support and the
+// held belief it rode, so the conclusion drawn from it records how far it stands
+// from observation and what it was drawn from, and so a chain stops before it
+// runs past heldMaxDepth.
+func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID uint64) (conf float64, depth int, from uint64, ok bool) {
+	if d.propositionHolds(&memory.Fragment{ID: agentID}, relContent, patientID) {
+		return 1, 0, 0, true
+	}
+	if p := d.held.findID(relContent, agentID, patientID, heldInferred); p != nil && p.depth < heldMaxDepth {
+		return p.conf * heldStepKeep, p.depth + 1, p.id, true
+	}
+	return 0, 0, 0, false
+}
+
 // assessProposition reads how GOLEM holds a proposition. Observed when the graph
 // holds it outright. Inferred when a concept the agent resembles stands in the
-// same relation to the patient: the resemblance layer proposes the neighbour and
-// the graph disposes by checking whether that neighbour actually did it, so the
-// answer is a calibrated guess earned from a near neighbour rather than a fact.
-// Unknown otherwise. The confidence on an inference is the resemblance it rode in
-// on. This is the dual process in miniature, generation kept honest by a label.
+// same relation to the patient, in the graph or already in mind: the resemblance
+// layer proposes the neighbour and the support layer disposes by checking whether
+// that neighbour actually did it or is believed to, so the answer is a calibrated
+// guess earned from a near neighbour rather than a fact. Unknown otherwise.
+//
+// A conclusion it draws is held in working memory, so a later step can build on
+// it: the wolf guessed to chase the cat lets the coyote, which resembles the
+// wolf, be guessed to chase it too, a hop further from observation and a notch
+// less sure. GOLEM's own standing conclusion about the very proposition counts as
+// evidence for it, so a re-ask is consistent and the belief stays warm. The
+// confidence is the resemblance the guess rode in on, attenuated once per hop.
 func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (propBelief, float64) {
 	if d.propositionHolds(agent, relContent, patient.ID) {
 		return beliefObserved, 1
@@ -327,17 +351,32 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	if err != nil {
 		return beliefUnknown, 0
 	}
-	best := 0.0
+	best, bestDepth, bestFrom := 0.0, 0, uint64(0)
+	// A standing conclusion about this very proposition is evidence for it.
+	if p := d.held.findID(relContent, agent.ID, patient.ID, heldInferred); p != nil {
+		best, bestDepth = p.conf, p.depth
+	}
 	for _, sib := range sibs {
 		// The patient itself is not evidence that the agent acts on it.
 		if sib.id == patient.ID {
 			continue
 		}
-		if sib.weight > best && d.propositionHolds(&memory.Fragment{ID: sib.id}, relContent, patient.ID) {
-			best = sib.weight
+		conf, depth, from, ok := d.propositionSupport(sib.id, relContent, patient.ID)
+		if !ok {
+			continue
+		}
+		if cand := sib.weight * conf; cand > best {
+			best, bestDepth, bestFrom = cand, depth, from
 		}
 	}
 	if best >= inferenceFloor {
+		var from []uint64
+		if bestFrom != 0 {
+			from = []uint64{bestFrom}
+		}
+		d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
+			agentGloss: agent.Content, patientGloss: patient.Content,
+			status: heldInferred, conf: best, depth: bestDepth, from: from})
 		return beliefInferred, best
 	}
 	return beliefUnknown, 0

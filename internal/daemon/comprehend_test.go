@@ -568,6 +568,50 @@ func TestPolarInfersFromResemblance(t *testing.T) {
 	}
 }
 
+// A guess GOLEM has drawn and is holding lets it draw a further guess that
+// stands on it: the chain builds through working memory, a hop further from
+// observation and a notch less sure. The dog chased the cat; the wolf resembles
+// the dog and the coyote resembles the wolf, but the coyote resembles the dog
+// not at all, so the coyote can reach the cat only through the held belief about
+// the wolf. Cold, before that belief is in mind, the chain does not form.
+func TestPolarChainsThroughHeldBelief(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	coyote := groundNoun(t, d, "coyote")
+	say(t, d, "a dog chased a cat")
+
+	feat := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	a, b := feat("pads"), feat("howls")
+	// The dog and the wolf share one feature, the wolf and the coyote another,
+	// the dog and the coyote none, so the only path from coyote to dog is the wolf.
+	s.SetLinkRel(dog.ID, a.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, a.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, b.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(coyote.ID, b.ID, memory.RelFeature, 1.0)
+
+	// Cold: the wolf is not yet in mind, so the coyote cannot reach the dog.
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "No, the coyote did not chase the cat." {
+		t.Fatalf("with no held intermediate the chain should not form: %q", got)
+	}
+	// One hop from the observed fact, and the conclusion is held.
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("a one-hop guess should be hedged: %q", got)
+	}
+	// Now the coyote reaches the cat through the held belief about the wolf.
+	if got := say(t, d, "did the coyote chase the cat").Say; got != "Probably, the coyote chased the cat." {
+		t.Fatalf("a two-hop chain through the held belief should form: %q", got)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,
