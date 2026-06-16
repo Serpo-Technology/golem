@@ -1122,26 +1122,22 @@ func (d *Daemon) nameRelationInTongue(rel *memory.Fragment, lemma, lang string) 
 	}
 }
 
-// roleFit scores a concept's affinity for a thematic role from what has
-// filled that role before: a concept that has stood as the agent of past
-// propositions, or whose feature signature overlaps those that have, fits
-// the agent role, so best fit reads an animacy off lived usage rather than a
-// hand-listed table. It is empty until propositions accumulate, so the word
-// order alone binds the first tellings and the features sharpen the binding
-// only once there is evidence.
+// roleFit scores a concept's affinity for a thematic role by ANIMACY, read off
+// how much its feature signature overlaps the concepts that have filled the role:
+// a concept that resembles past agents fits the agent role, so best fit corrects
+// an implausible parse (an inanimate seated as agent) without a hand-listed
+// table. It reads resemblance, NOT a concept's own role-count, on purpose: a
+// concept's history of standing as a patient does not make it a patient now, and
+// counting it would feed back, a thing once chased reading as never a chaser,
+// unseating a clear subject. Word order binds the roles; animacy only rescues the
+// parse the order clearly got wrong, and only once features distinguish animate
+// from inanimate.
 func (d *Daemon) roleFit(c *memory.Fragment, role string) float64 {
 	rel := memory.RelAgent
 	if role == "patient" {
 		rel = memory.RelPatient
 	}
-	// Direct history: the role edges arriving at this concept.
-	direct := 0.0
-	if edges, err := d.store.LinksToRel([]uint64{c.ID}, rel); err == nil {
-		for _, e := range edges {
-			direct += e.Weight
-		}
-	}
-	return direct + d.roleKinship(c, rel)
+	return d.roleKinship(c, rel)
 }
 
 // roleKinship measures how much a concept resembles the concepts that have

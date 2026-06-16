@@ -968,3 +968,27 @@ func TestResolveConceptPrefersSpecificOverInheritedAbstraction(t *testing.T) {
 		t.Fatalf("a category word should resolve to its own abstraction: %+v", got)
 	}
 }
+
+// Role-fit reads animacy from resemblance, never a concept's own role-count: a
+// concept that has only ever been a patient must not be locked into that role,
+// because counting its history fed back, a thing once chased reading as never a
+// chaser and unseating a clear subject ("a cat chased a mouse" written reversed).
+func TestRoleFitReadsAnimacyNotRoleCount(t *testing.T) {
+	d, s := testDaemon(t)
+	c := groundNoun(t, d, "cat")
+	// Three moments in which the cat stood as patient, but it resembles nothing.
+	for i := 0; i < 3; i++ {
+		mom := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "tell",
+			Content: "a dog chased a cat", Template: "chased " + string(rune('a'+i)),
+			Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(mom); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(mom.ID, c.ID, memory.RelPatient, 0.8); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := d.roleFit(c, "patient"); got != 0 {
+		t.Fatalf("role-fit must not count a concept's own role history (that fed the swap loop): %v", got)
+	}
+}
