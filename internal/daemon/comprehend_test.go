@@ -929,3 +929,42 @@ func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	}
 	return false
 }
+
+// A member word resolves to its own specific concept, not the superordinate it
+// names only by inheritance. The abstraction's name-inheritance can bond "cat"
+// to the animal abstraction more firmly than to the cat percept; left unchecked
+// that bound a chase argument to "animal". A category word still resolves to its
+// own abstraction, which it matches.
+func TestResolveConceptPrefersSpecificOverInheritedAbstraction(t *testing.T) {
+	d, s := testDaemon(t)
+	mkConcept := func(template, content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision", Content: content,
+			Template: template, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	percept := mkConcept("a small black cat", "a small black cat")
+	animal := mkConcept("abs:en:animal", "animal")
+	catW, _, err := s.WordNode("cat", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "cat" names the cat percept directly (0.4) and the animal abstraction by
+	// inheritance, more firmly (0.8); "animal" names its own abstraction.
+	s.SetLinkRel(catW.ID, percept.ID, memory.RelNames, 0.4)
+	s.SetLinkRel(catW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+
+	if got := d.resolveConcept("cat"); got == nil || got.ID != percept.ID {
+		t.Fatalf("a member word should resolve to its specific concept, not the inherited superordinate: %+v", got)
+	}
+	if got := d.resolveConcept("animal"); got == nil || got.ID != animal.ID {
+		t.Fatalf("a category word should resolve to its own abstraction: %+v", got)
+	}
+}

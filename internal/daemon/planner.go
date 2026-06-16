@@ -52,18 +52,49 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 		names, err := d.store.LinksFromRel(ids, memory.RelNames)
 		if err == nil && len(names) > 0 {
 			votes := map[uint64]float64{}
+			votedIDs := make([]uint64, 0, len(names))
 			for _, e := range names {
+				if votes[e.To] == 0 {
+					votedIDs = append(votedIDs, e.To)
+				}
 				votes[e.To] += e.Weight
 			}
-			var best uint64
-			bestW := 0.0
-			for id, w := range votes {
-				if w > bestW || (w == bestW && id > best) {
-					best, bestW = id, w
-				}
+			tokSet := make(map[string]bool, len(tokens))
+			for _, t := range tokens {
+				tokSet[t] = true
 			}
-			if frags, err := d.store.FragmentsByIDs([]uint64{best}); err == nil && len(frags) == 1 {
-				return frags[0]
+			frags, err := d.store.FragmentsByIDs(votedIDs)
+			if err == nil && len(frags) > 0 {
+				// An abstraction is the referent of its OWN word; a word that names
+				// an abstraction it does not match holds an inherited member-to-
+				// superordinate name (cat names the animal abstraction at 0.8), and
+				// refers to its own specific concept, not the category. So such an
+				// inherited abstraction is set aside, and the noun resolves to the
+				// percept it directly names. A category word still resolves to its
+				// abstraction, which it matches. The any-fallback keeps a word that
+				// names only an inherited abstraction resolving rather than failing.
+				var best, bestAny uint64
+				var bestW, bestAnyW float64
+				for _, f := range frags {
+					w := votes[f.ID]
+					if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
+						bestAny, bestAnyW = f.ID, w
+					}
+					if lemma, ok := abstractionLemma(f.Template); ok && !tokSet[lemma] {
+						continue
+					}
+					if w > bestW || (w == bestW && f.ID > best) {
+						best, bestW = f.ID, w
+					}
+				}
+				if best == 0 {
+					best = bestAny
+				}
+				for _, f := range frags {
+					if f.ID == best {
+						return f
+					}
+				}
 			}
 		}
 	}
@@ -71,6 +102,22 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 		return concepts[0]
 	}
 	return nil
+}
+
+// abstractionLemma reads the word an abstraction generalizes, the lemma in its
+// "abs:<lang>:<lemma>" template, so a resolver can tell whether a word names an
+// abstraction as its own (a category word) or only by inheritance from a member
+// it grounds. It returns false for a percept concept, which carries no such
+// template.
+func abstractionLemma(template string) (string, bool) {
+	if !strings.HasPrefix(template, "abs:") {
+		return "", false
+	}
+	parts := strings.SplitN(template, ":", 3)
+	if len(parts) != 3 || parts[2] == "" {
+		return "", false
+	}
+	return parts[2], true
 }
 
 // namingContrast measures how firmly a phrase names a concept against the
