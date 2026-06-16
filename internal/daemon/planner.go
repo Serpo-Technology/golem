@@ -73,6 +73,27 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 				// percept it directly names. A category word still resolves to its
 				// abstraction, which it matches. The any-fallback keeps a word that
 				// names only an inherited abstraction resolving rather than failing.
+				// A basic word names a thing, not a class of it. A percept's
+				// basic kind is the head of its caption ("a small black cat" is a
+				// cat), so when a candidate percept is basically an L, an
+				// "abs:<lang>:L" concept is a basic-level shadow of that percept,
+				// not a category above it: heavy company can grow such a shadow
+				// from a noun that only ever named one kind. It is set aside the
+				// same as an inherited name, so the noun resolves to the percept it
+				// labels. A true superordinate ("animal") heads no percept's
+				// caption, so its abstraction still wins.
+				perceptHead := map[string]bool{}
+				for _, f := range frags {
+					if _, ok := abstractionLemma(f.Template); ok {
+						continue
+					}
+					if f.Category == "relation" {
+						continue // a relation is not a thing with a basic-level name
+					}
+					if fields := strings.Fields(f.Content); len(fields) > 0 {
+						perceptHead[strings.ToLower(fields[len(fields)-1])] = true
+					}
+				}
 				var best, bestAny uint64
 				var bestW, bestAnyW float64
 				for _, f := range frags {
@@ -80,7 +101,7 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 					if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
 						bestAny, bestAnyW = f.ID, w
 					}
-					if lemma, ok := abstractionLemma(f.Template); ok && !tokSet[lemma] {
+					if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
 						continue
 					}
 					if w > bestW || (w == bestW && f.ID > best) {

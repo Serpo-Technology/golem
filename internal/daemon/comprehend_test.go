@@ -969,6 +969,48 @@ func TestResolveConceptPrefersSpecificOverInheritedAbstraction(t *testing.T) {
 	}
 }
 
+// A basic word that has kept enough varied company can grow an "abs:en:cat"
+// shadow of its own percept; that shadow then outweighs the percept in the
+// naming vote and every clause about the cat mis-resolves. The shadow is a
+// basic-level abstraction (its lemma heads a percept's caption), unlike a true
+// superordinate, so it is set aside and the noun resolves to the thing it names.
+func TestResolveConceptPrefersPerceptOverBasicLevelShadow(t *testing.T) {
+	d, s := testDaemon(t)
+	mkConcept := func(template, content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision", Content: content,
+			Template: template, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	percept := mkConcept("a small black cat", "a small black cat")
+	catShadow := mkConcept("abs:en:cat", "cat") // the spurious same-lemma abstraction
+	animal := mkConcept("abs:en:animal", "animal")
+	catW, _, err := s.WordNode("cat", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// "cat" names the percept faintly (0.24) but its shadow firmly (0.8): the
+	// bug is the shadow winning the vote. "animal" names its own abstraction,
+	// which heads no percept's caption.
+	s.SetLinkRel(catW.ID, percept.ID, memory.RelNames, 0.24)
+	s.SetLinkRel(catW.ID, catShadow.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animalW.ID, percept.ID, memory.RelNames, 0.21) // animal names the cat percept by inheritance
+
+	if got := d.resolveConcept("cat"); got == nil || got.ID != percept.ID {
+		t.Fatalf("a basic noun must resolve to its percept, not a same-lemma shadow: %+v", got)
+	}
+	if got := d.resolveConcept("animal"); got == nil || got.ID != animal.ID {
+		t.Fatalf("a true superordinate (heads no caption) must still resolve to its abstraction: %+v", got)
+	}
+}
+
 // Role-fit reads animacy from resemblance, never a concept's own role-count: a
 // concept that has only ever been a patient must not be locked into that role,
 // because counting its history fed back, a thing once chased reading as never a
