@@ -477,7 +477,7 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 			if f.Kind != memory.KindEpisodic {
 				continue
 			}
-			out = append(out, recentMoment{id: f.ID, template: f.Template, at: f.Time})
+			out = append(out, recentMoment{id: f.ID, template: f.Template, at: f.Time, heat: e.heat})
 			if n++; n >= attentionAnchorCap {
 				break
 			}
@@ -488,7 +488,7 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 		// across several attended categories grounds in those categories
 		// rather than falling through to one of their members.
 		if n == 0 {
-			out = append(out, recentMoment{id: frags[0].ID, template: frags[0].Template, at: frags[0].Time})
+			out = append(out, recentMoment{id: frags[0].ID, template: frags[0].Template, at: frags[0].Time, heat: e.heat})
 		}
 	}
 	return out
@@ -564,12 +564,35 @@ func (d *Daemon) bindAttention(words []*memory.Fragment, anchors []recentMoment)
 			if a.id == word.ID {
 				continue
 			}
-			if err := d.store.Link(word.ID, a.id, w); err != nil {
+			// The bond is scaled by how strongly the anchor is attended now: a
+			// concept held at full presence grounds the word fully, one merely
+			// warm from a moment ago grounds it faintly, so a freshly attended
+			// percept wins the naming over what lingers from the scene before.
+			wa := w * attentionWeight(a.heat)
+			if wa <= 0 {
 				continue
 			}
-			d.store.Link(a.id, word.ID, w)
+			if err := d.store.Link(word.ID, a.id, wa); err != nil {
+				continue
+			}
+			d.store.Link(a.id, word.ID, wa)
 		}
 	}
+}
+
+// attentionWeight maps a concept's heat to how much of an attention bond it
+// earns: nothing at the grounding gate, the whole bond at full presence. Lingering
+// warmth, just above the gate, binds faintly, so a word grounds in what it is
+// pointed at and only weakly in what is fading from the scene before it.
+func attentionWeight(heat float64) float64 {
+	w := (heat - attentionGroundingGate) / (1 - attentionGroundingGate)
+	if w < 0 {
+		return 0
+	}
+	if w > 1 {
+		return 1
+	}
+	return w
 }
 
 // mintWordsScaled is mintWords with the bond weight scaled by the source's

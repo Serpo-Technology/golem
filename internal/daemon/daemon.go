@@ -315,6 +315,7 @@ type recentMoment struct {
 	id       uint64
 	template string
 	at       time.Time
+	heat     float64 // how warm the concept lending this moment is, for weighting an attention bond
 }
 
 // untrustedWeight is the starting weight of a moment from an untrusted
