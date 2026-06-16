@@ -537,6 +537,37 @@ func TestFirstTellingVerbKeysOnLemma(t *testing.T) {
 	}
 }
 
+// A yes/no question GOLEM cannot answer from observation it answers from
+// inference, honestly hedged. The wolf was never seen chasing the cat, but it
+// resembles the dog, which was: the resemblance layer proposes the dog, the
+// graph confirms the dog chased the cat, and the answer is "probably", a guess
+// offered as a guess. An observed proposition still affirms plainly, and an
+// unsupported one still denies, so the hedge marks only what is actually a guess.
+func TestPolarInfersFromResemblance(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "did the dog chase the cat").Say; got != "Yes, the dog chased the cat." {
+		t.Fatalf("an observed proposition should affirm plainly: %q", got)
+	}
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("an inferable proposition should be a hedged guess: %q", got)
+	}
+	if got := say(t, d, "did the cat chase the wolf").Say; got != "No, the cat did not chase the wolf." {
+		t.Fatalf("an unsupported proposition should deny: %q", got)
+	}
+}
+
 // linksTo reports whether any edge points at the given target.
 func linksTo(edges []memory.LinkEdge, to uint64) bool {
 	for _, e := range edges {

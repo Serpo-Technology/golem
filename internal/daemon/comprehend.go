@@ -256,8 +256,8 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// English carries the tense on the auxiliary it led with; Turkish on the verb
 	// the particle trailed, read back by Comprehend. Either way the answer matches.
 	past := pastAux || m.Past
-	holds := d.propositionHolds(agent.Concept, rel.Content, patient.Concept.ID)
-	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, holds), true
+	belief, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief), true
 }
 
 // propositionHolds reads whether the graph holds a proposition: that the agent
@@ -275,15 +275,73 @@ func (d *Daemon) propositionHolds(agent *memory.Fragment, relContent string, pat
 	return false
 }
 
-// answerPolar speaks a yes/no answer: the affirmation word the tongue carries,
-// then the proposition spoken back through the same construction, affirmed when
-// the graph holds it and denied when it does not. The word and the clause both
-// come from the tongue's data, the denial running the negative morphology so a
-// "no" reads "the dog did not chase the cat" or "köpek kediyi kovalamadı".
-func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past, holds bool) string {
-	word := d.gram.Word(lang, "yes")
-	if !holds {
+// propBelief is how firmly GOLEM holds a proposition it was asked about.
+type propBelief int
+
+const (
+	beliefUnknown  propBelief = iota // neither observed nor inferable
+	beliefObserved                   // the graph holds it, a fact
+	beliefInferred                   // not observed, but a near neighbour did it, a guess
+)
+
+// inferenceFloor is how near a neighbour must be for its proposition to support
+// an inference about the asked agent; below it, resemblance is too thin to guess on.
+const inferenceFloor = 0.3
+
+// assessProposition reads how GOLEM holds a proposition. Observed when the graph
+// holds it outright. Inferred when a concept the agent resembles stands in the
+// same relation to the patient: the resemblance layer proposes the neighbour and
+// the graph disposes by checking whether that neighbour actually did it, so the
+// answer is a calibrated guess earned from a near neighbour rather than a fact.
+// Unknown otherwise. The confidence on an inference is the resemblance it rode in
+// on. This is the dual process in miniature, generation kept honest by a label.
+func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (propBelief, float64) {
+	if d.propositionHolds(agent, relContent, patient.ID) {
+		return beliefObserved, 1
+	}
+	// A thing standing in a relation to itself is not a claim worth guessing, so
+	// a self-proposition is left unknown rather than inferred from a neighbour.
+	if agent.ID == patient.ID {
+		return beliefUnknown, 0
+	}
+	sibs, err := d.featureSiblings(agent.ID, time.Now())
+	if err != nil {
+		return beliefUnknown, 0
+	}
+	best := 0.0
+	for _, sib := range sibs {
+		// The patient itself is not evidence that the agent acts on it.
+		if sib.id == patient.ID {
+			continue
+		}
+		if sib.weight > best && d.propositionHolds(&memory.Fragment{ID: sib.id}, relContent, patient.ID) {
+			best = sib.weight
+		}
+	}
+	if best >= inferenceFloor {
+		return beliefInferred, best
+	}
+	return beliefUnknown, 0
+}
+
+// answerPolar speaks a yes/no answer at the confidence GOLEM holds it. An
+// observed proposition affirms plainly ("Yes, the dog chased the cat"); an
+// unknown one denies ("No, the cat did not chase the dog"), the negative
+// morphology running for the "no"; an inferred one leads with the tongue's hedge
+// ("Probably, the wolf chased the cat") and speaks the affirmed clause, so the
+// guess is offered as a guess and never as a fact. Word and clause both come
+// from the tongue's data.
+func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief) string {
+	var word string
+	negate := false
+	switch belief {
+	case beliefObserved:
+		word = d.gram.Word(lang, "yes")
+	case beliefInferred:
+		word = d.gram.Word(lang, "probably") // the hedge marks the clause a guess
+	default:
 		word = d.gram.Word(lang, "no")
+		negate = true
 	}
 	clause, ok := d.gram.Speak(lang, grammar.Meaning{
 		Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
@@ -292,10 +350,10 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 			"patient": {Phrase: d.conceptName(patient.ID, patient.Content, lang), Definite: true},
 		},
 		Past:   past,
-		Negate: !holds,
+		Negate: negate,
 	})
 	if !ok {
-		// No construction bound the proposition; the bare affirmation still answers.
+		// No construction bound the proposition; the bare word still answers.
 		return upperFirst(word) + "."
 	}
 	if word == "" {
