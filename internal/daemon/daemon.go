@@ -997,6 +997,26 @@ func (d *Daemon) recentWithin(at time.Time, exclude uint64) []recentMoment {
 	return targets
 }
 
+// recentNaming is recentWithin over the tighter naming window: a told word
+// grounds only in what was perceived in the last breath, not across the whole
+// adjacency window. Episode adjacency still spans linkWindow, so "the door opens,
+// then the bell rings" keeps its succession, but the word does not bind to the
+// scene before, which is what let a name taught now catch what lingered.
+func (d *Daemon) recentNaming(at time.Time, exclude uint64) []recentMoment {
+	var targets []recentMoment
+	for i := len(d.recent) - 1; i >= 0 && len(targets) < maxLinkFanout; i-- {
+		r := d.recent[i]
+		if at.Sub(r.at) > attentionRecency {
+			break
+		}
+		if r.id == exclude {
+			continue
+		}
+		targets = append(targets, r)
+	}
+	return targets
+}
+
 // bindTo writes the bidirectional edges between a fragment and its
 // targets. Edge strength rides on dopamine, and a template pair that keeps
 // co-occurring earns a growing bonus. Confirmation pays one reward spike
@@ -1393,8 +1413,16 @@ func (d *Daemon) tellAbout(req wire.Request) wire.Response {
 	// Annotation words enter the lexicon bound to the annotated moments,
 	// so a label given after the fact can still come to name them. The
 	// labeling is deliberate, so even closed-class forms mint: this is
-	// the usage that can come to outweigh a seeded grammar parameter.
-	words := d.mintWords(req.Content, req.Lang, f.ID, targets, true)
+	// the usage that can come to outweigh a seeded grammar parameter. The
+	// moments span the adjacency window, but a name grounds only in the
+	// freshest of them, so a caption does not bind to the scene before.
+	naming := make([]recentMoment, 0, len(targets))
+	for _, t := range targets {
+		if f.Time.Sub(t.at) <= attentionRecency {
+			naming = append(naming, t)
+		}
+	}
+	words := d.mintWords(req.Content, req.Lang, f.ID, naming, true)
 	d.warmConcepts(words, exciteSpeech)
 
 	resp := wire.Response{OK: true, Observe: &res}
@@ -1592,7 +1620,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// verb's surface ("kovaladı") reinforces the relation word ("kovala")
 		// instead of minting a node before its lemma is a concept. They keep
 		// company with the recent moments the utterance bound to.
-		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentWithin(time.Now(), res.FragmentID), false)
+		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentNaming(time.Now(), res.FragmentID), false)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
 		// a told word grounds in the attended concept, but a proposition's words

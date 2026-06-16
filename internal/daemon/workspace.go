@@ -1,6 +1,9 @@
 package daemon
 
-import "sort"
+import (
+	"sort"
+	"time"
+)
 
 // The workspace is GOLEM's working memory: a decaying activation pattern
 // over concept nodes, held across ticks and turns. Encoding a moment
@@ -25,13 +28,15 @@ const (
 
 type workspace struct {
 	act   map[uint64]float64
-	touch map[uint64]uint64 // sequence of last excitation, for recency tie-breaks
-	role  map[uint64]string // the thematic role a concept last played, for pronoun binding
+	touch map[uint64]uint64    // sequence of last excitation, for recency tie-breaks
+	seen  map[uint64]time.Time // wall-clock of last excitation, for recency-gating a name's anchor
+	role  map[uint64]string    // the thematic role a concept last played, for pronoun binding
 	seq   uint64
 }
 
 func newWorkspace() *workspace {
-	return &workspace{act: make(map[uint64]float64), touch: make(map[uint64]uint64), role: make(map[uint64]string)}
+	return &workspace{act: make(map[uint64]float64), touch: make(map[uint64]uint64),
+		seen: make(map[uint64]time.Time), role: make(map[uint64]string)}
 }
 
 // excite warms a concept, keeping whichever is higher: the new activation
@@ -52,6 +57,7 @@ func (w *workspace) excite(id uint64, amount float64) {
 	// so "do it again" follows the latest mention rather than the lowest id.
 	w.seq++
 	w.touch[id] = w.seq
+	w.seen[id] = time.Now()
 	if len(w.act) <= workspaceBudget {
 		return
 	}
@@ -64,6 +70,7 @@ func (w *workspace) excite(id uint64, amount float64) {
 	}
 	delete(w.act, coldest)
 	delete(w.touch, coldest)
+	delete(w.seen, coldest)
 	delete(w.role, coldest)
 }
 
@@ -86,6 +93,7 @@ func (w *workspace) decay() {
 		if a < workspaceFloor {
 			delete(w.act, id)
 			delete(w.touch, id)
+			delete(w.seen, id)
 			delete(w.role, id)
 			continue
 		}
@@ -102,6 +110,7 @@ func (w *workspace) cool(id uint64, keep float64) {
 		if a < workspaceFloor {
 			delete(w.act, id)
 			delete(w.touch, id)
+			delete(w.seen, id)
 			delete(w.role, id)
 			return
 		}
@@ -112,7 +121,15 @@ func (w *workspace) cool(id uint64, keep float64) {
 func (w *workspace) clear() {
 	w.act = make(map[uint64]float64)
 	w.touch = make(map[uint64]uint64)
+	w.seen = make(map[uint64]time.Time)
 	w.role = make(map[uint64]string)
+}
+
+// seenAt reports when a concept was last excited, the recency a name's anchor is
+// gated on so a word grounds in what is freshly attended, not what lingers warm.
+func (w *workspace) seenAt(id uint64) (time.Time, bool) {
+	t, ok := w.seen[id]
+	return t, ok
 }
 
 // roleOf reports the thematic role a warm concept last played, empty when it

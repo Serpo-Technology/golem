@@ -387,6 +387,12 @@ const (
 	attentionGroundingGate = 0.4 // a concept must be at least this warm to lend its experience
 	attentionAnchorCap     = 4   // grounded moments of an attended concept a told word binds to
 	attentionConceptCap    = 2   // how many warm concepts can be attended at once
+	// A concept anchors a name only if it was attended this recently. Warmth
+	// lingers for minutes to serve discourse, but a name grounds in what is
+	// freshly in attention, so a word taught in one scene does not bind to what
+	// was merely still warm from the scene before. Deliberate co-attention, like
+	// naming a member and its category in one scene, falls well inside this.
+	attentionRecency = 5 * time.Second
 )
 
 // attendedWarmest returns the n hottest concepts after lateral
@@ -450,9 +456,15 @@ func (d *Daemon) attendedWarmest(n int) []warmEntry {
 // an attended category wins the slot over the members it subsumes.
 func (d *Daemon) attentionAnchors() []recentMoment {
 	warm := d.attendedWarmest(attentionConceptCap)
+	now := time.Now()
 	var out []recentMoment
 	for _, e := range warm {
 		if e.heat < attentionGroundingGate {
+			continue
+		}
+		// Warm but not freshly attended: it lingers from a scene before and may
+		// still serve discourse, but it does not ground a new name.
+		if t, ok := d.ws.seenAt(e.id); !ok || now.Sub(t) > attentionRecency {
 			continue
 		}
 		frags, err := d.store.FragmentsByIDs([]uint64{e.id})
