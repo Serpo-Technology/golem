@@ -737,6 +737,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "The cat is to the mouse as the dog is to what": a proportion, answered by the
+	// relation the first pair shares carried onto the third term.
+	if ans, ok := d.planAnalogy(frame); ok {
+		return ans, nil
+	}
+
 	// "How much bigger is the cat than the mouse": the degree of a comparison, read
 	// before the plain comparison since a magnitude clause is also comparative.
 	if ans, ok := d.planMagnitude(frame); ok {

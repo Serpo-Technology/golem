@@ -737,6 +737,61 @@ func (d *Daemon) discoverConverse(rel, subj, std *memory.Fragment) {
 	}
 }
 
+// analogize completes a proportion a:b::c:?: it finds the relation that holds from
+// a to b in the told facts, then the concepts c stands to in that same relation,
+// the fourth term. Grounded and glass-box: the relation is explicit, no vector
+// offset, so the analogy is the relation a:b shares with c:?. It returns the
+// relation and c's co-arguments under it, or false when a stands in no told
+// relation to b, or c stands in none of the relations a does.
+func (d *Daemon) analogize(a, b, c *memory.Fragment) (string, []focusFact, bool) {
+	if a == nil || b == nil || c == nil {
+		return "", nil, false
+	}
+	for _, ab := range d.gatherFacts(a, "agent", "") {
+		if ab.coID != b.ID {
+			continue // the relation must be the one that actually holds a -> b
+		}
+		if cf := d.gatherFacts(c, "agent", ab.rel); len(cf) > 0 {
+			return ab.rel, cf, true
+		}
+	}
+	return "", nil, false
+}
+
+// planAnalogy answers a proportion "A is to B as C is to what" with the fourth
+// term: the relation that holds A->B applied to C. It admits the gap when a term
+// grounds in nothing or no relation carries through, rather than force an answer.
+func (d *Daemon) planAnalogy(frame grammar.Frame) (string, bool) {
+	if !frame.Analogy || frame.Force != grammar.ForceQuestion {
+		return "", false
+	}
+	a, b, c := frame.Agent.Concept, frame.Patient.Concept, frame.Third.Concept
+	dontKnow := func() string {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot())
+	}
+	if a == nil || b == nil || c == nil {
+		return dontKnow(), true
+	}
+	d.noteFocus(c)
+	_, ans, ok := d.analogize(a, b, c)
+	if !ok {
+		return dontKnow(), true
+	}
+	seen := map[uint64]bool{}
+	var names []string
+	for _, f := range ans {
+		if !seen[f.coID] {
+			seen[f.coID] = true
+			names = append(names, d.conceptName(f.coID, f.coGloss, frame.Lang))
+		}
+	}
+	if len(names) == 0 {
+		return dontKnow(), true
+	}
+	return upperFirst(d.coordinatedNP(frame.Lang, names)) + ".", true
+}
+
 // sayComparison speaks a comparison's answer, the affirmation word and the clause
 // the question stated, denied when the ordering does not hold: "Yes, the cat is
 // bigger than the mouse" or "No, the cat is not bigger than the mouse". The copula

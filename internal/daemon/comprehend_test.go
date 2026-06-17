@@ -1346,6 +1346,56 @@ func TestMagnitudeQuestionAnswered(t *testing.T) {
 	}
 }
 
+// A proportion a:b::c:? is completed from the told relation: the relation that
+// holds cat -> mouse (chase) is found and applied to the dog, so the fourth term is
+// what the dog chased. Grounded in the relation, not a vector offset.
+func TestAnalogicalProportion(t *testing.T) {
+	d, _ := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	dog := groundNoun(t, d, "dog")
+	bird := groundNoun(t, d, "bird")
+	say(t, d, "the cat chased the mouse")
+	say(t, d, "the dog chased the bird")
+	rel, ans, ok := d.analogize(cat, mouse, dog)
+	if !ok || rel != "chase" {
+		t.Fatalf("the proportion's relation should be the chase that holds cat->mouse: rel=%q ok=%v", rel, ok)
+	}
+	found := false
+	for _, f := range ans {
+		if f.coID == bird.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the dog is to the bird as the cat is to the mouse: %+v", ans)
+	}
+	// No relation holds from the bird to the dog, so the proportion has no fourth term.
+	if _, _, ok := d.analogize(bird, dog, cat); ok {
+		t.Fatal("a proportion with no relation between its first pair has no answer")
+	}
+}
+
+// The proportion parses from "A is to B as C is to what" and is answered with the
+// fourth term: the cat chased the mouse and the dog chased the bird, so "the cat is
+// to the mouse as the dog is to what" yields the bird. A proportion whose first
+// pair shares no relation is admitted, not forced.
+func TestAnalogyQuestionAnswered(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "bird")
+	say(t, d, "the cat chased the mouse")
+	say(t, d, "the dog chased the bird")
+	if got := say(t, d, "the cat is to the mouse as the dog is to what").Say; got != "The bird." {
+		t.Fatalf("the proportion should yield what the dog chased: %q", got)
+	}
+	if got := say(t, d, "the bird is to the dog as the cat is to what").Say; strings.HasPrefix(got, "The ") {
+		t.Fatalf("no relation holds bird->dog, so the proportion should be admitted, not answered: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

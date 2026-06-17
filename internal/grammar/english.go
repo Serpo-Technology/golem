@@ -123,6 +123,16 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	if !verbFinal && p.category(lang, tokens[0]) == catCop {
 		f.Force = ForceQuestion
 	}
+	// "A is to B as C is to what": a proportion. Its four terms span two clauses
+	// joined by "as", a shape the clause-at-a-time parse below cannot hold, so it is
+	// read apart into the three known terms; the fourth is what the question asks.
+	if a, b, c, ok := p.proportionParts(lang, tokens); ok {
+		f.Analogy, f.Force = true, ForceQuestion
+		f.Agent = resolveTerm(a, resolve)
+		f.Patient = resolveTerm(b, resolve)
+		f.Third = resolveTerm(c, resolve)
+		return f
+	}
 	// "how much bigger is X than Y": a comparison asked for its DEGREE, not its
 	// truth. It opens with the degree interrogative, so it is read before the plain
 	// comparison below (which would mistake the subject for the relation).
@@ -381,6 +391,52 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 		return "", "", "", false, false
 	}
 	return rel, subject, standard, ask, true
+}
+
+// proportionParts reads "A is to B as C is to <what>" into its three known terms,
+// the first pair and the third whose fourth is asked. The clause "X is to Y" names
+// a relation by example rather than word, and "as" pivots one such clause against
+// another. It returns false when the shape is absent: no pivot, or a half that is
+// not an "is to" clause.
+func (p *Params) proportionParts(lang string, tokens []string) (a, b, c string, ok bool) {
+	as := -1
+	for i, tok := range tokens {
+		if tok == "as" { // the proportional pivot
+			as = i
+			break
+		}
+	}
+	if as <= 0 || as >= len(tokens)-1 {
+		return "", "", "", false
+	}
+	a, b, ok1 := p.isToParts(lang, tokens[:as])
+	c, _, ok2 := p.isToParts(lang, tokens[as+1:]) // the right half's fourth term is the asked one
+	if !ok1 || !ok2 {
+		return "", "", "", false
+	}
+	return a, b, c, true
+}
+
+// isToParts reads one "X is to Y" half of a proportion: the copula with "to" after
+// it splits the two terms. The right half's Y is the asked "what", so an empty Y is
+// allowed there; only X is required of either half.
+func (p *Params) isToParts(lang string, toks []string) (x, y string, ok bool) {
+	cop := -1
+	for i, tok := range toks {
+		if p.category(lang, tok) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 1 || cop+1 >= len(toks) || toks[cop+1] != "to" {
+		return "", "", false
+	}
+	x = p.contentSpan(toks[:cop])
+	y = p.contentSpan(toks[cop+2:])
+	if x == "" {
+		return "", "", false
+	}
+	return x, y, true
 }
 
 // magnitudeParts reads "how much bigger is X than Y" into its relation (the
