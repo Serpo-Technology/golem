@@ -134,7 +134,11 @@ verb:en:run	run runs ran run	en
 verb:en:see	see sees saw seen	en	
 fw:tr:asla	asla	tr	neg
 fw:tr:bazen	bazen	tr	adv
+fw:tr:ben	ben	tr	deixis
+fw:tr:beni	beni	tr	deixis
 fw:tr:bir	bir	tr	det
+fw:tr:biz	biz	tr	deixis
+fw:tr:bizi	bizi	tr	deixis
 fw:tr:defa	defa	tr	fn
 fw:tr:değil	değil	tr	neg
 fw:tr:genellikle	genellikle	tr	adv
@@ -155,6 +159,8 @@ fw:tr:neden	neden	tr	wh:why
 fw:tr:nedir	nedir	tr	wh:what:be
 fw:tr:nerede	nerede	tr	wh:where
 fw:tr:niye	niye	tr	wh:why
+fw:tr:sen	sen	tr	deixis
+fw:tr:seni	seni	tr	deixis
 fw:tr:sonra	sonra	tr	rel:after
 fw:tr:ve	ve	tr	fn
 fw:tr:zaman	zaman	tr	time

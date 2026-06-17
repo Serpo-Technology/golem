@@ -146,16 +146,22 @@ func TestRegularTurkishConjugation(t *testing.T) {
 	p := Builtin()
 	cases := []struct {
 		past, neg bool
+		person    trPerson
 		want      string
 	}{
-		{true, false, "kovaladı"},
-		{true, true, "kovalamadı"},
-		{false, false, "kovalar"},
-		{false, true, "kovalamaz"},
+		{true, false, trPerson3sg, "kovaladı"},
+		{true, true, trPerson3sg, "kovalamadı"},
+		{false, false, trPerson3sg, "kovalar"},
+		{false, true, trPerson3sg, "kovalamaz"},
+		// The past agrees with a participant subject: -m (I), -n (you), -k (we).
+		{true, false, trPerson1sg, "kovaladım"},
+		{true, false, trPerson2sg, "kovaladın"},
+		{true, false, trPerson1pl, "kovaladık"},
+		{true, true, trPerson1sg, "kovalamadım"},
 	}
 	for _, c := range cases {
-		if got := finiteVerbTR(p, "kovala", c.past, c.neg, false); got != c.want {
-			t.Fatalf("kovala past=%v neg=%v: got %q want %q", c.past, c.neg, got, c.want)
+		if got := finiteVerbTR(p, "kovala", c.past, c.neg, false, c.person); got != c.want {
+			t.Fatalf("kovala past=%v neg=%v person=%v: got %q want %q", c.past, c.neg, c.person, got, c.want)
 		}
 	}
 }

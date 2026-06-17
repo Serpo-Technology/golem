@@ -99,12 +99,35 @@ func stripCaseAccTR(w string) string {
 // effort over the regular paradigm; a seeded event verb is resolved by the
 // closed class before this is consulted.
 func turkishVerbStem(surface string) string {
-	for _, suf := range []string{"dı", "di", "du", "dü", "tı", "ti", "tu", "tü"} {
-		if strings.HasSuffix(surface, suf) && len([]rune(surface)) > 3 {
-			return strings.TrimSuffix(surface, suf)
+	s := surface
+	// A finite past may carry a person suffix after the tense: -m (I), -n (you),
+	// -k (we). Shed it when a past-tense suffix sits beneath, so an agreed verb
+	// ("kovaladın", "kovaladım") reduces to the same stem as the bare third person.
+	if r := []rune(s); len(r) > 4 {
+		switch r[len(r)-1] {
+		case 'm', 'n', 'k':
+			if trimmed := string(r[:len(r)-1]); endsPastTR(trimmed) {
+				s = trimmed
+			}
 		}
 	}
-	return surface
+	for _, suf := range []string{"dı", "di", "du", "dü", "tı", "ti", "tu", "tü"} {
+		if strings.HasSuffix(s, suf) && len([]rune(s)) > 3 {
+			return strings.TrimSuffix(s, suf)
+		}
+	}
+	return s
+}
+
+// endsPastTR reports whether a form ends in the Turkish past-tense suffix -DI, the
+// marker the verb stemmer strips, so a person suffix is shed only over a real past.
+func endsPastTR(s string) bool {
+	for _, suf := range []string{"dı", "di", "du", "dü", "tı", "ti", "tu", "tü"} {
+		if strings.HasSuffix(s, suf) {
+			return true
+		}
+	}
+	return false
 }
 
 // Vowel harmony. The last written vowel decides: twofold harmony picks
@@ -353,7 +376,57 @@ func regularVerbTR(p *Params, stem string, past, negate bool) string {
 	return stem + applySuffixTR(stem, p.suffix("aorist", "Ir"))
 }
 
-func finiteVerbTR(p *Params, base string, past, negate, hedge bool) string {
+// trPerson is the grammatical person a finite verb agrees with. The third person
+// is the unmarked default the engine speaks for an ordinary subject; the others
+// are the conversation participants, who carry an agreement suffix.
+type trPerson int
+
+const (
+	trPerson3sg trPerson = iota
+	trPerson1sg          // ben
+	trPerson2sg          // sen
+	trPerson1pl          // biz
+)
+
+// trPersonOf reads the person a subject's surface carries, so a Turkish past verb
+// agrees with it: "ben" is first person, "sen" second, "biz" first plural, and
+// anything else the bare third person the engine already speaks.
+func (p *Params) trPersonOf(surface string) trPerson {
+	switch strings.ToLower(strings.TrimSpace(surface)) {
+	case p.surfaceWord("tr", "firstperson"):
+		return trPerson1sg
+	case p.surfaceWord("tr", "addressee"):
+		return trPerson2sg
+	case p.surfaceWord("tr", "firstpersonpl"):
+		return trPerson1pl
+	}
+	return trPerson3sg
+}
+
+// pastPersonSuffixTR is the agreement suffix a Turkish past verb takes: -m (I),
+// -n (you), -k (we). The third person is unmarked.
+func pastPersonSuffixTR(person trPerson) string {
+	switch person {
+	case trPerson1sg:
+		return "m"
+	case trPerson2sg:
+		return "n"
+	case trPerson1pl:
+		return "k"
+	}
+	return ""
+}
+
+// finiteVerbTR conjugates a verb and agrees a past form with its subject's person.
+func finiteVerbTR(p *Params, base string, past, negate, hedge bool, person trPerson) string {
+	form := finiteVerbFormTR(p, base, past, negate, hedge)
+	if past && !hedge {
+		form += pastPersonSuffixTR(person)
+	}
+	return form
+}
+
+func finiteVerbFormTR(p *Params, base string, past, negate, hedge bool) string {
 	if _, seeded := p.verbsTR[base]; !seeded {
 		return regularVerbTR(p, base, past, negate) // a learned verb: the regular paradigm
 	}
@@ -426,7 +499,7 @@ func (p *Params) realizeTurkish(f Frame, chem limbic.State) string {
 			b.WriteString(f.At)
 			b.WriteString(" ")
 		}
-		b.WriteString(finiteVerbTR(p, f.Action.Phrase, f.Past, f.Negate, hedge))
+		b.WriteString(finiteVerbTR(p, f.Action.Phrase, f.Past, f.Negate, hedge, p.trPersonOf(f.Agent.Speak())))
 	case "know":
 		// "Make test'ten sonra ne gelir, henüz bilmiyorum."
 		var gap []string

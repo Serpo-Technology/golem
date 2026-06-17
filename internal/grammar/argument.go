@@ -83,7 +83,10 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 			if verb == "" {
 				return "", false
 			}
-			parts = append(parts, p.conjugate(lang, verb, m.Roles["agent"].Plural, m.Past, m.Negate))
+			// The Turkish past agrees with its subject's person, so a clause about a
+			// participant ("ben kediyi kovaladim") conjugates to it.
+			person := p.trPersonOf(m.Roles["agent"].Speak())
+			parts = append(parts, p.conjugate(lang, verb, m.Roles["agent"].Plural, m.Past, m.Negate, person))
 			continue
 		}
 		filler := m.Roles[s.Role]
@@ -99,9 +102,9 @@ func (p *Params) Speak(lang string, m Meaning) (string, bool) {
 // for Turkish, the English for the rest, and the negative in either. The
 // morphology is per-language code (vowel harmony and do-support are not
 // strings), but the words it works on come from data.
-func (p *Params) conjugate(lang, base string, plural, past, negate bool) string {
+func (p *Params) conjugate(lang, base string, plural, past, negate bool, person trPerson) string {
 	if lang == "tr" {
-		return finiteVerbTR(p, base, past, negate, false)
+		return finiteVerbTR(p, base, past, negate, false, person)
 	}
 	if negate {
 		// English denies with do-support: "did not chase", "does not chase".
@@ -370,17 +373,24 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 	if len(tokens) == 0 {
 		return nil, false
 	}
-	// A determiner anchors a noun phrase's start; a deictic pronoun is a one-word
-	// phrase that anchors the same way without a determiner, so "you chased the
-	// cat" yields the subject a determiner count alone would miss.
+	// A determiner anchors a noun phrase's start; in a verb-medial tongue a bare
+	// deictic pronoun anchors the same way without one, so "you chased the cat"
+	// yields the subject a determiner count alone would miss. A verb-final tongue
+	// marks definiteness by case rather than articles, so its arguments come through
+	// the content-token path, where a pronoun stays a content token rather than an
+	// anchor that would miscount the clause.
+	verbFinal := p.verbFinal(lang)
 	var anchors []int
 	for i, tok := range tokens {
 		switch p.category(lang, tok) {
-		case catDet, catDeixis:
+		case catDet:
 			anchors = append(anchors, i)
+		case catDeixis:
+			if !verbFinal {
+				anchors = append(anchors, i)
+			}
 		}
 	}
-	verbFinal := p.verbFinal(lang)
 	switch {
 	case len(anchors) >= 2:
 		d2 := anchors[1]
@@ -399,9 +409,31 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 		np1 := p.contentSpan(tokens[:len(tokens)-1])
 		return []string{np1, verb}, np1 != "" && verb != ""
 	default:
-		content := p.ContentTokens(utterance)
+		content := p.argContentTokens(lang, utterance)
 		return content, len(content) >= 2
 	}
+}
+
+// argContentTokens returns an utterance's open-class words plus its deictic
+// pronouns, the arguments a clause splits into when no determiner anchors them. A
+// pronoun is kept where the closed-class filter would drop it, so a verb-final
+// clause with a pronoun argument ("sen kediyi kovaladin") still yields every span.
+func (p *Params) argContentTokens(lang, s string) []string {
+	p = p.get()
+	tokens, _ := Tokenize(s)
+	seen := map[string]bool{}
+	var out []string
+	for _, tok := range tokens {
+		if len(tok) < 2 || seen[tok] {
+			continue
+		}
+		if p.isFunctionWordLang(lang, tok) && p.category(lang, tok) != catDeixis {
+			continue
+		}
+		seen[tok] = true
+		out = append(out, tok)
+	}
+	return out
 }
 
 // selectArgByArity picks the construction with the given number of slots,

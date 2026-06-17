@@ -1196,6 +1196,29 @@ func TestParticipantDeixisRoundTrips(t *testing.T) {
 	}
 }
 
+// The participants resolve in Turkish too, the asymmetry the deixis pronouns left
+// open: "sen" (you) is GOLEM, "ben" (I) the speaker, so a Turkish clause about the
+// speakers grounds in them and a fact told with "sen" comes back affirmed.
+func TestParticipantDeixisTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "kedi", "tr")
+	groundNounLang(t, d, "köpek", "tr")
+	// "sen" (you) is GOLEM; told of itself, it affirms of itself as "ben", the verb
+	// agreeing in the first person.
+	sayLang(t, d, "tr", "sen kediyi kovaladın")
+	if got := sayLang(t, d, "tr", "sen kediyi kovaladın mı").Say; got != "Evet, ben kediyi kovaladım." {
+		t.Fatalf("the fact told with sen should hold, spoken back as ben: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "sen köpeği kovaladın mı").Say; got != "Hayır, ben köpeği kovalamadım." {
+		t.Fatalf("an unheld fact about GOLEM should deny as ben: %q", got)
+	}
+	// "ben" (I) is the speaker; told of the speaker, GOLEM speaks back as "sen".
+	sayLang(t, d, "tr", "ben köpeği kovaladım")
+	if got := sayLang(t, d, "tr", "ben köpeği kovaladım mı").Say; got != "Evet, sen köpeği kovaladın." {
+		t.Fatalf("the fact told with ben should hold, spoken back as sen: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

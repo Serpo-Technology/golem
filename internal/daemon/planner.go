@@ -512,11 +512,11 @@ func (d *Daemon) trackTopic() {
 // "we" of the two together. It returns 0 for anything else.
 func (d *Daemon) deicticParticipant(phrase string) uint64 {
 	switch strings.ToLower(strings.TrimSpace(phrase)) {
-	case "i", "me", "myself":
+	case "i", "me", "myself", "ben", "beni", "bana":
 		return d.userID
-	case "you", "yourself":
+	case "you", "yourself", "sen", "seni", "sana":
 		return d.selfID
-	case "we", "us":
+	case "we", "us", "biz", "bizi", "bize":
 		return d.bothID
 	}
 	return 0
