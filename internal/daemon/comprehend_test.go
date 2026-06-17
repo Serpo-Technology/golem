@@ -1099,6 +1099,41 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// A member inherits its category's doing, defeasibly: told the animal chased the
+// mouse, a cat (an animal) probably did too, hedged because a category's doing
+// binds no one member. The inheritance answers the polar and the wh alike, and a
+// non-member inherits nothing.
+func TestDefeasibleCategoryInheritance(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	rabbit := groundNoun(t, d, "rabbit")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "bottle")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5)
+	s.SetLinkRel(animal.ID, rabbit.ID, memory.RelGrounds, 0.5)
+	say(t, d, "an animal chased the mouse") // a category-level fact
+
+	if got := say(t, d, "did the cat chase the mouse").Say; got != "Probably, the cat chased the mouse." {
+		t.Fatalf("a member should inherit the category's doing, hedged: %q", got)
+	}
+	if got := say(t, d, "what did the rabbit chase").Say; got != "Probably, the rabbit chased the mouse." {
+		t.Fatalf("the wh answer should inherit too, for consistency with the polar: %q", got)
+	}
+	if got := say(t, d, "did the bottle chase the mouse").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("a non-member inherits nothing: %q", got)
+	}
+}
+
 // GOLEM reasons over the is-a hierarchy: it answers whether a thing belongs to a
 // category, and composes membership with a relation, soundly and firmly, so "did
 // the dog chase an animal" holds because the dog chased a cat and a cat is an

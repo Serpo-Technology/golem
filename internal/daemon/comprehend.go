@@ -761,32 +761,82 @@ func (d *Daemon) categoryMembers(catID uint64) []uint64 {
 	return out
 }
 
-// isA reports whether a concept is a member of a category, directly or up the is-a
-// chain (the cat is an animal, an animal is a thing, so the cat is a thing), so a
-// member belongs to every category above it. The climb is the composition: a fact
-// of membership chained onto a fact of membership.
-func (d *Daemon) isA(memberID, catID uint64) bool {
-	seen := map[uint64]bool{}
+// categoriesOf returns the categories a concept belongs to, directly and up the
+// is-a chain (the cat is an animal, an animal is a thing), so a member's whole
+// lineage is in hand for a query or an inheritance. The climb is the composition:
+// a fact of membership chained onto a fact of membership.
+func (d *Daemon) categoriesOf(memberID uint64) []uint64 {
+	var out []uint64
+	seen := map[uint64]bool{memberID: true}
 	stack := []uint64{memberID}
 	for len(stack) > 0 {
 		m := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		if seen[m] {
-			continue
-		}
-		seen[m] = true
 		cats, err := d.store.LinksToRel([]uint64{m}, memory.RelGrounds)
 		if err != nil {
 			continue
 		}
 		for _, e := range cats { // the abstractions that ground in m are its categories
-			if e.From == catID {
-				return true
+			if !seen[e.From] {
+				seen[e.From] = true
+				out = append(out, e.From)
+				stack = append(stack, e.From) // climb to the category's own categories
 			}
-			stack = append(stack, e.From) // climb to the category's own categories
+		}
+	}
+	return out
+}
+
+// isA reports whether a concept is a member of a category, directly or up the is-a
+// chain, so a member belongs to every category above it.
+func (d *Daemon) isA(memberID, catID uint64) bool {
+	for _, c := range d.categoriesOf(memberID) {
+		if c == catID {
+			return true
 		}
 	}
 	return false
+}
+
+// categoryInherits reads whether a category the agent belongs to stands in the
+// relation to the patient: told that the animal chased the mouse, a cat (an animal)
+// probably did too. It composes membership with a category-level fact, defeasibly,
+// since a category's doing does not bind every member. It returns the inheriting
+// category, for the explanation, and whether one was found.
+func (d *Daemon) categoryInherits(agent *memory.Fragment, relContent string, patientID uint64) (uint64, bool) {
+	for _, catID := range d.categoriesOf(agent.ID) {
+		cf, err := d.fragmentsByIDsTiered([]uint64{catID})
+		if err != nil || len(cf) != 1 {
+			continue
+		}
+		if d.propositionHolds(cf[0], relContent, patientID) {
+			return catID, true
+		}
+	}
+	return 0, false
+}
+
+// inheritedFacts finds what a concept's categories do in the asked role, the
+// defeasible counterpart of inferredFacts: a member inherits its category's
+// propositions, hedged. "What did the rabbit chase" reaches the mouse through the
+// animal the rabbit belongs to. It returns false when no category fills the role.
+func (d *Daemon) inheritedFacts(known *memory.Fragment, knownRole, relContent string) ([]focusFact, bool) {
+	var out []focusFact
+	seen := map[uint64]bool{}
+	for _, catID := range d.categoriesOf(known.ID) {
+		cf, err := d.fragmentsByIDsTiered([]uint64{catID})
+		if err != nil || len(cf) != 1 {
+			continue
+		}
+		for _, f := range d.gatherFacts(cf[0], knownRole, relContent) {
+			if f.coID == known.ID || seen[f.coID] {
+				continue
+			}
+			seen[f.coID] = true
+			out = append(out, f)
+		}
+	}
+	return out, len(out) > 0
 }
 
 // propositionHoldsCategorically reads whether a proposition holds once a category
@@ -827,6 +877,12 @@ const (
 // inferenceFloor is how near a neighbour must be for its proposition to support
 // an inference about the asked agent; below it, resemblance is too thin to guess on.
 const inferenceFloor = 0.3
+
+// categoryInheritConf is the confidence a member inherits from a category-level
+// fact: firmer than a typical resemblance guess, since membership is a surer tie
+// than feature overlap, but still hedged, since a category's doing binds no one
+// member.
+const categoryInheritConf = 0.7
 
 // propositionSupport reads how firmly a concept stands in a relation to a
 // patient, for an inference leaning on it. Full when the graph holds it
@@ -879,6 +935,16 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {
 		return beliefUnknown, 0, false
+	}
+	// A category the agent belongs to standing in the relation lends it, hedged:
+	// the cat is an animal, and the animal chased the mouse, so probably the cat
+	// did. Membership is a firmer tie than resemblance, so it is tried first, but a
+	// category's doing binds no one member, so the conclusion is held as a guess.
+	if _, ok := d.categoryInherits(agent, relContent, patient.ID); ok {
+		d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
+			agentGloss: agent.Content, patientGloss: patient.Content,
+			status: heldInferred, conf: categoryInheritConf, depth: 0, voiced: true})
+		return beliefInferred, categoryInheritConf, false
 	}
 	sibs, err := d.featureSiblings(agent.ID, time.Now())
 	if err != nil {
@@ -941,7 +1007,13 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past, continuation bool) (string, bool) {
 	kept, _, ok := d.inferredFacts(known, knownRole, relContent)
 	if !ok {
-		return "", false
+		// No near neighbour stood in the relation, but a category the asked concept
+		// belongs to may have: "what did the rabbit chase" reaches the mouse through
+		// the animal the rabbit is, defeasibly, where resemblance fell short.
+		kept, ok = d.inheritedFacts(known, knownRole, relContent)
+		if !ok {
+			return "", false
+		}
 	}
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, continuation)
 	if !ok {
