@@ -123,6 +123,15 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	if !verbFinal && p.category(lang, tokens[0]) == catCop {
 		f.Force = ForceQuestion
 	}
+	// "who chased what the dog chased": a nested question, the asked role of the
+	// outer clause filled by an inner one. A second interrogative mid-clause opens
+	// the embedded clause; it is split off and the outer parsed alone, the inner
+	// kept for the planner to resolve first and feed back in.
+	if outer, inner, ok := p.splitNested(lang, tokens); ok {
+		f = p.parse(lang, outer, question, resolve)
+		f.Inner = inner
+		return f
+	}
 	// "A is to B as C is to what": a proportion. Its four terms span two clauses
 	// joined by "as", a shape the clause-at-a-time parse below cannot hold, so it is
 	// read apart into the three known terms; the fourth is what the question asks.
@@ -391,6 +400,23 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 		return "", "", "", false, false
 	}
 	return rel, subject, standard, ask, true
+}
+
+// splitNested separates a nested question into its outer clause and the embedded
+// inner one: a second interrogative, with a clause before it, opens an embedded
+// clause that fills the outer's asked role ("who chased | what the dog chased").
+// It returns false when there is no second interrogative or nothing precedes it.
+func (p *Params) splitNested(lang string, tokens []string) (outer []string, inner string, ok bool) {
+	var whs []int
+	for i, tok := range tokens {
+		if p.category(lang, tok) == catWh {
+			whs = append(whs, i)
+		}
+	}
+	if len(whs) < 2 || whs[1] < 2 {
+		return nil, "", false
+	}
+	return tokens[:whs[1]], strings.Join(tokens[whs[1]:], " "), true
 }
 
 // proportionParts reads "A is to B as C is to <what>" into its three known terms,

@@ -737,6 +737,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Who chased what the dog chased": a nested question, the inner clause resolved
+	// first and its answer fed into the outer, composing two relational hops.
+	if ans, ok := d.planMultiHop(frame, raw); ok {
+		return ans, nil
+	}
+
 	// "The cat is to the mouse as the dog is to what": a proportion, answered by the
 	// relation the first pair shares carried onto the third term.
 	if ans, ok := d.planAnalogy(frame); ok {

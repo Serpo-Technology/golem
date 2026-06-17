@@ -209,6 +209,65 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	return line, true
 }
 
+// planMultiHop answers a nested question "who chased what the dog chased" by
+// composing two relational hops. An object-fronted clause like "what the dog
+// chased" does not parse on its own (the parser leans on an auxiliary to flag the
+// verb), so the pieces are read straight from the tokens: the inner clause is its
+// subject plus its final verb, and the outer is the leading interrogative plus its
+// verb. The first hop walks the inner relation from its subject to its patients;
+// the second walks the outer relation to the agents that stand to each. It admits
+// the gap when a part does not resolve or no fact carries through.
+func (d *Daemon) planMultiHop(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Inner == "" {
+		return "", false
+	}
+	dontKnow := func() (string, bool) {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
+	}
+	all, _ := grammar.Tokenize(raw)
+	inner, _ := grammar.Tokenize(frame.Inner)
+	if len(inner) < 3 || len(all) < len(inner)+2 {
+		return dontKnow()
+	}
+	// Inner "what the dog chased": the interrogative fronts the object, so the
+	// subject is the agent and the final verb names the relation.
+	innerRel := d.resolveRelation(d.gram.Lemma(frame.Lang, inner[len(inner)-1]))
+	innerSubj := d.resolveConcept(strings.Join(inner[1:len(inner)-1], " "))
+	// Outer "who chased ...": the leading interrogative asks the agent, its verb the
+	// relation, and the inner answer fills the patient.
+	outer := all[:len(all)-len(inner)]
+	outerRel := d.resolveRelation(d.gram.Lemma(frame.Lang, outer[len(outer)-1]))
+	if innerRel == nil || innerSubj == nil || outerRel == nil {
+		return dontKnow()
+	}
+	seen := map[uint64]bool{}
+	var names []string
+	var focus *memory.Fragment
+	for _, mid := range d.gatherFacts(innerSubj, "agent", innerRel.Content) { // hop 1: the subject's patients
+		mf, err := d.fragmentsByIDsTiered([]uint64{mid.coID})
+		if err != nil || len(mf) != 1 {
+			continue
+		}
+		if focus == nil {
+			focus = mf[0]
+		}
+		for _, ag := range d.gatherFacts(mf[0], "patient", outerRel.Content) { // hop 2: who stood to each
+			if !seen[ag.coID] {
+				seen[ag.coID] = true
+				names = append(names, d.conceptName(ag.coID, ag.coGloss, frame.Lang))
+			}
+		}
+	}
+	if len(names) == 0 {
+		return dontKnow()
+	}
+	if focus != nil {
+		d.noteFocus(focus)
+	}
+	return upperFirst(d.coordinatedNP(frame.Lang, names)) + ".", true
+}
+
 // planActivityQuestion answers "what did the dog do": the relation itself is
 // asked, not a role of a named one. The agent is given and the verb is the
 // generic pro-verb, so the walk reads the strongest proposition the agent

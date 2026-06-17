@@ -1396,6 +1396,27 @@ func TestAnalogyQuestionAnswered(t *testing.T) {
 	}
 }
 
+// A nested question composes two relational hops: "who chased what the dog chased"
+// resolves the inner clause (the dog chased the cat) and asks the outer of its
+// answer (who chased the cat), naming the dog and the mouse. A nested query whose
+// inner clause finds nothing is admitted, not forced.
+func TestMultiHopNestedQuery(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the dog chased the cat")
+	say(t, d, "the mouse chased the cat")
+	got := say(t, d, "who chased what the dog chased").Say
+	if !strings.Contains(got, "dog") || !strings.Contains(got, "mouse") {
+		t.Fatalf("who chased what the dog chased should name the dog and the mouse: %q", got)
+	}
+	// The cat chased nothing here, so the inner clause is empty and the gap admitted.
+	if got := say(t, d, "who chased what the cat chased").Say; strings.Contains(got, "dog") || strings.Contains(got, "mouse") {
+		t.Fatalf("the cat chased nothing, so the nested query has no answer: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

@@ -76,6 +76,7 @@ type Frame struct {
 	Magnitude   bool        // the question asks the DEGREE of a comparison ("how much bigger is X than Y")
 	Analogy     bool        // a proportion "A is to B as C is to what": Agent:Patient :: Third:?
 	Third       Term        // the third term of a proportion, the one whose fourth is asked
+	Inner       string      // an embedded clause filling this question's asked role ("who chased WHAT THE DOG CHASED")
 	Pro         bool        // the patient was a pro-form; resolve it from the workspace
 	ProType     string      // the pro-form's animacy preference: animate, inanimate, or empty
 	Alt         bool        // "the other one": resolve past the warmest referent
