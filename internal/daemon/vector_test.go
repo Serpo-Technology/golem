@@ -105,3 +105,60 @@ func TestGrowEmbeddingsFromFeatures(t *testing.T) {
 			dogWolf, dogRock)
 	}
 }
+
+// Category membership bridges the gap feature overlap leaves: two concepts with
+// no shared feature still land near in the learned space when they belong to the
+// same category, so a sparsely-featured concept resembles its kind above the
+// blend floor. This is the source-matrix enrichment that lets a golden lion find
+// the dog through the animal they share, where feature tokens alone left it adrift.
+func TestGrowEmbeddingsBridgesByCategory(t *testing.T) {
+	d, s := testDaemon(t)
+	concept := func(name string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	feature := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	link := func(from, to *memory.Fragment, rel string, w float64) { s.SetLinkRel(from.ID, to.ID, rel, w) }
+	// lion and dog share NO feature; rock shares none either and is no animal.
+	golden, mane := feature("golden"), feature("mane")
+	small, brown := feature("small"), feature("brown")
+	hard := feature("hard")
+	animal := concept("animal")
+	lion, dog, rock := concept("lion"), concept("dog"), concept("rock")
+	link(lion, golden, memory.RelFeature, 1)
+	link(lion, mane, memory.RelFeature, 1)
+	link(dog, small, memory.RelFeature, 1)
+	link(dog, brown, memory.RelFeature, 1)
+	link(rock, hard, memory.RelFeature, 1)
+	// The animal abstraction grounds in lion and dog, the is-a membership, not rock.
+	link(animal, lion, memory.RelGrounds, 1)
+	link(animal, dog, memory.RelGrounds, 1)
+
+	d.growEmbeddings()
+
+	vl, ok1 := s.Vector(lion.ID)
+	vd, ok2 := s.Vector(dog.ID)
+	vr, ok3 := s.Vector(rock.ID)
+	if !ok1 || !ok2 || !ok3 {
+		t.Fatalf("every concept should gain an embedding: %v %v %v", ok1, ok2, ok3)
+	}
+	lionDog := memory.Cosine(vl, vd)
+	lionRock := memory.Cosine(vl, vr)
+	if lionDog < vectorSimFloor {
+		t.Fatalf("lion should resemble dog through the shared animal category, above the blend floor: lion~dog=%.3f floor=%.2f", lionDog, vectorSimFloor)
+	}
+	if lionDog <= lionRock {
+		t.Fatalf("the shared category should put lion nearer dog than the category-less rock: lion~dog=%.3f lion~rock=%.3f", lionDog, lionRock)
+	}
+}

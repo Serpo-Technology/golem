@@ -644,11 +644,12 @@ const (
 )
 
 // blendVectorSiblings folds the vector layer's nearest concepts into a seed's
-// resemblance set: where an embedding exists, the percepts nearest it in the
+// resemblance set: where an embedding exists, the concepts nearest it in the
 // space join the shared-token siblings, taking the stronger weight where both
-// name the same concept. The embedder lives outside the brain, so this only
-// measures distance over coordinates it was handed. A seed with no embedding,
-// the case until embeddings are learned, passes the set through untouched, so
+// name the same concept. The embeddings are the brain's own nightly
+// factorization of its grounded company, so this measures distance over
+// coordinates it learned for itself. A seed with no embedding, the case until
+// the first night's embeddings are learned, passes the set through untouched, so
 // the symbolic walk is unchanged until the associative layer is populated.
 func (d *Daemon) blendVectorSiblings(seed uint64, out []walkDest, now time.Time) []walkDest {
 	vec, ok := d.store.Vector(seed)

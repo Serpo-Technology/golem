@@ -9,10 +9,10 @@ import (
 // The vector layer is the associative substrate beside the symbolic graph: an
 // embedding per fragment that places it among the others, so "similar" can be
 // nearness in a space rather than overlap of discrete feature tokens. The
-// embeddings come from an embedder OUTSIDE the brain (a transducer, like the
-// captioner), so the brain runs no black-box math itself; it only stores the
-// vectors and measures distance. This is the layer that lets analogy and
-// generalization propose, while the graph still disposes (composes and grounds).
+// embeddings are learned by the brain from its own grounded company (the daemon's
+// nightly factorization, no outside model); the store only keeps the vectors and
+// measures distance. This is the layer that lets analogy and generalization
+// propose, while the graph still disposes (composes and grounds).
 
 // VectorMatch is one fragment and how near its embedding sits to a target.
 type VectorMatch struct {
