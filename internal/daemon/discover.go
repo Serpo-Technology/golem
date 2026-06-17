@@ -11,60 +11,52 @@ import (
 )
 
 const (
-	discoverKindFloor = 0.6 // how near in the learned space concepts must sit to read as one kind
-	discoverKindCap   = 5   // nearest neighbours weighed for a kind
+	discoverKindFloor = 0.3 // how strongly a concept must resemble the seed to read as one kind, the resemblance-guess floor; the member minimum guards against thin noise
+	discoverKindCap   = 5   // most members a proposed kind names
 	discoverKindMin   = 2   // members beyond the seed before a cluster reads as a kind
 	namedKindWeight   = 1.0 // grounding weight a told naming gives the new category, a firm tie
 )
 
-// discoverKind finds the un-named kind a concept sits in: the concepts nearest it
-// in the learned space that share no category with it yet. It is the vector
-// proposing a category the graph never grew, concepts that cluster by their own
-// grounded company but were given no common word. It returns the co-members (the
-// seed excluded), or nothing when the seed has no embedding or no near company
-// outside the categories it already belongs to (an already-named kind is not
-// rediscovered). The graph disposes: this only proposes, nothing is grounded here.
+// discoverKind finds the un-named kind a concept sits in: the concepts it most
+// resembles that share no category with it yet. It reads the resemblance set the
+// brain already computes (featureSiblings, which blends shared-feature overlap
+// with nearness in the learned space), so a cluster bound by a shared trait the
+// graph never named is caught whether the tie is a feature token or a latent
+// direction. It returns the co-members (the seed excluded), or nothing when the
+// seed has no near company outside the categories it already belongs to (an
+// already-named kind is not rediscovered). The graph disposes; this only proposes.
 func (d *Daemon) discoverKind(seedID uint64) []*memory.Fragment {
-	vec, ok := d.store.Vector(seedID)
-	if !ok {
-		return nil
-	}
-	matches, err := d.store.NearestVectors(vec, memory.KindConcept, discoverKindCap, seedID)
+	sibs, err := d.featureSiblings(seedID, time.Now())
 	if err != nil {
 		return nil
 	}
+	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].weight > sibs[j].weight })
 	seedCats := map[uint64]bool{}
 	for _, c := range d.categoriesOf(seedID) {
 		seedCats[c] = true
 	}
-	var ids []uint64
-	for _, m := range matches {
-		if m.Score < discoverKindFloor {
+	var members []*memory.Fragment
+	for _, s := range sibs {
+		if s.weight < discoverKindFloor || s.kind != memory.KindConcept {
 			continue
 		}
 		shares := false
-		for _, c := range d.categoriesOf(m.ID) {
+		for _, c := range d.categoriesOf(s.id) {
 			if seedCats[c] {
 				shares = true
 				break
 			}
 		}
-		if !shares {
-			ids = append(ids, m.ID)
+		if shares {
+			continue
 		}
-	}
-	if len(ids) < discoverKindMin {
-		return nil
-	}
-	frags, err := d.fragmentsByIDsTiered(ids)
-	if err != nil {
-		return nil
-	}
-	var members []*memory.Fragment
-	for _, f := range frags {
-		// A kind gathers members, so an abstraction caught nearby is not one of them.
-		if f.Kind == memory.KindConcept && !d.isCategory(f) {
-			members = append(members, f)
+		frags, err := d.fragmentsByIDsTiered([]uint64{s.id})
+		if err != nil || len(frags) != 1 || d.isCategory(frags[0]) {
+			continue // a kind gathers members, not the abstractions over them
+		}
+		members = append(members, frags[0])
+		if len(members) >= discoverKindCap {
+			break
 		}
 	}
 	if len(members) < discoverKindMin {
