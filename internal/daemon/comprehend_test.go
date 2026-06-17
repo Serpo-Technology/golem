@@ -1219,6 +1219,33 @@ func TestParticipantDeixisTurkish(t *testing.T) {
 	}
 }
 
+// GOLEM orders concepts along a gradable relation it was told about, and reasons
+// over the ordering transitively: told the cat is bigger than the mouse and the
+// mouse than the snail, it answers the cat is bigger than the snail, a chain it was
+// never told directly. The ordering lives in the told facts, not a scale in code.
+func TestComparativeOrdersTransitively(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "snail")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "the mouse is bigger than the snail")
+	if got := say(t, d, "is the cat bigger than the snail").Say; got != "Yes, the cat is bigger than the snail." {
+		t.Fatalf("a chained comparison should hold transitively: %q", got)
+	}
+	if got := say(t, d, "is the snail bigger than the cat").Say; got != "No, the snail is not bigger than the cat." {
+		t.Fatalf("the reverse of a told ordering should not hold: %q", got)
+	}
+	if got := say(t, d, "is the cat bigger than the mouse").Say; got != "Yes, the cat is bigger than the mouse." {
+		t.Fatalf("a directly told comparison should hold: %q", got)
+	}
+	// A dimension never compared on ("smaller", only "bigger" was told) is admitted,
+	// not denied: GOLEM does not assert an ordering it never heard.
+	if got := say(t, d, "is the mouse smaller than the cat").Say; strings.HasPrefix(got, "No") {
+		t.Fatalf("an untold dimension should be admitted, not denied: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

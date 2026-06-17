@@ -28,6 +28,7 @@ const (
 	catTime   = "time"   // a temporal noun that compounds with an interrogative
 	catDeixis = "deixis" // deictic pronouns: a span resolving to a participant
 	catSpeech = "speech" // speech-act verbs: the clause is about the talk itself
+	catThan   = "than"   // the comparative standard marker: "bigger THAN the cat"
 )
 
 // imperativeIntents maps the faculty verbs onto the acts they invoke:
@@ -121,6 +122,20 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	// verb. A verb-final tongue forms the question another way, so it is left out.
 	if !verbFinal && p.category(lang, tokens[0]) == catCop {
 		f.Force = ForceQuestion
+	}
+	// "X is bigger than Y": a comparison. Its predicate is a gradable relation
+	// between two arguments, not the copular predication the rest of an "is" clause
+	// is, so it is parsed apart into agent, relation, and standard. Inversion makes
+	// it a question ("is the cat bigger than the mouse").
+	if rel, subject, standard, ask, ok := p.comparativeParts(lang, tokens); ok {
+		f.Comparative = true
+		if ask {
+			f.Force = ForceQuestion
+		}
+		f.Action = Term{Phrase: rel}
+		f.Agent = resolveTerm(subject, resolve)
+		f.Patient = resolveTerm(standard, resolve)
+		return f
 	}
 
 	type span struct {
@@ -314,6 +329,48 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 		}
 	}
 	return f
+}
+
+// comparativeParts reads a comparison "X is bigger than Y" into its relation
+// (the gradable word before "than"), its subject, and its standard (after
+// "than"), and whether it is asked (the copula inverted to the front). It returns
+// false when the clause is not a comparison: no standard marker, no copula before
+// it, or no gradable word between them. The standard marker is read from the
+// tongue's seed, so a tongue marks comparison its own way.
+func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, standard string, ask, ok bool) {
+	than := -1
+	for i, tok := range tokens {
+		if p.category(lang, tok) == catThan {
+			than = i
+			break
+		}
+	}
+	if than <= 0 || than == len(tokens)-1 {
+		return "", "", "", false, false
+	}
+	cop := -1
+	for i := 0; i < than-1; i++ {
+		if p.category(lang, tokens[i]) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 0 {
+		return "", "", "", false, false
+	}
+	rel = tokens[than-1] // the gradable word sits just before the standard marker
+	standard = p.contentSpan(tokens[than+1:])
+	if cop == 0 {
+		// The copula led the clause: subject-auxiliary inversion makes it a question,
+		// the subject sitting between the copula and the gradable word.
+		subject, ask = p.contentSpan(tokens[cop+1:than-1]), true
+	} else {
+		subject = p.contentSpan(tokens[:cop])
+	}
+	if rel == "" || subject == "" || standard == "" {
+		return "", "", "", false, false
+	}
+	return rel, subject, standard, ask, true
 }
 
 // contentSpan joins a token run's open-class words, dropping the

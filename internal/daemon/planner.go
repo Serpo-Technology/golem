@@ -730,6 +730,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Is the cat bigger than the mouse": a comparison, settled against the told
+	// orderings walked transitively rather than the relation graph a polar reads.
+	if ans, ok := d.planComparative(frame); ok {
+		return ans, nil
+	}
+
 	if line, ok := d.planPolar(frame, raw); ok {
 		return line, nil
 	}

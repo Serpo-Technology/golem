@@ -31,6 +31,12 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if momentID == 0 {
 		return false
 	}
+	// A comparison is parsed apart from the copular clause, so it is stored from the
+	// frame's roles rather than re-read from the surface, which the argument
+	// splitter would mistake (it has no "than" construction).
+	if frame.Comparative {
+		return d.storeComparison(frame, momentID)
+	}
 	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
 	if !ok {
 		return false
@@ -94,6 +100,33 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 			}
 		}
 	}
+	return true
+}
+
+// storeComparison writes a told comparison "the cat is bigger than the mouse" as a
+// proposition on the gradable relation, from the frame's already-resolved roles, so
+// the ordering accumulates in the graph for a later comparison query to walk. It
+// returns false when a side grounds in nothing or the relation cannot be reached.
+func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64) bool {
+	subj, std := frame.Agent.Concept, frame.Patient.Concept
+	if subj == nil || std == nil {
+		return false
+	}
+	rel, err := d.relationConcept(grammar.Term{Phrase: frame.Action.Phrase}, frame.Lang)
+	if err != nil || rel == nil {
+		return false
+	}
+	if err := d.store.Propose(rel.ID, momentID, subj.ID, std.ID, comprehendWeight); err != nil {
+		fmt.Fprintf(d.out, "propose error: %v\n", err)
+		return false
+	}
+	d.noteFocus(subj)
+	d.recordThreadProp(rel.Content, subj.ID, std.ID, subj.Content, std.Content)
+	d.ws.excite(rel.ID, exciteSpeech)
+	d.ws.exciteRole(subj.ID, exciteSpeech, "agent")
+	d.ws.exciteRole(std.ID, exciteSpeech, "patient")
+	d.event(events.Event{Ev: "link", From: momentID, To: subj.ID, Rel: memory.RelAgent, Weight: comprehendWeight})
+	d.event(events.Event{Ev: "link", From: momentID, To: std.ID, Rel: memory.RelPatient, Weight: comprehendWeight})
 	return true
 }
 
@@ -495,6 +528,85 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 		word = d.gram.Word(frame.Lang, "no")
 	}
 	return upperFirst(word) + ", " + lowerFirst(clause), true
+}
+
+// planComparative answers a comparison "is the cat bigger than the mouse" against
+// the comparisons it was told, walked transitively so an ordering chained across
+// several tellings is followed: the cat is bigger than the mouse and the mouse
+// than the snail, so the cat is bigger than the snail. The ordering lives in the
+// told facts, not a scale spelled in code, and the walk is sound, so the answer is
+// firm like the categorical deduction. It returns false when the clause is not a
+// comparison question, so the older handling stands.
+func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
+	if !frame.Comparative || frame.Force != grammar.ForceQuestion {
+		return "", false
+	}
+	subj, std := frame.Agent.Concept, frame.Patient.Concept
+	if subj == nil || std == nil {
+		return "", false // a side of the comparison grounds in nothing; admit the gap
+	}
+	d.noteFocus(subj)
+	rel := d.resolveRelation(frame.Action.Phrase)
+	if rel == nil {
+		// Nothing has ever been compared on this dimension, so GOLEM cannot place
+		// the two: it admits the gap rather than deny an ordering it never heard.
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
+	}
+	holds := subj.ID != std.ID && d.comparesTransitively(rel.Content, subj.ID, std.ID)
+	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
+}
+
+// comparesTransitively reports whether the subject stands above the standard on a
+// gradable relation, directly or through a chain of comparisons walked over the
+// graph. The ordering is read from the told facts, so it holds for any gradable
+// relation without a scale in code, and the walk is reachability over the
+// relation's propositions, so a chain "cat > mouse > snail" answers "cat > snail".
+func (d *Daemon) comparesTransitively(relContent string, fromID, toID uint64) bool {
+	seen := map[uint64]bool{fromID: true}
+	stack := []uint64{fromID}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		frags, err := d.store.FragmentsByIDs([]uint64{cur})
+		if err != nil || len(frags) != 1 {
+			continue
+		}
+		for _, f := range d.gatherFacts(frags[0], "agent", relContent) {
+			if f.coID == toID {
+				return true
+			}
+			if !seen[f.coID] {
+				seen[f.coID] = true
+				stack = append(stack, f.coID)
+			}
+		}
+	}
+	return false
+}
+
+// sayComparison speaks a comparison's answer, the affirmation word and the clause
+// the question stated, denied when the ordering does not hold: "Yes, the cat is
+// bigger than the mouse" or "No, the cat is not bigger than the mouse". The copula
+// and the standard marker come from the tongue's data.
+func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, std *memory.Fragment, holds bool) string {
+	def := func(name string) string {
+		if a := d.gram.Article(lang); a != "" {
+			return a + " " + name
+		}
+		return name
+	}
+	than := d.gram.Word(lang, "than")
+	pred := strings.TrimSpace(rel + " " + than + " " + def(d.conceptName(std.ID, std.Content, lang)))
+	clause := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: def(d.conceptName(subj.ID, subj.Content, lang))},
+		Action:  grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: pred}, Negate: !holds}, d.chem.Snapshot())
+	word := d.gram.Word(lang, "yes")
+	if !holds {
+		word = d.gram.Word(lang, "no")
+	}
+	return upperFirst(word) + ", " + lowerFirst(clause)
 }
 
 // inferenceBasis finds the neighbour a guess rode on: the concept the agent most

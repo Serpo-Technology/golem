@@ -54,29 +54,30 @@ func (t Term) Speak() string {
 // temporal qualifier carries "what follows X" shapes; Unknown keeps the
 // words that resolved to nothing.
 type Frame struct {
-	Force    Force
-	Lang     string      // the language the utterance arrived in; answers go back the same way
-	Wh       string      // the interrogative that opened a question: what, which, when, where, why, who, how
-	Speech   string      // a speech-act verb's move when the clause is about the talk itself: clarify, recall
-	Agent    Term        // who or what the clause is about
-	Action   Term        // the predicate; for innate verbs only Phrase is set
-	Patient  Term        // what is acted on or asked about
-	Quals    []Qualifier // temporal adjuncts in spoken order; "after X and before Y" is two
-	Sort     string      // sortal restriction from "which command": the kind of answer asked for
-	SortPl   bool        // the sortal was plural, inviting more than one answer
-	Counting bool        // "how many" or "how often": the answer is a count
-	Past     bool        // tense: the clause is about a settled moment, "followed" against "follows"
-	Negate   bool        // the predicate is denied
-	Hedge    bool        // the claim is tentative ("may name")
-	Habit    bool        // habitual aspect: the clause states a regularity ("usually")
-	Times    int         // occurrence count, for "I have seen it N times"
-	At       string      // a time or place complement, preformatted by the planner
-	Last     bool        // the most recent occurrence: "last happened"
-	Pro      bool        // the patient was a pro-form; resolve it from the workspace
-	ProType  string      // the pro-form's animacy preference: animate, inanimate, or empty
-	Alt      bool        // "the other one": resolve past the warmest referent
-	Again    bool        // repetition was requested
-	Unknown  []string
+	Force       Force
+	Lang        string      // the language the utterance arrived in; answers go back the same way
+	Wh          string      // the interrogative that opened a question: what, which, when, where, why, who, how
+	Speech      string      // a speech-act verb's move when the clause is about the talk itself: clarify, recall
+	Agent       Term        // who or what the clause is about
+	Action      Term        // the predicate; for innate verbs only Phrase is set
+	Patient     Term        // what is acted on or asked about
+	Quals       []Qualifier // temporal adjuncts in spoken order; "after X and before Y" is two
+	Sort        string      // sortal restriction from "which command": the kind of answer asked for
+	SortPl      bool        // the sortal was plural, inviting more than one answer
+	Counting    bool        // "how many" or "how often": the answer is a count
+	Past        bool        // tense: the clause is about a settled moment, "followed" against "follows"
+	Negate      bool        // the predicate is denied
+	Hedge       bool        // the claim is tentative ("may name")
+	Habit       bool        // habitual aspect: the clause states a regularity ("usually")
+	Times       int         // occurrence count, for "I have seen it N times"
+	At          string      // a time or place complement, preformatted by the planner
+	Last        bool        // the most recent occurrence: "last happened"
+	Comparative bool        // the clause compares two concepts along a gradable relation ("X is bigger than Y")
+	Pro         bool        // the patient was a pro-form; resolve it from the workspace
+	ProType     string      // the pro-form's animacy preference: animate, inanimate, or empty
+	Alt         bool        // "the other one": resolve past the warmest referent
+	Again       bool        // repetition was requested
+	Unknown     []string
 }
 
 // Qualifier is one temporal adjunct: a relator and the anchor it
