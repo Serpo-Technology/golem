@@ -1693,10 +1693,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentNaming(time.Now(), res.FragmentID), false)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
-		// a told word grounds in the attended concept, but a proposition's words
-		// bound to their roles already, so an argument is not also named after the
-		// co-arguments warm beside it.
-		if !d.momentBoundRoles(res.FragmentID) {
+		// only a declarative naming grounds a word in the attended concept. A
+		// question or a discourse move ("what else") names nothing, so its words do
+		// not bind to whatever was warm, and a proposition's words already bound to
+		// their roles, so an argument is not also named after its co-arguments.
+		if frame.Force == grammar.ForceStatement && !d.momentBoundRoles(res.FragmentID) {
 			d.bindAttention(words, attn)
 		}
 		// A reply that was built is also spoken when the voice is on.

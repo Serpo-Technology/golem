@@ -91,6 +91,34 @@ func TestPropositionWordsSkipAttentionGrounding(t *testing.T) {
 	}
 }
 
+// A question names nothing. A discourse move like "what else", asked while a
+// concept is warm, must not bind its content words to that concept the way an
+// ostensive naming would: only a declarative grounds a word in what is attended.
+// This is the leak that let "else" become a name for the cat over a long session.
+func TestQuestionWordsSkipAttentionGrounding(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	// Ask the question with the cat warm each time, the shape that bound the
+	// question's word to the warm concept before the force gate.
+	for range 3 {
+		d.ws.clear()
+		d.recent = nil
+		d.ws.excite(cat.ID, exciteSpeech)
+		say(t, d, "what else")
+		calm(d)
+		d.growConcepts()
+	}
+	if id := wordID(t, s, "else"); id != 0 {
+		if w := edgeWeightRel(t, s, id, cat.ID, "names"); w != 0 {
+			t.Fatalf("a question's word must not be named toward the warm concept: %.2f", w)
+		}
+	}
+	// The cat still answers to its own name, unpolluted.
+	if c := d.resolveConcept("cat"); c == nil || c.ID != cat.ID {
+		t.Fatalf("the cat should still resolve to itself: %+v", c)
+	}
+}
+
 // A word warmed by accident in one scene does not stick: with the binding
 // seen only once, cross-situational reliability lets it fade rather than
 // becoming a new junk name.
