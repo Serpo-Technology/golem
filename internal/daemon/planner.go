@@ -737,6 +737,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "How much bigger is the cat than the mouse": the degree of a comparison, read
+	// before the plain comparison since a magnitude clause is also comparative.
+	if ans, ok := d.planMagnitude(frame); ok {
+		return ans, nil
+	}
+
 	// "Is the cat bigger than the mouse": a comparison, settled against the told
 	// orderings walked transitively rather than the relation graph a polar reads.
 	if ans, ok := d.planComparative(frame); ok {

@@ -560,6 +560,31 @@ func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
 	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
 }
 
+// planMagnitude answers "how much bigger is X than Y" with the degree read from the
+// told order: the rank gap between the two, sorted into a qualitative word. When the
+// subject does not stand above the standard there is no degree to give, so it
+// answers the plain comparison instead (denied or admitted).
+func (d *Daemon) planMagnitude(frame grammar.Frame) (string, bool) {
+	if !frame.Magnitude || frame.Force != grammar.ForceQuestion {
+		return "", false
+	}
+	subj, std := frame.Agent.Concept, frame.Patient.Concept
+	if subj == nil || std == nil {
+		return "", false
+	}
+	d.noteFocus(subj)
+	rel := d.resolveRelation(frame.Action.Phrase)
+	if rel == nil {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
+	}
+	gap, ok := d.comparativeMagnitude(rel, subj.ID, std.ID)
+	if !ok {
+		return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, false), true
+	}
+	return d.sayMagnitude(frame.Lang, subj, frame.Action.Phrase, std, degreeBucket(gap)), true
+}
+
 // comparesTransitively reports whether the subject stands above the standard on a
 // gradable relation, directly or through a chain walked over the graph. The order
 // is read from the told facts, so it needs no scale in code, and a converse pole
@@ -603,6 +628,68 @@ func (d *Daemon) comparesTransitively(rel *memory.Fragment, fromID, toID uint64)
 		}
 	}
 	return false
+}
+
+// comparativeReach returns every concept a concept stands above on a gradable
+// relation, directly or through the chain. It is the same walk comparesTransitively
+// runs, collecting the whole set rather than stopping at one target, so a concept's
+// PLACE on the scale (its rank: how many it exceeds) is read from the told order
+// alone, no scale written in code.
+func (d *Daemon) comparativeReach(rel *memory.Fragment, fromID uint64) map[uint64]bool {
+	opposites := d.oppositeRelations(rel.ID)
+	below := map[uint64]bool{}
+	seen := map[uint64]bool{fromID: true}
+	stack := []uint64{fromID}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		frags, err := d.store.FragmentsByIDs([]uint64{cur})
+		if err != nil || len(frags) != 1 {
+			continue
+		}
+		step := func(id uint64) {
+			below[id] = true
+			if !seen[id] {
+				seen[id] = true
+				stack = append(stack, id)
+			}
+		}
+		for _, f := range d.gatherFacts(frags[0], "agent", rel.Content) {
+			step(f.coID)
+		}
+		for _, opp := range opposites {
+			for _, f := range d.gatherFacts(frags[0], "patient", opp) {
+				step(f.coID)
+			}
+		}
+	}
+	delete(below, fromID)
+	return below
+}
+
+// comparativeMagnitude is the ordinal distance the subject stands above the
+// standard on a gradable relation: the difference in how many each exceeds, read
+// from the told order. The comparisons are ordinal, so this is a rank gap, not a
+// metric amount, the honest degree the data supports. It returns false when the
+// subject does not stand above the standard at all (nothing to measure).
+func (d *Daemon) comparativeMagnitude(rel *memory.Fragment, subjID, stdID uint64) (int, bool) {
+	if subjID == stdID || !d.comparesTransitively(rel, subjID, stdID) {
+		return 0, false
+	}
+	return len(d.comparativeReach(rel, subjID)) - len(d.comparativeReach(rel, stdID)), true
+}
+
+// degreeBucket sorts a rank gap into a qualitative degree, since ordinal data can
+// only say how far apart, not how many times: a one-step gap is slight, a wide gap
+// is great, the middle plain. The buckets name a degree the tongue then speaks.
+func degreeBucket(gap int) string {
+	switch {
+	case gap <= 1:
+		return "slight"
+	case gap >= 3:
+		return "great"
+	}
+	return ""
 }
 
 // oppositeRelations returns the contents of the relations discovered to be converse
@@ -672,6 +759,30 @@ func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, s
 		word = d.gram.Word(lang, "no")
 	}
 	return upperFirst(word) + ", " + lowerFirst(clause)
+}
+
+// sayMagnitude speaks a comparison's degree: the clause the question asked with the
+// degree word set before the gradable relation, "The lion is much bigger than the
+// mouse". A middling gap takes no word, reading as the plain comparative. The
+// degree word, copula, and standard marker come from the tongue's data.
+func (d *Daemon) sayMagnitude(lang string, subj *memory.Fragment, rel string, std *memory.Fragment, degree string) string {
+	def := func(name string) string {
+		if a := d.gram.Article(lang); a != "" {
+			return a + " " + name
+		}
+		return name
+	}
+	deg := ""
+	if degree != "" {
+		deg = d.gram.Word(lang, degree)
+	}
+	than := d.gram.Word(lang, "than")
+	pred := strings.TrimSpace(strings.TrimSpace(deg+" "+rel) + " " + than + " " + def(d.conceptName(std.ID, std.Content, lang)))
+	clause := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: def(d.conceptName(subj.ID, subj.Content, lang))},
+		Action:  grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: pred}}, d.chem.Snapshot())
+	return upperFirst(clause)
 }
 
 // inferenceBasis finds the neighbour a guess rode on: the concept the agent most

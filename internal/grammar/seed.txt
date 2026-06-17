@@ -254,6 +254,10 @@ surface:en:islike	like	en
 surface:tr:islike	benzer	tr
 surface:en:akin	seem to be a kind	en
 surface:tr:akin	bir tür gibi görünüyor	tr
+surface:en:great	much	en
+surface:tr:great	çok	tr
+surface:en:slight	a little	en
+surface:tr:slight	biraz	tr
 surface:en:isee	I see	en
 surface:tr:isee	anladım	tr
 surface:en:firstperson	I	en

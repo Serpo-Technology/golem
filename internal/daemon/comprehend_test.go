@@ -1269,6 +1269,83 @@ func TestComparativeConverseDiscovered(t *testing.T) {
 	}
 }
 
+// Magnitude is read from the told order: a concept's rank is how many it stands
+// above on the scale, and the gap between two ranks is the ordinal distance, sorted
+// into a qualitative degree. The comparisons are ordinal, so a wide gap reads as
+// great and a one-step gap as slight, no metric amount claimed.
+func TestComparativeMagnitudeFromRank(t *testing.T) {
+	d, _ := testDaemon(t)
+	lion := groundNoun(t, d, "lion")
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	snail := groundNoun(t, d, "snail")
+	say(t, d, "the lion is bigger than the dog")
+	say(t, d, "the dog is bigger than the cat")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "the mouse is bigger than the snail")
+	rel := d.resolveRelation("bigger")
+	if rel == nil {
+		t.Fatal("bigger should be a known relation after the tellings")
+	}
+	rank := func(c *memory.Fragment) int { return len(d.comparativeReach(rel, c.ID)) }
+	if rank(snail) != 0 || rank(lion) != 4 {
+		t.Fatalf("ranks from the chain wrong: snail=%d (want 0) lion=%d (want 4)", rank(snail), rank(lion))
+	}
+	cases := []struct {
+		a, b *memory.Fragment
+		gap  int
+		deg  string
+	}{
+		{lion, snail, 4, "great"},
+		{lion, mouse, 3, "great"},
+		{cat, snail, 2, ""},
+		{dog, cat, 1, "slight"},
+	}
+	for _, c := range cases {
+		gap, ok := d.comparativeMagnitude(rel, c.a.ID, c.b.ID)
+		if !ok || gap != c.gap {
+			t.Fatalf("%s over %s: gap=%d ok=%v, want gap %d", c.a.Content, c.b.Content, gap, ok, c.gap)
+		}
+		if got := degreeBucket(gap); got != c.deg {
+			t.Fatalf("gap %d bucketed %q, want %q", gap, got, c.deg)
+		}
+	}
+	// The smaller end does not stand above the larger, so there is nothing to measure.
+	if _, ok := d.comparativeMagnitude(rel, snail.ID, lion.ID); ok {
+		t.Fatal("the snail is not bigger than the lion; no magnitude to give")
+	}
+}
+
+// "How much bigger is X than Y" is answered with the degree read from the told
+// order: a wide rank gap reads as much bigger, a one-step gap as a little, a
+// middling gap as the plain comparative. The smaller end has no degree, so the
+// plain comparison is denied instead.
+func TestMagnitudeQuestionAnswered(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "lion")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "snail")
+	say(t, d, "the lion is bigger than the dog")
+	say(t, d, "the dog is bigger than the cat")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "the mouse is bigger than the snail")
+	if got := say(t, d, "how much bigger is the lion than the snail").Say; got != "The lion is much bigger than the snail." {
+		t.Fatalf("a wide rank gap should read as much bigger: %q", got)
+	}
+	if got := say(t, d, "how much bigger is the dog than the cat").Say; got != "The dog is a little bigger than the cat." {
+		t.Fatalf("a one-step gap should read as a little bigger: %q", got)
+	}
+	if got := say(t, d, "how much bigger is the cat than the snail").Say; got != "The cat is bigger than the snail." {
+		t.Fatalf("a middling gap should read as the plain comparative: %q", got)
+	}
+	if got := say(t, d, "how much bigger is the snail than the lion").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("the smaller end is not bigger, so there is no degree to give: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

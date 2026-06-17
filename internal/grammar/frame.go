@@ -73,6 +73,7 @@ type Frame struct {
 	At          string      // a time or place complement, preformatted by the planner
 	Last        bool        // the most recent occurrence: "last happened"
 	Comparative bool        // the clause compares two concepts along a gradable relation ("X is bigger than Y")
+	Magnitude   bool        // the question asks the DEGREE of a comparison ("how much bigger is X than Y")
 	Pro         bool        // the patient was a pro-form; resolve it from the workspace
 	ProType     string      // the pro-form's animacy preference: animate, inanimate, or empty
 	Alt         bool        // "the other one": resolve past the warmest referent

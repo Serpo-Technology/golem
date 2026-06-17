@@ -123,6 +123,16 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	if !verbFinal && p.category(lang, tokens[0]) == catCop {
 		f.Force = ForceQuestion
 	}
+	// "how much bigger is X than Y": a comparison asked for its DEGREE, not its
+	// truth. It opens with the degree interrogative, so it is read before the plain
+	// comparison below (which would mistake the subject for the relation).
+	if rel, subject, standard, ok := p.magnitudeParts(lang, tokens); ok {
+		f.Comparative, f.Magnitude, f.Force = true, true, ForceQuestion
+		f.Action = Term{Phrase: rel}
+		f.Agent = resolveTerm(subject, resolve)
+		f.Patient = resolveTerm(standard, resolve)
+		return f
+	}
 	// "X is bigger than Y": a comparison. Its predicate is a gradable relation
 	// between two arguments, not the copular predication the rest of an "is" clause
 	// is, so it is parsed apart into agent, relation, and standard. Inversion makes
@@ -371,6 +381,50 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 		return "", "", "", false, false
 	}
 	return rel, subject, standard, ask, true
+}
+
+// magnitudeParts reads "how much bigger is X than Y" into its relation (the
+// gradable word after the degree opener), subject, and standard. The opener is the
+// degree interrogative "how much" (a wh-how followed by the quantity word), so a
+// tongue forms the degree question its own way. It returns false when the clause is
+// not so opened, or lacks the copula or standard the shape needs.
+func (p *Params) magnitudeParts(lang string, tokens []string) (rel, subject, standard string, ok bool) {
+	if len(tokens) < 6 {
+		return "", "", "", false
+	}
+	if wh, _ := p.whInfo(lang, tokens[0]); wh != "how" {
+		return "", "", "", false
+	}
+	if p.category(lang, tokens[1]) != catCnt { // "much", the quantity word "how" leans on
+		return "", "", "", false
+	}
+	than := -1
+	for i, tok := range tokens {
+		if p.category(lang, tok) == catThan {
+			than = i
+			break
+		}
+	}
+	if than < 4 || than == len(tokens)-1 {
+		return "", "", "", false
+	}
+	cop := -1
+	for i := 2; i < than; i++ {
+		if p.category(lang, tokens[i]) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 3 { // need a gradable word between "how much" and the copula
+		return "", "", "", false
+	}
+	rel = p.contentSpan(tokens[2:cop])
+	subject = p.contentSpan(tokens[cop+1 : than])
+	standard = p.contentSpan(tokens[than+1:])
+	if rel == "" || subject == "" || standard == "" {
+		return "", "", "", false
+	}
+	return rel, subject, standard, true
 }
 
 // contentSpan joins a token run's open-class words, dropping the
