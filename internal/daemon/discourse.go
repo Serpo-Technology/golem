@@ -637,6 +637,49 @@ func meantReferent(raw string) (string, bool) {
 	return "", false
 }
 
+// correctionClause reads the clause of a correction, "the dog chased the rabbit"
+// from "no, the dog chased the rabbit" or "actually the dog chased the rabbit", the
+// leading marker dropped, so a turn that fixes a claim is told from a plain
+// statement. It returns false when the turn carries no correction marker.
+func correctionClause(raw string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	low := strings.ToLower(s)
+	for _, lead := range []string{"no, ", "actually, ", "actually "} {
+		if strings.HasPrefix(low, lead) {
+			if rest := strings.TrimSpace(s[len(lead):]); rest != "" {
+				return rest, true
+			}
+		}
+	}
+	return "", false
+}
+
+// removeThreadProp drops a proposition from the discourse record, used when a
+// correction retracts what was established so the old fact no longer wins recall.
+func (d *Daemon) removeThreadProp(rel string, agent, patient uint64) {
+	kept := d.threadProps[:0]
+	for _, p := range d.threadProps {
+		if p.rel == rel && p.agent == agent && p.patient == patient {
+			continue
+		}
+		kept = append(kept, p)
+	}
+	d.threadProps = kept
+}
+
+// removeClaim drops a claim from the speaker's-side record, used when a correction
+// retracts what GOLEM had committed to.
+func (d *Daemon) removeClaim(rel string, agent, patient uint64) {
+	kept := d.claims[:0]
+	for _, c := range d.claims {
+		if c.rel == rel && c.agent == agent && c.patient == patient {
+			continue
+		}
+		kept = append(kept, c)
+	}
+	d.claims = kept
+}
+
 // isClarify reports whether a turn asks GOLEM to say more about what it just
 // said, so it elaborates the subject in mind rather than reading the turn as a
 // fresh question of its own.

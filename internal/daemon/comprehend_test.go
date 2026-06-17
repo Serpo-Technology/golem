@@ -1099,6 +1099,52 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// Asked what it means by a guess, GOLEM explains the reasoning: the concept the
+// subject is like, and the fact that neighbour stands in, so a hedged answer is
+// justified rather than only repeated.
+func TestClarifyExplainsGuess(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("the guess should fire: %q", got)
+	}
+	got := strings.ToLower(say(t, d, "what do you mean").Say)
+	if !strings.Contains(got, "like") || !strings.Contains(got, "dog") || !strings.Contains(got, "chased the cat") {
+		t.Fatalf("clarify should explain the reasoning behind the guess: %q", got)
+	}
+}
+
+// A correction of a claim retracts the conflicting fact and accepts the new one:
+// "no, the dog chased the rabbit" after GOLEM affirmed the dog chased the cat
+// leaves only the corrected fact standing.
+func TestRepairCorrectsFact(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "rabbit")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "did the dog chase the cat") // GOLEM commits to the dog chasing the cat
+	if got := say(t, d, "no, the dog chased the rabbit").Say; got != "I see. The dog chased the rabbit." {
+		t.Fatalf("a correction should be acknowledged and accepted: %q", got)
+	}
+	if got := say(t, d, "did the dog chase the cat").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("the corrected-away fact should no longer hold: %q", got)
+	}
+	if got := say(t, d, "what did the dog chase").Say; !strings.Contains(got, "rabbit") || strings.Contains(got, "cat") {
+		t.Fatalf("only the corrected fact should stand: %q", got)
+	}
+}
+
 // A correction re-asks the last question of the right referent: "no, I meant the
 // cat" after "what did the dog chase" answers about the cat, the relation inherited
 // from the thread and only the subject repaired.

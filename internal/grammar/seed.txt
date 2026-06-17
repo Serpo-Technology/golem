@@ -228,3 +228,7 @@ surface:en:asisaid	as I said	en
 surface:tr:asisaid	dediğim gibi	tr
 surface:en:nowknow	now I know	en
 surface:tr:nowknow	artık biliyorum	tr
+surface:en:islike	like	en
+surface:tr:islike	benzer	tr
+surface:en:isee	I see	en
+surface:tr:isee	anladım	tr

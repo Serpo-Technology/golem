@@ -697,6 +697,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return line, nil
 	}
 
+	// "No, the dog chased the rabbit": a correction of a claim GOLEM made, not a
+	// plain statement. The conflicting prior is retracted and the new fact taught.
+	if ans, ok := d.planRepairFact(frame, raw, momentID); ok {
+		return ans, nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil

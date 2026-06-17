@@ -306,11 +306,26 @@ func (d *Daemon) planTopicRecall(frame grammar.Frame, raw string) (string, bool)
 }
 
 // planClarify answers a request to say more about what GOLEM just said ("what do
-// you mean"): it elaborates the subject in mind, its kind and what it has been
-// part of, rather than reading the turn as a fresh question of its own. It returns
-// false when the turn is not such a request or nothing is in mind to elaborate.
+// you mean"). When the last thing it said was a guess, it explains the reasoning:
+// the resemblance the guess rode on and the fact behind it. Otherwise it
+// elaborates the subject in mind, its kind and what it has been part of. It
+// returns false when the turn is not such a request or nothing is in mind.
 func (d *Daemon) planClarify(frame grammar.Frame, raw string) (string, bool) {
-	if !isClarify(raw) || d.topic == 0 {
+	if !isClarify(raw) {
+		return "", false
+	}
+	// A guess just made is clarified by saying why: "the rabbit is like a mouse,
+	// and the mouse chased the cat." The reasoning is rendered for English; other
+	// tongues fall back to elaborating the subject until a resemblance clause is
+	// built for them.
+	if frame.Lang == "en" && len(d.claims) > 0 {
+		if c := d.claims[0]; c.affirmed && c.hedged {
+			if line, ok := d.explainGuess(frame.Lang, c); ok {
+				return line, true
+			}
+		}
+	}
+	if d.topic == 0 {
 		return "", false
 	}
 	frags, err := d.store.FragmentsByIDs([]uint64{d.topic})
@@ -318,6 +333,179 @@ func (d *Daemon) planClarify(frame grammar.Frame, raw string) (string, bool) {
 		return "", false
 	}
 	return d.describeConcept(frame, frags[0]), true
+}
+
+// planRepairFact handles a correction of a claim GOLEM made: "no, the dog chased
+// the rabbit" retracts the conflicting claim, in mind, in long-term memory, in the
+// graph, and in the discourse record, then teaches the corrected fact and confirms
+// its updated understanding. It returns false when the turn is not a correction or
+// its clause is not a proposition, so an ordinary statement still teaches plainly.
+func (d *Daemon) planRepairFact(frame grammar.Frame, raw string, momentID uint64) (string, bool) {
+	clause, ok := correctionClause(raw)
+	if !ok || momentID == 0 {
+		return "", false
+	}
+	// A correction states its direction explicitly, so role-fit is given no say
+	// (as with a polar question): "no, the dog chased the rabbit" means the dog
+	// chased the rabbit, not the order role-fit would prefer on a trained graph.
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	if !ok {
+		return "", false
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	if agent.Concept == nil || patient.Concept == nil {
+		return "", false // not a proposition to correct toward
+	}
+	rel, err := d.relationConcept(m.Relation, frame.Lang)
+	if err != nil || rel == nil {
+		return "", false
+	}
+	// A claim GOLEM made about the same subject and relation, but a different
+	// object, is what the correction overturns. Retract it everywhere it is held.
+	for _, c := range append([]claim(nil), d.claims...) {
+		if !c.affirmed || c.agent != agent.Concept.ID || c.rel != rel.Content || c.patient == patient.Concept.ID {
+			continue
+		}
+		d.held.forget(c.rel, c.agent, c.patient)
+		if err := d.store.ForgetBelief(c.rel, c.agent, c.patient); err != nil {
+			fmt.Fprintf(d.out, "belief retire error: %v\n", err)
+		}
+		d.retractProposition(c.rel, c.agent, c.patient)
+		d.removeThreadProp(c.rel, c.agent, c.patient)
+		d.removeClaim(c.rel, c.agent, c.patient)
+	}
+	// Write the corrected fact in the asked direction, and remember the exchange
+	// set it down; any guess about it retires, now that it is observed.
+	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patient.Concept.ID, comprehendWeight); err != nil {
+		fmt.Fprintf(d.out, "propose error: %v\n", err)
+		return "", false
+	}
+	d.noteFocus(agent.Concept)
+	d.recordThreadProp(rel.Content, agent.Concept.ID, patient.Concept.ID, agent.Concept.Content, patient.Concept.Content)
+	d.held.forget(rel.Content, agent.Concept.ID, patient.Concept.ID)
+	d.store.ForgetBelief(rel.Content, agent.Concept.ID, patient.Concept.ID)
+	// Confirm the updated understanding.
+	isee := d.gram.Word(frame.Lang, "isee")
+	confirm := ""
+	if af, err := d.store.FragmentsByIDs([]uint64{agent.Concept.ID}); err == nil && len(af) == 1 {
+		if line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.Concept.ID, agent.Concept.Content, frame.Lang),
+			d.gatherFacts(af[0], "agent", rel.Content), true, false); ok {
+			confirm = line
+		}
+	}
+	switch {
+	case isee != "" && confirm != "":
+		return upperFirst(isee) + ". " + confirm, true
+	case confirm != "":
+		return confirm, true
+	case isee != "":
+		return upperFirst(isee) + ".", true
+	default:
+		return "", true
+	}
+}
+
+// retractProposition removes a proposition from the graph: it finds the moments in
+// which the agent acted on the patient under the relation and drops their role
+// edges, so a fact corrected away no longer reads back. It returns whether any
+// moment was retracted.
+func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
+	relC := d.resolveRelation(rel)
+	moments, err := d.store.LinksToRel([]uint64{agent}, memory.RelAgent)
+	if err != nil {
+		return false
+	}
+	retracted := false
+	for _, mm := range moments {
+		pats, err := d.store.LinksFromRel([]uint64{mm.From}, memory.RelPatient)
+		if err != nil {
+			continue
+		}
+		hasPatient := false
+		for _, p := range pats {
+			if p.To == patient {
+				hasPatient = true
+				break
+			}
+		}
+		if !hasPatient {
+			continue
+		}
+		if relC != nil {
+			grounds, err := d.store.LinksFromRel([]uint64{mm.From}, memory.RelGrounds)
+			if err != nil {
+				continue
+			}
+			matches := false
+			for _, g := range grounds {
+				if g.To == relC.ID {
+					matches = true
+					break
+				}
+			}
+			if !matches {
+				continue
+			}
+		}
+		d.store.DropRelFrom([]uint64{mm.From}, memory.RelAgent)
+		d.store.DropRelFrom([]uint64{mm.From}, memory.RelPatient)
+		retracted = true
+	}
+	return retracted
+}
+
+// inferenceBasis finds the neighbour a guess rode on: the concept the agent most
+// resembles that observably stands in the relation to the patient, the "like" that
+// explains a "probably". It returns false when no resembling neighbour does.
+func (d *Daemon) inferenceBasis(agentID uint64, rel string, patientID uint64) (*memory.Fragment, bool) {
+	sibs, err := d.featureSiblings(agentID, time.Now())
+	if err != nil {
+		return nil, false
+	}
+	sort.SliceStable(sibs, func(i, j int) bool { return sibs[i].weight > sibs[j].weight })
+	for _, s := range sibs {
+		if s.weight < inferenceFloor {
+			break
+		}
+		if s.id == patientID {
+			continue
+		}
+		sf, err := d.fragmentsByIDsTiered([]uint64{s.id})
+		if err != nil || len(sf) != 1 {
+			continue
+		}
+		if d.propositionHolds(sf[0], rel, patientID) {
+			return sf[0], true
+		}
+	}
+	return nil, false
+}
+
+// explainGuess voices why GOLEM guessed a proposition: the concept the agent is
+// like, and what that concept did, so a hedged answer can be justified rather than
+// only repeated. It returns false when the guess has no observed neighbour to point
+// to (a chained or supposition-backed guess, or one whose basis has since changed).
+func (d *Daemon) explainGuess(lang string, c claim) (string, bool) {
+	sib, ok := d.inferenceBasis(c.agent, c.rel, c.patient)
+	if !ok {
+		return "", false
+	}
+	agentFrags, err := d.store.FragmentsByIDs([]uint64{c.agent})
+	if err != nil || len(agentFrags) != 1 {
+		return "", false
+	}
+	agentName := d.conceptName(c.agent, agentFrags[0].Content, lang)
+	sibName := d.conceptName(sib.ID, sib.Content, lang)
+	// "<agent> is like a <sibling>." The copula and the seeded "like" carry it.
+	like := strings.TrimSpace(d.gram.Word(lang, "islike") + " " + grammar.Indefinite(sibName))
+	res := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent: grammar.Term{Phrase: agentName}, Action: grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: like}}, d.chem.Snapshot())
+	// "<sibling> chased <patient>." The fact the guess rests on.
+	if ev, ok := d.renderFacts(lang, sibName, d.gatherFacts(sib, "agent", c.rel), true, false); ok {
+		return res + " " + ev, true
+	}
+	return res, true
 }
 
 // planPolar answers a yes/no question by checking the proposition it states
