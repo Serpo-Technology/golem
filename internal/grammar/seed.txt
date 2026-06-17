@@ -252,6 +252,8 @@ surface:en:nowknow	now I know	en
 surface:tr:nowknow	artık biliyorum	tr
 surface:en:islike	like	en
 surface:tr:islike	benzer	tr
+surface:en:akin	seem to be a kind	en
+surface:tr:akin	bir tür gibi görünüyor	tr
 surface:en:isee	I see	en
 surface:tr:isee	anladım	tr
 surface:en:firstperson	I	en

@@ -211,6 +211,7 @@ type Daemon struct {
 	// rather than staying silent.
 	openQuestions []openQuestion
 	followUp      string
+	proposedKinds map[string]bool // un-named kinds already offered this session, so each is proposed once
 
 	// selfID, userID, and bothID are the conversation's participants as concepts:
 	// GOLEM, the one it speaks with, and the two together. The deictic pronouns
@@ -1377,6 +1378,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.claims = nil
 	d.openQuestions = nil
 	d.followUp = ""
+	d.proposedKinds = nil
 	// The night may have pruned a participant that nothing grounded it through;
 	// re-establish the trio so the cached ids point at live concepts for the new
 	// day. One spoken of in a stored fact kept its grounding and its id with it.

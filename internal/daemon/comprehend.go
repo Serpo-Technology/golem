@@ -1422,7 +1422,10 @@ func (d *Daemon) volunteerRemark(lang string) (string, bool) {
 		p = d.held.unvoicedAbout(d.topic)
 	}
 	if p == nil {
-		return "", false
+		// Nothing concluded to offer; perhaps GOLEM has NOTICED an un-named kind:
+		// concepts that sit together in the learned space but were never given a
+		// common word. It proposes one, hedged, for the speaker to name.
+		return d.proposeKind(lang)
 	}
 	line := d.speakHeld(lang, p)
 	if line == "" {
