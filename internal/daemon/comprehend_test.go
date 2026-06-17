@@ -1099,6 +1099,41 @@ func TestConceptNameSpeaksOwnNameOverStrongerMember(t *testing.T) {
 	}
 }
 
+// GOLEM reasons over the is-a hierarchy: it answers whether a thing belongs to a
+// category, and composes membership with a relation, soundly and firmly, so "did
+// the dog chase an animal" holds because the dog chased a cat and a cat is an
+// animal, while a thing that chased nothing chased no animal.
+func TestCategoricalDeduction(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5) // the animal category grounds in the cat
+	say(t, d, "a dog chased a cat")
+
+	if got := say(t, d, "is a cat an animal").Say; got != "Yes, a cat is an animal." {
+		t.Fatalf("the cat should be known an animal: %q", got)
+	}
+	if got := say(t, d, "is a cat a dog").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("a cat is not a dog: %q", got)
+	}
+	if got := say(t, d, "did the dog chase an animal").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the dog chased a cat, and a cat is an animal: %q", got)
+	}
+	if got := say(t, d, "did the cat chase an animal").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("the cat chased nothing, so it chased no animal: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

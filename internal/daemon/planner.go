@@ -693,6 +693,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,
 	// whether it carried a question mark or not.
+	// "Is a cat an animal": an is-a question, settled against the category
+	// hierarchy rather than the relation graph a polar question reads.
+	if ans, ok := d.planIsA(frame, raw); ok {
+		return ans, nil
+	}
+
 	if line, ok := d.planPolar(frame, raw); ok {
 		return line, nil
 	}

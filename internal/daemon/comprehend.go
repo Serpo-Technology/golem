@@ -454,6 +454,34 @@ func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
 	return retracted
 }
 
+// planIsA answers an is-a question against the category hierarchy: "is a cat an
+// animal" holds because the animal category grounds in the cat, climbing the chain
+// so "is a cat a thing" holds through animal. An identity ("is a cat a cat") holds,
+// and anything else is denied plainly. It returns false when the turn is not an
+// is-a question or its terms ground in nothing.
+func (d *Daemon) planIsA(frame grammar.Frame, raw string) (string, bool) {
+	memberP, catP, ok := isAQuestion(raw)
+	if !ok {
+		return "", false
+	}
+	member := d.resolveConcept(memberP)
+	cat := d.resolveConcept(catP)
+	if member == nil || cat == nil {
+		return "", false
+	}
+	yes := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
+	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
+	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
+	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent: grammar.Term{Phrase: memberName}, Action: grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: catName}, Negate: !yes}, d.chem.Snapshot())
+	word := d.gram.Word(frame.Lang, "yes")
+	if !yes {
+		word = d.gram.Word(frame.Lang, "no")
+	}
+	return upperFirst(word) + ", " + lowerFirst(clause), true
+}
+
 // inferenceBasis finds the neighbour a guess rode on: the concept the agent most
 // resembles that observably stands in the relation to the patient, the "like" that
 // explains a "probably". It returns false when no resembling neighbour does.
@@ -709,6 +737,84 @@ func (d *Daemon) propositionHolds(agent *memory.Fragment, relContent string, pat
 	return false
 }
 
+// isCategory reports whether a concept is an abstraction over members, a category
+// in the is-a hierarchy rather than a thing in it.
+func (d *Daemon) isCategory(c *memory.Fragment) bool {
+	if c == nil {
+		return false
+	}
+	_, ok := abstractionLemma(c.Template)
+	return ok
+}
+
+// categoryMembers returns the concepts an abstraction grounds in, the things it is
+// a category of: animal grounds in the cat, the dog, the mouse, the rabbit.
+func (d *Daemon) categoryMembers(catID uint64) []uint64 {
+	edges, err := d.store.LinksFromRel([]uint64{catID}, memory.RelGrounds)
+	if err != nil {
+		return nil
+	}
+	out := make([]uint64, 0, len(edges))
+	for _, e := range edges {
+		out = append(out, e.To)
+	}
+	return out
+}
+
+// isA reports whether a concept is a member of a category, directly or up the is-a
+// chain (the cat is an animal, an animal is a thing, so the cat is a thing), so a
+// member belongs to every category above it. The climb is the composition: a fact
+// of membership chained onto a fact of membership.
+func (d *Daemon) isA(memberID, catID uint64) bool {
+	seen := map[uint64]bool{}
+	stack := []uint64{memberID}
+	for len(stack) > 0 {
+		m := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[m] {
+			continue
+		}
+		seen[m] = true
+		cats, err := d.store.LinksToRel([]uint64{m}, memory.RelGrounds)
+		if err != nil {
+			continue
+		}
+		for _, e := range cats { // the abstractions that ground in m are its categories
+			if e.From == catID {
+				return true
+			}
+			stack = append(stack, e.From) // climb to the category's own categories
+		}
+	}
+	return false
+}
+
+// propositionHoldsCategorically reads whether a proposition holds once a category
+// in one of its roles is read as any member of it: the dog chased an animal because
+// it chased a cat, an animal chased the cat because the dog did. It composes a
+// proposition with a fact of membership, both grounded, so the conclusion is sound.
+func (d *Daemon) propositionHoldsCategorically(agent *memory.Fragment, relContent string, patient *memory.Fragment) bool {
+	if d.isCategory(patient) {
+		for _, m := range d.categoryMembers(patient.ID) {
+			if m != agent.ID && d.propositionHolds(agent, relContent, m) {
+				return true
+			}
+		}
+	}
+	if d.isCategory(agent) {
+		for _, m := range d.categoryMembers(agent.ID) {
+			if m == patient.ID {
+				continue
+			}
+			if mf, err := d.fragmentsByIDsTiered([]uint64{m}); err == nil && len(mf) == 1 &&
+				d.propositionHolds(mf[0], relContent, patient.ID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // propBelief is how firmly GOLEM holds a proposition it was asked about.
 type propBelief int
 
@@ -761,6 +867,12 @@ func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID
 // confidence is the resemblance the guess rode in on, attenuated once per hop.
 func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (belief propBelief, conf float64, supposed bool) {
 	if d.propositionHolds(agent, relContent, patient.ID) {
+		return beliefObserved, 1, false
+	}
+	// A category in a role is met by any member that fills it: "did the dog chase
+	// an animal" holds because the dog chased a cat and a cat is an animal. The
+	// deduction is sound, so it answers as firmly as the fact it rests on.
+	if d.propositionHoldsCategorically(agent, relContent, patient) {
 		return beliefObserved, 1, false
 	}
 	// A thing standing in a relation to itself is not a claim worth guessing, so
