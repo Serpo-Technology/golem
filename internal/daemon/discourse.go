@@ -463,8 +463,17 @@ func (d *Daemon) threadFactClause(lang string, c *memory.Fragment) (string, bool
 // discourse memory, never the entrenched graph, so it reports only what was said
 // this exchange. It returns false when the turn is not that question or nothing
 // has been established yet, so an empty exchange falls through to the older path.
-func (d *Daemon) planRecallSaid(frame grammar.Frame, raw string) (string, bool) {
-	if !isRecallSaid(raw) || len(d.threadProps) == 0 {
+func (d *Daemon) planRecallSaid(frame grammar.Frame) (string, bool) {
+	// A recall-said move asks what the exchange has set down: a verb of saying, in
+	// a question. Asked of GOLEM ("what did you say") it would be after GOLEM's own
+	// words, a different report, so the move is the speaker asking what was told.
+	if frame.Speech != "recall" || frame.Force != grammar.ForceQuestion {
+		return "", false
+	}
+	if frame.Agent.Concept != nil && frame.Agent.Concept.ID == d.selfID {
+		return "", false
+	}
+	if len(d.threadProps) == 0 {
 		return "", false
 	}
 	// Oldest first, so the recall reads in the order the exchange built it.
@@ -496,22 +505,6 @@ func (d *Daemon) planRecallSaid(frame grammar.Frame, raw string) (string, bool) 
 	return strings.Join(clauses, " "), true
 }
 
-// isRecallSaid reports whether a turn asks GOLEM to report back what it has been
-// told this exchange, distinct from "what do you know about X", which describes a
-// concept from the whole graph.
-func isRecallSaid(raw string) bool {
-	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	for _, p := range []string{
-		"what have i told you", "what did i tell you", "what have i told you so far",
-		"what have i said", "what did i say", "what do you remember",
-	} {
-		if s == p {
-			return true
-		}
-	}
-	return false
-}
-
 // completeRoleEllipsis answers an elliptical follow-up to a role question by
 // inheriting its relation and asking it of a new referent: after "what did the
 // cat chase", "what about the dog" walks chase from the dog. The relation and
@@ -524,15 +517,15 @@ func (d *Daemon) completeRoleEllipsis(frame grammar.Frame, raw string, thread *r
 	}
 	// A continuation ("what about the dog") and a repair ("no, I meant the dog")
 	// both inherit the last question's relation and ask it of a new referent; the
-	// difference is only what prompted the swap.
-	ref, ok := aboutReferent(raw)
-	if !ok {
-		ref, ok = meantReferent(raw)
+	// difference is only what prompted the swap. The repair names its referent
+	// through the "mean" verb, read from the frame; the continuation is still read
+	// from the surface.
+	var known *memory.Fragment
+	if frame.Speech == "clarify" && frame.Patient.Concept != nil && !d.isParticipant(frame.Patient.Concept.ID) {
+		known = frame.Patient.Concept
+	} else if ref, ok := aboutReferent(raw); ok {
+		known = d.resolveConcept(ref)
 	}
-	if !ok {
-		return "", false
-	}
-	known := d.resolveConcept(ref)
 	if known == nil {
 		return "", false
 	}
@@ -638,29 +631,6 @@ func aboutReferent(raw string) (string, bool) {
 	return "", false
 }
 
-// meantReferent reads the referent of a correction, the noun in "no, I meant the
-// cat" or "I mean a dog", with any leading "no" and article dropped, so a turn
-// that repairs the subject of the last question re-asks it of the right one.
-func meantReferent(raw string) (string, bool) {
-	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	s = strings.TrimPrefix(s, "no, ")
-	s = strings.TrimPrefix(s, "no ")
-	for _, lead := range []string{"i meant ", "i mean "} {
-		rest, ok := strings.CutPrefix(s, lead)
-		if !ok {
-			continue
-		}
-		rest = strings.TrimSpace(rest)
-		for _, art := range []string{"a ", "an ", "the "} {
-			rest = strings.TrimPrefix(rest, art)
-		}
-		if rest = strings.TrimSpace(rest); rest != "" {
-			return rest, true
-		}
-	}
-	return "", false
-}
-
 // correctionClause reads the clause of a correction, "the dog chased the rabbit"
 // from "no, the dog chased the rabbit" or "actually the dog chased the rabbit", the
 // leading marker dropped, so a turn that fixes a claim is told from a plain
@@ -702,21 +672,4 @@ func (d *Daemon) removeClaim(rel string, agent, patient uint64) {
 		kept = append(kept, c)
 	}
 	d.claims = kept
-}
-
-// isClarify reports whether a turn asks GOLEM to say more about what it just
-// said, so it elaborates the subject in mind rather than reading the turn as a
-// fresh question of its own.
-func isClarify(raw string) bool {
-	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	s = strings.TrimSuffix(s, ".")
-	for _, p := range []string{
-		"what do you mean", "what do you mean by that", "what does that mean",
-		"explain", "say more", "elaborate", "tell me more about that",
-	} {
-		if s == p {
-			return true
-		}
-	}
-	return false
 }

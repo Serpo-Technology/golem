@@ -57,6 +57,7 @@ type Frame struct {
 	Force    Force
 	Lang     string      // the language the utterance arrived in; answers go back the same way
 	Wh       string      // the interrogative that opened a question: what, which, when, where, why, who, how
+	Speech   string      // a speech-act verb's move when the clause is about the talk itself: clarify, recall
 	Agent    Term        // who or what the clause is about
 	Action   Term        // the predicate; for innate verbs only Phrase is set
 	Patient  Term        // what is acted on or asked about

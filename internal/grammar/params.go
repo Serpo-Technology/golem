@@ -205,6 +205,17 @@ func (p *Params) relType(lang, form string) string {
 	return form
 }
 
+// speechMove reads the discourse move a speech-act verb carries from its seeded
+// category, "speech:clarify" for "mean" and "speech:recall" for "say", so a verb
+// about the talk routes to its move from data rather than a string match. A bare
+// "speech" carries none.
+func (p *Params) speechMove(lang, form string) string {
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "speech:"); ok {
+		return spec
+	}
+	return ""
+}
+
 // proAnimacy reads a pro-form's animacy preference from its seeded category,
 // "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
 // binding favors the referent it fits. A bare "pro" carries none.

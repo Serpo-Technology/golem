@@ -310,8 +310,14 @@ func (d *Daemon) planTopicRecall(frame grammar.Frame, raw string) (string, bool)
 // the resemblance the guess rode on and the fact behind it. Otherwise it
 // elaborates the subject in mind, its kind and what it has been part of. It
 // returns false when the turn is not such a request or nothing is in mind.
-func (d *Daemon) planClarify(frame grammar.Frame, raw string) (string, bool) {
-	if !isClarify(raw) {
+func (d *Daemon) planClarify(frame grammar.Frame) (string, bool) {
+	// The clause is a clarify move when its verb is one ("what do you mean",
+	// "explain"). The same verb naming a concrete patient ("I meant the cat") is a
+	// repair of the referent, so it is left to that path rather than caught here.
+	if frame.Speech != "clarify" {
+		return "", false
+	}
+	if frame.Patient.Concept != nil && !d.isParticipant(frame.Patient.Concept.ID) {
 		return "", false
 	}
 	// A guess just made is clarified by saying why: "the rabbit is like a mouse,

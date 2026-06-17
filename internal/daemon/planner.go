@@ -686,7 +686,7 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 
 	// "What have I told you": report the propositions the exchange has set down,
 	// the discourse memory read back so the talk can be asked what it has covered.
-	if ans, ok := d.planRecallSaid(frame, raw); ok {
+	if ans, ok := d.planRecallSaid(frame); ok {
 		return ans, nil
 	}
 
@@ -698,7 +698,7 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 
 	// "What do you mean": elaborate the subject in mind rather than read the turn
 	// as a question of its own.
-	if ans, ok := d.planClarify(frame, raw); ok {
+	if ans, ok := d.planClarify(frame); ok {
 		return ans, nil
 	}
 

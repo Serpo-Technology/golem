@@ -25,7 +25,13 @@ fw:en:consolidate	consolidate	en	imp
 fw:en:did	did	en	fn
 fw:en:do	do	en	imp
 fw:en:does	does	en	fn
+fw:en:elaborate	elaborate	en	speech:clarify
+fw:en:elaborated	elaborated	en	speech:clarify
+fw:en:elaborates	elaborates	en	speech:clarify
 fw:en:execute	execute	en	imp
+fw:en:explain	explain	en	speech:clarify
+fw:en:explained	explained	en	speech:clarify
+fw:en:explains	explains	en	speech:clarify
 fw:en:for	for	en	fn
 fw:en:how	how	en	wh
 fw:en:i	i	en	deixis
@@ -37,6 +43,9 @@ fw:en:it	it	en	pro:inanimate
 fw:en:know	know	en	fn
 fw:en:many	many	en	cnt
 fw:en:me	me	en	deixis
+fw:en:mean	mean	en	speech:clarify
+fw:en:meant	meant	en	speech:clarify
+fw:en:means	means	en	speech:clarify
 fw:en:much	much	en	cnt
 fw:en:my	my	en	det
 fw:en:never	never	en	neg
@@ -55,9 +64,14 @@ fw:en:recall	recall	en	imp
 fw:en:remember	remember	en	imp
 fw:en:retry	retry	en	imp
 fw:en:run	run	en	imp
+fw:en:said	said	en	speech:recall
+fw:en:say	say	en	speech:recall
+fw:en:says	says	en	speech:recall
 fw:en:she	she	en	pro:animate
 fw:en:show	show	en	imp
 fw:en:sometimes	sometimes	en	adv
+fw:en:tell	tell	en	speech:recall
+fw:en:tells	tells	en	speech:recall
 fw:en:that	that	en	pro
 fw:en:the	the	en	det
 fw:en:them	them	en	pro
@@ -67,6 +81,7 @@ fw:en:tidy	tidy	en	imp
 fw:en:time	time	en	fn
 fw:en:times	times	en	fn
 fw:en:to	to	en	fn
+fw:en:told	told	en	speech:recall
 fw:en:try	try	en	imp
 fw:en:us	us	en	deixis
 fw:en:usually	usually	en	adv

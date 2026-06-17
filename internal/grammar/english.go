@@ -27,6 +27,7 @@ const (
 	catFn     = "fn"     // grammatical filler with no slot of its own
 	catTime   = "time"   // a temporal noun that compounds with an interrogative
 	catDeixis = "deixis" // deictic pronouns: a span resolving to a participant
+	catSpeech = "speech" // speech-act verbs: the clause is about the talk itself
 )
 
 // imperativeIntents maps the faculty verbs onto the acts they invoke:
@@ -256,6 +257,13 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			flush()
 		case catImp, catDet, catFn, catTime:
 			flush()
+		case catSpeech:
+			// A speech-act verb is the predicate, but the move it carries (clarify,
+			// recall) is about the talk rather than the world, so a clause built on
+			// one is routed as a discourse move instead of read as a fact.
+			flush()
+			f.Speech = p.speechMove(lang, tok)
+			verbSeen = true
 		case catDeixis:
 			// A deictic pronoun fills a role like a noun, but resolves to a
 			// conversation participant rather than a thing named in the world.

@@ -1221,6 +1221,34 @@ func TestClarifyExplainsGuess(t *testing.T) {
 	}
 }
 
+// The clarify move is recognized from the speech-act verb that carries it, so
+// phrasings never listed anywhere ("explain", "what does that mean") reach the
+// same explanation as "what do you mean": new ways of asking are vocabulary, not
+// new code.
+func TestClarifyRoutesOffSpeechActVerb(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("the guess should fire: %q", got)
+	}
+	for _, ask := range []string{"explain", "what does that mean", "elaborate"} {
+		got := strings.ToLower(say(t, d, ask).Say)
+		if !strings.Contains(got, "like") || !strings.Contains(got, "dog") {
+			t.Fatalf("%q should reach clarify through its verb: %q", ask, got)
+		}
+	}
+}
+
 // A correction of a claim retracts the conflicting fact and accepts the new one:
 // "no, the dog chased the rabbit" after GOLEM affirmed the dog chased the cat
 // leaves only the corrected fact standing.
@@ -1337,13 +1365,16 @@ func TestRecallSaidReportsEstablished(t *testing.T) {
 	groundNoun(t, d, "mouse")
 	say(t, d, "a dog chased a cat")
 	say(t, d, "a cat chased a mouse")
-	got, ok := d.planRecallSaid(grammar.Frame{Lang: "en"}, "what have I told you")
-	if !ok || !strings.Contains(got, "dog") || !strings.Contains(got, "cat") || !strings.Contains(got, "mouse") {
-		t.Fatalf("recall should report what the exchange established: %q (%v)", got, ok)
+	// The real utterance routes through the speech-act verb: "told" carries the
+	// recall move, no phrase list in between.
+	got := say(t, d, "what have I told you").Say
+	if !strings.Contains(got, "dog") || !strings.Contains(got, "cat") || !strings.Contains(got, "mouse") {
+		t.Fatalf("recall should report what the exchange established: %q", got)
 	}
 	// With nothing established, the move declines so the older path can answer.
+	frame := grammar.Frame{Lang: "en", Speech: "recall", Force: grammar.ForceQuestion}
 	d.threadProps = nil
-	if _, ok := d.planRecallSaid(grammar.Frame{Lang: "en"}, "what have I told you"); ok {
+	if _, ok := d.planRecallSaid(frame); ok {
 		t.Fatal("with nothing established, recall should decline")
 	}
 }
