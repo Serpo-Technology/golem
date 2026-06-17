@@ -1681,10 +1681,10 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// proposal. Verbatim memory above is untouched by any of it.
 		// The answer language follows the question's: detected from
 		// the closed class, with the spoken --lang tag as fallback.
-		frame := d.gram.Parse(req.Content, d.resolveConcept)
-		if frame.Lang == "" && req.Lang != "" {
-			frame.Lang = req.Lang
-		}
+		// Detection reads the tongue from the closed class; the spoken --lang tag is
+		// the fallback, applied during the parse so a tongue's constructions are read
+		// even when the clause carries no function word to detect it by.
+		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveConcept)
 		if frame.Lang == "" {
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}

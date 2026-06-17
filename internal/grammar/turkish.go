@@ -316,12 +316,15 @@ func (p *Params) Ablative(lang, w string) string {
 	return w + applySuffixTR(w, p.get().suffix("ablative", "DAn"))
 }
 
-// trComparativeParts reads a Turkish comparison "kedi fareden büyük" (cat
-// mouse-ABL big) into its subject, the gradable relation (the adjective), and the
-// standard (the ablative-marked noun). Turkish marks the standard by case and drops
-// the copula, so the comparison is found by the ablative noun with an adjective
-// after it; a relator after the ablative ("...-den sonra") is a temporal clause
-// instead. A trailing question particle makes it a question.
+// trComparativeParts reads a Turkish comparison into its subject, the comparative
+// relation, and the standard. Turkish has no comparative WORD: "büyük" alone is the
+// positive "big", and the comparative "bigger" is the construction, the standard in
+// the ablative ("fareden büyük") with the particle "daha" (more) optional
+// ("fareden daha büyük"). So the standard is the ablative noun, the subject the noun
+// before it, and the relation is normalized to "daha <adjective>" however it was
+// said, keeping the comparative distinct from the bare adjective. A relator after
+// the ablative ("...-den sonra") is a temporal anchor instead; a trailing question
+// particle makes it a question.
 func (p *Params) trComparativeParts(tokens []string) (rel, subject, standard string, ask, ok bool) {
 	abl := -1
 	for i, tok := range tokens {
@@ -336,22 +339,26 @@ func (p *Params) trComparativeParts(tokens []string) (rel, subject, standard str
 	if p.category("tr", tokens[abl+1]) == catRel {
 		return "", "", "", false, false // ablative + relator is a temporal anchor, not a comparison
 	}
-	var relWords []string
+	var adj []string
 	for _, tok := range tokens[abl+1:] {
 		switch tok {
 		case "mı", "mi", "mu", "mü":
 			ask = true
+		case "daha": // the comparative particle, normalized back in below
 		default:
 			if p.category("tr", tok) == catNeg {
 				continue
 			}
-			relWords = append(relWords, tok)
+			adj = append(adj, tok)
 		}
 	}
-	rel = strings.Join(relWords, " ")
+	if len(adj) == 0 {
+		return "", "", "", false, false
+	}
+	rel = "daha " + strings.Join(adj, " ") // the comparative, not the bare adjective
 	standard = stripCaseTR(tokens[abl])
 	subject = strings.Join(tokens[:abl], " ")
-	if rel == "" || subject == "" || standard == "" {
+	if subject == "" || standard == "" {
 		return "", "", "", false, false
 	}
 	return rel, subject, standard, ask, true

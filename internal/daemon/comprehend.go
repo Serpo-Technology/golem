@@ -1884,7 +1884,13 @@ func (d *Daemon) proVerbDo(lang, raw string) bool {
 // relation, so it asks for that kind directly.
 func (d *Daemon) resolveRelation(phrase string) *memory.Fragment {
 	tokens, _ := grammar.Tokenize(phrase)
-	words, err := d.store.WordNodesByForms(tokens)
+	forms := tokens
+	if len(tokens) > 1 {
+		// A multi-word relation (the Turkish comparative "daha büyük") is named as one
+		// form, so the whole phrase is tried alongside its tokens.
+		forms = append([]string{strings.Join(tokens, " ")}, tokens...)
+	}
+	words, err := d.store.WordNodesByForms(forms)
 	if err != nil || len(words) == 0 {
 		return nil
 	}

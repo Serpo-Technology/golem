@@ -1255,12 +1255,13 @@ func TestComparativeTurkish(t *testing.T) {
 	groundNounLang(t, d, "kedi", "tr")
 	groundNounLang(t, d, "fare", "tr")
 	groundNounLang(t, d, "köpek", "tr")
-	sayLang(t, d, "tr", "köpek kediden büyük") // the dog is bigger than the cat
-	sayLang(t, d, "tr", "kedi fareden büyük")  // the cat is bigger than the mouse
-	if got := sayLang(t, d, "tr", "köpek fareden büyük mü").Say; got != "Evet, köpek fareden büyük." {
-		t.Fatalf("a chained Turkish comparison should hold transitively: %q", got)
+	sayLang(t, d, "tr", "köpek kediden büyük")      // the dog is bigger than the cat (ablative, no daha)
+	sayLang(t, d, "tr", "kedi fareden daha büyük") // the cat is bigger than the mouse (with daha)
+	// Both forms normalize to the same comparative "daha büyük", so the chain holds.
+	if got := sayLang(t, d, "tr", "köpek fareden büyük mü").Say; got != "Evet, köpek fareden daha büyük." {
+		t.Fatalf("a chained Turkish comparison should hold transitively, spoken as the comparative: %q", got)
 	}
-	if got := sayLang(t, d, "tr", "fare köpekten büyük mü").Say; got != "Hayır, fare köpekten büyük değil." {
+	if got := sayLang(t, d, "tr", "fare köpekten daha büyük mü").Say; got != "Hayır, fare köpekten daha büyük değil." {
 		t.Fatalf("the reverse Turkish ordering should be denied: %q", got)
 	}
 }

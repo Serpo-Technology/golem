@@ -76,12 +76,24 @@ func (p *Params) detectLanguage(tokens []string) string {
 // tongues) and hands the tokens to the one language-general procedure, the
 // default tongue taken when none is detected.
 func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) Frame {
+	return p.ParseHint(utterance, "", resolve)
+}
+
+// ParseHint is Parse with a fallback tongue for when the closed class does not
+// reveal one. A clause of only open-class words (a Turkish comparison "kedi
+// fareden büyük", whose case marking is morphological, not a function word) detects
+// as no language; the caller's tag then settles it, so the parse runs in the right
+// tongue rather than defaulting to English and missing its constructions.
+func (p *Params) ParseHint(utterance, fallback string, resolve func(string) *memory.Fragment) Frame {
 	p = p.get()
 	tokens, question := Tokenize(utterance)
 	if len(tokens) == 0 {
 		return Frame{Force: ForceStatement}
 	}
 	lang := p.detectLanguage(tokens)
+	if lang == "" {
+		lang = fallback
+	}
 	if lang == "" {
 		lang = "en"
 	}
