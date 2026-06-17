@@ -42,6 +42,14 @@ const (
 // through words that name one, then by gloss content, the same fallback
 // recall uses for phrases nobody taught yet.
 func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
+	// A deictic pronoun points at a participant, not a thing in the world: from the
+	// speaker's side "I" is the user and "you" is GOLEM, so a clause about the
+	// speakers grounds in them and is reasoned over like any other.
+	if id := d.deicticParticipant(phrase); id != 0 {
+		if frags, err := d.store.FragmentsByIDs([]uint64{id}); err == nil && len(frags) == 1 {
+			return frags[0]
+		}
+	}
 	tokens, _ := grammar.Tokenize(phrase)
 	words, err := d.store.WordNodesByForms(tokens)
 	if err == nil && len(words) > 0 {
@@ -497,6 +505,28 @@ func (d *Daemon) trackTopic() {
 	d.topicTrail = removeID(d.topicTrail, next) // returning to a trailed subject lifts it off the trail
 	d.event(events.Event{Ev: "topic", From: d.topic, To: next})
 	d.topic = next
+}
+
+// deicticParticipant maps a deictic pronoun to the participant it points at from
+// the speaker's side: the one speaking says "I" of the user and "you" of GOLEM,
+// "we" of the two together. It returns 0 for anything else.
+func (d *Daemon) deicticParticipant(phrase string) uint64 {
+	switch strings.ToLower(strings.TrimSpace(phrase)) {
+	case "i", "me", "myself":
+		return d.userID
+	case "you", "yourself":
+		return d.selfID
+	case "we", "us":
+		return d.bothID
+	}
+	return 0
+}
+
+// isParticipant reports whether a concept is one of the innate conversation
+// participants (GOLEM, the speaker, the two together). They are concepts GOLEM
+// reasons over, but stand apart from the grown perceptual layer.
+func (d *Daemon) isParticipant(id uint64) bool {
+	return id != 0 && (id == d.selfID || id == d.userID || id == d.bothID)
 }
 
 // noteFocus records the concept a turn settled on as its subject, so the topic
@@ -1018,6 +1048,11 @@ func upperFirst(s string) string {
 // one sentence: "Yes, the dog ..." carries "The dog ..." as its tail.
 func lowerFirst(s string) string {
 	if s == "" || s[0] < 'A' || s[0] > 'Z' {
+		return s
+	}
+	// English "I" stays capitalized even mid-sentence, so a clause opening with the
+	// first-person pronoun is left as it stands ("Yes, I chased the cat").
+	if s == "I" || strings.HasPrefix(s, "I ") || strings.HasPrefix(s, "I'") {
 		return s
 	}
 	return string(s[0]+32) + s[1:]

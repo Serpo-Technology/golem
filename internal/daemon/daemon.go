@@ -212,6 +212,14 @@ type Daemon struct {
 	openQuestions []openQuestion
 	followUp      string
 
+	// selfID, userID, and bothID are the conversation's participants as concepts:
+	// GOLEM, the one it speaks with, and the two together. The deictic pronouns
+	// resolve to them ("you" is GOLEM, "I" the user) so a turn about the speakers
+	// is reasoned over like any other, and GOLEM can be asked about itself.
+	selfID uint64
+	userID uint64
+	bothID uint64
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -439,6 +447,9 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 	// The features a past run named universal are passed over from the first
 	// resemblance, not from the first night.
 	d.loadUniversalFeats()
+	// The conversation's participants are in mind from the first turn, so "you"
+	// and "I" resolve to someone and GOLEM can be asked about itself.
+	d.ensureParticipants()
 	if events, err := events.Open(home); err == nil {
 		d.events = events
 	} else {
@@ -554,6 +565,31 @@ func (d *Daemon) dropCounter(channel string) *atomic.Int64 {
 		d.drops[channel] = c
 	}
 	return c
+}
+
+// ensureParticipants makes sure the conversation's participants exist as concepts
+// and caches their ids: GOLEM itself, the one it speaks with, and the two
+// together. They are persistent and discourse-grounded rather than perceptual, the
+// referents the deictic pronouns ("you", "I", "we") point at.
+func (d *Daemon) ensureParticipants() {
+	d.selfID = d.ensureConcept("deixis:self", "GOLEM")
+	d.userID = d.ensureConcept("deixis:user", "the speaker")
+	d.bothID = d.ensureConcept("deixis:both", "us")
+}
+
+// ensureConcept returns the id of the concept with a template, creating it if
+// absent, so a singleton concept is stable across restarts.
+func (d *Daemon) ensureConcept(template, content string) uint64 {
+	if c, err := d.store.ConceptByTemplate(template); err == nil && c != nil {
+		return c.ID
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+		Template: template, Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "participant concept error: %v\n", err)
+		return 0
+	}
+	return c.ID
 }
 
 // Run blocks until the daemon is stopped by a signal or a stop command.
@@ -1341,6 +1377,10 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.claims = nil
 	d.openQuestions = nil
 	d.followUp = ""
+	// The night may have pruned a participant that nothing grounded it through;
+	// re-establish the trio so the cached ids point at live concepts for the new
+	// day. One spoken of in a stored fact kept its grounding and its id with it.
+	d.ensureParticipants()
 	d.flushModels()
 	if err := d.store.Checkpoint(); err != nil {
 		fmt.Fprintf(d.out, "checkpoint error: %v\n", err)

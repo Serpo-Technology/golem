@@ -12,20 +12,21 @@ import (
 // category from their concept's grounding role instead (verb for shapes
 // in command position, noun for recurring sensory objects).
 const (
-	catWh    = "wh"    // interrogatives: open a question
-	catRel   = "rel"   // temporal relators: attach an anchor clause
-	catAdv   = "adv"   // adverbs of habit
-	catAgain = "again" // the repetition pro-verb modifier
-	catPro   = "pro"   // pro-forms: resolve from the workspace
-	catOth   = "oth"   // "other": shift a pro-form past the warmest referent
-	catImp   = "imp"   // imperative openers: command force
-	catDet   = "det"   // determiners: skipped during resolution
-	catCop   = "cop"   // copulas: definition questions
-	catHap   = "hap"   // happen-verbs: event questions
-	catNeg   = "neg"   // negators: deny the predicate
-	catCnt   = "cnt"   // count quantifiers: "how many" asks for a number
-	catFn    = "fn"    // grammatical filler with no slot of its own
-	catTime  = "time"  // a temporal noun that compounds with an interrogative
+	catWh     = "wh"     // interrogatives: open a question
+	catRel    = "rel"    // temporal relators: attach an anchor clause
+	catAdv    = "adv"    // adverbs of habit
+	catAgain  = "again"  // the repetition pro-verb modifier
+	catPro    = "pro"    // pro-forms: resolve from the workspace
+	catOth    = "oth"    // "other": shift a pro-form past the warmest referent
+	catImp    = "imp"    // imperative openers: command force
+	catDet    = "det"    // determiners: skipped during resolution
+	catCop    = "cop"    // copulas: definition questions
+	catHap    = "hap"    // happen-verbs: event questions
+	catNeg    = "neg"    // negators: deny the predicate
+	catCnt    = "cnt"    // count quantifiers: "how many" asks for a number
+	catFn     = "fn"     // grammatical filler with no slot of its own
+	catTime   = "time"   // a temporal noun that compounds with an interrogative
+	catDeixis = "deixis" // deictic pronouns: a span resolving to a participant
 )
 
 // imperativeIntents maps the faculty verbs onto the acts they invoke:
@@ -255,6 +256,10 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			flush()
 		case catImp, catDet, catFn, catTime:
 			flush()
+		case catDeixis:
+			// A deictic pronoun fills a role like a noun, but resolves to a
+			// conversation participant rather than a thing named in the world.
+			current = append(current, tok)
 		default:
 			current = append(current, tok)
 		}

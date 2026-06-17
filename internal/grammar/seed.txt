@@ -28,7 +28,7 @@ fw:en:does	does	en	fn
 fw:en:execute	execute	en	imp
 fw:en:for	for	en	fn
 fw:en:how	how	en	wh
-fw:en:i	i	en	fn
+fw:en:i	i	en	deixis
 fw:en:in	in	en	fn
 fw:en:introspect	introspect	en	imp
 fw:en:is	is	en	cop
@@ -36,7 +36,7 @@ fw:en:he	he	en	pro:animate
 fw:en:it	it	en	pro:inanimate
 fw:en:know	know	en	fn
 fw:en:many	many	en	cnt
-fw:en:me	me	en	fn
+fw:en:me	me	en	deixis
 fw:en:much	much	en	cnt
 fw:en:my	my	en	det
 fw:en:never	never	en	neg
@@ -68,10 +68,10 @@ fw:en:time	time	en	fn
 fw:en:times	times	en	fn
 fw:en:to	to	en	fn
 fw:en:try	try	en	imp
-fw:en:us	us	en	fn
+fw:en:us	us	en	deixis
 fw:en:usually	usually	en	adv
 fw:en:was	was	en	cop
-fw:en:we	we	en	fn
+fw:en:we	we	en	deixis
 fw:en:were	were	en	cop
 fw:en:what	what	en	wh
 fw:en:when	when	en	wh
@@ -81,7 +81,7 @@ fw:en:who	who	en	wh
 fw:en:why	why	en	wh
 fw:en:with	with	en	fn
 fw:en:yet	yet	en	fn
-fw:en:you	you	en	fn
+fw:en:you	you	en	deixis
 fw:en:your	your	en	det
 sortal:en:action	action	en	action
 sortal:en:actions	actions	en	action
@@ -232,3 +232,9 @@ surface:en:islike	like	en
 surface:tr:islike	benzer	tr
 surface:en:isee	I see	en
 surface:tr:isee	anladım	tr
+surface:en:firstperson	I	en
+surface:tr:firstperson	ben	tr
+surface:en:addressee	you	en
+surface:tr:addressee	sen	tr
+surface:en:firstpersonpl	we	en
+surface:tr:firstpersonpl	biz	tr

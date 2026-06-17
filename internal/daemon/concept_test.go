@@ -310,12 +310,16 @@ func TestQuestionsDoNotBecomeConcepts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lived := false
 	for _, c := range concepts {
 		if strings.Contains(c.Content, "usually happens") {
 			t.Fatalf("an utterance shape must not distil into a concept: %q", c.Content)
 		}
+		if c.Content == "disk space low" {
+			lived = true
+		}
 	}
-	if len(concepts) == 0 || concepts[0].Content != "disk space low" {
+	if !lived {
 		t.Fatalf("the lived shape should still distil: %+v", concepts)
 	}
 }

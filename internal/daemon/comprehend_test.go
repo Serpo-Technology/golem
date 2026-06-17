@@ -1169,6 +1169,33 @@ func TestCategoricalDeduction(t *testing.T) {
 	}
 }
 
+// GOLEM treats the conversation's participants as concepts the deictic pronouns
+// resolve to, from the speaker's side: "you" is GOLEM, "I" the speaker. It reasons
+// over a clause about them like any other and answers from its own side, so a fact
+// told with "you" comes back as "I", and one told with "I" comes back as "you".
+func TestParticipantDeixisRoundTrips(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "dog")
+
+	// A fact GOLEM is told of itself in the second person it holds of itself, and
+	// speaks back in the first: "you chased the cat" comes back as "I chased the
+	// cat".
+	say(t, d, "you chased the cat")
+	if got := say(t, d, "did you chase the cat").Say; got != "Yes, I chased the cat." {
+		t.Fatalf("the fact told with you should hold, spoken back as I: %q", got)
+	}
+	// What it was not told of itself, it denies of itself, again as "I".
+	if got := say(t, d, "did you chase the dog").Say; got != "No, I did not chase the dog." {
+		t.Fatalf("you is GOLEM, which denies of itself as I: %q", got)
+	}
+	// Told of the speaker in the first person, GOLEM speaks back in the second.
+	say(t, d, "I chased the dog")
+	if got := say(t, d, "did I chase the dog").Say; got != "Yes, you chased the dog." {
+		t.Fatalf("the fact told with I should hold, spoken back as you: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

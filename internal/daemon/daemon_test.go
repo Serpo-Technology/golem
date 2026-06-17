@@ -316,6 +316,9 @@ func testDaemonOn(t *testing.T, s *memory.Store) *Daemon {
 	if err := d.loadGrammar(); err != nil {
 		t.Fatal(err)
 	}
+	// The conversation's participants exist from boot, as in a real run, so the
+	// deictic pronouns resolve to someone.
+	d.ensureParticipants()
 	return d
 }
 

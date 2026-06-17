@@ -227,6 +227,12 @@ const (
 // concept's own content when no word of the tongue names it, so a concept known
 // only by its shape still speaks.
 func (d *Daemon) conceptName(id uint64, content, lang string) string {
+	// A participant is spoken from GOLEM's side, the mirror of how it was heard:
+	// GOLEM names itself "I", the one it speaks with "you", the two "we", so the
+	// pronoun the user said as "you" comes back as "I".
+	if name := d.participantName(id, lang); name != "" {
+		return name
+	}
 	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelNames)
 	if err != nil || len(edges) == 0 {
 		return content
@@ -273,6 +279,24 @@ func (d *Daemon) conceptName(id uint64, content, lang string) string {
 		return content
 	}
 	return best
+}
+
+// participantName speaks a conversation participant from GOLEM's side: itself as
+// the first person, the one it addresses as the second, the two together as the
+// first-person plural. It returns "" for any other concept, and never matches when
+// the participants are unset (id 0), so naming falls through to the graph.
+func (d *Daemon) participantName(id uint64, lang string) string {
+	switch {
+	case id == 0:
+		return ""
+	case id == d.selfID:
+		return d.gram.Word(lang, "firstperson")
+	case id == d.userID:
+		return d.gram.Word(lang, "addressee")
+	case id == d.bothID:
+		return d.gram.Word(lang, "firstpersonpl")
+	}
+	return ""
 }
 
 // relationName is a relation's verb in a tongue: the firmest word naming the

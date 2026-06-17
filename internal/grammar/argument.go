@@ -171,7 +171,7 @@ func (p *Params) definiteNP(lang, role, np string) string {
 // pronoun, so the definite marker is not stacked onto one.
 func hasDeterminer(np string) bool {
 	lead, _, _ := strings.Cut(np, " ")
-	switch lead {
+	switch strings.ToLower(lead) {
 	case "a", "an", "the", "this", "that", "my", "your", "its",
 		"it", "they", "he", "she", "we", "you", "i", "o", "onu":
 		return true
@@ -370,16 +370,20 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 	if len(tokens) == 0 {
 		return nil, false
 	}
-	var dets []int
+	// A determiner anchors a noun phrase's start; a deictic pronoun is a one-word
+	// phrase that anchors the same way without a determiner, so "you chased the
+	// cat" yields the subject a determiner count alone would miss.
+	var anchors []int
 	for i, tok := range tokens {
-		if p.category(lang, tok) == catDet {
-			dets = append(dets, i)
+		switch p.category(lang, tok) {
+		case catDet, catDeixis:
+			anchors = append(anchors, i)
 		}
 	}
 	verbFinal := p.verbFinal(lang)
 	switch {
-	case len(dets) >= 2:
-		d2 := dets[1]
+	case len(anchors) >= 2:
+		d2 := anchors[1]
 		if verbFinal {
 			np1 := p.contentSpan(tokens[:d2])
 			np2 := p.contentSpan(tokens[d2 : len(tokens)-1])
@@ -390,7 +394,7 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 		np1 := p.contentSpan(tokens[:d2-1])
 		np2 := p.contentSpan(tokens[d2:])
 		return []string{np1, verb, np2}, np1 != "" && np2 != "" && verb != ""
-	case len(dets) == 1:
+	case len(anchors) == 1:
 		verb := tokens[len(tokens)-1]
 		np1 := p.contentSpan(tokens[:len(tokens)-1])
 		return []string{np1, verb}, np1 != "" && verb != ""
