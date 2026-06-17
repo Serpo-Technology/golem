@@ -702,6 +702,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// Naming a kind GOLEM has offered ("they are fruit" after it noticed a cluster)
+	// grounds it as a category. Fires only while an offer stands, so it does not
+	// shadow an ordinary statement.
+	if ans, ok := d.planNameKind(frame); ok {
+		return ans, nil
+	}
+
 	// An elliptical follow-up to a role question inherits its relation and asks
 	// it of a new referent: "what about the dog" after "what did the cat chase"
 	// walks chase from the dog. The thread is read and cleared here; a role

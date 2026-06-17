@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
 
@@ -85,5 +86,64 @@ func TestNamedKindIsNotReproposed(t *testing.T) {
 	d.topic = cat.ID
 	if line, ok := d.volunteerRemark("en"); ok {
 		t.Fatalf("a kind that already has a word should not be re-proposed: %q", line)
+	}
+}
+
+// Naming the kind GOLEM proposed grounds it as a real category: after it offers a
+// cluster, "they are fruit" mints an abstraction over the members and binds the
+// word, so the kind now answers is-a. This is the dispose half, the noticed
+// similarity becoming a fact the speaker gave.
+func TestNameKindGroundsCategory(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(name string, vec []float32) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetVector(c.ID, vec); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	apple := mk("apple", []float32{1, 0, 0})
+	cherry := mk("cherry", []float32{0.97, 0.06, 0})
+	plum := mk("plum", []float32{0.95, 0.09, 0})
+
+	// GOLEM notices the kind, leaving the offer open.
+	d.topic = apple.ID
+	if _, ok := d.volunteerRemark("en"); !ok {
+		t.Fatal("GOLEM should propose the un-named kind")
+	}
+	if len(d.pendingKind) == 0 {
+		t.Fatal("proposing a kind should leave the offer open for a name")
+	}
+
+	// The speaker names it: "they are fruit".
+	frame := grammar.Frame{Force: grammar.ForceStatement,
+		Agent: grammar.Term{Phrase: "they"}, Action: grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: "fruit"}}
+	ans, ok := d.planNameKind(frame)
+	if !ok {
+		t.Fatal("naming the proposed kind should ground it")
+	}
+	t.Logf("confirmation: %q", ans)
+	if len(d.pendingKind) != 0 {
+		t.Fatal("the offer should be consumed once the kind is named")
+	}
+
+	// The category is grounded: a fruit abstraction the word resolves to, and every
+	// member now answers is-a.
+	abs, err := s.ConceptByTemplate("abs:en:fruit")
+	if err != nil || abs == nil {
+		t.Fatalf("naming should mint a fruit abstraction: %v", err)
+	}
+	if got := d.resolveConcept("fruit"); got == nil || got.ID != abs.ID {
+		t.Fatalf("the word fruit should name the new category: %+v", got)
+	}
+	for _, m := range []*memory.Fragment{apple, cherry, plum} {
+		if !d.isA(m.ID, abs.ID) {
+			t.Fatalf("%s should be a fruit after the kind was named", m.Content)
+		}
 	}
 }
