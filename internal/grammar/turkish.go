@@ -306,6 +306,57 @@ func ablativeTR(p *Params, w string) string {
 	return w + "'" + applySuffixTR(w, p.get().suffix("ablative", "DAn"))
 }
 
+// Ablative forms a common noun's ablative ("fare" -> "fareden"), the case Turkish
+// marks a comparison's standard with. Unlike ablativeTR it adds no apostrophe, the
+// plain form a learned noun takes. Identity outside Turkish.
+func (p *Params) Ablative(lang, w string) string {
+	if lang != "tr" || w == "" {
+		return w
+	}
+	return w + applySuffixTR(w, p.get().suffix("ablative", "DAn"))
+}
+
+// trComparativeParts reads a Turkish comparison "kedi fareden büyük" (cat
+// mouse-ABL big) into its subject, the gradable relation (the adjective), and the
+// standard (the ablative-marked noun). Turkish marks the standard by case and drops
+// the copula, so the comparison is found by the ablative noun with an adjective
+// after it; a relator after the ablative ("...-den sonra") is a temporal clause
+// instead. A trailing question particle makes it a question.
+func (p *Params) trComparativeParts(tokens []string) (rel, subject, standard string, ask, ok bool) {
+	abl := -1
+	for i, tok := range tokens {
+		if stripCaseTR(tok) != tok {
+			abl = i
+			break
+		}
+	}
+	if abl <= 0 || abl >= len(tokens)-1 {
+		return "", "", "", false, false
+	}
+	if p.category("tr", tokens[abl+1]) == catRel {
+		return "", "", "", false, false // ablative + relator is a temporal anchor, not a comparison
+	}
+	var relWords []string
+	for _, tok := range tokens[abl+1:] {
+		switch tok {
+		case "mı", "mi", "mu", "mü":
+			ask = true
+		default:
+			if p.category("tr", tok) == catNeg {
+				continue
+			}
+			relWords = append(relWords, tok)
+		}
+	}
+	rel = strings.Join(relWords, " ")
+	standard = stripCaseTR(tokens[abl])
+	subject = strings.Join(tokens[:abl], " ")
+	if rel == "" || subject == "" || standard == "" {
+		return "", "", "", false, false
+	}
+	return rel, subject, standard, ask, true
+}
+
 // accusativeTR builds the definite object, buffer y after a vowel:
 // "make test'i", "elma'yı".
 func accusativeTR(p *Params, w string) string {

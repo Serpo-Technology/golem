@@ -1246,6 +1246,25 @@ func TestComparativeOrdersTransitively(t *testing.T) {
 	}
 }
 
+// Turkish marks a comparison's standard by ablative case and drops the copula
+// ("kedi fareden büyük"), so it parses its own way, but the ordering reasoning is
+// the same: a chained comparison holds transitively, the reverse does not, and the
+// answer is spoken with the standard back in the ablative.
+func TestComparativeTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "kedi", "tr")
+	groundNounLang(t, d, "fare", "tr")
+	groundNounLang(t, d, "köpek", "tr")
+	sayLang(t, d, "tr", "köpek kediden büyük") // the dog is bigger than the cat
+	sayLang(t, d, "tr", "kedi fareden büyük")  // the cat is bigger than the mouse
+	if got := sayLang(t, d, "tr", "köpek fareden büyük mü").Say; got != "Evet, köpek fareden büyük." {
+		t.Fatalf("a chained Turkish comparison should hold transitively: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "fare köpekten büyük mü").Say; got != "Hayır, fare köpekten büyük değil." {
+		t.Fatalf("the reverse Turkish ordering should be denied: %q", got)
+	}
+}
+
 // GOLEM discovers that two gradable relations are converse poles of one scale from
 // the ordering itself: told one pair the other way, it learns "smaller" reverses
 // "bigger" and answers smaller-questions across the whole bigger-chain, though it

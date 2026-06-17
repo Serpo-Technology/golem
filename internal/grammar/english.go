@@ -166,6 +166,21 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 		f.Patient = resolveTerm(standard, resolve)
 		return f
 	}
+	// Turkish marks the comparison's standard by ablative case and drops the copula
+	// ("kedi fareden büyük"), so it is read its own way; the reasoning over the
+	// ordering is the same once the roles are filled.
+	if lang == "tr" {
+		if rel, subject, standard, ask, ok := p.trComparativeParts(tokens); ok {
+			f.Comparative = true
+			if ask {
+				f.Force = ForceQuestion
+			}
+			f.Action = Term{Phrase: rel}
+			f.Agent = resolveTerm(subject, resolve)
+			f.Patient = resolveTerm(standard, resolve)
+			return f
+		}
+	}
 
 	type span struct {
 		text     string

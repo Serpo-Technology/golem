@@ -256,6 +256,7 @@ surface:en:akin	seem to be a kind	en
 surface:tr:akin	bir tür gibi görünüyor	tr
 surface:en:great	much	en
 surface:tr:great	çok	tr
+surface:tr:notcompare	değil	tr
 surface:en:slight	a little	en
 surface:tr:slight	biraz	tr
 surface:en:isee	I see	en

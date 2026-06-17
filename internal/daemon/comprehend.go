@@ -856,6 +856,20 @@ func (d *Daemon) planAnalogy(frame grammar.Frame) (string, bool) {
 // bigger than the mouse" or "No, the cat is not bigger than the mouse". The copula
 // and the standard marker come from the tongue's data.
 func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, std *memory.Fragment, holds bool) string {
+	if lang == "tr" {
+		// Turkish marks the standard ablative and follows the adjective with "değil"
+		// to deny, no copula: "kedi fareden büyük", "kedi fareden büyük değil".
+		clause := d.conceptName(subj.ID, subj.Content, lang) + " " +
+			d.gram.Ablative(lang, d.conceptName(std.ID, std.Content, lang)) + " " + rel
+		if !holds {
+			clause += " " + d.gram.Word(lang, "notcompare")
+		}
+		word := d.gram.Word(lang, "yes")
+		if !holds {
+			word = d.gram.Word(lang, "no")
+		}
+		return upperFirst(word) + ", " + strings.TrimSpace(clause) + "."
+	}
 	def := func(name string) string {
 		if a := d.gram.Article(lang); a != "" {
 			return a + " " + name
