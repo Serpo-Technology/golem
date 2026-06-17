@@ -113,6 +113,13 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			f.Action = Term{Phrase: intent}
 		}
 	}
+	// A verb-medial clause that opens with a copula is a yes/no question by
+	// subject-auxiliary inversion ("is a cat an animal"), the question the
+	// statement "a cat is an animal" asks once its subject steps back behind the
+	// verb. A verb-final tongue forms the question another way, so it is left out.
+	if !verbFinal && p.category(lang, tokens[0]) == catCop {
+		f.Force = ForceQuestion
+	}
 
 	type span struct {
 		text     string

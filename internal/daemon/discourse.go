@@ -680,39 +680,6 @@ func (d *Daemon) removeClaim(rel string, agent, patient uint64) {
 	d.claims = kept
 }
 
-// isAQuestion reads an "is X a Y" question into its member and category, "cat" and
-// "animal" from "is a cat an animal", so a turn asking after the is-a hierarchy is
-// told from one asking after a relation. The category is the last article-led noun;
-// the member is what comes before it, its own article dropped.
-func isAQuestion(raw string) (member, category string, ok bool) {
-	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	for _, lead := range []string{"is ", "are "} {
-		rest, found := strings.CutPrefix(s, lead)
-		if !found {
-			continue
-		}
-		toks := strings.Fields(rest)
-		art := -1
-		for i, t := range toks {
-			if t == "a" || t == "an" || t == "the" {
-				art = i
-			}
-		}
-		if art <= 0 || art == len(toks)-1 {
-			return "", "", false // need a member before the category's article and a noun after
-		}
-		member = strings.Join(toks[:art], " ")
-		category = strings.Join(toks[art+1:], " ")
-		for _, a := range []string{"a ", "an ", "the "} {
-			member = strings.TrimPrefix(member, a)
-		}
-		if member = strings.TrimSpace(member); member != "" && category != "" {
-			return member, category, true
-		}
-	}
-	return "", "", false
-}
-
 // isClarify reports whether a turn asks GOLEM to say more about what it just
 // said, so it elaborates the subject in mind rather than reading the turn as a
 // fresh question of its own.

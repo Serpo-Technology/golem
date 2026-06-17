@@ -459,15 +459,24 @@ func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
 // so "is a cat a thing" holds through animal. An identity ("is a cat a cat") holds,
 // and anything else is denied plainly. It returns false when the turn is not an
 // is-a question or its terms ground in nothing.
-func (d *Daemon) planIsA(frame grammar.Frame, raw string) (string, bool) {
-	memberP, catP, ok := isAQuestion(raw)
-	if !ok {
+func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
+	// An is-a question is a copular question with two grounded arguments: "is a cat
+	// an animal". The copula and the arguments are read from comprehension, not a
+	// surface template, so any phrasing that parses to them is answered alike. One
+	// grounded argument is a definition ("what is a cat"), left to its own path.
+	if frame.Force != grammar.ForceQuestion || frame.Action.Phrase != "be" {
 		return "", false
 	}
-	member := d.resolveConcept(memberP)
-	cat := d.resolveConcept(catP)
+	// Subject-auxiliary inversion puts the subject ("a cat") in the patient slot
+	// and the predicate ("an animal") in the agent slot, so the member is the
+	// patient and the category the agent. If the slots came the other way, the
+	// abstraction is the category whichever side it landed.
+	member, cat := frame.Patient.Concept, frame.Agent.Concept
 	if member == nil || cat == nil {
 		return "", false
+	}
+	if d.isCategory(member) && !d.isCategory(cat) {
+		member, cat = cat, member
 	}
 	yes := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
 	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
