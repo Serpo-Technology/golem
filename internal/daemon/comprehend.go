@@ -121,6 +121,9 @@ func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64) bool {
 		return false
 	}
 	d.noteFocus(subj)
+	// An ordering told the other way for a pair reveals this relation's converse
+	// pole, so a later query on either reads the same scale.
+	d.discoverConverse(rel, subj, std)
 	d.recordThreadProp(rel.Content, subj.ID, std.ID, subj.Content, std.Content)
 	d.ws.excite(rel.ID, exciteSpeech)
 	d.ws.exciteRole(subj.ID, exciteSpeech, "agent")
@@ -553,16 +556,17 @@ func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
 	}
-	holds := subj.ID != std.ID && d.comparesTransitively(rel.Content, subj.ID, std.ID)
+	holds := subj.ID != std.ID && d.comparesTransitively(rel, subj.ID, std.ID)
 	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
 }
 
 // comparesTransitively reports whether the subject stands above the standard on a
-// gradable relation, directly or through a chain of comparisons walked over the
-// graph. The ordering is read from the told facts, so it holds for any gradable
-// relation without a scale in code, and the walk is reachability over the
-// relation's propositions, so a chain "cat > mouse > snail" answers "cat > snail".
-func (d *Daemon) comparesTransitively(relContent string, fromID, toID uint64) bool {
+// gradable relation, directly or through a chain walked over the graph. The order
+// is read from the told facts, so it needs no scale in code, and a converse pole
+// the relation was discovered to oppose ("smaller" to "bigger") is walked reversed,
+// so an ordering told one way answers the other across the whole chain.
+func (d *Daemon) comparesTransitively(rel *memory.Fragment, fromID, toID uint64) bool {
+	opposites := d.oppositeRelations(rel.ID)
 	seen := map[uint64]bool{fromID: true}
 	stack := []uint64{fromID}
 	for len(stack) > 0 {
@@ -572,17 +576,78 @@ func (d *Daemon) comparesTransitively(relContent string, fromID, toID uint64) bo
 		if err != nil || len(frags) != 1 {
 			continue
 		}
-		for _, f := range d.gatherFacts(frags[0], "agent", relContent) {
-			if f.coID == toID {
+		reach := func(id uint64) bool {
+			if id == toID {
 				return true
 			}
-			if !seen[f.coID] {
-				seen[f.coID] = true
-				stack = append(stack, f.coID)
+			if !seen[id] {
+				seen[id] = true
+				stack = append(stack, id)
+			}
+			return false
+		}
+		// The things cur was told to exceed directly.
+		for _, f := range d.gatherFacts(frags[0], "agent", rel.Content) {
+			if reach(f.coID) {
+				return true
+			}
+		}
+		// And the things told to fall below cur on a converse pole: "the mouse is
+		// smaller than the cat" places the cat above the mouse just as "bigger" would.
+		for _, opp := range opposites {
+			for _, f := range d.gatherFacts(frags[0], "patient", opp) {
+				if reach(f.coID) {
+					return true
+				}
 			}
 		}
 	}
 	return false
+}
+
+// oppositeRelations returns the contents of the relations discovered to be converse
+// poles of the given one, so a comparison query can walk them reversed.
+func (d *Daemon) oppositeRelations(relID uint64) []string {
+	edges, err := d.store.LinksFromRel([]uint64{relID}, memory.RelOpposite)
+	if err != nil || len(edges) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(edges))
+	for _, e := range edges {
+		ids = append(ids, e.To)
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(frags))
+	for _, f := range frags {
+		out = append(out, f.Content)
+	}
+	return out
+}
+
+// discoverConverse learns that two gradable relations are opposite poles of one
+// scale from the ordering itself: a new "subj rel std" whose pair another relation
+// already orders the other way (std above subj), and never the same way, makes that
+// relation rel's converse. One such telling links them, so an ordering told as
+// "bigger" thereafter answers "smaller" across the whole chain, discovered rather
+// than told as an antonym.
+func (d *Daemon) discoverConverse(rel, subj, std *memory.Fragment) {
+	for _, f := range d.gatherFacts(std, "agent", "") { // relations std leads
+		if f.coID != subj.ID || f.rel == rel.Content {
+			continue // not the reversed pair, or the same relation
+		}
+		opp := d.resolveRelation(f.rel)
+		if opp == nil || opp.ID == rel.ID {
+			continue
+		}
+		if d.propositionHolds(subj, f.rel, std.ID) {
+			continue // it also orders subj above std: a synonym, not a converse
+		}
+		d.store.SetLinkRel(rel.ID, opp.ID, memory.RelOpposite, 1)
+		d.store.SetLinkRel(opp.ID, rel.ID, memory.RelOpposite, 1)
+	}
 }
 
 // sayComparison speaks a comparison's answer, the affirmation word and the clause

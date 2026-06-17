@@ -1246,6 +1246,29 @@ func TestComparativeOrdersTransitively(t *testing.T) {
 	}
 }
 
+// GOLEM discovers that two gradable relations are converse poles of one scale from
+// the ordering itself: told one pair the other way, it learns "smaller" reverses
+// "bigger" and answers smaller-questions across the whole bigger-chain, though it
+// was told only one smaller fact. The link is discovered, not seeded or told as an
+// antonym.
+func TestComparativeConverseDiscovered(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "snail")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "the mouse is bigger than the snail")
+	// One reversed telling reveals the converse: the cat stands above the mouse, so
+	// "smaller" is the other reading of the same scale.
+	say(t, d, "the mouse is smaller than the cat")
+	if got := say(t, d, "is the snail smaller than the cat").Say; got != "Yes, the snail is smaller than the cat." {
+		t.Fatalf("the converse should generalize across the chain: %q", got)
+	}
+	if got := say(t, d, "is the cat smaller than the snail").Say; got != "No, the cat is not smaller than the snail." {
+		t.Fatalf("the larger end is not smaller than the smaller: %q", got)
+	}
+}
+
 // Asked what it means by a guess, GOLEM explains the reasoning: the concept the
 // subject is like, and the fact that neighbour stands in, so a hedged answer is
 // justified rather than only repeated.

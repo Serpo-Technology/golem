@@ -47,6 +47,10 @@ const (
 	RelFeature   = "feature"
 	RelAgent     = "agent"
 	RelPatient   = "patient"
+	// RelOpposite links two gradable relations discovered to be converse poles of
+	// one scale (bigger and smaller), so an ordering told one way answers the
+	// other. It joins relation concepts, not the things they order.
+	RelOpposite = "opposite"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."
