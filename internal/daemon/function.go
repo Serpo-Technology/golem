@@ -35,6 +35,21 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 // same noun a told definition introduces with "a number".
 const inducedParam = "number"
 
+// encodeParams writes an operation's parameters for storage: a list parameter
+// keeps its type ("numbers:list"), a number parameter just its name, so the
+// types reload with the function.
+func encodeParams(op code.Op) string {
+	parts := make([]string, len(op.Params))
+	for i, p := range op.Params {
+		if i < len(op.ParamTypes) && op.ParamTypes[i] == "list" {
+			parts[i] = p + ":list"
+		} else {
+			parts[i] = p
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
 // learnFunction keeps a function GOLEM has just comprehended from a definition.
 // It stores the operation as a "code:<name>" construction the way the seeded
 // operations are stored, updating one already there or minting a new one, then
@@ -43,14 +58,15 @@ const inducedParam = "number"
 // restart with the rest of the grammar. The line it returns shows the Go it can
 // now write.
 func (d *Daemon) learnFunction(op code.Op) (string, error) {
-	params, body, ok := d.code.DefSource(op)
+	_, body, ok := d.code.DefSource(op)
 	if !ok {
 		return "", fmt.Errorf("the function's body could not be written")
 	}
 	key := "code:" + op.Name
 	// The parameters are comma-joined into a single space-free field so the body,
-	// which carries spaces, is cleanly separable on reload.
-	value := "func:" + strings.Join(params, ",") + " " + body
+	// which carries spaces, is cleanly separable on reload; a list parameter
+	// carries its type ("numbers:list"), a number parameter just its name.
+	value := "func:" + encodeParams(op) + " " + body
 
 	nodes, err := d.store.NodesByKind(memory.KindConstruction)
 	if err != nil {

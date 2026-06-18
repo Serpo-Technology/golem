@@ -2,13 +2,76 @@ package code
 
 import "testing"
 
-// listEngine carries a couple of primitives; the built-in collection operations
-// are the floor every engine boots with, so they need no seeding here.
+// listEngine carries the arithmetic primitives; the built-in collection
+// operations are the floor every engine boots with, so they need no seeding here.
 func listEngine() *Engine {
 	return NewEngine([]Op{
 		{Name: "add", Symbol: "+", Word: "sum"},
+		{Name: "subtract", Symbol: "-", Word: "difference"},
 		{Name: "multiply", Symbol: "*", Word: "product"},
+		{Name: "divide", Symbol: "/", Word: "quotient"},
 	}, nil)
+}
+
+const avgDef = "the average of a list of numbers is the quotient of the total of the numbers and the length of the numbers"
+
+// A function over a list declares its parameter with a named type, "a list of
+// numbers", and refers to it by the noun in the body.
+func TestComprehendListParameter(t *testing.T) {
+	e := listEngine()
+	op, ok := e.ComprehendDefinition(avgDef)
+	if !ok {
+		t.Fatal("a list-parameter definition should comprehend")
+	}
+	if len(op.Params) != 1 || op.Params[0] != "numbers" || op.paramType(0) != typeList {
+		t.Fatalf("the parameter should be a list named numbers: %+v", op)
+	}
+}
+
+// A list function writes the Go that takes a slice and reduces it.
+func TestListFunctionToFunc(t *testing.T) {
+	e := listEngine()
+	op, ok := e.ComprehendDefinition(avgDef)
+	if !ok {
+		t.Fatal("average should comprehend")
+	}
+	e.byWord[op.Word], e.byName[op.Name] = op, op
+	want := "func average(numbers []int) int { return (func() int { s := 0; for _, v := range numbers { s += v }; return s }()) / len(numbers) }"
+	if src, ok := e.ToFunc("average"); !ok || src != want {
+		t.Fatalf("average should write a slice-taking function:\n got %q\nwant %q", src, want)
+	}
+}
+
+// A definition that uses a list where a number is expected is refused by the type
+// check, so a function that would run to broken Go is not learned.
+func TestListFunctionTypeErrorRejected(t *testing.T) {
+	e := listEngine()
+	if _, ok := e.ComprehendDefinition("the bad of a list of numbers is the sum of the numbers and 1"); ok {
+		t.Fatal("adding a list to a number should be refused")
+	}
+}
+
+// The list-function loop closes through storage: the body keeps the collection
+// operations as calls and the parameter keeps its type, and reloading rebuilds an
+// engine that comprehends the call.
+func TestListFunctionRoundTrip(t *testing.T) {
+	e := listEngine()
+	op, ok := e.ComprehendDefinition(avgDef)
+	if !ok {
+		t.Fatal("average should comprehend")
+	}
+	_, body, ok := e.DefSource(op)
+	if !ok || body != "total(numbers) / length(numbers)" {
+		t.Fatalf("DefSource should keep the collection operations as calls: %q", body)
+	}
+	reloaded := NewEngine([]Op{{Name: "divide", Symbol: "/", Word: "quotient"}},
+		[]Def{{Name: op.Name, Params: []string{"numbers"}, ParamTypes: []string{typeList}, Body: body}})
+	if reloaded.byName["average"].paramType(0) != typeList {
+		t.Fatal("the reloaded average should keep its list parameter")
+	}
+	if _, ok := reloaded.Comprehend("the average of the list of 2 and 4 and 6"); !ok {
+		t.Fatal("the reloaded function should comprehend a call")
+	}
 }
 
 // A list literal comprehends to a list value over its elements, however many.

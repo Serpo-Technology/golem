@@ -151,7 +151,21 @@ func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
 			if !ok || plist == "" || strings.TrimSpace(body) == "" {
 				continue
 			}
-			defs = append(defs, code.Def{Name: name, Params: strings.Split(plist, ","), Body: strings.TrimSpace(body)})
+			// Each parameter is "name" (a number) or "name:list" (a list); split the
+			// type off so the function reloads with its parameter types.
+			raw := strings.Split(plist, ",")
+			pnames := make([]string, len(raw))
+			ptypes := make([]string, len(raw))
+			for i, rp := range raw {
+				n, t, has := strings.Cut(rp, ":")
+				pnames[i] = n
+				if has {
+					ptypes[i] = t
+				} else {
+					ptypes[i] = "int"
+				}
+			}
+			defs = append(defs, code.Def{Name: name, Params: pnames, ParamTypes: ptypes, Body: strings.TrimSpace(body)})
 			continue
 		}
 		fields := strings.Fields(p.Value)

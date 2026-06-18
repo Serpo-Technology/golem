@@ -93,9 +93,10 @@ func (o Op) paramType(i int) string {
 // learned function persists to and is read back from, so a function survives a
 // restart the way a seeded construction does.
 type Def struct {
-	Name   string
-	Params []string
-	Body   string // the body as code, e.g. "number * factor"
+	Name       string
+	Params     []string
+	ParamTypes []string // parallel to Params, "int" or "list"; empty means all int
+	Body       string   // the body as code, e.g. "number * factor"
 }
 
 // The value types the faculty distinguishes and the forms a built-in collection
@@ -158,7 +159,7 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		if !ok {
 			continue
 		}
-		op := Op{Name: d.Name, Word: d.Name, Params: d.Params, Body: &body}
+		op := Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Body: &body}
 		e.byWord[op.Word] = op
 		e.byName[op.Name] = op
 	}
@@ -376,16 +377,24 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 		return Op{}, false
 	}
 	name := toks[1]
-	// Read the parameters: one or more "a <param>" groups joined by "and", up to
-	// "is", which opens the body.
-	var params []string
+	// Read the parameters: one or more declarations joined by "and", up to "is",
+	// which opens the body. "a <noun>" is a number; "a list of <noun>" is a list,
+	// referred to in the body by the noun ("the numbers").
+	var params, paramTypes []string
 	i := 3
 	for {
 		if i+1 >= len(toks) || (toks[i] != "a" && toks[i] != "an") {
 			return Op{}, false
 		}
-		params = append(params, toks[i+1])
-		i += 2
+		if toks[i+1] == listWord && i+3 < len(toks) && toks[i+2] == "of" {
+			params = append(params, toks[i+3])
+			paramTypes = append(paramTypes, typeList)
+			i += 4
+		} else {
+			params = append(params, toks[i+1])
+			paramTypes = append(paramTypes, typeInt)
+			i += 2
+		}
 		if i >= len(toks) {
 			return Op{}, false
 		}
@@ -431,7 +440,16 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			return Op{}, false
 		}
 	}
-	return Op{Name: name, Word: name, Params: params, Body: &body}, true
+	// The body must type-check against the parameters' types, so a definition that
+	// would run to a broken program (a list operation on a number, say) is refused.
+	env := make(map[string]string, len(params))
+	for j, p := range params {
+		env[p] = paramTypes[j]
+	}
+	if _, ok := e.typeOf(body, env, name); !ok {
+		return Op{}, false
+	}
+	return Op{Name: name, Word: name, Params: params, ParamTypes: paramTypes, Body: &body}, true
 }
 
 // parseBody reads a function body with the parameters in scope: a conditional
@@ -893,15 +911,36 @@ func (e *Engine) genRecursiveCall(op Op, args []Computation, outerSelf string) (
 	if !sok || !aok {
 		return "", false
 	}
-	types := make([]string, len(op.Params))
-	sig := make([]string, len(op.Params))
-	for i, p := range op.Params {
-		types[i] = "int"
-		sig[i] = p + " int"
-	}
-	return "(func() int { var " + op.Name + " func(" + strings.Join(types, ", ") + ") int; " +
-		op.Name + " = func(" + strings.Join(sig, ", ") + ") int { " + stmts + " }; " +
+	return "(func() int { var " + op.Name + " " + op.funcType() + "; " +
+		op.Name + " = func(" + op.sigParams() + ") int { " + stmts + " }; " +
 		"return " + op.Name + "(" + argCode + ") }())", true
+}
+
+// goType is a value type's Go form.
+func goType(t string) string {
+	if t == typeList {
+		return "[]int"
+	}
+	return "int"
+}
+
+// sigParams writes a function's parameter list with Go types, "numbers []int".
+func (op Op) sigParams() string {
+	parts := make([]string, len(op.Params))
+	for i, p := range op.Params {
+		parts[i] = p + " " + goType(op.paramType(i))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// funcType writes a function's type, "func([]int) int", for the local variable a
+// recursive call declares.
+func (op Op) funcType() string {
+	parts := make([]string, len(op.Params))
+	for i := range op.Params {
+		parts[i] = goType(op.paramType(i))
+	}
+	return "func(" + strings.Join(parts, ", ") + ") int"
 }
 
 // bodyStmts writes the statements inside a function's braces, the function's own
@@ -981,11 +1020,7 @@ func (e *Engine) ToFunc(name string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	params := make([]string, len(op.Params))
-	for i, p := range op.Params {
-		params[i] = p + " int"
-	}
-	return "func " + name + "(" + strings.Join(params, ", ") + ") int { " + stmts + " }", true
+	return "func " + name + "(" + op.sigParams() + ") int { " + stmts + " }", true
 }
 
 // DefSource reads a defined operation back into the surface it is stored as, the

@@ -143,6 +143,27 @@ func TestLearnsAndRunsRecursion(t *testing.T) {
 	}
 }
 
+// A function over a list is taught with a named-type parameter, runs over a list
+// literal, and survives a recompile with its parameter type intact.
+func TestLearnsAndCallsAListFunction(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the average of a list of numbers is the quotient of the total of the numbers and the length of the numbers")
+	if !strings.Contains(resp.Say, "average") || !strings.Contains(resp.Say, "numbers []int") {
+		t.Fatalf("the list function should be learned and write a slice parameter: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the average of the list of 2 and 4 and 6"); !strings.Contains(r.Say, "4") {
+		t.Fatalf("average of 2, 4, 6 should be 4: %q", r.Say)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if r := say(t, d, "what is the average of the list of 10 and 20 and 30 and 40"); !strings.Contains(r.Say, "25") {
+		t.Fatalf("the reloaded list function should still run: %q", r.Say)
+	}
+}
+
 // A learned function survives a recompile, the boot-and-nightly path that
 // rebuilds the engine from memory, so it is kept the way a weight is and not held
 // only in the running engine.

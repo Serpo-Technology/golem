@@ -157,7 +157,7 @@ confidence.
 | 2 | Multi-step induction | wider hypothesis search | done |
 | 3 | Conditionals | a branch node | done |
 | 4 | Recursion | a function decl with a self-call + base case | done |
-| 5 | Data and types | typed values, sequences | not started |
+| 5 | Data and types | typed values, sequences | done |
 | 6 | Sequencing and iteration | statements; loops or fold | not started |
 | 7 | Intent to procedure | a spec, decomposition, verification | not started |
 
