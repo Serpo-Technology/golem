@@ -28,7 +28,15 @@ import (
 // to a concept the next time naming runs.
 const (
 	conceptBudgetScale = 16 // concepts mintable in one night at full serotonin
-	groundsWeight      = 0.8
+	// genesisFloor is the fewest concepts a DELIBERATE consolidation forms, the
+	// budget at the rested baseline (0.5 * scale). Genesis is paced by sleep
+	// pressure, which active teaching drives to its floor, so a nap forced
+	// mid-teaching would otherwise mint nothing though the percepts are ready. An
+	// organic night triggers at high pressure and clears this on its own; only a
+	// manual "sleep" lifts to the floor (gated by d.forceGenesis), so the pacing
+	// that keeps an alarmed system from abstracting is untouched.
+	genesisFloor  = conceptBudgetScale / 2
+	groundsWeight = 0.8
 	// Naming is cross-situational: a bond's strength is the reliability
 	// of the pairing, not the count of meetings. The smoothing mass is
 	// about one co-occurrence, so a single meeting reads as half
@@ -370,6 +378,9 @@ func glossFor(proto *memory.Fragment) string {
 // concepts one night may mint; dopamine decides how eagerly words bond.
 func (d *Daemon) growConcepts() (born, named int) {
 	budget := int(d.chem.Serotonin() * conceptBudgetScale)
+	if d.forceGenesis && budget < genesisFloor {
+		budget = genesisFloor // a deliberate consolidation forms the concepts that are ready
+	}
 	candidates, err := d.store.ConceptCandidates(memory.MergeThreshold, budget)
 	if err != nil {
 		fmt.Fprintf(d.out, "concept genesis error: %v\n", err)

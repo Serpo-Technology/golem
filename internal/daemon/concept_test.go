@@ -468,3 +468,26 @@ func TestSilenceDoesNotDisconfirm(t *testing.T) {
 			before, after)
 	}
 }
+
+// A deliberate consolidation forms the concepts that are ready even when active
+// teaching has driven sleep pressure to its floor: the manual "sleep" the
+// teaching naps fire lifts the genesis budget to its floor, so a taught block
+// lands though serotonin is depleted. The organic pacing (TestSerotoninPaces) is
+// untouched because the floor is gated on forceGenesis, which only that handler sets.
+func TestDeliberateConsolidationFormsReadyConcepts(t *testing.T) {
+	d, s := testDaemon(t)
+	feedShape(t, s, "vision", "a small brown dog", 4, time.Now().Add(-time.Hour))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	d.chem.SuppressSleep(1.0) // depleted, as a block of taught showings leaves it
+	if born, _ := d.growConcepts(); born != 0 {
+		t.Fatalf("without the deliberate flag, a depleted system is still paced: got %d", born)
+	}
+	d.forceGenesis = true // the manual "sleep" handler sets this around the cycle
+	born, _ := d.growConcepts()
+	d.forceGenesis = false
+	if born != 1 {
+		t.Fatalf("a deliberate consolidation should form the ready concept though pressure is at its floor, got %d", born)
+	}
+}

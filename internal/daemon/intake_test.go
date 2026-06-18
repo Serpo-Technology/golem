@@ -39,3 +39,20 @@ func TestPerChannelEncodeBurst(t *testing.T) {
 		t.Fatalf("an unlisted channel should keep the default burst: %v", got)
 	}
 }
+
+// A deliberate teaching percept encodes past the attention gate: a forced observe
+// is an instruction, so it is written even when the gate would predict it away,
+// while an ordinary ambient observe of the same thing is gated. This is what lets
+// a taught percept be shown enough times to crystallize without fighting the gate.
+func TestForcedObserveBypassesGate(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.SurpriseThreshold = 100 // a bar nothing clears: every ambient observe is gated
+	ambient := d.process(senses.Observation{Channel: "vision", Content: "a small brown dog", At: time.Now()}, false, true)
+	if ambient.Conscious || ambient.FragmentID != 0 {
+		t.Fatalf("an ambient observe under an impossible bar should be gated: %+v", ambient)
+	}
+	forced := d.process(senses.Observation{Channel: "vision", Content: "a small brown dog", At: time.Now()}, true, true)
+	if !forced.Conscious || forced.FragmentID == 0 {
+		t.Fatalf("a forced teaching observe should encode past the gate: %+v", forced)
+	}
+}

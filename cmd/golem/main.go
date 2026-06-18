@@ -35,6 +35,7 @@ Usage:
   golem chem                      show current neurochemistry
   golem chem --watch              print it once a second until interrupted
   golem observe <channel> <text>  feed one observation to the daemon
+  golem observe --force ...        encode it past the attention gate (teaching)
   golem tell <words>              speak to GOLEM; the words become a memory
                                   bound to the moments around them, a
                                   question is answered from what is
@@ -179,14 +180,24 @@ func main() {
 	case "observe":
 		rest := args[1:]
 		mediaPath := ""
-		if len(rest) >= 2 && rest[0] == "--media" {
-			mediaPath = rest[1]
-			rest = rest[2:]
+		force := false
+		for len(rest) >= 1 {
+			switch {
+			case rest[0] == "--media" && len(rest) >= 2:
+				mediaPath = rest[1]
+				rest = rest[2:]
+			case rest[0] == "--force":
+				force = true
+				rest = rest[1:]
+			default:
+				goto optsDone
+			}
 		}
+	optsDone:
 		if len(rest) < 2 {
-			fail(fmt.Errorf("usage: golem observe [--media <file>] <channel> <text>"))
+			fail(fmt.Errorf("usage: golem observe [--media <file>] [--force] <channel> <text>"))
 		}
-		req := wire.Request{Cmd: "observe", Channel: rest[0], Content: strings.Join(rest[1:], " ")}
+		req := wire.Request{Cmd: "observe", Channel: rest[0], Content: strings.Join(rest[1:], " "), Force: force}
 		if mediaPath != "" {
 			data, err := os.ReadFile(mediaPath)
 			if err != nil {
