@@ -41,6 +41,17 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if !ok {
 		return false
 	}
+	// A clause naming a conversation participant is a deictic assertion ("I chased
+	// the cat", "kediyi kovaladım"): the speaker fixed the roles by the pronoun or
+	// the verb's agreement, so word order is authoritative here as it is for a
+	// correction. A participant carries no features, so role-fit would otherwise
+	// unseat it for whatever featured concept reads as the better agent, storing
+	// the cat as having chased the speaker. Re-read it with word order alone.
+	if d.meaningNamesParticipant(m) {
+		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, nil); ok2 {
+			m = m2
+		}
+	}
 	agent := m.Roles["agent"]
 	if agent.Concept == nil {
 		return false // the subject grounds in nothing; not yet a proposition to write
@@ -101,6 +112,18 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		}
 	}
 	return true
+}
+
+// meaningNamesParticipant reports whether a comprehended clause fills a role with
+// a conversation participant, the signal that the clause is a deictic assertion
+// whose roles the speaker fixed and word order should hold.
+func (d *Daemon) meaningNamesParticipant(m grammar.Meaning) bool {
+	for _, role := range []string{"agent", "patient"} {
+		if t := m.Roles[role]; t.Concept != nil && d.isParticipant(t.Concept.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 // storeComparison writes a told comparison "the cat is bigger than the mouse" as a
