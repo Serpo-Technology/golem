@@ -118,6 +118,31 @@ func TestLearnsAndCallsAConditional(t *testing.T) {
 	}
 }
 
+// A recursive function is taught, calls itself to a base case, runs, and survives
+// a recompile. The body refers to factorial before it is in the inventory, and a
+// call runs as a self-referential local function in the interpreter.
+func TestLearnsAndRunsRecursion(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the factorial of a number is 1 if the number is below 1 else the product of the number and the factorial of the difference of the number and 1")
+	if !strings.Contains(resp.Say, "factorial") || !strings.Contains(resp.Say, "factorial(number - 1)") {
+		t.Fatalf("the recursive definition should be learned and write a self-call: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the factorial of 5"); !strings.Contains(r.Say, "120") {
+		t.Fatalf("factorial(5) should be 120: %q", r.Say)
+	}
+	if r := say(t, d, "what is the factorial of 6"); !strings.Contains(r.Say, "720") {
+		t.Fatalf("factorial(6) should be 720: %q", r.Say)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if r := say(t, d, "what is the factorial of 4"); !strings.Contains(r.Say, "24") {
+		t.Fatalf("the reloaded recursion should still run: %q", r.Say)
+	}
+}
+
 // A learned function survives a recompile, the boot-and-nightly path that
 // rebuilds the engine from memory, so it is kept the way a weight is and not held
 // only in the running engine.

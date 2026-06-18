@@ -218,7 +218,7 @@ func (e *Engine) comprehendLiteral(toks []string) (Computation, bool) {
 	if len(toks) == 0 || toks[0] != "the" {
 		return Computation{}, false
 	}
-	c, n, ok := e.literalOperand(toks, nil)
+	c, n, ok := e.literalOperand(toks, nil, "", 0)
 	if !ok || n != len(toks) {
 		return Computation{}, false
 	}
@@ -242,8 +242,10 @@ func isParam(params []string, word string) bool {
 // body is a reference to one of the parameters in scope; "the <word> of <A> and
 // <B> and ..." is the operation its word names over as many operands as it
 // takes, each read the same way, the recursion that lets the surface nest and
-// lets a function call sit where a number would.
-func (e *Engine) literalOperand(toks []string, params []string) (Computation, int, bool) {
+// lets a function call sit where a number would. selfName, with selfArity, is the
+// function being defined, so its own body can call it (recursion) before it is in
+// the inventory.
+func (e *Engine) literalOperand(toks, params []string, selfName string, selfArity int) (Computation, int, bool) {
 	if len(toks) == 0 {
 		return Computation{}, 0, false
 	}
@@ -258,14 +260,18 @@ func (e *Engine) literalOperand(toks []string, params []string) (Computation, in
 	if len(toks) < 3 || toks[2] != "of" {
 		return Computation{}, 0, false
 	}
-	op, ok := e.byWord[toks[1]]
-	if !ok || op.arity() < 1 {
+	opName, arity := "", 0
+	if selfName != "" && toks[1] == selfName {
+		opName, arity = selfName, selfArity
+	} else if op, ok := e.byWord[toks[1]]; ok && op.arity() >= 1 {
+		opName, arity = op.Name, op.arity()
+	} else {
 		return Computation{}, 0, false
 	}
 	consumed := 3 // "the <word> of"
 	rest := toks[3:]
-	args := make([]Computation, 0, op.arity())
-	for i := 0; i < op.arity(); i++ {
+	args := make([]Computation, 0, arity)
+	for i := 0; i < arity; i++ {
 		if i > 0 {
 			if len(rest) == 0 || rest[0] != "and" {
 				return Computation{}, 0, false
@@ -273,7 +279,7 @@ func (e *Engine) literalOperand(toks []string, params []string) (Computation, in
 			rest = rest[1:]
 			consumed++
 		}
-		arg, n, ok := e.literalOperand(rest, params)
+		arg, n, ok := e.literalOperand(rest, params, selfName, selfArity)
 		if !ok {
 			return Computation{}, 0, false
 		}
@@ -281,7 +287,7 @@ func (e *Engine) literalOperand(toks []string, params []string) (Computation, in
 		rest = rest[n:]
 		consumed += n
 	}
-	return Computation{Op: op.Name, Args: args}, consumed, true
+	return Computation{Op: opName, Args: args}, consumed, true
 }
 
 // ComprehendDefinition reads a function taught in language into the operation it
@@ -344,7 +350,7 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			return Op{}, false
 		}
 	}
-	body, ok := e.parseBody(toks[bodyStart:], params)
+	body, ok := e.parseBody(toks[bodyStart:], params, name, len(params))
 	if !ok {
 		return Op{}, false
 	}
@@ -361,7 +367,7 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 // "<then> if <cond> else <else>", or a plain arithmetic computation. It tolerates
 // a comma before "else" and fails unless the body comprehends and consumes every
 // token, so a half-formed body is not half-learned.
-func (e *Engine) parseBody(toks, params []string) (Computation, bool) {
+func (e *Engine) parseBody(toks, params []string, selfName string, selfArity int) (Computation, bool) {
 	clean := make([]string, len(toks))
 	for i, t := range toks {
 		clean[i] = strings.TrimSuffix(t, ",")
@@ -379,7 +385,7 @@ func (e *Engine) parseBody(toks, params []string) (Computation, bool) {
 		}
 	}
 	if ifAt < 0 {
-		body, n, ok := e.literalOperand(clean, params)
+		body, n, ok := e.literalOperand(clean, params, selfName, selfArity)
 		if !ok || n != len(clean) {
 			return Computation{}, false
 		}
@@ -388,15 +394,15 @@ func (e *Engine) parseBody(toks, params []string) (Computation, bool) {
 	if ifAt == 0 || elseAt <= ifAt+1 || elseAt == len(clean)-1 {
 		return Computation{}, false
 	}
-	then, n, ok := e.literalOperand(clean[:ifAt], params)
+	then, n, ok := e.literalOperand(clean[:ifAt], params, selfName, selfArity)
 	if !ok || n != ifAt {
 		return Computation{}, false
 	}
-	cond, ok := e.comparison(clean[ifAt+1:elseAt], params)
+	cond, ok := e.comparison(clean[ifAt+1:elseAt], params, selfName, selfArity)
 	if !ok {
 		return Computation{}, false
 	}
-	els, m, ok := e.literalOperand(clean[elseAt+1:], params)
+	els, m, ok := e.literalOperand(clean[elseAt+1:], params, selfName, selfArity)
 	if !ok || m != len(clean)-elseAt-1 {
 		return Computation{}, false
 	}
@@ -407,8 +413,8 @@ func (e *Engine) parseBody(toks, params []string) (Computation, bool) {
 // comparison reads a conditional's test into the operator and its operands: "<A>
 // is above <B>" is A > B, "<A> is below <B>" is A < B, and a bare "<A> is <B>" is
 // equality. The branches are left empty for parseBody to fill.
-func (e *Engine) comparison(toks, params []string) (*Conditional, bool) {
-	left, n, ok := e.literalOperand(toks, params)
+func (e *Engine) comparison(toks, params []string, selfName string, selfArity int) (*Conditional, bool) {
+	left, n, ok := e.literalOperand(toks, params, selfName, selfArity)
 	if !ok || n >= len(toks) || toks[n] != "is" {
 		return nil, false
 	}
@@ -422,7 +428,7 @@ func (e *Engine) comparison(toks, params []string) (*Conditional, bool) {
 			cmp, rest = "<", rest[1:]
 		}
 	}
-	right, m, ok := e.literalOperand(rest, params)
+	right, m, ok := e.literalOperand(rest, params, selfName, selfArity)
 	if !ok || m != len(rest) {
 		return nil, false
 	}
@@ -447,6 +453,32 @@ func usesVar(c Computation, name string) bool {
 		}
 	}
 	return false
+}
+
+// references reports whether a computation calls the operation named, descending
+// through arguments and a conditional. It is how a self-call is found, the mark
+// that a definition is recursive.
+func references(c Computation, name string) bool {
+	if c.Cond != nil {
+		return references(c.Cond.Left, name) || references(c.Cond.Right, name) ||
+			references(c.Cond.Then, name) || references(c.Cond.Else, name)
+	}
+	if c.Op == name {
+		return true
+	}
+	for _, a := range c.Args {
+		if references(a, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// recursive reports whether a defined operation calls itself, so it is run as a
+// self-referential local function rather than inlined, since an inline of a
+// recursive body would expand forever.
+func (e *Engine) recursive(op Op) bool {
+	return op.Body != nil && references(*op.Body, op.Name)
 }
 
 // comprehendCode reads the executable surface as real Go: the language's own
@@ -493,18 +525,48 @@ func (e *Engine) fromExpr(expr ast.Expr) (Computation, bool) {
 			return Computation{}, false
 		}
 		return Computation{Op: op.Name, Args: []Computation{a, b}}, true
+	case *ast.CallExpr:
+		// A call to a named function, "factorial(number - 1)", the form a self-call
+		// reads back from storage as, so a recursive body reloads as the call it is
+		// rather than expanding.
+		id, ok := x.Fun.(*ast.Ident)
+		if !ok {
+			return Computation{}, false
+		}
+		args := make([]Computation, 0, len(x.Args))
+		for _, a := range x.Args {
+			ac, aok := e.fromExpr(a)
+			if !aok {
+				return Computation{}, false
+			}
+			args = append(args, ac)
+		}
+		return Computation{Op: id.Name, Args: args}, true
 	default:
 		return Computation{}, false
 	}
 }
 
 // ToCode generates the executable form from a computation, the meaning pole run
-// to source: add(6, 7) becomes "6 + 7". A call of a defined operation is inlined,
-// its body with the arguments bound to its parameters, so the source runs in the
-// runtime without a function declaration to carry along.
+// to source: add(6, 7) becomes "6 + 7". A call of a non-recursive defined
+// operation is inlined; a recursive one is written as a self-referential local
+// function and called, so the source runs in the runtime as a self-contained
+// expression either way, with no top-level declaration to carry along.
 func (e *Engine) ToCode(c Computation) (string, bool) {
+	return e.render(c, "", false)
+}
+
+// render is the one code generator, parameterized by the name of the function
+// whose body is being written (so a call to that name is a self-call, written as
+// a plain call to the local recursive variable) and by whether this is for
+// storage (flat), where a recursive call is kept as a plain call to read back
+// rather than expanded into a function literal.
+func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 	if c.Cond != nil {
-		return e.condCode(c.Cond)
+		if flat {
+			return "", false // a nested conditional is not stored in this form
+		}
+		return e.genCond(c.Cond, self)
 	}
 	if c.Var != "" {
 		return c.Var, true
@@ -512,61 +574,158 @@ func (e *Engine) ToCode(c Computation) (string, bool) {
 	if c.Op == "" {
 		return c.Lit, c.Lit != ""
 	}
+	if self != "" && c.Op == self {
+		args, ok := e.renderArgs(c.Args, self, flat)
+		if !ok {
+			return "", false
+		}
+		return c.Op + "(" + args + ")", true
+	}
 	op, ok := e.byName[c.Op]
 	if !ok {
 		return "", false
+	}
+	if e.recursive(op) {
+		if flat {
+			args, ok := e.renderArgs(c.Args, self, flat)
+			if !ok {
+				return "", false
+			}
+			return c.Op + "(" + args + ")", true
+		}
+		return e.genRecursiveCall(op, c.Args, self)
 	}
 	if op.Body != nil {
 		inlined, ok := e.inline(op, c.Args)
 		if !ok {
 			return "", false
 		}
-		return e.ToCode(inlined)
+		return e.render(inlined, self, flat)
 	}
 	if len(c.Args) != 2 {
 		return "", false
 	}
-	a, aok := e.codeOperand(c.Args[0])
-	b, bok := e.codeOperand(c.Args[1])
+	a, aok := e.renderOperand(c.Args[0], self, flat)
+	b, bok := e.renderOperand(c.Args[1], self, flat)
 	if !aok || !bok {
 		return "", false
 	}
 	return a + " " + op.Symbol + " " + b, true
 }
 
-// condCode writes a conditional as an immediately-invoked function literal, so a
-// choice is an expression that composes anywhere a value does ("the double of the
-// larger of 3 and 4") and runs in the interpreter like any other expression. The
-// readable function form is written by ToFunc instead, for the declaration a
-// person reads.
-func (e *Engine) condCode(c *Conditional) (string, bool) {
-	test, ok := e.condTest(c)
+// renderArgs writes a call's argument list.
+func (e *Engine) renderArgs(args []Computation, self string, flat bool) (string, bool) {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		s, ok := e.render(a, self, flat)
+		if !ok {
+			return "", false
+		}
+		parts[i] = s
+	}
+	return strings.Join(parts, ", "), true
+}
+
+// renderOperand writes an operand, wrapping a compound one in parentheses so the
+// source keeps its grouping whatever the operators' precedence. A call (a
+// self-call or a recursive function) and a conditional already render as a
+// primary expression, a call or a parenthesized literal, so they need none.
+func (e *Engine) renderOperand(c Computation, self string, flat bool) (string, bool) {
+	s, ok := e.render(c, self, flat)
 	if !ok {
 		return "", false
 	}
-	then, tok := e.ToCode(c.Then)
-	els, eok := e.ToCode(c.Else)
-	if !tok || !eok {
+	if c.Op != "" && !e.rendersAsCall(c, self) {
+		return "(" + s + ")", true
+	}
+	return s, true
+}
+
+// rendersAsCall reports whether a computation renders as a call or a
+// parenthesized literal, a primary expression that needs no grouping as an
+// operand: a self-call, or a call to a recursive function.
+func (e *Engine) rendersAsCall(c Computation, self string) bool {
+	if c.Op == "" {
+		return false
+	}
+	if self != "" && c.Op == self {
+		return true
+	}
+	op, ok := e.byName[c.Op]
+	return ok && e.recursive(op)
+}
+
+// genCond writes a conditional as a parenthesized immediately-invoked function
+// literal, so a choice is an expression that composes anywhere a value does and
+// yields its value when run (a bare leading function literal evaluates to
+// nothing). The readable function form is written by ToFunc instead.
+func (e *Engine) genCond(c *Conditional, self string) (string, bool) {
+	test, tok := e.genTest(c, self)
+	then, thok := e.render(c.Then, self, false)
+	els, eok := e.render(c.Else, self, false)
+	if !tok || !thok || !eok {
 		return "", false
 	}
-	// Parenthesized so the call yields its value as an expression (a bare leading
-	// function literal evaluates to nothing) and composes safely as an operand.
 	return "(func() int { if " + test + " { return " + then + " }; return " + els + " }())", true
 }
 
-// condTest writes a conditional's comparison, "number > count", the guard the
-// branch turns on. The operands are written as operands so a compared expression
-// keeps its grouping.
-func (e *Engine) condTest(c *Conditional) (string, bool) {
+// genTest writes a conditional's comparison, "number > count", the guard the
+// branch turns on.
+func (e *Engine) genTest(c *Conditional, self string) (string, bool) {
 	if c.Cmp != ">" && c.Cmp != "<" && c.Cmp != "==" {
 		return "", false
 	}
-	left, lok := e.codeOperand(c.Left)
-	right, rok := e.codeOperand(c.Right)
+	left, lok := e.renderOperand(c.Left, self, false)
+	right, rok := e.renderOperand(c.Right, self, false)
 	if !lok || !rok {
 		return "", false
 	}
 	return left + " " + c.Cmp + " " + right, true
+}
+
+// genRecursiveCall writes a call to a recursive function as a self-contained
+// expression: a local variable of the function's type, assigned the function
+// literal (which then calls itself through the variable), invoked on the
+// arguments. Parenthesized so it yields its value and composes as an operand.
+func (e *Engine) genRecursiveCall(op Op, args []Computation, outerSelf string) (string, bool) {
+	if len(args) != len(op.Params) {
+		return "", false
+	}
+	stmts, sok := e.bodyStmts(op)
+	argCode, aok := e.renderArgs(args, outerSelf, false)
+	if !sok || !aok {
+		return "", false
+	}
+	types := make([]string, len(op.Params))
+	sig := make([]string, len(op.Params))
+	for i, p := range op.Params {
+		types[i] = "int"
+		sig[i] = p + " int"
+	}
+	return "(func() int { var " + op.Name + " func(" + strings.Join(types, ", ") + ") int; " +
+		op.Name + " = func(" + strings.Join(sig, ", ") + ") int { " + stmts + " }; " +
+		"return " + op.Name + "(" + argCode + ") }())", true
+}
+
+// bodyStmts writes the statements inside a function's braces, the function's own
+// name in scope so a self-call is a plain call: a conditional becomes the branch
+// form "if test { return then }; return else", any other body a single return.
+func (e *Engine) bodyStmts(op Op) (string, bool) {
+	if op.Body.Cond != nil {
+		c := op.Body.Cond
+		test, tok := e.genTest(c, op.Name)
+		then, thok := e.render(c.Then, op.Name, false)
+		els, eok := e.render(c.Else, op.Name, false)
+		if !tok || !thok || !eok {
+			return "", false
+		}
+		return "if " + test + " { return " + then + " }; return " + els, true
+	}
+	body, ok := e.render(*op.Body, op.Name, false)
+	if !ok {
+		return "", false
+	}
+	return "return " + body, true
 }
 
 // inline binds a defined operation's arguments to its parameters and returns its
@@ -611,67 +770,40 @@ func substitute(c Computation, binding map[string]Computation) Computation {
 	return Computation{Op: c.Op, Args: args}
 }
 
-// codeOperand generates an operand, wrapping a compound one in parentheses so
-// the source it makes carries the same grouping as the computation does and runs
-// to the same value whatever the operators' precedence. A call of a defined
-// operation is compound too, wrapped around the body it inlines to.
-func (e *Engine) codeOperand(c Computation) (string, bool) {
-	s, ok := e.ToCode(c)
-	if !ok {
-		return "", false
-	}
-	if c.Op != "" {
-		return "(" + s + ")", true
-	}
-	// A conditional already renders as a parenthesized function-literal call, so it
-	// is safe as an operand without another pair of parentheses.
-	return s, true
-}
-
-// ToFunc writes a defined operation as the Go function it means: its body becomes
-// the return expression over its parameters, so "double" is written "func
-// double(number int) int { return number * 2 }". A conditional body is written as
-// the branch a person reads, "if number > count { return number }; return count",
-// rather than the function-literal form ToCode composes with. A primitive has no
-// body to write and fails.
+// ToFunc writes a defined operation as the Go function it means: "double" is
+// written "func double(number int) int { return number * 2 }", a conditional as
+// the branch a person reads, and a recursive one calls itself by name. The
+// function's own name is in scope as the body is written, so a self-call is a
+// plain call. A primitive has no body to write and fails.
 func (e *Engine) ToFunc(name string) (string, bool) {
 	op, ok := e.byName[name]
 	if !ok || op.Body == nil {
+		return "", false
+	}
+	stmts, ok := e.bodyStmts(op)
+	if !ok {
 		return "", false
 	}
 	params := make([]string, len(op.Params))
 	for i, p := range op.Params {
 		params[i] = p + " int"
 	}
-	sig := "func " + name + "(" + strings.Join(params, ", ") + ") int { "
-	if op.Body.Cond != nil {
-		c := op.Body.Cond
-		test, tok := e.condTest(c)
-		then, thok := e.ToCode(c.Then)
-		els, eok := e.ToCode(c.Else)
-		if !tok || !thok || !eok {
-			return "", false
-		}
-		return sig + "if " + test + " { return " + then + " }; return " + els + " }", true
-	}
-	bodyCode, ok := e.ToCode(*op.Body)
-	if !ok {
-		return "", false
-	}
-	return sig + "return " + bodyCode + " }", true
+	return "func " + name + "(" + strings.Join(params, ", ") + ") int { " + stmts + " }", true
 }
 
 // DefSource reads a defined operation back into the surface it is stored as, the
 // parameters and the body, so the daemon can persist a learned function as a
 // construction. An arithmetic body is stored as the code it generates, which
 // reads back through the Go parser. A conditional is stored in a structured form,
-// "if <cmp> ; <left> ; <right> ; <then> ; <else>", each part arithmetic code, so
-// the branch reloads without the parser having to read a function literal back.
+// "if <cmp> ; <left> ; <right> ; <then> ; <else>", each part code, so the branch
+// reloads without the parser having to read a function literal back. A self-call
+// is kept as a call, "factorial(number - 1)", so a recursive body reads back as
+// the call it is rather than expanding.
 func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
 	if op.Body == nil || len(op.Params) == 0 {
 		return nil, "", false
 	}
-	body, ok = e.bodySource(*op.Body)
+	body, ok = e.bodySource(*op.Body, op.Name)
 	if !ok {
 		return nil, "", false
 	}
@@ -685,17 +817,18 @@ const condBodyPrefix = "if "
 // contains so the parts split back cleanly.
 const bodySep = " ; "
 
-// bodySource serializes a body for storage: arithmetic as its code, a conditional
-// as the structured form bodyFromSource reads back.
-func (e *Engine) bodySource(c Computation) (string, bool) {
+// bodySource serializes a body for storage with the function's own name in scope:
+// arithmetic and inlined calls as code, a conditional as the structured form
+// bodyFromSource reads back, and a self-call kept as a call.
+func (e *Engine) bodySource(c Computation, self string) (string, bool) {
 	if c.Cond == nil {
-		return e.ToCode(c)
+		return e.render(c, self, true)
 	}
 	parts := []Computation{c.Cond.Left, c.Cond.Right, c.Cond.Then, c.Cond.Else}
 	codes := make([]string, 0, len(parts)+1)
 	codes = append(codes, c.Cond.Cmp)
 	for _, p := range parts {
-		s, ok := e.ToCode(p)
+		s, ok := e.render(p, self, true)
 		if !ok {
 			return "", false
 		}
