@@ -27,7 +27,10 @@ func stripCaseTR(w string) string {
 		return w[:i]
 	}
 	for _, suf := range []string{"dan", "den", "tan", "ten"} {
-		if strings.HasSuffix(w, suf) && len(w) > len(suf)+2 {
+		// Leave a stem of at least two letters, so a genuine short noun keeps its
+		// ablative readable ("attan" -> "at", a horse) while the suffix is not torn
+		// off a word that would leave nothing behind it.
+		if strings.HasSuffix(w, suf) && len(w) > len(suf)+1 {
 			return w[:len(w)-len(suf)]
 		}
 	}

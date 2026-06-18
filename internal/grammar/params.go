@@ -279,7 +279,18 @@ func (p *Params) isFunctionWord(form string) bool {
 // this a question particle accrues naming mass on every asking until it
 // outweighs its own seed and turns into a spurious noun.
 func (p *Params) isFunctionWordLang(lang, form string) bool {
-	return p.category(lang, form) != "" || p.category("en", form) != ""
+	if p.category(lang, form) != "" {
+		return true
+	}
+	// English is the bootstrap tongue, so its closed class is the fallback filter
+	// when the utterance is English or its tongue was not detected. For a known
+	// other tongue, that tongue's closed class is authoritative: a content word
+	// that happens to spell an English function word ("at", a Turkish horse) is
+	// not filtered out of its own language.
+	if lang == "" || lang == "en" {
+		return p.category("en", form) != ""
+	}
+	return false
 }
 
 // verb returns a verb's principal parts, regular by rule when memory
