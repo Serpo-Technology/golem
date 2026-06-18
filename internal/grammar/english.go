@@ -3,6 +3,7 @@ package grammar
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"golem/internal/limbic"
 	"golem/internal/memory"
@@ -777,16 +778,16 @@ func relWord(rel string) string {
 }
 
 // sentence finishes a clause: first letter up, terminal mark on, unless
-// the content already ends with one.
+// the content already ends with one. The first letter is cased by rune, so a
+// clause a tongue opens with an accented letter rises too (the Turkish "üzüm" ->
+// "Üzüm"), not only an ASCII one.
 func sentence(s, mark string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
 	}
 	r := []rune(s)
-	if r[0] >= 'a' && r[0] <= 'z' {
-		r[0] = r[0] - 'a' + 'A'
-	}
+	r[0] = unicode.ToUpper(r[0])
 	s = string(r)
 	if strings.HasSuffix(s, ".") || strings.HasSuffix(s, "?") || strings.HasSuffix(s, "!") {
 		return s

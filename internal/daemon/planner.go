@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"golem/internal/attention"
 	"golem/internal/events"
@@ -1073,20 +1074,29 @@ func stripAsk(raw string) string {
 	return s
 }
 
-// upperFirst capitalizes a leading ASCII letter so the spoken answer opens like
-// a sentence; a phrase that begins with a digit or symbol is left untouched.
+// upperFirst capitalizes a phrase's leading letter so the spoken answer opens
+// like a sentence; a phrase beginning with a digit or symbol is left untouched.
+// It reads the first rune, so an accented letter a tongue opens a word with (the
+// Turkish "üzüm" -> "Üzüm") capitalizes too, not only an ASCII one. The Turkish
+// dotted-i casing (i -> İ) is locale-specific and not distinguished here; no
+// answer-initial word triggers it today.
 func upperFirst(s string) string {
-	if s == "" || s[0] < 'a' || s[0] > 'z' {
+	if s == "" {
 		return s
 	}
-	return string(s[0]-32) + s[1:]
+	r, size := utf8.DecodeRuneInString(s)
+	up := unicode.ToUpper(r)
+	if up == r {
+		return s
+	}
+	return string(up) + s[size:]
 }
 
-// lowerFirst lowercases a leading ASCII letter, the inverse of upperFirst, so a
-// clause the engine already capitalized can follow an affirmation word inside
+// lowerFirst lowercases a phrase's leading letter, the inverse of upperFirst, so
+// a clause the engine already capitalized can follow an affirmation word inside
 // one sentence: "Yes, the dog ..." carries "The dog ..." as its tail.
 func lowerFirst(s string) string {
-	if s == "" || s[0] < 'A' || s[0] > 'Z' {
+	if s == "" {
 		return s
 	}
 	// English "I" stays capitalized even mid-sentence, so a clause opening with the
@@ -1094,7 +1104,12 @@ func lowerFirst(s string) string {
 	if s == "I" || strings.HasPrefix(s, "I ") || strings.HasPrefix(s, "I'") {
 		return s
 	}
-	return string(s[0]+32) + s[1:]
+	r, size := utf8.DecodeRuneInString(s)
+	low := unicode.ToLower(r)
+	if low == r {
+		return s
+	}
+	return string(low) + s[size:]
 }
 
 // hasLetter reports whether a token carries any letter, the mark of a word that

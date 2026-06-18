@@ -7,6 +7,18 @@ import (
 	"golem/internal/limbic"
 )
 
+// A clause rises by its first rune, so one a tongue opens with an accented
+// letter capitalizes too ("üzüm bir şeydir" -> "Üzüm bir şeydir"), not only an
+// ASCII one; a clause already ending in terminal punctuation keeps it.
+func TestSentenceCapitalizesByRune(t *testing.T) {
+	if got := sentence("üzüm bir şeydir.", ""); got != "Üzüm bir şeydir." {
+		t.Fatalf("an accented leading letter should rise: %q", got)
+	}
+	if got := sentence("the dog ran", "."); got != "The dog ran." {
+		t.Fatalf("an ASCII clause should rise and take the mark: %q", got)
+	}
+}
+
 // The parser reads illocutionary force from the innate grammar: a
 // wh-opener asks, an imperative opener commands, a bare clause states,
 // and a question mark asks even without a wh-word.

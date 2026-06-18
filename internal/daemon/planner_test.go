@@ -423,3 +423,27 @@ func TestWhenWhereCountAndGaps(t *testing.T) {
 		t.Fatalf("who has no agent model and should say so: %q", who.Say)
 	}
 }
+
+// upperFirst and lowerFirst read the first rune, so a word a tongue opens with an
+// accented letter cases like a sentence ("üzüm" -> "Üzüm"), not only an ASCII one,
+// while English casing and the standalone "I" are unchanged.
+func TestCaseFirstRune(t *testing.T) {
+	cases := []struct{ in, up, low string }{
+		{"üzüm bir şeydir", "Üzüm bir şeydir", "üzüm bir şeydir"},
+		{"the dog ran", "The dog ran", "the dog ran"},
+		{"It chased the cat", "It chased the cat", "it chased the cat"},
+		{"5 things", "5 things", "5 things"},
+	}
+	for _, c := range cases {
+		if got := upperFirst(c.in); got != c.up {
+			t.Fatalf("upperFirst(%q) = %q, want %q", c.in, got, c.up)
+		}
+		if got := lowerFirst(c.in); got != c.low {
+			t.Fatalf("lowerFirst(%q) = %q, want %q", c.in, got, c.low)
+		}
+	}
+	// The first-person "I" stays capitalized mid-sentence.
+	if got := lowerFirst("I chased the cat"); got != "I chased the cat" {
+		t.Fatalf("lowerFirst should preserve the pronoun I: %q", got)
+	}
+}
