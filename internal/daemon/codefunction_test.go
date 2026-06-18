@@ -164,6 +164,29 @@ func TestLearnsAndCallsAListFunction(t *testing.T) {
 	}
 }
 
+// A transform over a list maps a function across its elements, returns a list,
+// composes under a reduction, and survives a recompile. doubled maps double; the
+// total and largest of a doubled list reduce the mapped result.
+func TestLearnsAndCallsAMap(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	say(t, d, "the double of a number is the product of the number and 2")
+	resp := say(t, d, "the doubled of a list of numbers is the double of each number")
+	if !strings.Contains(resp.Say, "doubled") || !strings.Contains(resp.Say, "[]int") {
+		t.Fatalf("the map should be learned returning a slice: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the total of the doubled of the list of 1 and 2 and 3"); !strings.Contains(r.Say, "12") {
+		t.Fatalf("total of the doubled list should be 12: %q", r.Say)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if r := say(t, d, "what is the largest of the doubled of the list of 5 and 2 and 8"); !strings.Contains(r.Say, "16") {
+		t.Fatalf("the reloaded map should still run under a reduction: %q", r.Say)
+	}
+}
+
 // A learned function survives a recompile, the boot-and-nightly path that
 // rebuilds the engine from memory, so it is kept the way a weight is and not held
 // only in the running engine.

@@ -38,6 +38,8 @@ type Computation struct {
 	Var  string        // a reference to a parameter, inside a defined operation's body
 	Args []Computation // the operands of an operation
 	Cond *Conditional  // a choice between two computations, when set
+	Map  *Mapping      // a transform of a list into a list, element by element, when set
+	Each bool          // a reference to the element of a map, "each number", before it is lifted into a Mapping
 }
 
 // Conditional is a computation that chooses between two branches on a comparison:
@@ -49,6 +51,17 @@ type Conditional struct {
 	Cmp         string
 	Left, Right Computation
 	Then, Else  Computation
+}
+
+// Mapping is a computation that transforms a list into a list element by element:
+// "the doubled of a list of numbers is the double of each number" applies the
+// per-element body to each element of the list, collecting the results. Var names
+// the element, List is the list ranged over, Body the computation over the
+// element.
+type Mapping struct {
+	Var  string
+	List Computation
+	Body Computation
 }
 
 // Op is one code construction: an operation paired with the surfaces it is read
@@ -106,6 +119,7 @@ const (
 	typeList = "list"
 
 	listWord = "list" // the literal surface, "the list of 1 and 2 and 3"
+	eachWord = "each" // the element of a map, "the double of each number"
 
 	formReduceSum = "reduce+" // fold a list to its sum
 	formLen       = "len"     // the count of a list
@@ -301,6 +315,11 @@ func (e *Engine) literalOperand(toks, params []string, selfName string, selfArit
 	if len(toks) == 0 {
 		return Computation{}, 0, false
 	}
+	// "each <name>" is the element of a map, "the double of each number"; it is
+	// lifted into a Mapping over the list parameter once the body is read.
+	if toks[0] == eachWord && len(toks) >= 2 {
+		return Computation{Var: toks[1], Each: true}, 2, true
+	}
 	// A parameter reference, "the number", takes precedence over reading "the"
 	// as the opening of an operation.
 	if len(toks) >= 2 && toks[0] == "the" && isParam(params, toks[1]) {
@@ -434,6 +453,15 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 	if !ok {
 		return Op{}, false
 	}
+	// A body that names "each <element>" is a transform: lift it into a map over
+	// the list parameter, so "the double of each number" maps double across the
+	// list. The lift runs before the parameter-use check, since the list parameter
+	// is used by the map it is lifted into.
+	if lifted, ok := liftMap(body, params, paramTypes); ok {
+		body = lifted
+	} else if eachReferenced(body) {
+		return Op{}, false // an "each" the lift could not resolve
+	}
 	// The body must be a genuine function of every parameter, with no dead ones.
 	for _, p := range params {
 		if !usesVar(body, p) {
@@ -529,6 +557,9 @@ func (e *Engine) comparison(toks, params []string, selfName string, selfArity in
 // one. It descends through a conditional's comparison and both branches, so a
 // parameter used only to choose between two constants still counts as used.
 func usesVar(c Computation, name string) bool {
+	if c.Map != nil {
+		return usesVar(c.Map.List, name) || usesVar(c.Map.Body, name)
+	}
 	if c.Cond != nil {
 		return usesVar(c.Cond.Left, name) || usesVar(c.Cond.Right, name) ||
 			usesVar(c.Cond.Then, name) || usesVar(c.Cond.Else, name)
@@ -548,6 +579,9 @@ func usesVar(c Computation, name string) bool {
 // through arguments and a conditional. It is how a self-call is found, the mark
 // that a definition is recursive.
 func references(c Computation, name string) bool {
+	if c.Map != nil {
+		return references(c.Map.List, name) || references(c.Map.Body, name)
+	}
 	if c.Cond != nil {
 		return references(c.Cond.Left, name) || references(c.Cond.Right, name) ||
 			references(c.Cond.Then, name) || references(c.Cond.Else, name)
@@ -570,6 +604,86 @@ func (e *Engine) recursive(op Op) bool {
 	return op.Body != nil && references(*op.Body, op.Name)
 }
 
+// liftMap turns a body that names "each <element>" into a map over the list
+// parameter: the element variable is the each-reference's name, the list is the
+// single list parameter, and the per-element body reads each-references as the
+// element. It returns false when the body names no element, names more than one,
+// has no single list parameter to map over, or the element would shadow a
+// parameter, so a transform with nowhere to map is refused.
+func liftMap(body Computation, params, paramTypes []string) (Computation, bool) {
+	set := map[string]bool{}
+	collectEach(body, set)
+	if len(set) != 1 {
+		return Computation{}, false
+	}
+	var v string
+	for k := range set {
+		v = k
+	}
+	listParam := ""
+	for i, p := range params {
+		if p == v {
+			return Computation{}, false
+		}
+		if i < len(paramTypes) && paramTypes[i] == typeList {
+			if listParam != "" {
+				return Computation{}, false
+			}
+			listParam = p
+		}
+	}
+	if listParam == "" {
+		return Computation{}, false
+	}
+	return Computation{Map: &Mapping{Var: v, List: Computation{Var: listParam}, Body: clearEach(body)}}, true
+}
+
+// eachReferenced reports whether a body still names "each <element>", the mark of
+// a transform the lift must resolve.
+func eachReferenced(c Computation) bool {
+	set := map[string]bool{}
+	collectEach(c, set)
+	return len(set) > 0
+}
+
+// collectEach gathers the element names a body names through "each <element>".
+func collectEach(c Computation, set map[string]bool) {
+	switch {
+	case c.Each:
+		set[c.Var] = true
+	case c.Cond != nil:
+		collectEach(c.Cond.Left, set)
+		collectEach(c.Cond.Right, set)
+		collectEach(c.Cond.Then, set)
+		collectEach(c.Cond.Else, set)
+	default:
+		for _, a := range c.Args {
+			collectEach(a, set)
+		}
+	}
+}
+
+// clearEach reads each "each <element>" reference as a plain reference to the
+// element, the form the per-element body of a map takes.
+func clearEach(c Computation) Computation {
+	switch {
+	case c.Each:
+		return Computation{Var: c.Var}
+	case c.Cond != nil:
+		return Computation{Cond: &Conditional{Cmp: c.Cond.Cmp,
+			Left: clearEach(c.Cond.Left), Right: clearEach(c.Cond.Right),
+			Then: clearEach(c.Cond.Then), Else: clearEach(c.Cond.Else)}}
+	case len(c.Args) > 0:
+		args := make([]Computation, len(c.Args))
+		for i, a := range c.Args {
+			args[i] = clearEach(a)
+		}
+		return Computation{Op: c.Op, Args: args}
+	default:
+		return c
+	}
+}
+
 // typeOf computes a computation's value type ("int" or "list") and checks that
 // every operation is given the kind of value it takes: a list operation a list, a
 // primitive and arithmetic a number, a function its declared parameter types. env
@@ -578,6 +692,21 @@ func (e *Engine) recursive(op Op) bool {
 // type-inconsistent computation is refused before it is run to a broken program.
 func (e *Engine) typeOf(c Computation, env map[string]string, self string) (string, bool) {
 	switch {
+	case c.Map != nil:
+		if lt, ok := e.typeOf(c.Map.List, env, self); !ok || lt != typeList {
+			return "", false
+		}
+		inner := make(map[string]string, len(env)+1)
+		for k, v := range env {
+			inner[k] = v
+		}
+		inner[c.Map.Var] = typeInt // an element of a list of numbers is a number
+		if bt, ok := e.typeOf(c.Map.Body, inner, self); !ok || bt != typeInt {
+			return "", false
+		}
+		return typeList, true
+	case c.Each:
+		return typeInt, true // an element reference, before it is lifted into a map
 	case c.Cond != nil:
 		lt, lok := e.typeOf(c.Cond.Left, env, self)
 		rt, rok := e.typeOf(c.Cond.Right, env, self)
@@ -639,6 +768,12 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 		if t, ok := e.typeOf(a, env, self); !ok || t != expect {
 			return "", false
 		}
+	}
+	// A defined operation returns whatever its body yields, so a transform that
+	// returns a list reads as a list to whatever consumes it; a primitive returns a
+	// number.
+	if op.Body != nil {
+		return e.retType(op)
 	}
 	return typeInt, true
 }
@@ -732,6 +867,21 @@ func (e *Engine) ToCode(c Computation) (string, bool) {
 // storage (flat), where a recursive call is kept as a plain call to read back
 // rather than expanded into a function literal.
 func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
+	if c.Map != nil {
+		if flat {
+			return "", false // a map is stored structurally, not as runnable code
+		}
+		list, lok := e.render(c.Map.List, self, false)
+		body, bok := e.render(c.Map.Body, self, false)
+		if !lok || !bok {
+			return "", false
+		}
+		return "(func() []int { out := []int{}; for _, " + c.Map.Var + " := range " + list +
+			" { out = append(out, " + body + ") }; return out }())", true
+	}
+	if c.Each {
+		return c.Var, true // the element, inside a map's per-element body
+	}
 	if c.Cond != nil {
 		if flat {
 			return "", false // a nested conditional is not stored in this form
@@ -908,11 +1058,13 @@ func (e *Engine) genRecursiveCall(op Op, args []Computation, outerSelf string) (
 	}
 	stmts, sok := e.bodyStmts(op)
 	argCode, aok := e.renderArgs(args, outerSelf, false)
-	if !sok || !aok {
+	ret, rok := e.retType(op)
+	if !sok || !aok || !rok {
 		return "", false
 	}
-	return "(func() int { var " + op.Name + " " + op.funcType() + "; " +
-		op.Name + " = func(" + op.sigParams() + ") int { " + stmts + " }; " +
+	rt := goType(ret)
+	return "(func() " + rt + " { var " + op.Name + " " + op.funcType(rt) + "; " +
+		op.Name + " = func(" + op.sigParams() + ") " + rt + " { " + stmts + " }; " +
 		"return " + op.Name + "(" + argCode + ") }())", true
 }
 
@@ -922,6 +1074,19 @@ func goType(t string) string {
 		return "[]int"
 	}
 	return "int"
+}
+
+// retType is a defined operation's return type, the type its body evaluates to,
+// so a transform that yields a list is written returning a slice.
+func (e *Engine) retType(op Op) (string, bool) {
+	if op.Body == nil {
+		return "", false
+	}
+	env := make(map[string]string, len(op.Params))
+	for i, p := range op.Params {
+		env[p] = op.paramType(i)
+	}
+	return e.typeOf(*op.Body, env, op.Name)
 }
 
 // sigParams writes a function's parameter list with Go types, "numbers []int".
@@ -934,13 +1099,13 @@ func (op Op) sigParams() string {
 }
 
 // funcType writes a function's type, "func([]int) int", for the local variable a
-// recursive call declares.
-func (op Op) funcType() string {
+// recursive call declares; ret is its return type's Go form.
+func (op Op) funcType(ret string) string {
 	parts := make([]string, len(op.Params))
 	for i := range op.Params {
 		parts[i] = goType(op.paramType(i))
 	}
-	return "func(" + strings.Join(parts, ", ") + ") int"
+	return "func(" + strings.Join(parts, ", ") + ") " + ret
 }
 
 // bodyStmts writes the statements inside a function's braces, the function's own
@@ -981,6 +1146,13 @@ func (e *Engine) inline(op Op, args []Computation) (Computation, bool) {
 // to it, leaving literals and operations otherwise intact and descending through
 // a conditional's comparison and both branches.
 func substitute(c Computation, binding map[string]Computation) Computation {
+	if c.Map != nil {
+		return Computation{Map: &Mapping{
+			Var:  c.Map.Var,
+			List: substitute(c.Map.List, binding),
+			Body: substitute(c.Map.Body, binding),
+		}}
+	}
 	if c.Cond != nil {
 		return Computation{Cond: &Conditional{
 			Cmp:   c.Cond.Cmp,
@@ -1017,10 +1189,11 @@ func (e *Engine) ToFunc(name string) (string, bool) {
 		return "", false
 	}
 	stmts, ok := e.bodyStmts(op)
-	if !ok {
+	ret, rok := e.retType(op)
+	if !ok || !rok {
 		return "", false
 	}
-	return "func " + name + "(" + op.sigParams() + ") int { " + stmts + " }", true
+	return "func " + name + "(" + op.sigParams() + ") " + goType(ret) + " { " + stmts + " }", true
 }
 
 // DefSource reads a defined operation back into the surface it is stored as, the
@@ -1042,37 +1215,59 @@ func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
 	return op.Params, body, true
 }
 
-// condBodyPrefix marks a stored body as a conditional, ahead of its parts.
+// condBodyPrefix marks a stored body as a conditional, ahead of its parts;
+// mapBodyPrefix marks one as a map.
 const condBodyPrefix = "if "
+const mapBodyPrefix = "map "
 
-// bodySep separates a stored conditional's parts, a sequence no arithmetic body
-// contains so the parts split back cleanly.
+// bodySep separates a stored body's parts, a sequence no arithmetic body contains
+// so the parts split back cleanly.
 const bodySep = " ; "
 
 // bodySource serializes a body for storage with the function's own name in scope:
-// arithmetic and inlined calls as code, a conditional as the structured form
-// bodyFromSource reads back, and a self-call kept as a call.
+// arithmetic and inlined calls as code, a conditional and a map as the structured
+// forms bodyFromSource reads back, and a self-call kept as a call.
 func (e *Engine) bodySource(c Computation, self string) (string, bool) {
-	if c.Cond == nil {
-		return e.render(c, self, true)
-	}
-	parts := []Computation{c.Cond.Left, c.Cond.Right, c.Cond.Then, c.Cond.Else}
-	codes := make([]string, 0, len(parts)+1)
-	codes = append(codes, c.Cond.Cmp)
-	for _, p := range parts {
-		s, ok := e.render(p, self, true)
-		if !ok {
+	switch {
+	case c.Map != nil:
+		list, lok := e.render(c.Map.List, self, true)
+		body, bok := e.render(c.Map.Body, self, true)
+		if !lok || !bok {
 			return "", false
 		}
-		codes = append(codes, s)
+		return mapBodyPrefix + strings.Join([]string{c.Map.Var, list, body}, bodySep), true
+	case c.Cond != nil:
+		parts := []Computation{c.Cond.Left, c.Cond.Right, c.Cond.Then, c.Cond.Else}
+		codes := []string{c.Cond.Cmp}
+		for _, p := range parts {
+			s, ok := e.render(p, self, true)
+			if !ok {
+				return "", false
+			}
+			codes = append(codes, s)
+		}
+		return condBodyPrefix + strings.Join(codes, bodySep), true
+	default:
+		return e.render(c, self, true)
 	}
-	return condBodyPrefix + strings.Join(codes, bodySep), true
 }
 
 // bodyFromSource reads a stored body back into its computation, the inverse of
-// bodySource: a conditional from its structured parts, anything else through the
-// Go parser as arithmetic.
+// bodySource: a conditional or a map from its structured parts, anything else
+// through the Go parser as arithmetic.
 func (e *Engine) bodyFromSource(body string) (Computation, bool) {
+	if rest, ok := strings.CutPrefix(body, mapBodyPrefix); ok {
+		parts := strings.SplitN(rest, bodySep, 3)
+		if len(parts) != 3 || parts[0] == "" {
+			return Computation{}, false
+		}
+		list, lok := e.comprehendCode(parts[1])
+		inner, bok := e.comprehendCode(parts[2])
+		if !lok || !bok {
+			return Computation{}, false
+		}
+		return Computation{Map: &Mapping{Var: parts[0], List: list, Body: inner}}, true
+	}
 	rest, isCond := strings.CutPrefix(body, condBodyPrefix)
 	if !isCond {
 		return e.comprehendCode(body)
