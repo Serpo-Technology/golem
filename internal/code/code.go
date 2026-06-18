@@ -56,20 +56,36 @@ type Conditional struct {
 // defined operation carries its parameters and the body that computes it, a
 // function learned as one more construction.
 type Op struct {
-	Name   string       // the operation the meaning pole carries
-	Symbol string       // the code form: the operator that runs it, for a primitive
-	Word   string       // the literal form: the word it is taught by
-	Params []string     // the parameters of a defined operation, in order
-	Body   *Computation // the meaning of a defined operation over its parameters, nil for a primitive
+	Name       string       // the operation the meaning pole carries
+	Symbol     string       // the code form: the operator that runs it, for a primitive
+	Word       string       // the literal form: the word it is taught by
+	Params     []string     // the parameters of a defined operation, in order
+	ParamTypes []string     // each parameter's type ("int" or "list"), parallel to Params; empty means int
+	Body       *Computation // the meaning of a defined operation over its parameters, nil for a primitive
+	Form       string       // the codegen of a built-in collection operation ("reduce+", "len", "first", "max"); empty otherwise
 }
 
-// arity is how many operands the operation takes: a defined operation's is the
-// count of its parameters, and a primitive is binary.
+// arity is how many operands the operation takes: a built-in collection operation
+// takes one list, a defined operation as many as it has parameters, a primitive
+// is binary.
 func (o Op) arity() int {
-	if o.Body != nil {
+	switch {
+	case o.Form != "":
+		return 1
+	case o.Body != nil:
 		return len(o.Params)
+	default:
+		return 2
 	}
-	return 2
+}
+
+// paramType reports a parameter's type by position, "int" unless the operation
+// declared it a list.
+func (o Op) paramType(i int) string {
+	if i < len(o.ParamTypes) && o.ParamTypes[i] != "" {
+		return o.ParamTypes[i]
+	}
+	return "int"
 }
 
 // Def is a defined operation in the surface it is stored as: a name, the
@@ -80,6 +96,33 @@ type Def struct {
 	Name   string
 	Params []string
 	Body   string // the body as code, e.g. "number * factor"
+}
+
+// The value types the faculty distinguishes and the forms a built-in collection
+// operation's code generation takes.
+const (
+	typeInt  = "int"
+	typeList = "list"
+
+	listWord = "list" // the literal surface, "the list of 1 and 2 and 3"
+
+	formReduceSum = "reduce+" // fold a list to its sum
+	formLen       = "len"     // the count of a list
+	formFirst     = "first"   // the first element
+	formMax       = "max"     // the largest element
+)
+
+// builtinListOps is the floor of operations over a list: a fold to a total, the
+// count, the first element, and the largest. Each takes one list and yields a
+// number, its code generation fixed by its form, the way the arithmetic
+// primitives are fixed by their operator symbol.
+func builtinListOps() []Op {
+	return []Op{
+		{Name: "total", Word: "total", Form: formReduceSum},
+		{Name: "length", Word: "length", Form: formLen},
+		{Name: "first", Word: "first", Form: formFirst},
+		{Name: "largest", Word: "largest", Form: formMax},
+	}
 }
 
 // Engine carries the code constructions and runs them both ways. It is built
@@ -97,10 +140,18 @@ type Engine struct {
 // rather than indexed half-formed.
 func NewEngine(prims []Op, defs []Def) *Engine {
 	e := &Engine{byWord: map[string]Op{}, bySymbol: map[string]Op{}, byName: map[string]Op{}}
-	for _, o := range prims {
+	index := func(o Op) {
 		e.byWord[o.Word] = o
 		e.bySymbol[o.Symbol] = o
 		e.byName[o.Name] = o
+	}
+	for _, o := range prims {
+		index(o)
+	}
+	// The built-in collection operations are the floor for working over a list, the
+	// way the arithmetic primitives are the floor for working over a number.
+	for _, o := range builtinListOps() {
+		index(o)
 	}
 	for _, d := range defs {
 		body, ok := e.bodyFromSource(d.Body)
@@ -259,6 +310,26 @@ func (e *Engine) literalOperand(toks, params []string, selfName string, selfArit
 	}
 	if len(toks) < 3 || toks[2] != "of" {
 		return Computation{}, 0, false
+	}
+	// A list literal, "the list of 1 and 2 and 3", reads as many operands as are
+	// joined by "and", variadic where an operation is fixed-arity.
+	if toks[1] == listWord {
+		consumed := 3 // "the list of"
+		rest := toks[3:]
+		var elems []Computation
+		for {
+			el, n, ok := e.literalOperand(rest, params, selfName, selfArity)
+			if !ok {
+				return Computation{}, 0, false
+			}
+			elems = append(elems, el)
+			rest, consumed = rest[n:], consumed+n
+			if len(rest) == 0 || rest[0] != "and" {
+				break
+			}
+			rest, consumed = rest[1:], consumed+1
+		}
+		return Computation{Op: listWord, Args: elems}, consumed, true
 	}
 	opName, arity := "", 0
 	if selfName != "" && toks[1] == selfName {
@@ -481,6 +552,87 @@ func (e *Engine) recursive(op Op) bool {
 	return op.Body != nil && references(*op.Body, op.Name)
 }
 
+// typeOf computes a computation's value type ("int" or "list") and checks that
+// every operation is given the kind of value it takes: a list operation a list, a
+// primitive and arithmetic a number, a function its declared parameter types. env
+// gives the parameters' types in scope; self names the function being defined,
+// whose own calls yield a number. It returns false on any mismatch, so a
+// type-inconsistent computation is refused before it is run to a broken program.
+func (e *Engine) typeOf(c Computation, env map[string]string, self string) (string, bool) {
+	switch {
+	case c.Cond != nil:
+		lt, lok := e.typeOf(c.Cond.Left, env, self)
+		rt, rok := e.typeOf(c.Cond.Right, env, self)
+		tt, tok := e.typeOf(c.Cond.Then, env, self)
+		et, eok := e.typeOf(c.Cond.Else, env, self)
+		if !lok || !rok || !tok || !eok || lt != typeInt || rt != typeInt || tt != typeInt || et != typeInt {
+			return "", false
+		}
+		return typeInt, true
+	case c.Var != "":
+		t, ok := env[c.Var]
+		return t, ok
+	case c.Op == "":
+		if c.Lit == "" {
+			return "", false
+		}
+		return typeInt, true
+	case c.Op == listWord:
+		for _, a := range c.Args {
+			if t, ok := e.typeOf(a, env, self); !ok || t != typeInt {
+				return "", false
+			}
+		}
+		return typeList, true
+	}
+	if self != "" && c.Op == self {
+		for _, a := range c.Args {
+			if _, ok := e.typeOf(a, env, self); !ok {
+				return "", false
+			}
+		}
+		return typeInt, true
+	}
+	op, ok := e.byName[c.Op]
+	if !ok {
+		return "", false
+	}
+	if op.Form != "" { // a collection operation takes one list, yields a number
+		if len(c.Args) != 1 {
+			return "", false
+		}
+		if t, ok := e.typeOf(c.Args[0], env, self); !ok || t != typeList {
+			return "", false
+		}
+		return typeInt, true
+	}
+	want := 2
+	if op.Body != nil {
+		want = len(op.Params)
+	}
+	if len(c.Args) != want {
+		return "", false
+	}
+	for i, a := range c.Args {
+		expect := typeInt
+		if op.Body != nil {
+			expect = op.paramType(i)
+		}
+		if t, ok := e.typeOf(a, env, self); !ok || t != expect {
+			return "", false
+		}
+	}
+	return typeInt, true
+}
+
+// TypeCheck reports whether a computation is type-consistent, so a computation
+// that would run to a broken program (a list operation on a number, say) is
+// refused before it is run.
+func (e *Engine) TypeCheck(c Computation) bool {
+	_, ok := e.typeOf(c, nil, "")
+	return ok
+}
+
 // comprehendCode reads the executable surface as real Go: the language's own
 // parser turns the source into a syntax tree, and fromExpr walks it into the
 // computation, so a nested, parenthesized expression of any depth comprehends.
@@ -574,6 +726,16 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 	if c.Op == "" {
 		return c.Lit, c.Lit != ""
 	}
+	if c.Op == listWord {
+		args, ok := e.renderArgs(c.Args, self, flat)
+		if !ok {
+			return "", false
+		}
+		if flat {
+			return listWord + "(" + args + ")", true
+		}
+		return "[]int{" + args + "}", true
+	}
 	if self != "" && c.Op == self {
 		args, ok := e.renderArgs(c.Args, self, flat)
 		if !ok {
@@ -584,6 +746,23 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 	op, ok := e.byName[c.Op]
 	if !ok {
 		return "", false
+	}
+	if op.Form != "" {
+		if len(c.Args) != 1 {
+			return "", false
+		}
+		if flat {
+			args, ok := e.renderArgs(c.Args, self, flat)
+			if !ok {
+				return "", false
+			}
+			return c.Op + "(" + args + ")", true
+		}
+		list, ok := e.render(c.Args[0], self, flat)
+		if !ok {
+			return "", false
+		}
+		return listOpCode(op.Form, list)
 	}
 	if e.recursive(op) {
 		if flat {
@@ -611,6 +790,24 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return "", false
 	}
 	return a + " " + op.Symbol + " " + b, true
+}
+
+// listOpCode writes a built-in collection operation over a list expression: the
+// count by len, and the fold, the first, and the largest by a parenthesized
+// function literal that yields its value (a bare leading literal would not). The
+// list is bound once for an operation that reads it more than the count does.
+func listOpCode(form, list string) (string, bool) {
+	switch form {
+	case formLen:
+		return "len(" + list + ")", true
+	case formReduceSum:
+		return "(func() int { s := 0; for _, v := range " + list + " { s += v }; return s }())", true
+	case formFirst:
+		return "(func() int { xs := " + list + "; return xs[0] }())", true
+	case formMax:
+		return "(func() int { xs := " + list + "; m := xs[0]; for _, v := range xs { if v > m { m = v } }; return m }())", true
+	}
+	return "", false
 }
 
 // renderArgs writes a call's argument list.
@@ -648,11 +845,11 @@ func (e *Engine) rendersAsCall(c Computation, self string) bool {
 	if c.Op == "" {
 		return false
 	}
-	if self != "" && c.Op == self {
+	if c.Op == listWord || (self != "" && c.Op == self) {
 		return true
 	}
 	op, ok := e.byName[c.Op]
-	return ok && e.recursive(op)
+	return ok && (op.Form != "" || e.recursive(op))
 }
 
 // genCond writes a conditional as a parenthesized immediately-invoked function

@@ -1637,6 +1637,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		src := req.Content
 		if d.code != nil {
 			if comp, ok := d.code.Comprehend(src); ok {
+				// A computation that does not type-check (a list operation on a
+				// number, say) is a gap to admit, not source to run to a broken program.
+				if !d.code.TypeCheck(comp) {
+					return wire.Response{OK: true, Say: "I could not work that out."}, false, false
+				}
 				if generated, ok := d.code.ToCode(comp); ok {
 					src = generated
 				}

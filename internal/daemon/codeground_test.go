@@ -67,6 +67,31 @@ func TestComputeAdmitsIllFormedComputation(t *testing.T) {
 	}
 }
 
+// The built-in collection operations run over a list literal and ground to the
+// value the code computes: a total, a length, a first, a largest.
+func TestComputesOverLists(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	cases := []struct{ surface, want string }{
+		{"the total of the list of 1 and 2 and 3", "6"},
+		{"the length of the list of 1 and 2 and 3", "3"},
+		{"the first of the list of 4 and 5 and 6", "4"},
+		{"the largest of the list of 3 and 9 and 2", "9"},
+	}
+	for _, tc := range cases {
+		resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: tc.surface}, nil)
+		if !resp.OK || !strings.Contains(resp.Say, tc.want) {
+			t.Fatalf("%q should run to %s: %q", tc.surface, tc.want, resp.Say)
+		}
+	}
+	// A collection operation on a number is admitted as a gap, not run to a Go error.
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the total of 5"}, nil)
+	if strings.Contains(resp.Say, "error:") {
+		t.Fatalf("a list operation on a number should be admitted, not leaked: %q", resp.Say)
+	}
+}
+
 // A nested expression in real Go comprehends to its computation, generates back
 // to grouped source, and grounds by running to the value its grouping means.
 func TestComputeGroundsNestedExpression(t *testing.T) {
