@@ -128,6 +128,49 @@ func (e *Engine) Comprehend(text string) (Computation, bool) {
 	return e.comprehendCode(text)
 }
 
+// UnknownOp reports the first operation a computation surface names that no
+// construction claims. Each operation in the literal teaching surface is named
+// "the <word> of ...", so a call of a function GOLEM has not learned ("the cube
+// of 3") is found here. The caller can then admit the gap by name where it would
+// otherwise run the words as a broken program. A surface naming only operations
+// it knows, or one not phrased as a call at all, returns false.
+func (e *Engine) UnknownOp(text string) (string, bool) {
+	toks := strings.Fields(text)
+	for i := 0; i+2 < len(toks); i++ {
+		if toks[i] != "the" || toks[i+2] != "of" {
+			continue
+		}
+		if _, ok := e.byWord[toks[i+1]]; !ok {
+			return toks[i+1], true
+		}
+	}
+	return "", false
+}
+
+// IsComputationSurface reports whether the text is phrased as a request to
+// compute: the literal teaching surface, which opens with "the" and joins its
+// operands with "of", or an expression said in operator words ("6 plus 7"). It
+// tells a computation that did not comprehend (ill-formed, or a call of an
+// operation GOLEM lacks) apart from a raw program handed in to run, so the
+// first is answered with the gap and the second is left to run as the source it
+// already is.
+func (e *Engine) IsComputationSurface(text string) bool {
+	toks := strings.Fields(text)
+	for _, t := range toks {
+		if _, ok := spokenOps[strings.ToLower(t)]; ok {
+			return true
+		}
+	}
+	if len(toks) >= 3 && toks[0] == "the" {
+		for _, t := range toks[1:] {
+			if t == "of" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // spokenOps maps the words a person says an operator with to the symbol that
 // runs it, the pseudocode register of the same operations: "6 plus 7" is read
 // as "6 + 7" and "3 times 4" as "3 * 4".

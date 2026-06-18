@@ -1640,6 +1640,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				if generated, ok := d.code.ToCode(comp); ok {
 					src = generated
 				}
+				return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
+			}
+			// It did not comprehend. A computation that names an operation GOLEM
+			// has not learned, or is otherwise ill-formed, has its gap admitted
+			// here; only a genuine raw program falls through to the compiler.
+			if name, ok := d.code.UnknownOp(src); ok {
+				return wire.Response{OK: true, Say: "I do not know how to compute the " + name + "."}, false, false
+			}
+			if d.code.IsComputationSurface(src) {
+				return wire.Response{OK: true, Say: "I could not work that out."}, false, false
 			}
 		}
 		return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false

@@ -159,3 +159,36 @@ func TestComprehendRejectsTrailingOperand(t *testing.T) {
 		t.Fatalf("a third operand to a binary operation should not comprehend: %+v", c)
 	}
 }
+
+// A call of an operation no construction claims is found and named, so the gap
+// can be admitted; a known operation is not, even nested inside an unknown one,
+// the first unknown wins, and a known-only surface reports nothing.
+func TestUnknownOp(t *testing.T) {
+	e := testEngine()
+	if name, ok := e.UnknownOp("the cube of 3"); !ok || name != "cube" {
+		t.Fatalf("an unlearned operation should be named: %q ok %v", name, ok)
+	}
+	if name, ok := e.UnknownOp("the sum of the cube of 3 and 4"); !ok || name != "cube" {
+		t.Fatalf("a nested unlearned operation should be named: %q ok %v", name, ok)
+	}
+	if name, ok := e.UnknownOp("the sum of 6 and 7"); ok {
+		t.Fatalf("a known operation should not be reported unknown: %q", name)
+	}
+}
+
+// A computation request is told apart from a raw program: the literal surface
+// and a spoken-operator expression are computation surfaces, while bare source
+// and unrelated words are not, so only a real program falls through to run.
+func TestIsComputationSurface(t *testing.T) {
+	e := testEngine()
+	for _, s := range []string{"the cube of 3", "the sum of 2 and 3 and 4", "6 plus 7"} {
+		if !e.IsComputationSurface(s) {
+			t.Fatalf("%q should read as a computation surface", s)
+		}
+	}
+	for _, s := range []string{"6 + 7", "hello there", "func main() {}"} {
+		if e.IsComputationSurface(s) {
+			t.Fatalf("%q should not read as a computation surface", s)
+		}
+	}
+}

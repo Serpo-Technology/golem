@@ -36,6 +36,37 @@ func TestComputeGroundsAComprehendedComputation(t *testing.T) {
 	}
 }
 
+// A call of an operation GOLEM has not learned admits the gap by name instead
+// of handing the words to the compiler as a broken program. The runtime is open
+// so a fall-through would surface a Go error, which the admission must replace.
+func TestComputeAdmitsUnknownFunction(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the cube of 3"}, nil)
+	if !resp.OK {
+		t.Fatalf("runcode failed: %s", resp.Error)
+	}
+	if !strings.Contains(resp.Say, "do not know") || !strings.Contains(resp.Say, "cube") {
+		t.Fatalf("an unlearned function should be admitted by name, not run: %q", resp.Say)
+	}
+}
+
+// An ill-formed computation (a binary operation given a third operand) is a gap
+// to admit too, so a recognizable computation request never leaks a Go error.
+func TestComputeAdmitsIllFormedComputation(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the sum of 2 and 3 and 4"}, nil)
+	if !resp.OK {
+		t.Fatalf("runcode failed: %s", resp.Error)
+	}
+	if strings.Contains(resp.Say, "error:") {
+		t.Fatalf("an ill-formed computation should be admitted, not leaked as a Go error: %q", resp.Say)
+	}
+}
+
 // A nested expression in real Go comprehends to its computation, generates back
 // to grouped source, and grounds by running to the value its grouping means.
 func TestComputeGroundsNestedExpression(t *testing.T) {
