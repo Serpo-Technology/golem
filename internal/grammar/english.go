@@ -387,12 +387,15 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	return f
 }
 
-// comparativeParts reads a comparison "X is bigger than Y" into its relation
-// (the gradable word before "than"), its subject, and its standard (after
-// "than"), and whether it is asked (the copula inverted to the front). It returns
+// comparativeParts reads a comparison "X is bigger than Y" into its relation, its
+// subject, and its standard (after "than"), and whether it is asked (the copula
+// inverted to the front). The relation is the gradable word before "than"; an
+// analytic comparative marks it with "more"/"less" instead of "-er", which is
+// normalized to "more <adjective>" so the comparative is one relation however it
+// was formed. "Less" is the grammatical inverse of "more" ("X less clever than Y"
+// is "Y more clever than X"), so its subject and standard are swapped. It returns
 // false when the clause is not a comparison: no standard marker, no copula before
-// it, or no gradable word between them. The standard marker is read from the
-// tongue's seed, so a tongue marks comparison its own way.
+// it, or no gradable word between them.
 func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, standard string, ask, ok bool) {
 	than := -1
 	for i, tok := range tokens {
@@ -414,14 +417,32 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 	if cop < 0 {
 		return "", "", "", false, false
 	}
-	rel = tokens[than-1] // the gradable word sits just before the standard marker
+	// The gradable word sits just before "than"; an analytic comparative puts
+	// "more" or "less" before it, which is folded into the relation.
+	relStart, invert := than-1, false
+	if than-2 > cop {
+		switch tokens[than-2] {
+		case "more":
+			relStart = than - 2
+		case "less":
+			relStart, invert = than-2, true
+		}
+	}
+	if relStart < than-1 {
+		rel = "more " + tokens[than-1] // analytic comparative, normalized
+	} else {
+		rel = tokens[than-1] // synthetic "-er" comparative
+	}
 	standard = p.contentSpan(tokens[than+1:])
 	if cop == 0 {
 		// The copula led the clause: subject-auxiliary inversion makes it a question,
-		// the subject sitting between the copula and the gradable word.
-		subject, ask = p.contentSpan(tokens[cop+1:than-1]), true
+		// the subject sitting between the copula and the comparative.
+		subject, ask = p.contentSpan(tokens[cop+1:relStart]), true
 	} else {
 		subject = p.contentSpan(tokens[:cop])
+	}
+	if invert {
+		subject, standard = standard, subject // "X less clever than Y" is "Y more clever than X"
 	}
 	if rel == "" || subject == "" || standard == "" {
 		return "", "", "", false, false

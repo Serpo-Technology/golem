@@ -1246,6 +1246,25 @@ func TestComparativeOrdersTransitively(t *testing.T) {
 	}
 }
 
+// An analytic comparative ("more clever than") is read as one relation "more
+// clever", chaining transitively like a synthetic "-er" one. "Less" is the
+// grammatical inverse, so "the mouse is less clever than the dog" is answered as
+// the positive comparative, "the dog is more clever than the mouse".
+func TestAnalyticComparative(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the dog is more clever than the cat")
+	say(t, d, "the cat is more clever than the mouse")
+	if got := say(t, d, "is the dog more clever than the mouse").Say; got != "Yes, the dog is more clever than the mouse." {
+		t.Fatalf("an analytic comparative should chain transitively: %q", got)
+	}
+	if got := say(t, d, "is the mouse less clever than the dog").Say; got != "Yes, the dog is more clever than the mouse." {
+		t.Fatalf("less should invert to the positive comparative: %q", got)
+	}
+}
+
 // Turkish marks a comparison's standard by ablative case and drops the copula
 // ("kedi fareden büyük"), so it parses its own way, but the ordering reasoning is
 // the same: a chained comparison holds transitively, the reverse does not, and the
