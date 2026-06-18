@@ -362,6 +362,11 @@ func TestAbstractionSkipsBasicLevelWord(t *testing.T) {
 	if abs, _ := s.ConceptByTemplate("abs:en:cat"); abs != nil {
 		t.Fatal("a basic word that heads one of its own core percepts must not abstract")
 	}
+	// Each member's head names its own percept, so the category below spans three
+	// named basic-level things, the realistic case (a superordinate generalizes
+	// over things that have names, not one named thing among unnamed company).
+	mintOverMembers("dog")
+	mintOverMembers("rabbit")
 
 	mintOverMembers("animal")
 	if abs, _ := s.ConceptByTemplate("abs:en:animal"); abs == nil {
@@ -437,5 +442,53 @@ func TestAbstractionBondSurvivesDepression(t *testing.T) {
 	}
 	if got := edgeWeightRel(t, s, w, deployConcept.ID, memory.RelNames); got >= deployBefore {
 		t.Fatalf("the stale concrete bond should weaken: %.2f -> %.2f", deployBefore, got)
+	}
+}
+
+// A word that names one basic-level percept already named in another tongue binds
+// to that concept rather than splitting a parallel abstraction: "kurt" names the
+// wolf "wolf" already names, even when junk company spreads it to the abstraction
+// gate, so both tongues stay on one node and the propositions reach it from
+// either. A superordinate naming several named percepts still abstracts.
+func TestAbstractionBindsCrossTongueNameToPercept(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	wolf := feedShape(t, s, "vision", "a gray wolf", 4, base)
+	junk := feedShape(t, s, "vision", "a passing shape", 4, base.Add(time.Minute))
+	cat := feedShape(t, s, "vision", "a small black cat", 4, base.Add(2*time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	mintOver := func(word, lang string, momentsets ...[]recentMoment) {
+		for i := range 3 {
+			anchors := make([]recentMoment, 0, len(momentsets))
+			for _, ms := range momentsets {
+				anchors = append(anchors, ms[i])
+			}
+			d.mintWords(word, lang, 0, anchors, false)
+		}
+		calm(d)
+		d.growConcepts()
+		d.growAbstractions()
+	}
+	// The English heads name their percepts.
+	mintOver("wolf", "en", wolf)
+	mintOver("cat", "en", cat)
+	// "kurt" (tr), spread across the wolf percept and the junk one, reaches the
+	// abstraction gate but heads neither caption.
+	mintOver("kurt", "tr", wolf, junk)
+	if abs, _ := s.ConceptByTemplate("abs:tr:kurt"); abs != nil {
+		t.Fatal("a cross-tongue name for one named percept must not split into a parallel abstraction")
+	}
+	kurtC, wolfC := d.resolveConcept("kurt"), d.resolveConcept("wolf")
+	if kurtC == nil || wolfC == nil || kurtC.ID != wolfC.ID {
+		t.Fatalf("kurt should name the same concept as wolf: kurt=%v wolf=%v", kurtC, wolfC)
+	}
+	// A superordinate over two named percepts still abstracts.
+	mintOver("hayvan", "tr", wolf, cat)
+	if abs, _ := s.ConceptByTemplate("abs:tr:hayvan"); abs == nil {
+		t.Fatal("a superordinate naming several named percepts should still abstract")
 	}
 }

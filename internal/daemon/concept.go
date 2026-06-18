@@ -165,6 +165,19 @@ func (d *Daemon) growAbstractions() (born int) {
 		if d.headsCorePercept(w.Content, coreIDs) {
 			continue
 		}
+		// A word that names a single basic-level percept already named in another
+		// tongue is that thing's name in this tongue, not a category over it:
+		// "kurt" names the wolf that "wolf" already names. Bind it to that concept
+		// so both tongues share one node, rather than splitting a parallel
+		// abs:tr:kurt the propositions never reach. A true superordinate names
+		// several basic percepts (the class it spans) and is left to abstract; a
+		// name spread by junk company over one real percept is caught here.
+		if named := d.headNamedPercepts(coreIDs); len(named) == 1 {
+			if err := d.store.SetLinkRel(w.ID, named[0], memory.RelNames, absNameWeight); err != nil {
+				fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
+			}
+			continue
+		}
 		switch {
 		case c == nil:
 			if !healthy || born >= absPerNight {
@@ -238,6 +251,57 @@ func (d *Daemon) headsCorePercept(word string, coreIDs []uint64) bool {
 			continue
 		}
 		if fields := strings.Fields(f.Content); len(fields) > 0 && strings.EqualFold(fields[len(fields)-1], word) {
+			return true
+		}
+	}
+	return false
+}
+
+// headNamedPercepts returns the core members that are basic-level named percepts:
+// a sensory percept whose caption head is a word that names it ("wolf" names "a
+// gray wolf"). Abstractions, relations, and junk that accreted a caption but no
+// deliberate name are excluded. The count tells a cross-tongue basic name (one
+// such percept, the thing it names in another tongue) from a true superordinate
+// (several, the class it spans), so the abstraction pass can bind the one and
+// abstract the other.
+func (d *Daemon) headNamedPercepts(coreIDs []uint64) []uint64 {
+	frags, err := d.store.FragmentsByIDs(coreIDs)
+	if err != nil {
+		return nil
+	}
+	var out []uint64
+	for _, f := range frags {
+		if _, ok := abstractionLemma(f.Template); ok || f.Category == "relation" {
+			continue
+		}
+		fields := strings.Fields(f.Content)
+		if len(fields) == 0 {
+			continue
+		}
+		if d.wordNamesConcept(fields[len(fields)-1], f.ID) {
+			out = append(out, f.ID)
+		}
+	}
+	return out
+}
+
+// wordNamesConcept reports whether a word form names a concept directly, the test
+// for whether a percept's caption head is its established name.
+func (d *Daemon) wordNamesConcept(form string, conceptID uint64) bool {
+	words, err := d.store.WordNodesByForms([]string{form})
+	if err != nil || len(words) == 0 {
+		return false
+	}
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	edges, err := d.store.LinksFromRel(ids, memory.RelNames)
+	if err != nil {
+		return false
+	}
+	for _, e := range edges {
+		if e.To == conceptID {
 			return true
 		}
 	}
