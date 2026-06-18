@@ -368,8 +368,12 @@ const untrustedNameScale = 0.5
 const (
 	linkWindow        = 30 * time.Second
 	maxLinkFanout     = 8
-	linkBaseWeight    = 0.2
-	linkDopamineGain  = 0.4
+	// linkWeight is the strength of a fresh bond between a word and the moment it
+	// kept company with. It is a constant: naming reads the RATIO of a word's
+	// company across situations, so the rate it bonds is fixed, not modulated by
+	// how rewarded GOLEM felt at that instant. Dopamine drives behaviour (what to
+	// pursue, whether curiosity fires), not how firmly a word binds.
+	linkWeight        = 0.5
 	assocRepeatBonus  = 0.1
 	confirmReward     = 0.08
 	recallReward      = 0.05
@@ -1097,9 +1101,8 @@ func (d *Daemon) recentNaming(at time.Time, exclude uint64) []recentMoment {
 func (d *Daemon) bindTo(f *memory.Fragment, targets []recentMoment) []uint64 {
 	var linked []uint64
 	confirmed := false
-	da := d.chem.Snapshot().Dopamine
 	for _, r := range targets {
-		w := linkBaseWeight + linkDopamineGain*da
+		w := linkWeight
 		if r.template != f.Template {
 			count, err := d.store.BumpAssoc(f.Template, r.template)
 			if err != nil {

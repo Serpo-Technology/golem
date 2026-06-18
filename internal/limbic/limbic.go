@@ -98,10 +98,11 @@ func (n *System) SpikeNoradrenaline(amount float64) {
 	}
 }
 
-// SpikeDopamine is reward: an association confirmed by repetition, or a
-// recall that served its keeper. Dopamine is the link learning rate, so a
-// memory that keeps proving useful makes the system bind new moments more
-// eagerly. Clamped at 1.0; Decay drifts it back toward baseline.
+// SpikeDopamine is reward: an association confirmed by repetition, or a recall
+// that served its keeper. Dopamine drives BEHAVIOUR, the curiosity that asks
+// about an unknown word and the confidence the graduation bar reads, not the
+// strength of a bond (a word's company binds at a fixed rate). Clamped at 1.0;
+// Decay drifts it back toward baseline.
 func (n *System) SpikeDopamine(amount float64) {
 	n.state.Dopamine += amount
 	if n.state.Dopamine > 1 {

@@ -698,7 +698,7 @@ func (d *Daemon) bindAttention(words []*memory.Fragment, anchors []recentMoment)
 	if len(anchors) == 0 {
 		return
 	}
-	w := linkBaseWeight + linkDopamineGain*d.chem.Snapshot().Dopamine
+	w := linkWeight
 	for _, word := range words {
 		for _, a := range anchors {
 			if a.id == word.ID {
@@ -751,11 +751,10 @@ func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors 
 	if len(forms) == 0 {
 		return nil
 	}
-	da := d.chem.Snapshot().Dopamine
 	// The bond a word earns is scaled by the source's trust: a word read on an
 	// untrusted channel bonds lightly, so it entrenches only by recurring across
-	// many reads and a word from a single page fades.
-	w := (linkBaseWeight + linkDopamineGain*da) * scale
+	// many reads and a word from a single page fades. Trust scales it, not mood.
+	w := linkWeight * scale
 	var words []*memory.Fragment
 	for _, form := range forms {
 		word, minted, err := d.store.WordNode(form, lang, d.chem.Snapshot(), time.Now())
