@@ -464,6 +464,58 @@ func (p *Params) trPersonOf(surface string) trPerson {
 	return trPerson3sg
 }
 
+// pastVerbPersonTR reads the person a Turkish past verb agrees with from its
+// suffix: -m (I), -n (you), -k (we) after the -DI tense, the bare third person
+// otherwise. It is the inverse of pastPersonSuffixTR, so a dropped subject is
+// recovered from the verb that agreed with it ("kovaladım" -> first person, I).
+func pastVerbPersonTR(surface string) trPerson {
+	if r := []rune(surface); len(r) > 4 {
+		if trimmed := string(r[:len(r)-1]); endsPastTR(trimmed) {
+			switch r[len(r)-1] {
+			case 'm':
+				return trPerson1sg
+			case 'n':
+				return trPerson2sg
+			case 'k':
+				return trPerson1pl
+			}
+		}
+	}
+	return trPerson3sg
+}
+
+// personPronounTR is the nominative subject pronoun a person implies (ben, sen,
+// biz), for recovering a dropped Turkish subject from its verb's agreement.
+func (p *Params) personPronounTR(person trPerson) string {
+	switch person {
+	case trPerson1sg:
+		return p.surfaceWord("tr", "firstperson")
+	case trPerson2sg:
+		return p.surfaceWord("tr", "addressee")
+	case trPerson1pl:
+		return p.surfaceWord("tr", "firstpersonpl")
+	}
+	return ""
+}
+
+// hasSubjectPronounTR reports whether a clause already names its subject with a
+// nominative pronoun (ben, sen, biz), so a dropped subject is recovered only
+// when none was spoken. An accusative pronoun (beni, seni) is an object, not a
+// subject, so it does not count.
+func (p *Params) hasSubjectPronounTR(spans []string) bool {
+	subj := map[string]bool{
+		p.surfaceWord("tr", "firstperson"):   true,
+		p.surfaceWord("tr", "addressee"):     true,
+		p.surfaceWord("tr", "firstpersonpl"): true,
+	}
+	for _, s := range spans {
+		if subj[strings.ToLower(strings.TrimSpace(s))] {
+			return true
+		}
+	}
+	return false
+}
+
 // pastPersonSuffixTR is the agreement suffix a Turkish past verb takes: -m (I),
 // -n (you), -k (we). The third person is unmarked.
 func pastPersonSuffixTR(person trPerson) string {

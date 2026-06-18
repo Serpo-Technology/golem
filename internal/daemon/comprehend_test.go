@@ -1219,6 +1219,22 @@ func TestParticipantDeixisTurkish(t *testing.T) {
 	}
 }
 
+// Turkish drops a subject its verb's agreement carries: "kediyi kovaladım" is
+// "(I) chased the cat", the -m marking first person, so the fact holds of the
+// speaker and GOLEM speaks it back as "sen". No overt pronoun is spoken.
+func TestParticipantProDropTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "kedi", "tr")
+	groundNounLang(t, d, "köpek", "tr")
+	sayLang(t, d, "tr", "kediyi kovaladım") // (I) chased the cat, subject dropped
+	if got := sayLang(t, d, "tr", "kediyi kovaladım mı").Say; got != "Evet, sen kediyi kovaladın." {
+		t.Fatalf("a dropped first-person subject should be recovered as the speaker: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "köpeği kovaladım mı").Say; !strings.HasPrefix(got, "Hayır") {
+		t.Fatalf("an unheld fact about the dropped speaker should deny: %q", got)
+	}
+}
+
 // GOLEM orders concepts along a gradable relation it was told about, and reasons
 // over the ordering transitively: told the cat is bigger than the mouse and the
 // mouse than the snail, it answers the cat is bigger than the snail, a chain it was

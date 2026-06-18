@@ -277,6 +277,18 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	if !ok {
 		return Meaning{}, false
 	}
+	// Turkish drops a subject the verb's agreement already carries: "kediyi
+	// kovaladım" is "(I) chased the cat", the -m marking first person. Recover it
+	// when the verb (last in a verb-final clause) agrees with a person and no
+	// nominative pronoun was spoken, so the clause reads as the transitive it is
+	// rather than mistaking the object for a subject.
+	if lang == "tr" && len(spans) > 0 {
+		if person := pastVerbPersonTR(spans[len(spans)-1]); person != trPerson3sg && !p.hasSubjectPronounTR(spans) {
+			if pronoun := p.personPronounTR(person); pronoun != "" {
+				spans = append([]string{pronoun}, spans...)
+			}
+		}
+	}
 	cxn, ok := p.selectArgByArity(lang, len(spans))
 	if !ok {
 		return Meaning{}, false
