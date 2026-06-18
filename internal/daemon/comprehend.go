@@ -945,15 +945,24 @@ func (d *Daemon) inferenceBasis(agentID uint64, rel string, patientID uint64) (*
 // only repeated. It returns false when the guess has no observed neighbour to point
 // to (a chained or supposition-backed guess, or one whose basis has since changed).
 func (d *Daemon) explainGuess(lang string, c claim) (string, bool) {
-	sib, ok := d.inferenceBasis(c.agent, c.rel, c.patient)
-	if !ok {
-		return "", false
-	}
 	agentFrags, err := d.store.FragmentsByIDs([]uint64{c.agent})
 	if err != nil || len(agentFrags) != 1 {
 		return "", false
 	}
 	agentName := d.conceptName(c.agent, agentFrags[0].Content, lang)
+	// A category-inheritance guess rests on membership, not resemblance: the agent
+	// belongs to a category that stands in the relation, so the guess is explained
+	// by the is-a and the category-level fact. Tried first, the order
+	// assessProposition draws the guess in.
+	if catID, ok := d.categoryInherits(agentFrags[0], c.rel, c.patient); ok {
+		if line, ok := d.explainByCategory(lang, agentName, catID, c.rel); ok {
+			return line, true
+		}
+	}
+	sib, ok := d.inferenceBasis(c.agent, c.rel, c.patient)
+	if !ok {
+		return "", false
+	}
 	sibName := d.conceptName(sib.ID, sib.Content, lang)
 	// "<agent> is like a <sibling>." The copula and the seeded "like" carry it.
 	like := strings.TrimSpace(d.gram.Word(lang, "islike") + " " + grammar.Indefinite(sibName))
@@ -965,6 +974,26 @@ func (d *Daemon) explainGuess(lang string, c claim) (string, bool) {
 		return res + " " + ev, true
 	}
 	return res, true
+}
+
+// explainByCategory voices the basis of a category-inheritance guess: the is-a
+// that places the agent in the category, then the category-level fact the guess
+// inherited. "Cat is an animal. The animal chased the mouse." The membership is
+// the firm part, the inherited fact the defeasible part, so the explanation is
+// honest about what carried the "probably."
+func (d *Daemon) explainByCategory(lang, agentName string, catID uint64, rel string) (string, bool) {
+	catFrags, err := d.store.FragmentsByIDs([]uint64{catID})
+	if err != nil || len(catFrags) != 1 {
+		return "", false
+	}
+	catName := d.conceptName(catID, catFrags[0].Content, lang)
+	isA := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent: grammar.Term{Phrase: agentName}, Action: grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: grammar.Indefinite(catName)}}, d.chem.Snapshot())
+	if ev, ok := d.renderFacts(lang, catName, d.gatherFacts(catFrags[0], "agent", rel), true, false); ok {
+		return isA + " " + ev, true
+	}
+	return isA, true
 }
 
 // planPolar answers a yes/no question by checking the proposition it states

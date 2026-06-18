@@ -1521,6 +1521,35 @@ func TestClarifyExplainsGuess(t *testing.T) {
 	}
 }
 
+// A category-inheritance guess is clarified by its MEMBERSHIP basis, not a
+// resemblance: "Cat is an animal. The animal chased the mouse." The is-a is the
+// firm part, the inherited category fact the defeasible part the "probably" rode.
+func TestClarifyExplainsCategoricalGuess(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5)
+	say(t, d, "an animal chased the mouse") // a category-level fact
+
+	if got := say(t, d, "did the cat chase the mouse").Say; got != "Probably, the cat chased the mouse." {
+		t.Fatalf("the category-inheritance guess should fire: %q", got)
+	}
+	got := strings.ToLower(say(t, d, "what do you mean").Say)
+	if !strings.Contains(got, "animal") || !strings.Contains(got, "chased the mouse") {
+		t.Fatalf("clarify should explain the membership basis: %q", got)
+	}
+}
+
 // The clarify move is recognized from the speech-act verb that carries it, so
 // phrasings never listed anywhere ("explain", "what does that mean") reach the
 // same explanation as "what do you mean": new ways of asking are vocabulary, not
