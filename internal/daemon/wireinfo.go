@@ -28,7 +28,7 @@ func fragmentInfo(f *memory.Fragment) *wire.FragmentInfo {
 	return info
 }
 
-// chemWire mirrors the limbic state into its wire form, the four levels a client
+// chemWire mirrors the limbic state into its wire form, the levels a client
 // reads.
 func chemWire(s limbic.State) wire.Chem {
 	return wire.Chem{
@@ -36,5 +36,6 @@ func chemWire(s limbic.State) wire.Chem {
 		Noradrenaline: s.Noradrenaline,
 		Serotonin:     s.Serotonin,
 		Oxytocin:      s.Oxytocin,
+		Adenosine:     s.Adenosine,
 	}
 }

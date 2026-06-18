@@ -39,6 +39,14 @@ func calm(d *Daemon) {
 	}
 }
 
+// tired drives sleep need (adenosine) past the gate, the activity side of the
+// two-process sleep that calm's quiet only grants the permission for.
+func tired(d *Daemon) {
+	for range 60 {
+		d.chem.BuildSleepNeed(0.05)
+	}
+}
+
 // The done-when of the language step: "what usually happens after make
 // test" is answered with a constructed sentence naming the successor.
 func TestAnswersWhatFollowsQuestion(t *testing.T) {

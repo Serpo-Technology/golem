@@ -20,9 +20,10 @@ func TestDetermineIdleIsTheFloor(t *testing.T) {
 // Under sleep pressure consolidation wins the arbitration, outranking idle.
 func TestDetermineConsolidatesUnderPressure(t *testing.T) {
 	d, _ := testDaemon(t)
-	calm(d) // build serotonin past the sleep gate
+	tired(d) // need: enough taken in to be worth consolidating
+	calm(d)  // permission: quiet grants the safety to do it
 	if !d.readyToSleep() {
-		t.Fatal("calm should build enough sleep pressure to be ready")
+		t.Fatal("a tired, calm system should be ready to consolidate")
 	}
 	if det := d.determine(time.Now()); det.mode != "consolidate" {
 		t.Fatalf("under sleep pressure the determination should be consolidate, got %q", det.mode)

@@ -1018,6 +1018,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	}
 	st.Conscious++
 	d.encodesSinceSleep++
+	d.chem.BuildSleepNeed(limbic.SleepNeedPerEncode) // what was taken in must be slept on
 	d.hot.Put(frag)
 	// A moment whose shape has a concept warms that concept: experience
 	// keeps working memory pointed at what is happening. The warming scales
@@ -1330,8 +1331,13 @@ func fairTruncate(frags []*memory.Fragment, budget int) []*memory.Fragment {
 	return picked
 }
 
+// readyToSleep is the two-process sleep gate: NEED that enough has been taken in
+// to be worth consolidating (adenosine past the gate), and PERMISSION that it is
+// a safe, quiet moment to do it (no recent surprise, input silent, the minimum
+// interval elapsed). Activity drives the need; quiet grants the permission.
 func (d *Daemon) readyToSleep() bool {
-	return d.chem.Serotonin() >= d.cfg.SleepPressureGate &&
+	return d.chem.Adenosine() >= d.cfg.SleepPressureGate &&
+		time.Since(d.lastSurprise) >= d.cfg.CalmBeforeSleep() &&
 		time.Since(d.lastObs) >= d.cfg.InputSilence() &&
 		time.Since(d.lastSleep) >= d.cfg.SleepInterval()
 }

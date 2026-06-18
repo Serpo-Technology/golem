@@ -168,12 +168,12 @@ func main() {
 			resp := call(home, wire.Request{Cmd: "chem"})
 			c := resp.Chem
 			if !watch {
-				fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
-					c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
+				fmt.Printf("dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f   adenosine %.2f\n",
+					c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin, c.Adenosine)
 				break
 			}
-			fmt.Printf("%s  dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f\n",
-				time.Now().Format("15:04:05"), c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin)
+			fmt.Printf("%s  dopamine %.2f   noradrenaline %.2f   serotonin %.2f   oxytocin %.2f   adenosine %.2f\n",
+				time.Now().Format("15:04:05"), c.Dopamine, c.Noradrenaline, c.Serotonin, c.Oxytocin, c.Adenosine)
 			time.Sleep(time.Second)
 		}
 
@@ -478,8 +478,8 @@ func printStatus(st *wire.StatusInfo) {
 	} else {
 		fmt.Println("  nights slept: 0")
 	}
-	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f, oxytocin %.2f\n",
-		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin, st.Chem.Oxytocin)
+	fmt.Printf("  chem: dopamine %.2f, noradrenaline %.2f, serotonin %.2f, oxytocin %.2f, adenosine %.2f\n",
+		st.Chem.Dopamine, st.Chem.Noradrenaline, st.Chem.Serotonin, st.Chem.Oxytocin, st.Chem.Adenosine)
 	if st.PromotionBar > 0 {
 		fmt.Printf("  graduation bar: %d consistent approval(s)\n", st.PromotionBar)
 	}

@@ -22,6 +22,7 @@ type Chem struct {
 	Noradrenaline float64
 	Serotonin     float64
 	Oxytocin      float64
+	Adenosine     float64
 }
 
 // The CLI talks to the daemon over a unix socket with one JSON request and
