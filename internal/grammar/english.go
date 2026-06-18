@@ -91,9 +91,14 @@ func (p *Params) ParseHint(utterance, fallback string, resolve func(string) *mem
 	if len(tokens) == 0 {
 		return Frame{Force: ForceStatement}
 	}
-	lang := p.detectLanguage(tokens)
+	// An explicit tongue tag is authoritative: the speaker said which language this
+	// is. Detection is the fallback for an untagged utterance, where the closed
+	// classes name the tongue. Reading detection first would let a word that spells
+	// a foreign function word ("at", a Turkish horse, is also English "at") tip a
+	// tagged Turkish clause to English and lose its construction.
+	lang := fallback
 	if lang == "" {
-		lang = fallback
+		lang = p.detectLanguage(tokens)
 	}
 	if lang == "" {
 		lang = "en"

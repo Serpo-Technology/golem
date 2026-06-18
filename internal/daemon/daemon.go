@@ -1710,8 +1710,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// only a declarative naming grounds a word in the attended concept. A
 		// question or a discourse move ("what else") names nothing, so its words do
 		// not bind to whatever was warm, and a proposition's words already bound to
-		// their roles, so an argument is not also named after its co-arguments.
-		if frame.Force == grammar.ForceStatement && !d.momentBoundRoles(res.FragmentID) {
+		// their roles, so an argument is not also named after its co-arguments. A
+		// comparison names nothing either: "the horse is bigger than the dog" states
+		// an ordering, so its words must not ground in the standard that was warm
+		// (else the dog's word keeps company with the horse and they blur).
+		if frame.Force == grammar.ForceStatement && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) {
 			d.bindAttention(words, attn)
 		}
 		// A reply that was built is also spoken when the voice is on.
