@@ -605,7 +605,7 @@ func (d *Daemon) featureSeeds(query string) ([]*memory.Fragment, []*wire.Fragmen
 		for _, fid := range carrier[m.concept] {
 			matchedFeatures[fid] = true
 		}
-		d.ws.excite(m.concept, exciteRecall)
+		d.ws.mull(m.concept, exciteRecall)
 	}
 	grounds, err := d.store.LinksFromRel(conceptIDs, memory.RelGrounds)
 	if err != nil {

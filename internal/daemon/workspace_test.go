@@ -90,6 +90,39 @@ func TestEncodeWarmsConceptAndSleepClears(t *testing.T) {
 	}
 }
 
+// Internal cognition warms working memory without claiming fresh attention: a
+// mulled concept is held in mind, but it is not something just perceived or
+// spoken of, so it does not become a naming anchor. Only excite marks it seen.
+func TestMullWarmsWithoutAttending(t *testing.T) {
+	w := newWorkspace()
+	w.excite(1, 1.0)
+	w.mull(2, 1.0)
+	if _, ok := w.seenAt(1); !ok {
+		t.Fatal("an externally attended concept should be marked freshly attended")
+	}
+	if _, ok := w.seenAt(2); ok {
+		t.Fatal("a mulled concept should not be marked freshly attended")
+	}
+	if w.heat(2) == 0 {
+		t.Fatal("a mulled concept should still be warm in working memory")
+	}
+}
+
+// A consolidation closes the scene: the recency buffer a name's company is drawn
+// from is cleared, so a name taught after a nap keeps company with the new block
+// rather than the percepts of the one before it.
+func TestSleepClosesTheScene(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.process(senses.Observation{Channel: "vision", Content: "a small brown dog", At: time.Now()}, true, true)
+	if len(d.recent) == 0 {
+		t.Fatal("a moment should enter the recency buffer")
+	}
+	d.sleepCycle()
+	if len(d.recent) != 0 {
+		t.Fatalf("the night should close the scene and clear the recency buffer, got %d", len(d.recent))
+	}
+}
+
 // Speaking words that name a concept warms it to full presence.
 func TestSpeechWarmsNamedConcepts(t *testing.T) {
 	d, s := testDaemon(t)

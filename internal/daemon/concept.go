@@ -568,8 +568,9 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 		if e.heat < attentionGroundingGate {
 			continue
 		}
-		// Warm but not freshly attended: it lingers from a scene before and may
-		// still serve discourse, but it does not ground a new name.
+		// Warm but not freshly attended: it lingers from a scene before, or
+		// GOLEM mulled it over, and may still serve discourse, but it does not
+		// ground a new name.
 		if t, ok := d.ws.seenAt(e.id); !ok || now.Sub(t) > attentionRecency {
 			continue
 		}
@@ -1072,7 +1073,7 @@ func (d *Daemon) semanticSeeds(query string) ([]*memory.Fragment, []*wire.Fragme
 		d.store.StrengthenLinks(walked, linkPracticeDelta)
 	}
 	for id := range conceptIDs {
-		d.ws.excite(id, exciteRecall)
+		d.ws.mull(id, exciteRecall)
 	}
 
 	var mediators []*wire.FragmentInfo

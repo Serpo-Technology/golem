@@ -39,10 +39,20 @@ func newWorkspace() *workspace {
 		seen: make(map[uint64]time.Time), role: make(map[uint64]string)}
 }
 
-// excite warms a concept, keeping whichever is higher: the new activation
-// or what remains of the old. Past the budget the coldest entry is
-// evicted, because a working memory that holds everything holds nothing.
-func (w *workspace) excite(id uint64, amount float64) {
+// excite warms a concept from EXTERNAL attention, perception or speech, and
+// marks it freshly attended: it is something just perceived or spoken of, so a
+// name told now may ground in it. mull warms it the same way for INTERNAL
+// cognition, a recall or a wandering thought, but leaves the naming recency
+// alone, so GOLEM's own mulling over a topic's neighbours does not pull a taught
+// name onto them.
+func (w *workspace) excite(id uint64, amount float64) { w.warm(id, amount, true) }
+func (w *workspace) mull(id uint64, amount float64)   { w.warm(id, amount, false) }
+
+// warm keeps whichever activation is higher: the new or what remains of the old.
+// Past the budget the coldest entry is evicted, because a working memory that
+// holds everything holds nothing. attended records the concept as freshly
+// attended for naming; internal warmth passes false to leave that recency be.
+func (w *workspace) warm(id uint64, amount float64, attended bool) {
 	if id == 0 {
 		return
 	}
@@ -57,7 +67,9 @@ func (w *workspace) excite(id uint64, amount float64) {
 	// so "do it again" follows the latest mention rather than the lowest id.
 	w.seq++
 	w.touch[id] = w.seq
-	w.seen[id] = time.Now()
+	if attended {
+		w.seen[id] = time.Now()
+	}
 	if len(w.act) <= workspaceBudget {
 		return
 	}

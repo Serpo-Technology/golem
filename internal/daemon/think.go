@@ -869,7 +869,7 @@ func (d *Daemon) absorbThought(cand thoughtCandidate) {
 		return
 	}
 	for _, id := range winner.warm {
-		d.ws.excite(id, winner.seedHeat*thinkDamping)
+		d.ws.mull(id, winner.seedHeat*thinkDamping)
 	}
 	d.lastThought = winner.content
 	d.lastThoughtAt = time.Now()
