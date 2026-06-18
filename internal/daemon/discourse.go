@@ -299,6 +299,27 @@ func (d *Daemon) participantName(id uint64, lang string) string {
 	return ""
 }
 
+// objectCase gives a participant filler its object-case surface for the patient
+// role where the tongue distinguishes it: English "I" becomes "me" and "we"
+// becomes "us", so a participant in object position reads "the dog chased me"
+// with its correct case where it would otherwise read "chased I".
+// The mapping is read from the tongue's participant surfaces, the subject form
+// to its object form; a filler that is no participant, or a tongue that cases
+// the object by morphology instead (Turkish marks it accusative downstream), is
+// returned unchanged.
+func (d *Daemon) objectCase(name, lang string) string {
+	for _, p := range []string{"firstperson", "addressee", "firstpersonpl"} {
+		if d.gram.Word(lang, p) != name {
+			continue
+		}
+		if obj := d.gram.Word(lang, p+".obj"); obj != "" {
+			return obj
+		}
+		return name
+	}
+	return name
+}
+
 // relationName is a relation's verb in a tongue: the firmest word naming the
 // relation there, found from the relation's content, so a Turkish answer
 // conjugates "kovala" where an English one conjugates "chase". It falls back to
@@ -408,11 +429,26 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 	var clauses []string
 	for _, k := range order {
 		names := coargs[k]
+		// The focus plays k.role and the co-arguments fill the other. A participant
+		// in the patient role takes its object case ("the dog chased me"), so the
+		// patient-side filler is cased before the clause is built.
+		focusIsPatient := k.role == "patient"
+		coNames := names
+		if !focusIsPatient {
+			coNames = make([]string, len(names))
+			for i, n := range names {
+				coNames[i] = d.objectCase(n, lang)
+			}
+		}
+		fName := focusName
+		if focusIsPatient {
+			fName = d.objectCase(focusName, lang)
+		}
 		// The meaning is language-free: the focus and the coordinated
 		// co-arguments are named, marked definite or given, and the engine
 		// renders the article, coordinator, and pronoun from the tongue's data.
-		co := grammar.Term{Phrase: names[0], With: names[1:], Definite: true}
-		focus := grammar.Term{Phrase: focusName, Definite: true}
+		co := grammar.Term{Phrase: coNames[0], With: coNames[1:], Definite: true}
+		focus := grammar.Term{Phrase: fName, Definite: true}
 		if continuation || len(clauses) > 0 {
 			focus = grammar.Term{Given: true} // already in play; the tongue's pronoun
 		}

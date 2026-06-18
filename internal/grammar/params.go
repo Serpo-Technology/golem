@@ -371,6 +371,14 @@ func (p *Params) IsContentWord(lang, form string) bool {
 	return len(form) >= 2 && p.category(lang, form) == ""
 }
 
+// IsDeictic reports whether a surface form is a deictic pronoun in a language.
+// It names a conversation participant a clause can be about ("you chased the
+// cat"), so a caller scanning for a clause's arguments keeps it where the
+// closed-class filter of IsContentWord would drop it.
+func (p *Params) IsDeictic(lang, form string) bool {
+	return p.get().category(lang, form) == catDeixis
+}
+
 // Lemma recovers a verb's base form from an inflected surface, exposing the
 // reverse morphology so a caller outside the package can key a relation on
 // one lemma across its inflections.

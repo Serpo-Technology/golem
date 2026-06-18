@@ -60,6 +60,29 @@ func TestWordOrderParameterDrivesParsing(t *testing.T) {
 	}
 }
 
+// A deictic pronoun is closed-class, so it is no content word, but it names a
+// participant a clause can be about, which IsDeictic marks for a caller scanning
+// a question's arguments. An open-class word is neither.
+func TestIsDeicticMarksParticipantPronouns(t *testing.T) {
+	p := Builtin()
+	for _, w := range []string{"you", "we", "me", "us"} {
+		if !p.IsDeictic("en", w) {
+			t.Fatalf("%q should read as a deictic pronoun", w)
+		}
+		if p.IsContentWord("en", w) {
+			t.Fatalf("%q should not read as a content word", w)
+		}
+	}
+	for _, w := range []string{"ben", "sen", "biz"} {
+		if !p.IsDeictic("tr", w) {
+			t.Fatalf("%q should read as a Turkish deictic pronoun", w)
+		}
+	}
+	if p.IsDeictic("en", "dog") {
+		t.Fatal("an open-class noun should not read as deictic")
+	}
+}
+
 // A nil Params falls back to the builtin seed, so an engine without a
 // memory-backed grammar still speaks.
 func TestNilParamsFallBackToBuiltin(t *testing.T) {

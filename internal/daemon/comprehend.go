@@ -1879,7 +1879,7 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
 		Roles: map[string]grammar.Term{
 			"agent":   {Phrase: d.conceptName(agent.ID, agent.Content, lang), Definite: true},
-			"patient": {Phrase: d.conceptName(patient.ID, patient.Content, lang), Definite: true},
+			"patient": {Phrase: d.objectCase(d.conceptName(patient.ID, patient.Content, lang), lang), Definite: true},
 		},
 		Past:   past,
 		Negate: negate,
@@ -1913,7 +1913,9 @@ func (d *Daemon) activityAgent(frame grammar.Frame, raw string) *memory.Fragment
 	}
 	tokens, _ := grammar.Tokenize(raw)
 	for _, t := range tokens {
-		if !d.gram.IsContentWord(frame.Lang, t) {
+		// A deictic pronoun ("what did you do") names a participant the activity is
+		// asked after, so it is kept where the closed-class filter would drop it.
+		if !d.gram.IsContentWord(frame.Lang, t) && !d.gram.IsDeictic(frame.Lang, t) {
 			continue
 		}
 		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
@@ -2014,7 +2016,10 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 	tokens, _ := grammar.Tokenize(raw)
 	var content []string
 	for _, t := range tokens {
-		if d.gram.IsContentWord(lang, t) {
+		// A deictic pronoun is closed-class but names a participant, so it can be
+		// the known argument of "what did you chase"; keep it beside the open-class
+		// words the question splits into.
+		if d.gram.IsContentWord(lang, t) || d.gram.IsDeictic(lang, t) {
 			content = append(content, t)
 		}
 	}

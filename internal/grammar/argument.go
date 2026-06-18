@@ -176,7 +176,7 @@ func hasDeterminer(np string) bool {
 	lead, _, _ := strings.Cut(np, " ")
 	switch strings.ToLower(lead) {
 	case "a", "an", "the", "this", "that", "my", "your", "its",
-		"it", "they", "he", "she", "we", "you", "i", "o", "onu":
+		"it", "they", "he", "she", "we", "you", "i", "me", "us", "o", "onu":
 		return true
 	}
 	return false

@@ -268,4 +268,8 @@ surface:en:addressee	you	en
 surface:tr:addressee	sen	tr
 surface:en:firstpersonpl	we	en
 surface:tr:firstpersonpl	biz	tr
+# the object-case forms English distinguishes, for a participant in the patient
+# role ("the dog chased me"); Turkish cases the object by the accusative instead.
+surface:en:firstperson.obj	me	en
+surface:en:firstpersonpl.obj	us	en
 surface:en:than	than	en

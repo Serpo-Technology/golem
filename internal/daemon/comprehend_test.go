@@ -1235,6 +1235,40 @@ func TestParticipantProDropTurkish(t *testing.T) {
 	}
 }
 
+// A wh-question can ask after a participant: told "you chased the cat", "what did
+// you chase" walks the chase from GOLEM and answers in the first person. The
+// deictic pronoun is closed-class, so the question parse must keep it as the known
+// argument; otherwise "you chase" reads as a thing to define.
+func TestParticipantAgentQuestion(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	say(t, d, "you chased the cat")
+	if got := say(t, d, "what did you chase").Say; got != "I chased the cat." {
+		t.Fatalf("a wh-question with a participant agent should answer in the first person: %q", got)
+	}
+}
+
+// A participant in the patient role takes English object case: told "the dog
+// chased you", GOLEM answers "the dog chased me" across the polar and wh paths,
+// while a participant in the agent role keeps the subject form "I". Turkish,
+// which cases the object by the accusative, is covered by the deixis tests above.
+func TestParticipantObjectCase(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "the dog chased you")
+	if got := say(t, d, "did the dog chase you").Say; got != "Yes, the dog chased me." {
+		t.Fatalf("a participant patient should take object case in a polar answer: %q", got)
+	}
+	if got := say(t, d, "who chased you").Say; got != "The dog chased me." {
+		t.Fatalf("a participant patient should take object case in a wh-answer: %q", got)
+	}
+	say(t, d, "you chased the cat")
+	if got := say(t, d, "did you chase the cat").Say; got != "Yes, I chased the cat." {
+		t.Fatalf("a participant agent should keep the subject form: %q", got)
+	}
+}
+
 // GOLEM orders concepts along a gradable relation it was told about, and reasons
 // over the ordering transitively: told the cat is bigger than the mouse and the
 // mouse than the snail, it answers the cat is bigger than the snail, a chain it was
