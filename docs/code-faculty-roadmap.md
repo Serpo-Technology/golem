@@ -53,7 +53,7 @@ The ceiling is the meaning representation, which is expression-only:
 representation, adds comprehension (surface to meaning) and generation (meaning
 to Go), and grounds the new construction by running it.
 
-## Rails and the scope boundary
+## Rails, reach, and the one limit
 
 Every slice holds the project's rails:
 
@@ -72,14 +72,82 @@ Every slice holds the project's rails:
   (the cross-tongue litmus stays green).
 - **Honesty.** What cannot be computed or grounded is admitted, never faked.
 
-**Scope boundary (the volume wall).** The grounded path fits problems where
-running the code decides correctness: algorithmic code over well-defined data
-(arithmetic, recursion, search, sort, transforms). Arbitrary application or
-library code leans on vast API and convention knowledge that a low-volume,
-grounded system does not hold by design. The target is GOLEM composing and
-grounding algorithmic procedures from intent; writing arbitrary software stays
-out of scope. Within that target it can be more trustworthy than a statistical
-writer, because every step is grounded and verified.
+### Reach: what teaching covers
+
+There is no kind of code the faculty is barred from writing or grounding.
+Capability is a function of acquired knowledge, of two sorts.
+
+- *Conceptual / necessary* knowledge composes and emerges. The logic of an
+  algorithm (apply the chosen operation, dispatch, recurse, fold over a
+  sequence) follows from grounded concepts the way a reasoned conclusion does.
+  This is the part the faculty does well and verifiably, and it is the hard,
+  valuable part.
+- *Conventional / contingent* knowledge must be acquired; it does not follow from
+  the concepts. That parsing a number is spelled `strconv.Atoi` with signature
+  `(int, error)`, that output goes through `fmt.Println`, the package and import
+  shape: no depth of understanding what parsing *is* yields the name. This is
+  vocabulary, and there is a lot of it for code that touches the world. A
+  statistical writer did not derive it either; it memorized it from a huge
+  corpus. The gap is dictionary size, and it moves outward as GOLEM is taught or
+  reads and grounds libraries itself.
+
+So a program is emergent logic wrapped in acquired vocabulary. An algorithm is
+mostly logic and little vocabulary, so it emerges well; application code is
+vocabulary-heavy, so it leans on how much has been acquired.
+
+### Grounding the messy cases is also teachable
+
+"Run it and check a fixed output" is one grounding method among several, and the
+rest are procedures the faculty can hold and apply:
+
+- randomness: seed the generator for a reproducible run, or check an invariant
+  that holds whatever the value (a shuffle is still a permutation), or run many
+  times and check the distribution;
+- time: inject a fixed clock;
+- filesystem and IO: run in a sandbox and read the effect back, the percept being
+  the observed state change;
+- a network or external service: stub it with a fixture and verify the code
+  against that.
+
+Side effects and non-determinism do not put code out of reach; they change
+*which* grounding procedure applies, and the procedure is knowledge like any
+other.
+
+### Reducing the volume
+
+Hand-teaching every library fact does not scale. The path that does, and that
+fits the self-build aim, is for GOLEM to ground a library function by reading its
+Go source and running it, the way it reads any expression. That turns "teach ten
+thousand APIs" into "acquire them by reading": still acquisition, far more
+scalable, still grounded.
+
+### The one limit teaching cannot pre-empt
+
+Verification is after the fact. A model is built from outcomes already
+experienced; the first time a genuinely novel outcome occurs (a clock that runs
+backward, an undocumented status), it is met by the model held *before* it, and
+may be handled wrongly. The update happens *from* that encounter and improves the
+next run; the run that taught it has already happened. This after-the-fact
+learning binds every learner, human, statistical, or grounded, the same way.
+
+GOLEM is not rigid here: it revises from surprise online (surprise drives
+encoding, concepts abstract from instances, beliefs are defeasible and get
+overturned by observation), which a frozen-weights model cannot do at runtime.
+Nor is this a missing fact: the outcome had not happened yet, so there was
+nothing to know. Judging a fresh outcome as a real new case or as noise is the
+same after-the-fact judgment, settled by repetition or by a reason, with the
+fallibility a person has.
+
+### The practical boundary is cost and guarantee
+
+Nothing is permanently out of reach. What the faculty can write and ground is set
+by how much vocabulary and grounding technique it has acquired, which teaching
+and self-reading move outward. What it can *guarantee at a given moment* is set
+by whether a run can decide correctness then; the open world can always present
+an outcome that is learned only once it occurs. Within reach the faculty is more
+trustworthy than a statistical writer, because every step is an explicit,
+grounded, verifiable structure, where a statistical writer offers only a
+confidence.
 
 ## Staged plan
 
