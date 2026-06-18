@@ -42,6 +42,23 @@ func TestInducesAFunctionFromExamples(t *testing.T) {
 	}
 }
 
+// A rule of two operations is induced when the examples constrain it: cube is no
+// one-step rule, so the search composes the square with one more multiply and
+// grounds it by running over every pair.
+func TestInducesCubeFromExamples(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the cube of 2 is 8 and the cube of 3 is 27 and the cube of 5 is 125")
+	if !strings.Contains(resp.Say, "cube") || !strings.Contains(resp.Say, "(number * number) * number") {
+		t.Fatalf("GOLEM should infer cube = (number * number) * number: %q", resp.Say)
+	}
+	resp = say(t, d, "what is the cube of 4")
+	if !strings.Contains(resp.Say, "64") {
+		t.Fatalf("the inferred cube should run on a new number: %q", resp.Say)
+	}
+}
+
 // The search reaches the parameter-against-itself shape, so squaring is inferred
 // from pairs no constant rule fits.
 func TestInducesSquareFromExamples(t *testing.T) {

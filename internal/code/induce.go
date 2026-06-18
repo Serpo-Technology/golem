@@ -42,29 +42,43 @@ func (e *Engine) ComprehendExamples(text string) (name string, ins, outs []strin
 	return name, ins, outs, true
 }
 
-// InduceBody searches the primitive operations for a unary body that carries
-// each input to its output, the rule the examples mean. It tries an operation
-// over the parameter and a constant drawn from the first pair, then the parameter
-// against itself (the shape of squaring), and grounds each candidate by running
-// it over every pair, keeping the first that fits them all. The run callback
-// executes a generated expression, so the search is decided by what the code
-// does and not by arithmetic done here.
+// minMultiStepExamples is how many pairs a rule of more than one operation needs
+// before it is searched. A two-step rule has more freedom than a one-step one, so
+// two points could be a coincidence; a third constrains it enough to ground a
+// composed rule honestly.
+const minMultiStepExamples = 3
+
+// InduceBody searches the primitive operations for a unary body that carries each
+// input to its output, the rule the examples mean. It tries the one-step forms
+// first (an operation over the parameter and a constant, or the parameter against
+// itself), and only if none fit, and there are examples enough to constrain it,
+// the two-step compositions (a rule like cube, n*n*n). Each candidate is grounded
+// by running it over every pair, the first that fits them all kept, so the rule
+// is decided by what the code does and not by arithmetic done here. The simplest
+// fitting rule wins, since the one-step forms are tried before the composed ones.
 func (e *Engine) InduceBody(param string, ins, outs []string, run func(string) (string, bool)) (Computation, bool) {
 	if len(ins) < 2 || len(ins) != len(outs) {
 		return Computation{}, false
 	}
-	for _, body := range e.candidateBodies(param, ins[0], outs[0]) {
+	for _, body := range e.oneStepBodies(param, ins[0], outs[0]) {
 		if e.bodyFits(body, param, ins, outs, run) {
 			return body, true
+		}
+	}
+	if len(ins) >= minMultiStepExamples {
+		for _, body := range e.multiStepBodies(param, ins[0], outs[0]) {
+			if e.bodyFits(body, param, ins, outs, run) {
+				return body, true
+			}
 		}
 	}
 	return Computation{}, false
 }
 
-// candidateBodies builds the hypotheses to try, the constant forms before the
-// parameter-against-itself form so "double" reads as times two rather than the
-// parameter added to itself.
-func (e *Engine) candidateBodies(param, in0, out0 string) []Computation {
+// oneStepBodies builds the single-operation hypotheses, the constant forms before
+// the parameter-against-itself form so "double" reads as times two rather than
+// the parameter added to itself.
+func (e *Engine) oneStepBodies(param, in0, out0 string) []Computation {
 	prims := e.primitives()
 	var bodies []Computation
 	for _, c := range deriveConstants(in0, out0) {
@@ -74,6 +88,39 @@ func (e *Engine) candidateBodies(param, in0, out0 string) []Computation {
 	}
 	for _, op := range prims {
 		bodies = append(bodies, Computation{Op: op.Name, Args: []Computation{{Var: param}, {Var: param}}})
+	}
+	return bodies
+}
+
+// multiStepBodies composes one further operation over each one-step body and a
+// leaf (the parameter or a derived constant), in both operand orders, so a rule
+// of two operations is reached: cube is the parameter squared, times the
+// parameter again. The bodies are deduped by the source they generate. Deeper
+// compositions (three operations and up) are left for a later widening, since the
+// search grows quickly with depth.
+func (e *Engine) multiStepBodies(param, in0, out0 string) []Computation {
+	prims := e.primitives()
+	leaves := []Computation{{Var: param}}
+	for _, c := range deriveConstants(in0, out0) {
+		leaves = append(leaves, Computation{Lit: c})
+	}
+	var bodies []Computation
+	seen := map[string]bool{}
+	add := func(b Computation) {
+		key, ok := e.ToCode(b)
+		if !ok || seen[key] {
+			return
+		}
+		seen[key] = true
+		bodies = append(bodies, b)
+	}
+	for _, s := range e.oneStepBodies(param, in0, out0) {
+		for _, op := range prims {
+			for _, leaf := range leaves {
+				add(Computation{Op: op.Name, Args: []Computation{s, leaf}})
+				add(Computation{Op: op.Name, Args: []Computation{leaf, s}})
+			}
+		}
 	}
 	return bodies
 }

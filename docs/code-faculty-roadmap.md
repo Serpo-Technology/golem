@@ -154,7 +154,7 @@ confidence.
 | Slice | Capability | Adds to the IR | Status |
 |------|------------|----------------|--------|
 | 1 | Binary / n-ary user functions | parse + write n parameters | done |
-| 2 | Multi-step induction | wider hypothesis search | not started |
+| 2 | Multi-step induction | wider hypothesis search | done |
 | 3 | Conditionals | a branch node | not started |
 | 4 | Recursion | a function decl with a self-call + base case | not started |
 | 5 | Data and types | typed values, sequences | not started |
