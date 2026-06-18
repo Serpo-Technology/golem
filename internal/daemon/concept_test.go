@@ -491,3 +491,19 @@ func TestDeliberateConsolidationFormsReadyConcepts(t *testing.T) {
 		t.Fatalf("a deliberate consolidation should form the ready concept though pressure is at its floor, got %d", born)
 	}
 }
+
+// A noun ending in what looks like a verb-past suffix yields a short mangled stem
+// ("kedi" -> "ke"); minting keeps the noun whole rather than taking the stem for
+// it on a loose gloss match against some unrelated concept that merely contains
+// those letters ("a wooden basket").
+func TestMintKeepsNounWithVerbLikeEnding(t *testing.T) {
+	d, s := testDaemon(t)
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "a wooden basket",
+		Template: "a wooden basket", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.baseForMint("tr", "kedi"); got != "kedi" {
+		t.Fatalf("a noun ending in a verb-like suffix should mint whole, got %q", got)
+	}
+}

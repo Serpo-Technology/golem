@@ -653,11 +653,32 @@ func (d *Daemon) lemmatizeForms(lang string, forms []string) []string {
 // stem from a mangled one, a mangled stem names nothing, so the surface stands.
 func (d *Daemon) baseForMint(lang, tok string) string {
 	for _, cand := range d.gram.StemCandidates(lang, tok) {
-		if d.resolveConcept(cand) != nil {
+		if d.formNamesConcept(cand) {
 			return cand
 		}
 	}
 	return tok
+}
+
+// formNamesConcept reports whether a word form has a node that already names
+// some concept. baseForMint reduces an inflection to such a lemma; it asks this
+// rather than full resolution so a morphological stem is accepted only when it
+// is a real named lemma, never when it merely matches a concept's gloss as a
+// substring. A noun ending in what looks like a verb suffix ("kedi") yields a
+// short mangled stem ("ke") that the loose gloss match would take for the word;
+// requiring a naming edge rejects it, so the surface stands and the word is
+// kept whole.
+func (d *Daemon) formNamesConcept(form string) bool {
+	words, err := d.store.WordNodesByForms([]string{form})
+	if err != nil || len(words) == 0 {
+		return false
+	}
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	names, err := d.store.LinksFromRel(ids, memory.RelNames)
+	return err == nil && len(names) > 0
 }
 
 // mintWords stores or refreshes word nodes for the content words of an
