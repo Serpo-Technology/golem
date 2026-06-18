@@ -83,6 +83,7 @@ fw:en:times	times	en	fn
 fw:en:to	to	en	fn
 fw:en:than	than	en	than
 fw:en:told	told	en	speech:recall
+fw:en:transitive	transitive	en	property:transitive
 fw:en:try	try	en	imp
 fw:en:us	us	en	deixis
 fw:en:usually	usually	en	adv

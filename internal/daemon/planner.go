@@ -726,6 +726,14 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return line, nil
 	}
 
+	// "Before is transitive": a rule predicated of a relation, learned as a
+	// property of it and read back the same way. It runs before the statement path
+	// so the rule is recorded on the relation rather than written as a fact, and
+	// before is-a since its subject is a relation, not a member of a category.
+	if ans, ok := d.planProperty(frame); ok {
+		return ans, nil
+	}
+
 	// A yes/no question is checked, not asserted: "did the dog chase the cat"
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,

@@ -292,3 +292,26 @@ func TestRealizeWhenceAnswers(t *testing.T) {
 		t.Fatalf("where-answer wrong: %q", got)
 	}
 }
+
+// A property predicated of a relation parses to the property and its subject,
+// not a fact: "outrank is transitive" reads f.Property and leaves the relation as
+// the subject, and the inverted "is outrank transitive" asks it. This is the
+// hook a learned relation-property routes off, the way a speech-act verb routes
+// a discourse move.
+func TestPropertyAssertionParses(t *testing.T) {
+	p := Builtin()
+	f := p.Parse("outrank is transitive", nil)
+	if f.Property != "transitive" {
+		t.Fatalf("the predicate should be read as the property: %q", f.Property)
+	}
+	if f.Agent.Phrase != "outrank" {
+		t.Fatalf("the subject should be the relation: %q", f.Agent.Phrase)
+	}
+	if f.Force != ForceStatement {
+		t.Fatalf("a plain property assertion states: %v", f.Force)
+	}
+	q := p.Parse("is outrank transitive", nil)
+	if q.Property != "transitive" || q.Force != ForceQuestion {
+		t.Fatalf("an inverted property clause asks: property=%q force=%v agent=%q", q.Property, q.Force, q.Agent.Phrase)
+	}
+}

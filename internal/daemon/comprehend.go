@@ -1362,6 +1362,18 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	if d.propositionHoldsCategorically(agent, relContent, patient) {
 		return beliefObserved, 1, false
 	}
+	// A transitive relation chains its told orderings: told "before is transitive",
+	// A before B and B before C entail A before C. The relation must have been told
+	// it is transitive, so this never fires for an ordinary relation (chase does not
+	// chain); the walk is the same reachability the comparative reads, run here for a
+	// relation whose transitivity is a learned property rather than a given of the
+	// construction. The deduction is sound, so it answers as firmly as the orderings.
+	if agent.ID != patient.ID {
+		if rel := d.resolveRelation(relContent); rel != nil && d.relationIsTransitive(rel.ID) &&
+			d.comparesTransitively(rel, agent.ID, patient.ID) {
+			return beliefObserved, 1, false
+		}
+	}
 	// A thing standing in a relation to itself is not a claim worth guessing, so
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {

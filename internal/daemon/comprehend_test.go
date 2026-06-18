@@ -1274,7 +1274,7 @@ func TestComparativeTurkish(t *testing.T) {
 	groundNounLang(t, d, "kedi", "tr")
 	groundNounLang(t, d, "fare", "tr")
 	groundNounLang(t, d, "köpek", "tr")
-	sayLang(t, d, "tr", "köpek kediden büyük")      // the dog is bigger than the cat (ablative, no daha)
+	sayLang(t, d, "tr", "köpek kediden büyük")     // the dog is bigger than the cat (ablative, no daha)
 	sayLang(t, d, "tr", "kedi fareden daha büyük") // the cat is bigger than the mouse (with daha)
 	// Both forms normalize to the same comparative "daha büyük", so the chain holds.
 	if got := sayLang(t, d, "tr", "köpek fareden büyük mü").Say; got != "Evet, köpek fareden daha büyük." {
@@ -1742,5 +1742,72 @@ func TestRoleFitReadsAnimacyNotRoleCount(t *testing.T) {
 	}
 	if got := d.roleFit(c, "patient"); got != 0 {
 		t.Fatalf("role-fit must not count a concept's own role history (that fed the swap loop): %v", got)
+	}
+}
+
+// Transitivity is a property a relation is TOLD it has, not one a construction
+// gives. Told an ordering chain on an ordinary verb and that the verb is
+// transitive, GOLEM chains it: the cat outranked the dog and the dog the mouse
+// answer the cat outranked the mouse, a step it was never told. Before the rule
+// the chain is not asserted firmly; the property is read back like any fact.
+func TestRelationTransitivityTold(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the cat outranked the dog")
+	say(t, d, "the dog outranked the mouse")
+	// Without the rule, the indirect step is not asserted as a fact.
+	if got := say(t, d, "did the cat outrank the mouse").Say; strings.HasPrefix(got, "Yes") {
+		t.Fatalf("without the transitive rule the chain should not be asserted firmly: %q", got)
+	}
+	// Tell the rule; it is learned and confirmed.
+	if got := say(t, d, "outrank is transitive").Say; got != "I see. Outrank is transitive." {
+		t.Fatalf("the property should be learned and confirmed: %q", got)
+	}
+	// Now the chain holds, firm (a sound deduction), not hedged.
+	if got := say(t, d, "did the cat outrank the mouse").Say; got != "Yes, the cat outranked the mouse." {
+		t.Fatalf("a transitive relation should chain its told orderings firmly: %q", got)
+	}
+	// The order is asymmetric: the reverse of a told ordering does not hold.
+	if got := say(t, d, "did the mouse outrank the cat").Say; strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the reverse of a told ordering should not hold: %q", got)
+	}
+	// The learned property reads back.
+	if got := say(t, d, "is outrank transitive").Say; got != "Yes." {
+		t.Fatalf("the learned property should read back: %q", got)
+	}
+}
+
+// Transitivity is a property of the particular relation, not a blanket
+// assumption: told outrank is transitive but never told it of chase, GOLEM
+// chains outrank and does not chain chase, even with an identical ordering told
+// on each. So the chaining is learned per relation, not hardcoded.
+func TestTransitivityIsPerRelation(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the cat outranked the dog")
+	say(t, d, "the dog outranked the mouse")
+	say(t, d, "the cat chased the dog")
+	say(t, d, "the dog chased the mouse")
+	say(t, d, "outrank is transitive")
+	if got := say(t, d, "did the cat outrank the mouse").Say; got != "Yes, the cat outranked the mouse." {
+		t.Fatalf("the relation told transitive should chain: %q", got)
+	}
+	// Chase was never told transitive, so its identical chain does not chain firmly.
+	if got := say(t, d, "did the cat chase the mouse").Say; strings.HasPrefix(got, "Yes") {
+		t.Fatalf("a relation not told transitive should not chain: %q", got)
+	}
+}
+
+// A property predicated of a thing GOLEM knows no relation for is an honest gap,
+// not a silent no-op: there is no relation to mark, so it admits it.
+func TestPropertyOfUnknownRelationAdmitsGap(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	if got := say(t, d, "zorp is transitive").Say; !strings.Contains(got, "know") {
+		t.Fatalf("a property of an unknown relation should admit the gap: %q", got)
 	}
 }

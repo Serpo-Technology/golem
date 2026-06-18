@@ -216,6 +216,17 @@ func (p *Params) speechMove(lang, form string) string {
 	return ""
 }
 
+// propertyName reads the relation property a predicate names from its seeded
+// category, "property:transitive" for "transitive", so a clause predicating a
+// rule of a relation routes to that property from data rather than a string
+// match. A bare "property" carries none.
+func (p *Params) propertyName(lang, form string) string {
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "property:"); ok {
+		return spec
+	}
+	return ""
+}
+
 // proAnimacy reads a pro-form's animacy preference from its seeded category,
 // "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
 // binding favors the referent it fits. A bare "pro" carries none.

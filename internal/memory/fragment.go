@@ -51,6 +51,12 @@ const (
 	// one scale (bigger and smaller), so an ordering told one way answers the
 	// other. It joins relation concepts, not the things they order.
 	RelOpposite = "opposite"
+	// RelTransitive marks a relation concept as transitive: a self-edge that
+	// records a learned property of the relation, so a told ordering chains
+	// (A before B and B before C entail A before C). It is set when GOLEM is
+	// told the relation is transitive, not baked into any construction, so the
+	// chaining is a fact about the relation rather than the grammar.
+	RelTransitive = "transitive"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."
