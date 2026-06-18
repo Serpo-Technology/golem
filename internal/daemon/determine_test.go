@@ -30,6 +30,19 @@ func TestDetermineConsolidatesUnderPressure(t *testing.T) {
 	}
 }
 
+// The restraint on an alarmed system is at the sleep gate: even with the need
+// built, a recent surprise withholds the permission, so it does not consolidate
+// while alert. This is where "an alarmed system should not abstract" now lives,
+// since genesis itself no longer reads mood.
+func TestRecentSurpriseWithholdsSleep(t *testing.T) {
+	d, _ := testDaemon(t)
+	tired(d)                    // the need is past the gate
+	d.lastSurprise = time.Now() // but something just alarmed it
+	if d.readyToSleep() {
+		t.Fatal("a recent surprise should withhold sleep though the need is there")
+	}
+}
+
 // A held goal wins over idle and survives a passing distraction: the loop keeps
 // pursuing rather than re-deciding from scratch when the world flickers.
 func TestDeterminePursuesAndSurvivesDistraction(t *testing.T) {

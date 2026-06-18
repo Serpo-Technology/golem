@@ -71,24 +71,19 @@ func TestConceptGenesisAtSleep(t *testing.T) {
 	}
 }
 
-// Serotonin paces genesis: a system at the alarm floor abstracts nothing
-// that night.
-func TestSerotoninPacesConceptGenesis(t *testing.T) {
+// Genesis is paced by what is ready, not by mood: a consolidation forms the
+// recurring shape whether the system is calm or depleted. The restraint on an
+// alarmed system lives at the sleep gate, which withholds the consolidation;
+// once it runs, it forms what was taken in.
+func TestConceptGenesisIsNotPacedByMood(t *testing.T) {
 	d, s := testDaemon(t)
 	feedShape(t, s, "syslog", "Disk full on /dev/disk1s9", 4, time.Now().Add(-time.Hour))
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
-
-	d.chem.SuppressSleep(1.0) // floored at 0.05: an alarmed night
-	born, _ := d.growConcepts()
-	if born != 0 {
-		t.Fatalf("an alarmed system should not abstract, got %d concept(s)", born)
-	}
-	d.chem.WakeRested()
-	born, _ = d.growConcepts()
-	if born != 1 {
-		t.Fatalf("a rested system should distil the shape, got %d", born)
+	d.chem.SuppressSleep(1.0) // calm at its floor, as a stretch of intake leaves it
+	if born, _ := d.growConcepts(); born != 1 {
+		t.Fatalf("a consolidation should form the ready shape regardless of mood, got %d", born)
 	}
 }
 
@@ -466,29 +461,6 @@ func TestSilenceDoesNotDisconfirm(t *testing.T) {
 	if after != before {
 		t.Fatalf("a window with no active concepts is no evidence: before %.2f, after %.2f",
 			before, after)
-	}
-}
-
-// A deliberate consolidation forms the concepts that are ready even when active
-// teaching has driven sleep pressure to its floor: the manual "sleep" the
-// teaching naps fire lifts the genesis budget to its floor, so a taught block
-// lands though serotonin is depleted. The organic pacing (TestSerotoninPaces) is
-// untouched because the floor is gated on forceGenesis, which only that handler sets.
-func TestDeliberateConsolidationFormsReadyConcepts(t *testing.T) {
-	d, s := testDaemon(t)
-	feedShape(t, s, "vision", "a small brown dog", 4, time.Now().Add(-time.Hour))
-	if _, err := s.MergeDuplicates(); err != nil {
-		t.Fatal(err)
-	}
-	d.chem.SuppressSleep(1.0) // depleted, as a block of taught showings leaves it
-	if born, _ := d.growConcepts(); born != 0 {
-		t.Fatalf("without the deliberate flag, a depleted system is still paced: got %d", born)
-	}
-	d.forceGenesis = true // the manual "sleep" handler sets this around the cycle
-	born, _ := d.growConcepts()
-	d.forceGenesis = false
-	if born != 1 {
-		t.Fatalf("a deliberate consolidation should form the ready concept though pressure is at its floor, got %d", born)
 	}
 }
 

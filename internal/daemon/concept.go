@@ -23,19 +23,16 @@ import (
 //
 // Concepts are born during consolidation, the same pass that merges
 // recurring shapes into prototypes: a shape that has recurred enough to
-// earn a prototype has earned an abstraction. Serotonin paces how many
-// may be born in one night, and dopamine gates how readily a word bonds
-// to a concept the next time naming runs.
+// earn a prototype has earned an abstraction.
 const (
-	conceptBudgetScale = 16 // concepts mintable in one night at full serotonin
-	// genesisFloor is the fewest concepts a DELIBERATE consolidation forms, the
-	// budget at the rested baseline (0.5 * scale). Genesis is paced by sleep
-	// pressure, which active teaching drives to its floor, so a nap forced
-	// mid-teaching would otherwise mint nothing though the percepts are ready. An
-	// organic night triggers at high pressure and clears this on its own; only a
-	// manual "sleep" lifts to the floor (gated by d.forceGenesis), so the pacing
-	// that keeps an alarmed system from abstracting is untouched.
-	genesisFloor  = conceptBudgetScale / 2
+	// genesisCap is the most concepts one consolidation forms: the recurring
+	// shapes that crossed the merge threshold, taken in count order up to this
+	// many. Formation is paced by what is ready, a capacity limit, not by mood,
+	// so a deliberate nap during teaching forms the percepts it has even with
+	// sleep pressure at its floor. An alarmed system still does not abstract,
+	// because it does not reach a consolidation: the sleep gate withholds the
+	// permission. Once consolidating, it forms what it took in.
+	genesisCap    = 16
 	groundsWeight = 0.8
 	// Naming is cross-situational: a bond's strength is the reliability
 	// of the pairing, not the count of meetings. The smoothing mass is
@@ -377,10 +374,7 @@ func glossFor(proto *memory.Fragment) string {
 // to the concepts their episodes ground. Serotonin decides how many
 // concepts one night may mint; dopamine decides how eagerly words bond.
 func (d *Daemon) growConcepts() (born, named int) {
-	budget := int(d.chem.Serotonin() * conceptBudgetScale)
-	if d.forceGenesis && budget < genesisFloor {
-		budget = genesisFloor // a deliberate consolidation forms the concepts that are ready
-	}
+	budget := genesisCap
 	candidates, err := d.store.ConceptCandidates(memory.MergeThreshold, budget)
 	if err != nil {
 		fmt.Fprintf(d.out, "concept genesis error: %v\n", err)

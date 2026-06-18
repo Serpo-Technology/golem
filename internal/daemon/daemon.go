@@ -63,13 +63,6 @@ type Daemon struct {
 	lastSleep    time.Time
 	sleeps       int
 
-	// forceGenesis lifts the genesis budget to its floor for a DELIBERATE
-	// consolidation (the manual "sleep" command, the one teaching naps fire). It
-	// is set only around that handler, on the single brain loop, so an organic
-	// pressure-triggered night is unaffected and stays paced by how rested the
-	// system is.
-	forceGenesis bool
-
 	// recent holds the just-encoded moments that new fragments bind to.
 	// It serves as the hippocampal present.
 	recent []recentMoment
@@ -1989,12 +1982,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 	case "sleep":
 		// Consolidate once on demand and stay running, the same cycle the
 		// homeostasis tick fires when the daemon falls quiet. It runs on the
-		// loop, so memory is never touched concurrently. A deliberate consolidate
-		// forms the concepts that are ready even when active teaching has driven
-		// sleep pressure to its floor, so a taught block lands on the next nap.
-		d.forceGenesis = true
+		// loop, so memory is never touched concurrently.
 		d.sleepCycle()
-		d.forceGenesis = false
 		return wire.Response{OK: true}, false, false
 
 	case "forget":
