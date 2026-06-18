@@ -1285,6 +1285,46 @@ func TestComparativeTurkish(t *testing.T) {
 	}
 }
 
+// The comparative is one relation across tongues: told in English then Turkish
+// back to back, "daha büyük" unifies with "bigger" the way kovala unifies with
+// chase, so a comparison chain split across the tongues holds transitively and is
+// answered in either. The nouns are bilingual, one concept named in both.
+func TestComparativeUnifiesCrossTongue(t *testing.T) {
+	d, _ := testDaemon(t)
+	bilingual := func(en, tr string) *memory.Fragment {
+		now := time.Now()
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: en,
+			Template: en, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := d.store.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		for _, nm := range []struct{ form, lang string }{{en, "en"}, {tr, "tr"}} {
+			w, _, err := d.store.WordNode(nm.form, nm.lang, d.chem.Snapshot(), now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.9); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return c
+	}
+	bilingual("cat", "kedi")
+	bilingual("mouse", "fare")
+	bilingual("dog", "köpek")
+	// The chain is split across tongues, taught back to back so the relation unifies.
+	say(t, d, "the dog is bigger than the cat")    // English: the bigger relation, warm
+	sayLang(t, d, "tr", "kedi fareden daha büyük") // Turkish: daha büyük joins the same relation
+	// Asked in Turkish over the whole chain (dog > cat told in English, cat > mouse in Turkish).
+	if got := sayLang(t, d, "tr", "köpek fareden daha büyük mü").Say; !strings.HasPrefix(got, "Evet") {
+		t.Fatalf("a chain split across tongues should hold, asked in Turkish: %q", got)
+	}
+	// And the same chain asked in English.
+	if got := say(t, d, "is the dog bigger than the mouse").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the same chain should hold asked in English: %q", got)
+	}
+}
+
 // GOLEM discovers that two gradable relations are converse poles of one scale from
 // the ordering itself: told one pair the other way, it learns "smaller" reverses
 // "bigger" and answers smaller-questions across the whole bigger-chain, though it
