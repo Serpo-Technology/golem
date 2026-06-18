@@ -26,6 +26,22 @@ func TestLearnsAndCallsAFunction(t *testing.T) {
 	}
 }
 
+// Shown examples that no fixed-step rule fits, GOLEM synthesizes a recursive
+// procedure, never told it recurs: a base case and a self-call over the
+// predecessor, grounded by running over every pair. It then runs on a new input.
+func TestSynthesizesRecursionFromExamples(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the fact of 1 is 1 and the fact of 2 is 2 and the fact of 3 is 6 and the fact of 4 is 24 and the fact of 5 is 120")
+	if !strings.Contains(resp.Say, "fact(number - 1)") {
+		t.Fatalf("GOLEM should synthesize a recursive factorial from examples: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the fact of 6"); !strings.Contains(r.Say, "720") {
+		t.Fatalf("the synthesized recursion should run on a new input: %q", r.Say)
+	}
+}
+
 // A function can be shown rather than told: from input/output pairs GOLEM works
 // out the rule, keeps it, and then runs it on a number the examples never named.
 func TestInducesAFunctionFromExamples(t *testing.T) {

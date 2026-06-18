@@ -129,6 +129,19 @@ func TestInduceBodyOffsetMultiStepAndMiss(t *testing.T) {
 	}
 }
 
+// Recursion is searched only with examples enough to pin it: two pairs are too
+// few, so the runner is never even reached.
+func TestInduceRecursiveNeedsExamples(t *testing.T) {
+	e := listEngine() // carries subtract, so the step toward the base exists
+	called := func(string) (string, bool) {
+		t.Fatal("the runner should not run with too few examples")
+		return "", false
+	}
+	if _, ok := e.InduceRecursive("f", "number", []string{"1", "2"}, []string{"1", "2"}, called); ok {
+		t.Fatal("recursion should not be induced from two pairs")
+	}
+}
+
 // A two-step rule is found only with enough examples: cube needs three pairs,
 // since two points alone could be a coincidence a composed rule overfits.
 func TestInduceBodyMultiStepNeedsEnoughExamples(t *testing.T) {

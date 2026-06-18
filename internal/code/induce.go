@@ -48,6 +48,64 @@ func (e *Engine) ComprehendExamples(text string) (name string, ins, outs []strin
 // composed rule honestly.
 const minMultiStepExamples = 3
 
+// minRecursiveExamples is how many pairs a recursive rule needs before it is
+// searched. Recursion is the most expressive shape, so it asks for the most
+// evidence, lest a short sequence be read as a recursion it does not mean.
+const minRecursiveExamples = 4
+
+// InduceRecursive searches for a simple recursive rule that carries each input to
+// its output, the synthesis beyond a fixed number of steps: the function is a
+// base value for the smallest inputs, otherwise the input combined with the
+// function of its predecessor, "factorial(n) = 1 if n < 1 else n * factorial(n -
+// 1)". The base, its threshold, and the combining operation are searched over a
+// small space, and each candidate is grounded by running it over every pair, the
+// recursion run as the self-referential function the call generates. It declines
+// unless there are pairs enough to pin a recursion, and when no candidate fits.
+func (e *Engine) InduceRecursive(name, param string, ins, outs []string, run func(string) (string, bool)) (Op, bool) {
+	if len(ins) < minRecursiveExamples || len(ins) != len(outs) {
+		return Op{}, false
+	}
+	if _, ok := e.byName["subtract"]; !ok {
+		return Op{}, false // no way to step toward the base
+	}
+	for _, threshold := range []string{"1", "0", "2"} {
+		for _, base := range []string{"1", "0"} {
+			for _, comb := range []string{"multiply", "add"} {
+				if _, ok := e.byName[comb]; !ok {
+					continue
+				}
+				step := Computation{Op: name, Args: []Computation{
+					{Op: "subtract", Args: []Computation{{Var: param}, {Lit: "1"}}}}}
+				body := Computation{Cond: &Conditional{
+					Cmp: "<", Left: Computation{Var: param}, Right: Computation{Lit: threshold},
+					Then: Computation{Lit: base},
+					Else: Computation{Op: comb, Args: []Computation{{Var: param}, step}}}}
+				hyp := Op{Name: name, Word: name, Params: []string{param}, Body: &body}
+				if e.recursiveFits(hyp, ins, outs, run) {
+					return hyp, true
+				}
+			}
+		}
+	}
+	return Op{}, false
+}
+
+// recursiveFits reports whether a recursive candidate maps every input to its
+// output when run, grounding it the way the call would, as a self-referential
+// function invoked on the input.
+func (e *Engine) recursiveFits(hyp Op, ins, outs []string, run func(string) (string, bool)) bool {
+	for i := range ins {
+		src, ok := e.genRecursiveCall(hyp, []Computation{{Lit: ins[i]}}, "")
+		if !ok {
+			return false
+		}
+		if val, ok := run(src); !ok || val != outs[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // InduceBody searches the primitive operations for a unary body that carries each
 // input to its output, the rule the examples mean. It tries the one-step forms
 // first (an operation over the parameter and a constant, or the parameter against

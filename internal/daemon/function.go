@@ -24,11 +24,16 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 	if name == "" || name == inducedParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
-	body, ok := d.code.InduceBody(inducedParam, ins, outs, d.evalCode)
-	if !ok {
-		return code.Op{}, false
+	if body, ok := d.code.InduceBody(inducedParam, ins, outs, d.evalCode); ok {
+		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
 	}
-	return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
+	// Beyond a fixed number of steps, search for a simple recursive rule: factorial
+	// and the running total fit no fixed-step rule, but a base case and a self-call
+	// over the predecessor carry them. The recursion is grounded by running.
+	if op, ok := d.code.InduceRecursive(name, inducedParam, ins, outs, d.evalCode); ok {
+		return op, true
+	}
+	return code.Op{}, false
 }
 
 // inducedParam is the parameter name an induced function abstracts over, the
