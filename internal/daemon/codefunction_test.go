@@ -94,6 +94,30 @@ func TestLearnsAndCallsABinaryFunction(t *testing.T) {
 	}
 }
 
+// A conditional function is taught, runs the branch its comparison selects, and
+// survives a recompile, the first control flow the faculty grounds by running.
+func TestLearnsAndCallsAConditional(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the larger of a number and a count is the number if the number is above the count else the count")
+	if !strings.Contains(resp.Say, "larger") || !strings.Contains(resp.Say, "if number > count") {
+		t.Fatalf("the conditional should be learned and written as a branch: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the larger of 6 and 4"); !strings.Contains(r.Say, "6") {
+		t.Fatalf("larger(6, 4) should choose 6: %q", r.Say)
+	}
+	if r := say(t, d, "what is the larger of 2 and 9"); !strings.Contains(r.Say, "9") {
+		t.Fatalf("larger(2, 9) should choose 9: %q", r.Say)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if r := say(t, d, "what is the larger of 8 and 3"); !strings.Contains(r.Say, "8") {
+		t.Fatalf("the reloaded conditional should still choose the larger: %q", r.Say)
+	}
+}
+
 // A learned function survives a recompile, the boot-and-nightly path that
 // rebuilds the engine from memory, so it is kept the way a weight is and not held
 // only in the running engine.

@@ -155,7 +155,7 @@ confidence.
 |------|------------|----------------|--------|
 | 1 | Binary / n-ary user functions | parse + write n parameters | done |
 | 2 | Multi-step induction | wider hypothesis search | done |
-| 3 | Conditionals | a branch node | not started |
+| 3 | Conditionals | a branch node | done |
 | 4 | Recursion | a function decl with a self-call + base case | not started |
 | 5 | Data and types | typed values, sequences | not started |
 | 6 | Sequencing and iteration | statements; loops or fold | not started |

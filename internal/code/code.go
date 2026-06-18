@@ -27,15 +27,28 @@ import (
 )
 
 // Computation is the meaning pole of a program, pseudocode made precise: an
-// expression over an operation and its operands, a bare literal, or a reference
-// to the parameter of the function being defined. It is what comprehending a
-// surface yields and what generating one reads, the bridge between the literal a
-// computation is taught in and the source it runs as.
+// expression over an operation and its operands, a bare literal, a reference to
+// the parameter of the function being defined, or a conditional choosing between
+// two computations on a comparison. It is what comprehending a surface yields and
+// what generating one reads, the bridge between the literal a computation is
+// taught in and the source it runs as.
 type Computation struct {
 	Op   string        // the operation: the construction's name, empty for a literal or a variable
 	Lit  string        // the literal value, when Op and Var are empty
 	Var  string        // a reference to a parameter, inside a defined operation's body
 	Args []Computation // the operands of an operation
+	Cond *Conditional  // a choice between two computations, when set
+}
+
+// Conditional is a computation that chooses between two branches on a comparison:
+// "the larger of A and B" is A when A is above B, else B. The comparison is the
+// only control the faculty needs to express selection and, with a self-call, a
+// base case. Cmp is the comparison operator (">", "<", "=="); Left and Right are
+// its operands; Then is taken when it holds, Else otherwise.
+type Conditional struct {
+	Cmp         string
+	Left, Right Computation
+	Then, Else  Computation
 }
 
 // Op is one code construction: an operation paired with the surfaces it is read
@@ -90,7 +103,7 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		e.byName[o.Name] = o
 	}
 	for _, d := range defs {
-		body, ok := e.comprehendCode(d.Body)
+		body, ok := e.bodyFromSource(d.Body)
 		if !ok {
 			continue
 		}
@@ -331,8 +344,8 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			return Op{}, false
 		}
 	}
-	body, n, ok := e.literalOperand(toks[bodyStart:], params)
-	if !ok || n != len(toks)-bodyStart {
+	body, ok := e.parseBody(toks[bodyStart:], params)
+	if !ok {
 		return Op{}, false
 	}
 	// The body must be a genuine function of every parameter, with no dead ones.
@@ -344,10 +357,87 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 	return Op{Name: name, Word: name, Params: params, Body: &body}, true
 }
 
+// parseBody reads a function body with the parameters in scope: a conditional
+// "<then> if <cond> else <else>", or a plain arithmetic computation. It tolerates
+// a comma before "else" and fails unless the body comprehends and consumes every
+// token, so a half-formed body is not half-learned.
+func (e *Engine) parseBody(toks, params []string) (Computation, bool) {
+	clean := make([]string, len(toks))
+	for i, t := range toks {
+		clean[i] = strings.TrimSuffix(t, ",")
+	}
+	ifAt, elseAt := -1, -1
+	for i, t := range clean {
+		switch {
+		case t == "if" && ifAt < 0:
+			ifAt = i
+		case t == "else" && ifAt >= 0:
+			elseAt = i
+		}
+		if elseAt >= 0 {
+			break
+		}
+	}
+	if ifAt < 0 {
+		body, n, ok := e.literalOperand(clean, params)
+		if !ok || n != len(clean) {
+			return Computation{}, false
+		}
+		return body, true
+	}
+	if ifAt == 0 || elseAt <= ifAt+1 || elseAt == len(clean)-1 {
+		return Computation{}, false
+	}
+	then, n, ok := e.literalOperand(clean[:ifAt], params)
+	if !ok || n != ifAt {
+		return Computation{}, false
+	}
+	cond, ok := e.comparison(clean[ifAt+1:elseAt], params)
+	if !ok {
+		return Computation{}, false
+	}
+	els, m, ok := e.literalOperand(clean[elseAt+1:], params)
+	if !ok || m != len(clean)-elseAt-1 {
+		return Computation{}, false
+	}
+	cond.Then, cond.Else = then, els
+	return Computation{Cond: cond}, true
+}
+
+// comparison reads a conditional's test into the operator and its operands: "<A>
+// is above <B>" is A > B, "<A> is below <B>" is A < B, and a bare "<A> is <B>" is
+// equality. The branches are left empty for parseBody to fill.
+func (e *Engine) comparison(toks, params []string) (*Conditional, bool) {
+	left, n, ok := e.literalOperand(toks, params)
+	if !ok || n >= len(toks) || toks[n] != "is" {
+		return nil, false
+	}
+	rest := toks[n+1:]
+	cmp := "=="
+	if len(rest) > 0 {
+		switch rest[0] {
+		case "above":
+			cmp, rest = ">", rest[1:]
+		case "below":
+			cmp, rest = "<", rest[1:]
+		}
+	}
+	right, m, ok := e.literalOperand(rest, params)
+	if !ok || m != len(rest) {
+		return nil, false
+	}
+	return &Conditional{Cmp: cmp, Left: left, Right: right}, true
+}
+
 // usesVar reports whether a parameter is referenced anywhere in a body, the test
 // that a definition is a function of its parameter and not a constant dressed as
-// one.
+// one. It descends through a conditional's comparison and both branches, so a
+// parameter used only to choose between two constants still counts as used.
 func usesVar(c Computation, name string) bool {
+	if c.Cond != nil {
+		return usesVar(c.Cond.Left, name) || usesVar(c.Cond.Right, name) ||
+			usesVar(c.Cond.Then, name) || usesVar(c.Cond.Else, name)
+	}
 	if c.Var == name {
 		return true
 	}
@@ -413,6 +503,9 @@ func (e *Engine) fromExpr(expr ast.Expr) (Computation, bool) {
 // its body with the arguments bound to its parameters, so the source runs in the
 // runtime without a function declaration to carry along.
 func (e *Engine) ToCode(c Computation) (string, bool) {
+	if c.Cond != nil {
+		return e.condCode(c.Cond)
+	}
 	if c.Var != "" {
 		return c.Var, true
 	}
@@ -441,6 +534,41 @@ func (e *Engine) ToCode(c Computation) (string, bool) {
 	return a + " " + op.Symbol + " " + b, true
 }
 
+// condCode writes a conditional as an immediately-invoked function literal, so a
+// choice is an expression that composes anywhere a value does ("the double of the
+// larger of 3 and 4") and runs in the interpreter like any other expression. The
+// readable function form is written by ToFunc instead, for the declaration a
+// person reads.
+func (e *Engine) condCode(c *Conditional) (string, bool) {
+	test, ok := e.condTest(c)
+	if !ok {
+		return "", false
+	}
+	then, tok := e.ToCode(c.Then)
+	els, eok := e.ToCode(c.Else)
+	if !tok || !eok {
+		return "", false
+	}
+	// Parenthesized so the call yields its value as an expression (a bare leading
+	// function literal evaluates to nothing) and composes safely as an operand.
+	return "(func() int { if " + test + " { return " + then + " }; return " + els + " }())", true
+}
+
+// condTest writes a conditional's comparison, "number > count", the guard the
+// branch turns on. The operands are written as operands so a compared expression
+// keeps its grouping.
+func (e *Engine) condTest(c *Conditional) (string, bool) {
+	if c.Cmp != ">" && c.Cmp != "<" && c.Cmp != "==" {
+		return "", false
+	}
+	left, lok := e.codeOperand(c.Left)
+	right, rok := e.codeOperand(c.Right)
+	if !lok || !rok {
+		return "", false
+	}
+	return left + " " + c.Cmp + " " + right, true
+}
+
 // inline binds a defined operation's arguments to its parameters and returns its
 // body with the bindings substituted, the call replaced by what it computes.
 func (e *Engine) inline(op Op, args []Computation) (Computation, bool) {
@@ -455,8 +583,18 @@ func (e *Engine) inline(op Op, args []Computation) (Computation, bool) {
 }
 
 // substitute replaces each parameter reference in a body with the argument bound
-// to it, leaving literals and operations otherwise intact.
+// to it, leaving literals and operations otherwise intact and descending through
+// a conditional's comparison and both branches.
 func substitute(c Computation, binding map[string]Computation) Computation {
+	if c.Cond != nil {
+		return Computation{Cond: &Conditional{
+			Cmp:   c.Cond.Cmp,
+			Left:  substitute(c.Cond.Left, binding),
+			Right: substitute(c.Cond.Right, binding),
+			Then:  substitute(c.Cond.Then, binding),
+			Else:  substitute(c.Cond.Else, binding),
+		}}
+	}
 	if c.Var != "" {
 		if v, ok := binding[c.Var]; ok {
 			return v
@@ -485,41 +623,112 @@ func (e *Engine) codeOperand(c Computation) (string, bool) {
 	if c.Op != "" {
 		return "(" + s + ")", true
 	}
+	// A conditional already renders as a parenthesized function-literal call, so it
+	// is safe as an operand without another pair of parentheses.
 	return s, true
 }
 
 // ToFunc writes a defined operation as the Go function it means: its body becomes
 // the return expression over its parameters, so "double" is written "func
-// double(number int) int { return number * 2 }". A primitive has no body to write
-// and fails.
+// double(number int) int { return number * 2 }". A conditional body is written as
+// the branch a person reads, "if number > count { return number }; return count",
+// rather than the function-literal form ToCode composes with. A primitive has no
+// body to write and fails.
 func (e *Engine) ToFunc(name string) (string, bool) {
 	op, ok := e.byName[name]
 	if !ok || op.Body == nil {
-		return "", false
-	}
-	bodyCode, ok := e.ToCode(*op.Body)
-	if !ok {
 		return "", false
 	}
 	params := make([]string, len(op.Params))
 	for i, p := range op.Params {
 		params[i] = p + " int"
 	}
-	return "func " + name + "(" + strings.Join(params, ", ") + ") int { return " + bodyCode + " }", true
+	sig := "func " + name + "(" + strings.Join(params, ", ") + ") int { "
+	if op.Body.Cond != nil {
+		c := op.Body.Cond
+		test, tok := e.condTest(c)
+		then, thok := e.ToCode(c.Then)
+		els, eok := e.ToCode(c.Else)
+		if !tok || !thok || !eok {
+			return "", false
+		}
+		return sig + "if " + test + " { return " + then + " }; return " + els + " }", true
+	}
+	bodyCode, ok := e.ToCode(*op.Body)
+	if !ok {
+		return "", false
+	}
+	return sig + "return " + bodyCode + " }", true
 }
 
 // DefSource reads a defined operation back into the surface it is stored as, the
-// parameters and the body as code, so the daemon can persist a learned function
-// as a construction.
+// parameters and the body, so the daemon can persist a learned function as a
+// construction. An arithmetic body is stored as the code it generates, which
+// reads back through the Go parser. A conditional is stored in a structured form,
+// "if <cmp> ; <left> ; <right> ; <then> ; <else>", each part arithmetic code, so
+// the branch reloads without the parser having to read a function literal back.
 func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
 	if op.Body == nil || len(op.Params) == 0 {
 		return nil, "", false
 	}
-	body, ok = e.ToCode(*op.Body)
+	body, ok = e.bodySource(*op.Body)
 	if !ok {
 		return nil, "", false
 	}
 	return op.Params, body, true
+}
+
+// condBodyPrefix marks a stored body as a conditional, ahead of its parts.
+const condBodyPrefix = "if "
+
+// bodySep separates a stored conditional's parts, a sequence no arithmetic body
+// contains so the parts split back cleanly.
+const bodySep = " ; "
+
+// bodySource serializes a body for storage: arithmetic as its code, a conditional
+// as the structured form bodyFromSource reads back.
+func (e *Engine) bodySource(c Computation) (string, bool) {
+	if c.Cond == nil {
+		return e.ToCode(c)
+	}
+	parts := []Computation{c.Cond.Left, c.Cond.Right, c.Cond.Then, c.Cond.Else}
+	codes := make([]string, 0, len(parts)+1)
+	codes = append(codes, c.Cond.Cmp)
+	for _, p := range parts {
+		s, ok := e.ToCode(p)
+		if !ok {
+			return "", false
+		}
+		codes = append(codes, s)
+	}
+	return condBodyPrefix + strings.Join(codes, bodySep), true
+}
+
+// bodyFromSource reads a stored body back into its computation, the inverse of
+// bodySource: a conditional from its structured parts, anything else through the
+// Go parser as arithmetic.
+func (e *Engine) bodyFromSource(body string) (Computation, bool) {
+	rest, isCond := strings.CutPrefix(body, condBodyPrefix)
+	if !isCond {
+		return e.comprehendCode(body)
+	}
+	parts := strings.Split(rest, bodySep)
+	if len(parts) != 5 {
+		return Computation{}, false
+	}
+	cmp := parts[0]
+	if cmp != ">" && cmp != "<" && cmp != "==" {
+		return Computation{}, false
+	}
+	sides := make([]Computation, 4)
+	for i, p := range parts[1:] {
+		c, ok := e.comprehendCode(p)
+		if !ok {
+			return Computation{}, false
+		}
+		sides[i] = c
+	}
+	return Computation{Cond: &Conditional{Cmp: cmp, Left: sides[0], Right: sides[1], Then: sides[2], Else: sides[3]}}, true
 }
 
 // ToLiteral generates the teaching surface from a computation, the meaning pole
