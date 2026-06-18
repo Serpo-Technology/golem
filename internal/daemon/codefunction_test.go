@@ -54,6 +54,29 @@ func TestInducesSquareFromExamples(t *testing.T) {
 	}
 }
 
+// A binary function taught in language is learned, called with two operands, and
+// kept across a recompile with both parameters intact.
+func TestLearnsAndCallsABinaryFunction(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the blend of a number and a factor is the product of the number and the factor")
+	if !strings.Contains(resp.Say, "blend") || !strings.Contains(resp.Say, "number * factor") {
+		t.Fatalf("the binary definition should be learned and written: %q", resp.Say)
+	}
+	resp = say(t, d, "what is the blend of 6 and 7")
+	if !strings.Contains(resp.Say, "42") {
+		t.Fatalf("the binary function should run to 42: %q", resp.Say)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	resp = say(t, d, "what is the blend of 8 and 9")
+	if !strings.Contains(resp.Say, "72") {
+		t.Fatalf("the reloaded binary function should run to 72: %q", resp.Say)
+	}
+}
+
 // A learned function survives a recompile, the boot-and-nightly path that
 // rebuilds the engine from memory, so it is kept the way a weight is and not held
 // only in the running engine.

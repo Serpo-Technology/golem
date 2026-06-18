@@ -9,7 +9,7 @@ func doubleEngine() *Engine {
 		{Name: "add", Symbol: "+", Word: "sum"},
 		{Name: "subtract", Symbol: "-", Word: "difference"},
 		{Name: "multiply", Symbol: "*", Word: "product"},
-	}, []Def{{Name: "double", Param: "number", Body: "number * 2"}})
+	}, []Def{{Name: "double", Params: []string{"number"}, Body: "number * 2"}})
 }
 
 // A function taught in language comprehends to the operation it defines: the
@@ -82,13 +82,13 @@ func TestDefSourceRoundTrip(t *testing.T) {
 	if !ok {
 		t.Fatal("the definition should comprehend")
 	}
-	param, body, ok := e.DefSource(op)
-	if !ok || param != "number" || body != "number * 2" {
-		t.Fatalf("DefSource should read the stored surface: %q %q ok %v", param, body, ok)
+	params, body, ok := e.DefSource(op)
+	if !ok || len(params) != 1 || params[0] != "number" || body != "number * 2" {
+		t.Fatalf("DefSource should read the stored surface: %v %q ok %v", params, body, ok)
 	}
 	reloaded := NewEngine([]Op{
 		{Name: "multiply", Symbol: "*", Word: "product"},
-	}, []Def{{Name: op.Name, Param: param, Body: body}})
+	}, []Def{{Name: op.Name, Params: params, Body: body}})
 	call, ok := reloaded.Comprehend("the double of 9")
 	if !ok {
 		t.Fatal("the reloaded function should comprehend a call")
@@ -124,5 +124,68 @@ func TestDefinitionRejectsConstantAndShadow(t *testing.T) {
 	}
 	if _, ok := e.ComprehendDefinition("the sum of a number is the product of the number and 2"); ok {
 		t.Fatal("a function may not shadow a seeded primitive's word")
+	}
+}
+
+// A binary function taught in language comprehends to an operation over two
+// parameters, the n-ary generalization of the unary definition.
+func TestComprehendBinaryDefinition(t *testing.T) {
+	e := testEngine()
+	op, ok := e.ComprehendDefinition("the blend of a number and a factor is the product of the number and the factor")
+	if !ok {
+		t.Fatal("a binary definition should comprehend")
+	}
+	if op.Name != "blend" || len(op.Params) != 2 || op.Params[0] != "number" || op.Params[1] != "factor" {
+		t.Fatalf("the operation should be blend(number, factor): %+v", op)
+	}
+	if op.Body == nil || op.Body.Op != "multiply" || op.Body.Args[0].Var != "number" || op.Body.Args[1].Var != "factor" {
+		t.Fatalf("the body should be multiply(number, factor): %+v", op.Body)
+	}
+}
+
+// A binary function is called with two operands, inlines both into the source it
+// computes, and writes a two-parameter declaration.
+func TestBinaryCallAndDeclaration(t *testing.T) {
+	e := NewEngine([]Op{{Name: "multiply", Symbol: "*", Word: "product"}},
+		[]Def{{Name: "blend", Params: []string{"number", "factor"}, Body: "number * factor"}})
+	call, ok := e.Comprehend("the blend of 6 and 7")
+	if !ok || call.Op != "blend" || len(call.Args) != 2 || call.Args[0].Lit != "6" || call.Args[1].Lit != "7" {
+		t.Fatalf("the call should comprehend to blend(6, 7): %+v ok %v", call, ok)
+	}
+	if src, ok := e.ToCode(call); !ok || src != "6 * 7" {
+		t.Fatalf("the binary call should inline both arguments: %q ok %v", src, ok)
+	}
+	if src, ok := e.ToFunc("blend"); !ok || src != "func blend(number int, factor int) int { return number * factor }" {
+		t.Fatalf("blend should write a two-parameter declaration: %q ok %v", src, ok)
+	}
+}
+
+// The binary loop closes through storage: a two-parameter definition reads back
+// into its parameters and body, and reloading rebuilds an engine that runs the
+// call.
+func TestBinaryDefSourceRoundTrip(t *testing.T) {
+	e := testEngine()
+	op, ok := e.ComprehendDefinition("the blend of a number and a factor is the product of the number and the factor")
+	if !ok {
+		t.Fatal("the binary definition should comprehend")
+	}
+	params, body, ok := e.DefSource(op)
+	if !ok || len(params) != 2 || params[0] != "number" || params[1] != "factor" || body != "number * factor" {
+		t.Fatalf("DefSource should read both parameters: %v %q ok %v", params, body, ok)
+	}
+	reloaded := NewEngine([]Op{{Name: "multiply", Symbol: "*", Word: "product"}},
+		[]Def{{Name: op.Name, Params: params, Body: body}})
+	call, _ := reloaded.Comprehend("the blend of 9 and 4")
+	if src, ok := reloaded.ToCode(call); !ok || src != "9 * 4" {
+		t.Fatalf("the reloaded binary call should inline: %q ok %v", src, ok)
+	}
+}
+
+// Each declared parameter must be used: a binary definition whose body ignores
+// one is the n-ary form of refusing a constant.
+func TestBinaryDefinitionRejectsDeadParameter(t *testing.T) {
+	e := testEngine()
+	if _, ok := e.ComprehendDefinition("the pick of a number and a factor is the product of the number and 2"); ok {
+		t.Fatal("a definition that ignores a parameter should be rejected")
 	}
 }

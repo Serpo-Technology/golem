@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"golem/internal/code"
@@ -42,12 +43,14 @@ const inducedParam = "number"
 // restart with the rest of the grammar. The line it returns shows the Go it can
 // now write.
 func (d *Daemon) learnFunction(op code.Op) (string, error) {
-	param, body, ok := d.code.DefSource(op)
+	params, body, ok := d.code.DefSource(op)
 	if !ok {
 		return "", fmt.Errorf("the function's body could not be written")
 	}
 	key := "code:" + op.Name
-	value := "func:" + param + " " + body
+	// The parameters are comma-joined into a single space-free field so the body,
+	// which carries spaces, is cleanly separable on reload.
+	value := "func:" + strings.Join(params, ",") + " " + body
 
 	nodes, err := d.store.NodesByKind(memory.KindConstruction)
 	if err != nil {

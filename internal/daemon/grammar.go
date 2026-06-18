@@ -135,8 +135,9 @@ func (d *Daemon) recompileGrammar() error {
 // codeOps reads the code constructions out of the construction parameters,
 // splitting the seeded primitives from the functions learned since. A primitive
 // value is "<symbol> <word>", the operator and the word it is taught by; a
-// learned function is "func:<param> <body as code>", which the engine reads back
-// into the operation it names so the function returns after a restart.
+// learned function is "func:<param,...> <body as code>", its parameters
+// comma-joined ahead of the body, which the engine reads back into the operation
+// it names so the function returns after a restart.
 func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
 	var prims []code.Op
 	var defs []code.Def
@@ -146,11 +147,11 @@ func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
 			continue
 		}
 		if spec, ok := strings.CutPrefix(p.Value, "func:"); ok {
-			param, body, ok := strings.Cut(spec, " ")
-			if !ok || param == "" || strings.TrimSpace(body) == "" {
+			plist, body, ok := strings.Cut(spec, " ")
+			if !ok || plist == "" || strings.TrimSpace(body) == "" {
 				continue
 			}
-			defs = append(defs, code.Def{Name: name, Param: param, Body: strings.TrimSpace(body)})
+			defs = append(defs, code.Def{Name: name, Params: strings.Split(plist, ","), Body: strings.TrimSpace(body)})
 			continue
 		}
 		fields := strings.Fields(p.Value)

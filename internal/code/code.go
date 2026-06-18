@@ -60,13 +60,13 @@ func (o Op) arity() int {
 }
 
 // Def is a defined operation in the surface it is stored as: a name, the
-// parameter it abstracts over, and its body as code. It is what a learned
-// function persists to and is read back from, so a function survives a restart
-// the way a seeded construction does.
+// parameters it abstracts over in order, and its body as code. It is what a
+// learned function persists to and is read back from, so a function survives a
+// restart the way a seeded construction does.
 type Def struct {
-	Name  string
-	Param string
-	Body  string // the body as code, e.g. "number * 2"
+	Name   string
+	Params []string
+	Body   string // the body as code, e.g. "number * factor"
 }
 
 // Engine carries the code constructions and runs them both ways. It is built
@@ -94,7 +94,7 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		if !ok {
 			continue
 		}
-		op := Op{Name: d.Name, Word: d.Name, Params: []string{d.Param}, Body: &body}
+		op := Op{Name: d.Name, Word: d.Name, Params: d.Params, Body: &body}
 		e.byWord[op.Word] = op
 		e.byName[op.Name] = op
 	}
@@ -205,27 +205,39 @@ func (e *Engine) comprehendLiteral(toks []string) (Computation, bool) {
 	if len(toks) == 0 || toks[0] != "the" {
 		return Computation{}, false
 	}
-	c, n, ok := e.literalOperand(toks, "")
+	c, n, ok := e.literalOperand(toks, nil)
 	if !ok || n != len(toks) {
 		return Computation{}, false
 	}
 	return c, true
 }
 
+// isParam reports whether a word is one of the parameters in scope inside a
+// function body, so "the number" reads as a reference to it rather than the
+// opening of an operation.
+func isParam(params []string, word string) bool {
+	for _, p := range params {
+		if p == word {
+			return true
+		}
+	}
+	return false
+}
+
 // literalOperand reads one operand from the front of toks and reports how many
 // tokens it spanned. A bare token is a literal; "the <param>" inside a function
-// body is a reference to the parameter; "the <word> of <A> and <B> and ..." is
-// the operation its word names over as many operands as it takes, each read the
-// same way, the recursion that lets the surface nest and lets a function call
-// sit where a number would.
-func (e *Engine) literalOperand(toks []string, param string) (Computation, int, bool) {
+// body is a reference to one of the parameters in scope; "the <word> of <A> and
+// <B> and ..." is the operation its word names over as many operands as it
+// takes, each read the same way, the recursion that lets the surface nest and
+// lets a function call sit where a number would.
+func (e *Engine) literalOperand(toks []string, params []string) (Computation, int, bool) {
 	if len(toks) == 0 {
 		return Computation{}, 0, false
 	}
 	// A parameter reference, "the number", takes precedence over reading "the"
 	// as the opening of an operation.
-	if param != "" && len(toks) >= 2 && toks[0] == "the" && toks[1] == param {
-		return Computation{Var: param}, 2, true
+	if len(toks) >= 2 && toks[0] == "the" && isParam(params, toks[1]) {
+		return Computation{Var: toks[1]}, 2, true
 	}
 	if toks[0] != "the" {
 		return Computation{Lit: toks[0]}, 1, true
@@ -248,7 +260,7 @@ func (e *Engine) literalOperand(toks []string, param string) (Computation, int, 
 			rest = rest[1:]
 			consumed++
 		}
-		arg, n, ok := e.literalOperand(rest, param)
+		arg, n, ok := e.literalOperand(rest, params)
 		if !ok {
 			return Computation{}, 0, false
 		}
@@ -259,41 +271,77 @@ func (e *Engine) literalOperand(toks []string, param string) (Computation, int, 
 	return Computation{Op: op.Name, Args: args}, consumed, true
 }
 
-// ComprehendDefinition reads a function taught in language, "the double of a
-// number is the product of the number and 2", into the operation it defines: the
-// name is the word after "the", the parameter is the noun introduced by "a", and
-// the body is the computation after "is", read with the parameter in scope so
-// "the number" is its reference. The body must comprehend, must consume every
-// word after "is", and must actually use the parameter, so a half-formed or
-// constant "function" fails rather than being half-learned.
+// ComprehendDefinition reads a function taught in language into the operation it
+// defines. A unary "the double of a number is the product of the number and 2"
+// and an n-ary "the blend of a number and a factor is the product of the number
+// and the factor" both parse: the name is the word after "the", the parameters
+// are the nouns each introduced by "a" and joined by "and" up to "is", and the
+// body is the computation after "is", read with the parameters in scope so "the
+// number" is a reference to one. The body must comprehend, must consume every
+// word after "is", and must use every parameter, so a half-formed or constant
+// "function", or one with a dead parameter, fails rather than being half-learned.
 func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 	toks := strings.Fields(text)
-	if len(toks) < 7 || toks[0] != "the" || toks[2] != "of" || toks[5] != "is" {
+	if len(toks) < 7 || toks[0] != "the" || toks[2] != "of" {
 		return Op{}, false
 	}
-	if toks[3] != "a" && toks[3] != "an" {
+	name := toks[1]
+	// Read the parameters: one or more "a <param>" groups joined by "and", up to
+	// "is", which opens the body.
+	var params []string
+	i := 3
+	for {
+		if i+1 >= len(toks) || (toks[i] != "a" && toks[i] != "an") {
+			return Op{}, false
+		}
+		params = append(params, toks[i+1])
+		i += 2
+		if i >= len(toks) {
+			return Op{}, false
+		}
+		if toks[i] == "is" {
+			i++
+			break
+		}
+		if toks[i] != "and" {
+			return Op{}, false
+		}
+		i++
+	}
+	bodyStart := i
+	if name == "" || len(params) == 0 || bodyStart >= len(toks) {
 		return Op{}, false
 	}
-	name, param := toks[1], toks[4]
-	if name == "" || param == "" || name == param {
-		return Op{}, false
-	}
-	// A function may not shadow a seeded primitive, by its name or its word, and
-	// its parameter may not be an operation word the body would misread.
+	// A name may not shadow a seeded primitive, by its name or its word.
 	if op, taken := e.byName[name]; taken && op.Body == nil {
 		return Op{}, false
 	}
 	if op, taken := e.byWord[name]; taken && op.Body == nil {
 		return Op{}, false
 	}
-	if _, taken := e.byWord[param]; taken {
+	// Each parameter must be distinct, not the name, and not an operation word the
+	// body would misread.
+	seen := map[string]bool{}
+	for _, p := range params {
+		if p == "" || p == name || seen[p] {
+			return Op{}, false
+		}
+		seen[p] = true
+		if _, taken := e.byWord[p]; taken {
+			return Op{}, false
+		}
+	}
+	body, n, ok := e.literalOperand(toks[bodyStart:], params)
+	if !ok || n != len(toks)-bodyStart {
 		return Op{}, false
 	}
-	body, n, ok := e.literalOperand(toks[6:], param)
-	if !ok || n != len(toks)-6 || !usesVar(body, param) {
-		return Op{}, false
+	// The body must be a genuine function of every parameter, with no dead ones.
+	for _, p := range params {
+		if !usesVar(body, p) {
+			return Op{}, false
+		}
 	}
-	return Op{Name: name, Word: name, Params: []string{param}, Body: &body}, true
+	return Op{Name: name, Word: name, Params: params, Body: &body}, true
 }
 
 // usesVar reports whether a parameter is referenced anywhere in a body, the test
@@ -461,17 +509,17 @@ func (e *Engine) ToFunc(name string) (string, bool) {
 }
 
 // DefSource reads a defined operation back into the surface it is stored as, the
-// parameter and the body as code, so the daemon can persist a learned function
+// parameters and the body as code, so the daemon can persist a learned function
 // as a construction.
-func (e *Engine) DefSource(op Op) (param, body string, ok bool) {
-	if op.Body == nil || len(op.Params) != 1 {
-		return "", "", false
+func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
+	if op.Body == nil || len(op.Params) == 0 {
+		return nil, "", false
 	}
 	body, ok = e.ToCode(*op.Body)
 	if !ok {
-		return "", "", false
+		return nil, "", false
 	}
-	return op.Params[0], body, true
+	return op.Params, body, true
 }
 
 // ToLiteral generates the teaching surface from a computation, the meaning pole
