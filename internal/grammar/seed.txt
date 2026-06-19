@@ -38,8 +38,8 @@ fw:en:i	i	en	deixis
 fw:en:in	in	en	fn
 fw:en:introspect	introspect	en	imp
 fw:en:is	is	en	cop
-fw:en:he	he	en	pro:animate
-fw:en:it	it	en	pro:inanimate
+fw:en:he	he	en	pro
+fw:en:it	it	en	pro
 fw:en:know	know	en	fn
 fw:en:many	many	en	cnt
 fw:en:me	me	en	deixis
@@ -67,7 +67,7 @@ fw:en:run	run	en	imp
 fw:en:said	said	en	speech
 fw:en:say	say	en	speech
 fw:en:says	says	en	speech
-fw:en:she	she	en	pro:animate
+fw:en:she	she	en	pro
 fw:en:show	show	en	imp
 fw:en:sometimes	sometimes	en	adv
 fw:en:tell	tell	en	speech

@@ -329,8 +329,23 @@ func refinedBuiltin() *Params {
 		Param{Key: "fw:tr:nasıl", Value: "nasıl", Lang: "tr", Category: "wh:how", Weight: 1},
 		Param{Key: "fw:tr:hangi", Value: "hangi", Lang: "tr", Category: "wh:which", Weight: 1},
 		Param{Key: "fw:tr:nedir", Value: "nedir", Lang: "tr", Category: "wh:what:be", Weight: 1},
+		Param{Key: "fw:en:he", Value: "he", Lang: "en", Category: "pro:animate", Weight: 1},
+		Param{Key: "fw:en:she", Value: "she", Lang: "en", Category: "pro:animate", Weight: 1},
+		Param{Key: "fw:en:it", Value: "it", Lang: "en", Category: "pro:inanimate", Weight: 1},
 	)
 	return Compile(refined, nil).SetConstructions(Constructions()).SetDecl(Curriculum()).SetArgConstructions(Constructions())
+}
+
+// A pronoun's animacy bias is a colon-refined category the daemon derives from the
+// graph in a real run; the parser reads it the same whatever the source.
+func TestProAnimacyParses(t *testing.T) {
+	p := refinedBuiltin()
+	if f := p.Parse("he chased the cat", nil); f.ProType != "animate" {
+		t.Fatalf("he should carry the animate bias: %q", f.ProType)
+	}
+	if f := p.Parse("it chased the cat", nil); f.ProType != "inanimate" {
+		t.Fatalf("it should carry the inanimate bias: %q", f.ProType)
+	}
 }
 
 func TestPropertyAssertionParses(t *testing.T) {

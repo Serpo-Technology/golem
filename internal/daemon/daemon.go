@@ -708,6 +708,10 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		{"wh:how", "how", []string{"nasıl"}},
 		{"wh:which", "which", []string{"hangi"}},
 		{"wh:what:be", "what:be", []string{"nedir"}},
+		// Pronoun animacy: the bias a pro-form's binding favors. The bare pro-forms
+		// (one, that, this, them) carry none and link to nothing.
+		{"pro:animate", "animate", []string{"he", "she"}},
+		{"pro:inanimate", "inanimate", []string{"it"}},
 	}
 	// The closed-class words are grammar nodes; map each by its surface so a word is
 	// linked to its refinement whatever tongue seeds it.
