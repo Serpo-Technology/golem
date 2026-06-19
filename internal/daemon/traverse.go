@@ -209,26 +209,30 @@ func joinRendered(parts []rendered) string {
 }
 
 // nlSurface renders a transitive clause from a proposition node: a moment grounded in
-// its relation, with agent and patient edges to the argument concepts (the moment's
-// content marks past tense). The slots lay out in the language's word order (the verb
-// closing a verb-final clause), the verb is conjugated and the object marked definite by
-// grammar's morphology, and co-arguments on a role coordinate, the same Speak does.
-// A given referent's pronoun is a discourse choice carried by the meaning, not the
+// its relation, with agent and patient edges to the argument CONCEPTS (the moment's
+// content marks past tense). Each role concept resolves to a word by the graph -- its
+// firmest naming word in the language, or a participant's pronoun -- the same conceptName
+// every answer uses, so the proposition's concepts are the meaning and the words are
+// looked up, not pre-rendered. The slots then lay out in the language's word order (the
+// verb closing a verb-final clause), the verb is conjugated and the object marked
+// definite by grammar's morphology, and co-arguments on a role coordinate, the same Speak
+// does. A given referent's pronoun is a discourse choice carried by the meaning, not the
 // proposition's structure, so it stays with Speak's Meaning render for now.
 type nlSurface struct {
 	lang string
 }
 
 func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (construction, bool) {
-	verb := g.content(firstDest(g, node, memory.RelGrounds))
-	agents := roleNames(g, node, memory.RelAgent)
-	patients := roleNames(g, node, memory.RelPatient)
-	if verb == "" || len(agents) == 0 || len(patients) == 0 {
-		return construction{}, false
-	}
 	lang := s.lang
 	if lang == "" {
 		lang = "en"
+	}
+	relNode := firstDest(g, node, memory.RelGrounds)
+	verb := d.conceptName(relNode, g.content(relNode), lang)
+	agents := d.roleWords(g, node, memory.RelAgent, lang)
+	patients := d.roleWords(g, node, memory.RelPatient, lang)
+	if verb == "" || len(agents) == 0 || len(patients) == 0 {
+		return construction{}, false
 	}
 	past := g.content(node) == "past"
 	coord := d.gram.Coordinator(lang)
@@ -252,14 +256,17 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 	}}, true
 }
 
-// roleNames reads the names of the concepts a role's edges leave a node for, in storage
-// order, so a role with more than one filler coordinates them.
-func roleNames(g codeGraph, node uint64, rel string) []string {
+// roleWords resolves the concepts a role's edges leave a node for to their words in the
+// language, in storage order, so a role with more than one filler coordinates them. The
+// resolution is conceptName, the graph's own concept-to-word lookup (its firmest naming
+// word, or a participant's pronoun, falling back to the node's content when nothing names
+// it), so the surface reads concepts and the words come from the graph.
+func (d *Daemon) roleWords(g codeGraph, node uint64, rel, lang string) []string {
 	dests := g.dests(node, rel)
 	out := make([]string, 0, len(dests))
 	for _, dst := range dests {
-		if c := g.content(dst); c != "" {
-			out = append(out, c)
+		if w := d.conceptName(dst, g.content(dst), lang); w != "" {
+			out = append(out, w)
 		}
 	}
 	return out

@@ -170,6 +170,68 @@ func TestTraverseRendersClauseTR(t *testing.T) {
 	}
 }
 
+// The clause surface renders from CONCEPTS, not pre-resolved words: a proposition whose
+// roles point to concept nodes named only through their word edges (their own content
+// left blank) speaks by resolving each concept to its word the way every answer does, and
+// matches grammar.Speak of the equivalent meaning. So the proposition's concepts are the
+// meaning and the words are looked up from the graph, not carried in the node.
+func TestTraverseRendersClauseFromConcepts(t *testing.T) {
+	d, s := testDaemon(t)
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	link := func(from, to uint64, rel string) {
+		if err := s.LinkRel(from, to, rel, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// name attaches a word to a concept: a word node naming the concept in a language.
+	name := func(concept uint64, form, lang string) {
+		w := &memory.Fragment{Kind: memory.KindWord, Lang: lang, Channel: "test", Content: form, Time: time.Now()}
+		if _, err := s.Encode(w); err != nil {
+			t.Fatal(err)
+		}
+		link(w.ID, concept, memory.RelNames)
+	}
+	// Concepts named only through their word edges, their own content blank, so the words
+	// must come from the graph (the content alone would render nothing).
+	dog := mk("")
+	cat := mk("")
+	chase := mk("")
+	name(dog, "dog", "en")
+	name(cat, "cat", "en")
+	name(chase, "chase", "en")
+	moment := mk("past")
+	link(moment, chase, memory.RelGrounds)
+	link(moment, dog, memory.RelAgent)
+	link(moment, cat, memory.RelPatient)
+
+	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
+	if !ok {
+		t.Fatal("the clause should traverse from concepts")
+	}
+	want, wok := d.gram.Speak("en", grammar.Meaning{
+		Relation: grammar.Term{Phrase: "chase"},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: "dog"},
+			"patient": {Phrase: "cat", Definite: true},
+		},
+		Past: true,
+		Lang: "en",
+	})
+	if !wok {
+		t.Fatal("grammar should speak the clause")
+	}
+	if got.src != want {
+		t.Fatalf("the concept-resolved clause %q should match Speak %q", got.src, want)
+	}
+}
+
 // A role with more than one filler coordinates: a clause whose patient binds two concepts
 // speaks them joined by the coordinator, matching Speak's co-argument render.
 func TestTraverseRendersCoordination(t *testing.T) {
