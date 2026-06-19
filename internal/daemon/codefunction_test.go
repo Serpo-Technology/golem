@@ -87,6 +87,28 @@ func TestInducesSquareFromExamples(t *testing.T) {
 	}
 }
 
+// A function over a list is synthesized as a loop, the structure assembled from
+// the examples rather than templated: the search lands on a range over the list
+// with an accumulator, written as real Go and grounded by running. The loop body's
+// update emerges (a sum, then a sum of squares), and the learned loop runs on a
+// list the examples never named, surviving a recompile.
+func TestSynthesizesFoldFromListExamples(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the tally of the list of 1 and 2 and 3 is 6 and the tally of the list of 2 and 4 is 6")
+	if !strings.Contains(resp.Say, "I learned tally") || !strings.Contains(resp.Say, "for _, x := range numbers") {
+		t.Fatalf("a loop should be synthesized from the list examples: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the tally of the list of 4 and 5 and 6"); !strings.Contains(r.Say, "15") {
+		t.Fatalf("the synthesized loop should run on a new list: %q", r.Say)
+	}
+	say(t, d, "the energy of the list of 1 and 2 and 3 is 14 and the energy of the list of 2 and 3 is 13")
+	if r := say(t, d, "what is the energy of the list of 2 and 3 and 4"); !strings.Contains(r.Say, "29") {
+		t.Fatalf("a sum of squares should be synthesized and run: %q", r.Say)
+	}
+}
+
 // A binary function taught in language is learned, called with two operands, and
 // kept across a recompile with both parameters intact.
 func TestLearnsAndCallsABinaryFunction(t *testing.T) {

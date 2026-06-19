@@ -76,15 +76,19 @@ type Op struct {
 	ParamTypes []string     // each parameter's type ("int" or "list"), parallel to Params; empty means int
 	Body       *Computation // the meaning of a defined operation over its parameters, nil for a primitive
 	Form       string       // the codegen of a built-in collection operation ("reduce+", "len", "first", "max"); empty otherwise
+	Raw        string       // the Go statements of a synthesized imperative function (a loop), when set
+	Ret        string       // a synthesized function's return type ("int" or "list"), parallel to Raw
 }
 
 // arity is how many operands the operation takes: a built-in collection operation
-// takes one list, a defined operation as many as it has parameters, a primitive
-// is binary.
+// takes one list, a defined or synthesized operation as many as it has parameters,
+// a primitive is binary.
 func (o Op) arity() int {
 	switch {
 	case o.Form != "":
 		return 1
+	case o.Raw != "":
+		return len(o.Params)
 	case o.Body != nil:
 		return len(o.Params)
 	default:
@@ -169,6 +173,15 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		index(o)
 	}
 	for _, d := range defs {
+		// A synthesized imperative function is stored as its Go statements behind a
+		// "raw:<ret> " marker; it reloads as the raw op it is rather than through the
+		// expression reader.
+		if ret, raw, ok := rawDef(d.Body); ok {
+			op := Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Ret: ret, Raw: raw}
+			e.byWord[op.Word] = op
+			e.byName[op.Name] = op
+			continue
+		}
 		body, ok := e.bodyFromSource(d.Body)
 		if !ok {
 			continue
@@ -178,6 +191,24 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		e.byName[op.Name] = op
 	}
 	return e
+}
+
+// rawDefPrefix marks a stored body as the Go statements of a synthesized
+// imperative function, the return type following the marker ahead of the body.
+const rawDefPrefix = "raw:"
+
+// rawDef reads a stored synthesized body into its return type and statements, the
+// inverse of how DefSource writes one; it declines a body that is not raw.
+func rawDef(body string) (ret, raw string, ok bool) {
+	rest, ok := strings.CutPrefix(body, rawDefPrefix)
+	if !ok {
+		return "", "", false
+	}
+	sp := strings.SplitN(rest, " ", 2)
+	if len(sp) != 2 || sp[1] == "" {
+		return "", "", false
+	}
+	return sp[0], sp[1], true
 }
 
 // Ops lists the operations the engine carries, sorted by name, so a caller can
@@ -744,6 +775,20 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 	if !ok {
 		return "", false
 	}
+	if op.Raw != "" { // a synthesized function takes its declared parameters, returns its type
+		if len(c.Args) != len(op.Params) {
+			return "", false
+		}
+		for i, a := range c.Args {
+			if t, ok := e.typeOf(a, env, self); !ok || t != op.paramType(i) {
+				return "", false
+			}
+		}
+		if op.Ret == typeList {
+			return typeList, true
+		}
+		return typeInt, true
+	}
 	if op.Form != "" { // a collection operation takes one list, yields a number
 		if len(c.Args) != 1 {
 			return "", false
@@ -914,6 +959,20 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 	op, ok := e.byName[c.Op]
 	if !ok {
 		return "", false
+	}
+	if op.Raw != "" {
+		// A synthesized imperative function runs as its statements in a function
+		// literal applied to the arguments, so a loop composes as an expression. It
+		// is stored as its own raw body rather than inlined, so the flat storage form
+		// declines.
+		if flat {
+			return "", false
+		}
+		args, ok := e.renderArgs(c.Args, self, flat)
+		if !ok {
+			return "", false
+		}
+		return "(func(" + op.sigParams() + ") " + goType(op.Ret) + " { " + op.Raw + " })(" + args + ")", true
 	}
 	if op.Form != "" {
 		if len(c.Args) != 1 {
@@ -1185,7 +1244,13 @@ func substitute(c Computation, binding map[string]Computation) Computation {
 // plain call. A primitive has no body to write and fails.
 func (e *Engine) ToFunc(name string) (string, bool) {
 	op, ok := e.byName[name]
-	if !ok || op.Body == nil {
+	if !ok {
+		return "", false
+	}
+	if op.Raw != "" { // a synthesized function is its statements as written
+		return "func " + name + "(" + op.sigParams() + ") " + goType(op.Ret) + " { " + op.Raw + " }", true
+	}
+	if op.Body == nil {
 		return "", false
 	}
 	stmts, ok := e.bodyStmts(op)
@@ -1205,7 +1270,13 @@ func (e *Engine) ToFunc(name string) (string, bool) {
 // is kept as a call, "factorial(number - 1)", so a recursive body reads back as
 // the call it is rather than expanding.
 func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
-	if op.Body == nil || len(op.Params) == 0 {
+	if len(op.Params) == 0 {
+		return nil, "", false
+	}
+	if op.Raw != "" { // a synthesized function stores its return type and statements
+		return op.Params, rawDefPrefix + op.Ret + " " + op.Raw, true
+	}
+	if op.Body == nil {
 		return nil, "", false
 	}
 	body, ok = e.bodySource(*op.Body, op.Name)

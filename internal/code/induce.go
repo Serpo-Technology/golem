@@ -42,6 +42,51 @@ func (e *Engine) ComprehendExamples(text string) (name string, ins, outs []strin
 	return name, ins, outs, true
 }
 
+// ComprehendListExamples reads a function shown by example over a LIST input, "the
+// tally of the list of 1 and 2 and 3 is 6 and the tally of the list of 2 and 4 is
+// 6", into the name, the example lists, and their outputs. The clauses are split on
+// the repeated "and the <name> of", so a list's own "and"s do not split them; each
+// gives a list literal and a number. At least two pairs are needed to fix a rule.
+func (e *Engine) ComprehendListExamples(text string) (name string, lists [][]string, outs []string, ok bool) {
+	toks := strings.Fields(text)
+	if len(toks) < 2 || toks[0] != "the" {
+		return "", nil, nil, false
+	}
+	name = toks[1]
+	head := "the " + name + " of "
+	for i, clause := range strings.Split(text, " and "+head) {
+		if i > 0 {
+			clause = head + clause
+		}
+		rest, ok := strings.CutPrefix(clause, head)
+		if !ok {
+			return "", nil, nil, false
+		}
+		isAt := strings.LastIndex(rest, " is ")
+		if isAt < 0 {
+			return "", nil, nil, false
+		}
+		out := strings.TrimSpace(rest[isAt+len(" is "):])
+		comp, ok := e.comprehendLiteral(strings.Fields(strings.TrimSpace(rest[:isAt])))
+		if !ok || comp.Op != listWord || !isNumber(out) {
+			return "", nil, nil, false
+		}
+		nums := make([]string, 0, len(comp.Args))
+		for _, el := range comp.Args {
+			if el.Op != "" || el.Var != "" || !isNumber(el.Lit) {
+				return "", nil, nil, false
+			}
+			nums = append(nums, el.Lit)
+		}
+		lists = append(lists, nums)
+		outs = append(outs, out)
+	}
+	if len(lists) < 2 {
+		return "", nil, nil, false
+	}
+	return name, lists, outs, true
+}
+
 // minRecursiveExamples is how many pairs a recursive rule needs before it is
 // searched. Recursion is the most expressive shape, so it asks for the most
 // evidence, lest a short sequence be read as a recursion it does not mean.

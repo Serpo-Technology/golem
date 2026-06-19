@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,50 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 // inducedParam is the parameter name an induced function abstracts over, the
 // same noun a told definition introduces with "a number".
 const inducedParam = "number"
+
+// listParam is the parameter name a synthesized list function ranges over, the
+// noun a told list definition introduces with "a list of numbers".
+const listParam = "numbers"
+
+// synthesizeFold works out a list function from the example lists it was shown,
+// the loop assembled and grounded rather than fitted to a template: the code
+// faculty searches for a program that folds each example list to its output and
+// runs it to decide. It refuses a name that shadows a primitive or built-in, and
+// returns the synthesized operation, false when no program fits or the runtime is
+// closed.
+func (d *Daemon) synthesizeFold(name string, lists [][]string, outs []string) (code.Op, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return code.Op{}, false
+	}
+	if name == "" || name == listParam || d.code.Primitive(name) {
+		return code.Op{}, false
+	}
+	ilists := make([][]int, len(lists))
+	for i, row := range lists {
+		nums := make([]int, len(row))
+		for j, s := range row {
+			n, err := strconv.Atoi(s)
+			if err != nil {
+				return code.Op{}, false
+			}
+			nums[j] = n
+		}
+		ilists[i] = nums
+	}
+	iouts := make([]int, len(outs))
+	for i, s := range outs {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return code.Op{}, false
+		}
+		iouts[i] = n
+	}
+	body, ok := d.code.SynthesizeFold(listParam, ilists, iouts, d.evalCode)
+	if !ok {
+		return code.Op{}, false
+	}
+	return code.Op{Name: name, Word: name, Params: []string{listParam}, ParamTypes: []string{"list"}, Ret: "int", Raw: body}, true
+}
 
 // encodeParams writes an operation's parameters for storage: a list parameter
 // keeps its type ("numbers:list"), a number parameter just its name, so the

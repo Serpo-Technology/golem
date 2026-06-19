@@ -1692,6 +1692,20 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				return wire.Response{OK: true, Say: line}, false, false
 			}
+			// A function over a list can also be shown by example: from lists and their
+			// results the faculty assembles and grounds a loop, the structure emerging
+			// from the search rather than a template.
+			if name, lists, outs, ok := d.code.ComprehendListExamples(req.Content); ok {
+				op, found := d.synthesizeFold(name, lists, outs)
+				if !found {
+					return wire.Response{OK: true, Say: "I could not find a rule that fits those examples."}, false, false
+				}
+				line, err := d.learnFunction(op)
+				if err != nil {
+					return wire.Response{Error: err.Error()}, false, false
+				}
+				return wire.Response{OK: true, Say: line}, false, false
+			}
 		}
 		// What is warm before the utterance is captured now, to ground the words
 		// in once the planner has read the clause.
