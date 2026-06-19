@@ -1703,6 +1703,33 @@ func TestSpeechMoveDerivedFromGraph(t *testing.T) {
 	}
 }
 
+// A deictic pronoun resolves to the participant it is linked to in the graph, not
+// a table in code: a seeded pronoun resolves through its link, and a fresh deixis
+// word linked to a participant resolves to it once the index reloads.
+func TestDeicticResolvesFromGraph(t *testing.T) {
+	d, s := testDaemon(t)
+	if id := d.deicticParticipant("you"); id != d.selfID {
+		t.Fatalf("you should resolve to GOLEM through its graph link, got %d", id)
+	}
+	if id := d.deicticParticipant("i"); id != d.userID {
+		t.Fatalf("i should resolve to the speaker through its graph link, got %d", id)
+	}
+	// A fresh closed-class deixis word linked to GOLEM resolves to it, learned from
+	// the graph rather than added to a table.
+	fw := &memory.Fragment{Kind: memory.KindGrammar, Channel: "grammar", Content: "yourself",
+		Template: "fw:en:yourself", Lang: "en", Category: "deixis", Time: time.Now()}
+	if _, err := s.Encode(fw); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(fw.ID, d.selfID, memory.RelMarks, 1); err != nil {
+		t.Fatal(err)
+	}
+	d.loadDeicticForms()
+	if id := d.deicticParticipant("yourself"); id != d.selfID {
+		t.Fatalf("a word linked to GOLEM should resolve to it from the graph, got %d", id)
+	}
+}
+
 // "What do you mean" elaborates the subject in mind rather than reading as a fresh
 // question, so a turn can ask GOLEM to say more about what it just said.
 func TestClarifyElaboratesTopic(t *testing.T) {

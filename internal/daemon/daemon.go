@@ -228,6 +228,11 @@ type Daemon struct {
 	// string; like the participants, they sit outside the grown concept layer.
 	speechMoves map[uint64]string
 
+	// deicticByForm resolves a deictic pronoun to the participant it points at,
+	// built from the graph: each deixis word is linked to its participant concept,
+	// so the mapping is a learnable graph relation, not a hardcoded matcher.
+	deicticByForm map[string]uint64
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -587,6 +592,74 @@ func (d *Daemon) ensureParticipants() {
 	d.selfID = d.ensureConcept("deixis:self", "GOLEM")
 	d.userID = d.ensureConcept("deixis:user", "the speaker")
 	d.bothID = d.ensureConcept("deixis:both", "us")
+	d.ensureDeicticForms()
+}
+
+// ensureDeicticForms links each seeded deictic pronoun to the participant it
+// points at, so the word-to-participant mapping is a graph relation a learner can
+// extend rather than a matcher in code, then loads the resolution index from
+// those links. The form lists are the innate seed, the way the participants
+// themselves are; the graph is where the mapping lives. Idempotent.
+func (d *Daemon) ensureDeicticForms() {
+	links := []struct {
+		participant uint64
+		forms       []string
+	}{
+		{d.userID, []string{"i", "me", "ben", "beni"}},
+		{d.selfID, []string{"you", "sen", "seni"}},
+		{d.bothID, []string{"we", "us", "biz", "bizi"}},
+	}
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return
+	}
+	idByForm := make(map[string]uint64, len(gnodes))
+	for _, n := range gnodes {
+		if n.Category == "deixis" {
+			idByForm[strings.ToLower(n.Content)] = n.ID
+		}
+	}
+	for _, l := range links {
+		if l.participant == 0 {
+			continue
+		}
+		for _, f := range l.forms {
+			if id, ok := idByForm[f]; ok {
+				if err := d.store.LinkRel(id, l.participant, memory.RelMarks, 1); err != nil {
+					fmt.Fprintf(d.out, "deictic link error: %v\n", err)
+				}
+			}
+		}
+	}
+	d.loadDeicticForms()
+}
+
+// loadDeicticForms builds the deictic resolution index from the graph: each
+// deixis word linked to a participant resolves to it. Reading the links rather
+// than a fixed table is what lets a taught link take effect.
+func (d *Daemon) loadDeicticForms() {
+	d.deicticByForm = map[string]uint64{}
+	edges, err := d.store.LinksToRel([]uint64{d.selfID, d.userID, d.bothID}, memory.RelMarks)
+	if err != nil || len(edges) == 0 {
+		return
+	}
+	froms := make([]uint64, 0, len(edges))
+	for _, e := range edges {
+		froms = append(froms, e.From)
+	}
+	words, err := d.store.FragmentsByIDs(froms)
+	if err != nil {
+		return
+	}
+	contentByID := make(map[uint64]string, len(words))
+	for _, w := range words {
+		contentByID[w.ID] = w.Content
+	}
+	for _, e := range edges {
+		if form := contentByID[e.From]; form != "" {
+			d.deicticByForm[strings.ToLower(form)] = e.To
+		}
+	}
 }
 
 // ensureConcept returns the id of the concept with a template, creating it if

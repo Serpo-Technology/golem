@@ -510,17 +510,11 @@ func (d *Daemon) trackTopic() {
 
 // deicticParticipant maps a deictic pronoun to the participant it points at from
 // the speaker's side: the one speaking says "I" of the user and "you" of GOLEM,
-// "we" of the two together. It returns 0 for anything else.
+// "we" of the two together. The mapping is read from the graph (each deixis word
+// is linked to its participant concept), so it is a learnable relation, not a
+// table in code; it returns 0 for anything not linked.
 func (d *Daemon) deicticParticipant(phrase string) uint64 {
-	switch strings.ToLower(strings.TrimSpace(phrase)) {
-	case "i", "me", "myself", "ben", "beni", "bana":
-		return d.userID
-	case "you", "yourself", "sen", "seni", "sana":
-		return d.selfID
-	case "we", "us", "biz", "bizi", "bize":
-		return d.bothID
-	}
-	return 0
+	return d.deicticByForm[strings.ToLower(strings.TrimSpace(phrase))]
 }
 
 // isParticipant reports whether a concept is one of the innate conversation
