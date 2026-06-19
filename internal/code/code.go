@@ -75,18 +75,14 @@ type Op struct {
 	Params     []string     // the parameters of a defined operation, in order
 	ParamTypes []string     // each parameter's type ("int" or "list"), parallel to Params; empty means int
 	Body       *Computation // the meaning of a defined operation over its parameters, nil for a primitive
-	Form       string       // the codegen of a built-in collection operation ("reduce+", "len", "first", "max"); empty otherwise
-	Raw        string       // the Go statements of a synthesized imperative function (a loop), when set
-	Ret        string       // a synthesized function's return type ("int" or "list"), parallel to Raw
+	Raw        string       // the Go statements of an imperative function (a reduction or a synthesized loop), when set
+	Ret        string       // an imperative function's return type ("int" or "list"), parallel to Raw
 }
 
-// arity is how many operands the operation takes: a built-in collection operation
-// takes one list, a defined or synthesized operation as many as it has parameters,
-// a primitive is binary.
+// arity is how many operands the operation takes: an imperative or defined
+// operation as many as it has parameters, a primitive is binary.
 func (o Op) arity() int {
 	switch {
-	case o.Form != "":
-		return 1
 	case o.Raw != "":
 		return len(o.Params)
 	case o.Body != nil:
@@ -116,8 +112,7 @@ type Def struct {
 	Body       string   // the body as code, e.g. "number * factor"
 }
 
-// The value types the faculty distinguishes and the forms a built-in collection
-// operation's code generation takes.
+// The value types the faculty distinguishes.
 const (
 	typeInt  = "int"
 	typeList = "list"
@@ -125,22 +120,23 @@ const (
 	listWord = "list" // the literal surface, "the list of 1 and 2 and 3"
 	eachWord = "each" // the element of a map, "the double of each number"
 
-	formReduceSum = "reduce+" // fold a list to its sum
-	formLen       = "len"     // the count of a list
-	formFirst     = "first"   // the first element
-	formMax       = "max"     // the largest element
+	listOpParam = "numbers" // the list the built-in list operations range over
 )
 
 // builtinListOps is the floor of operations over a list: a fold to a total, the
 // count, the first element, and the largest. Each takes one list and yields a
-// number, its code generation fixed by its form, the way the arithmetic
-// primitives are fixed by their operator symbol.
+// number, carried as the Go loop it runs as, the same Raw form the synthesizer
+// assembles, so a reduction and a synthesized fold are the one kind of operation
+// and share the one render path.
 func builtinListOps() []Op {
+	listOp := func(name, raw string) Op {
+		return Op{Name: name, Word: name, Params: []string{listOpParam}, ParamTypes: []string{typeList}, Ret: typeInt, Raw: raw}
+	}
 	return []Op{
-		{Name: "total", Word: "total", Form: formReduceSum},
-		{Name: "length", Word: "length", Form: formLen},
-		{Name: "first", Word: "first", Form: formFirst},
-		{Name: "largest", Word: "largest", Form: formMax},
+		listOp("total", "a := 0; for _, x := range "+listOpParam+" { a = a + x }; return a"),
+		listOp("length", "return len("+listOpParam+")"),
+		listOp("first", "return "+listOpParam+"[0]"),
+		listOp("largest", "m := "+listOpParam+"[0]; for _, x := range "+listOpParam+" { if x > m { m = x } }; return m"),
 	}
 }
 
@@ -789,15 +785,6 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 		}
 		return typeInt, true
 	}
-	if op.Form != "" { // a collection operation takes one list, yields a number
-		if len(c.Args) != 1 {
-			return "", false
-		}
-		if t, ok := e.typeOf(c.Args[0], env, self); !ok || t != typeList {
-			return "", false
-		}
-		return typeInt, true
-	}
 	want := 2
 	if op.Body != nil {
 		want = len(op.Params)
@@ -960,35 +947,19 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return "", false
 	}
 	if op.Raw != "" {
-		// A synthesized imperative function runs as its statements in a function
-		// literal applied to the arguments, so a loop composes as an expression. It
-		// is stored as its own raw body rather than inlined, so the flat storage form
-		// declines.
-		if flat {
-			return "", false
-		}
+		// An imperative function (a built-in reduction or a synthesized loop) runs as
+		// its statements in a function literal applied to the arguments, so the loop
+		// composes as an expression. A call to it stores flat as a plain call, the way
+		// the body of a function that uses one is serialized; the function's own raw
+		// body is stored separately by DefSource, not inlined here.
 		args, ok := e.renderArgs(c.Args, self, flat)
 		if !ok {
 			return "", false
 		}
-		return "(func(" + op.sigParams() + ") " + goType(op.Ret) + " { " + op.Raw + " })(" + args + ")", true
-	}
-	if op.Form != "" {
-		if len(c.Args) != 1 {
-			return "", false
-		}
 		if flat {
-			args, ok := e.renderArgs(c.Args, self, flat)
-			if !ok {
-				return "", false
-			}
 			return c.Op + "(" + args + ")", true
 		}
-		list, ok := e.render(c.Args[0], self, flat)
-		if !ok {
-			return "", false
-		}
-		return listOpCode(op.Form, list)
+		return "(func(" + op.sigParams() + ") " + goType(op.Ret) + " { " + op.Raw + " })(" + args + ")", true
 	}
 	if e.recursive(op) {
 		if flat {
@@ -1016,24 +987,6 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return "", false
 	}
 	return a + " " + op.Symbol + " " + b, true
-}
-
-// listOpCode writes a built-in collection operation over a list expression: the
-// count by len, and the fold, the first, and the largest by a parenthesized
-// function literal that yields its value (a bare leading literal would not). The
-// list is bound once for an operation that reads it more than the count does.
-func listOpCode(form, list string) (string, bool) {
-	switch form {
-	case formLen:
-		return "len(" + list + ")", true
-	case formReduceSum:
-		return "(func() int { s := 0; for _, v := range " + list + " { s += v }; return s }())", true
-	case formFirst:
-		return "(func() int { xs := " + list + "; return xs[0] }())", true
-	case formMax:
-		return "(func() int { xs := " + list + "; m := xs[0]; for _, v := range xs { if v > m { m = v } }; return m }())", true
-	}
-	return "", false
 }
 
 // renderArgs writes a call's argument list.
@@ -1066,9 +1019,9 @@ func (e *Engine) renderOperand(c Computation, self string, flat bool) (string, b
 
 // rendersAsCall reports whether a computation renders as a call or a
 // parenthesized literal, a primary expression that needs no grouping as an
-// operand: a self-call, a built-in collection operation, a synthesized function
-// (which renders as a parenthesized function literal applied to its argument), or
-// a call to a recursive function.
+// operand: a self-call, an imperative function (a reduction or a synthesized
+// loop, which renders as a parenthesized function literal applied to its
+// argument), or a call to a recursive function.
 func (e *Engine) rendersAsCall(c Computation, self string) bool {
 	if c.Op == "" {
 		return false
@@ -1077,7 +1030,7 @@ func (e *Engine) rendersAsCall(c Computation, self string) bool {
 		return true
 	}
 	op, ok := e.byName[c.Op]
-	return ok && (op.Form != "" || op.Raw != "" || e.recursive(op))
+	return ok && (op.Raw != "" || e.recursive(op))
 }
 
 // genCond writes a conditional as a parenthesized immediately-invoked function

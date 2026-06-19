@@ -36,7 +36,7 @@ func TestListFunctionToFunc(t *testing.T) {
 		t.Fatal("average should comprehend")
 	}
 	e.byWord[op.Word], e.byName[op.Name] = op, op
-	want := "func average(numbers []int) int { return (func() int { s := 0; for _, v := range numbers { s += v }; return s }()) / len(numbers) }"
+	want := "func average(numbers []int) int { return (func(numbers []int) int { a := 0; for _, x := range numbers { a = a + x }; return a })(numbers) / (func(numbers []int) int { return len(numbers) })(numbers) }"
 	if src, ok := e.ToFunc("average"); !ok || src != want {
 		t.Fatalf("average should write a slice-taking function:\n got %q\nwant %q", src, want)
 	}
@@ -83,14 +83,15 @@ func TestComprehendListLiteral(t *testing.T) {
 	}
 }
 
-// The built-in collection operations generate the Go that runs them: a fold for
-// the total, len for the length, an index for the first.
+// The built-in collection operations generate the Go that runs them, each the
+// loop it means applied to the list: a fold for the total, len for the length,
+// an index for the first.
 func TestListOpCode(t *testing.T) {
 	e := listEngine()
 	cases := []struct{ surface, want string }{
-		{"the total of the list of 1 and 2 and 3", "(func() int { s := 0; for _, v := range []int{1, 2, 3} { s += v }; return s }())"},
-		{"the length of the list of 1 and 2 and 3", "len([]int{1, 2, 3})"},
-		{"the first of the list of 4 and 5 and 6", "(func() int { xs := []int{4, 5, 6}; return xs[0] }())"},
+		{"the total of the list of 1 and 2 and 3", "(func(numbers []int) int { a := 0; for _, x := range numbers { a = a + x }; return a })([]int{1, 2, 3})"},
+		{"the length of the list of 1 and 2 and 3", "(func(numbers []int) int { return len(numbers) })([]int{1, 2, 3})"},
+		{"the first of the list of 4 and 5 and 6", "(func(numbers []int) int { return numbers[0] })([]int{4, 5, 6})"},
 	}
 	for _, tc := range cases {
 		c, ok := e.Comprehend(tc.surface)
