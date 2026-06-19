@@ -151,3 +151,154 @@ func intList(xs []int) string {
 	}
 	return "[]int{" + strings.Join(parts, ", ") + "}"
 }
+
+// SynthesizeListReturn searches for a program that turns a list into a list, the
+// structure assembled rather than given: a range over the list building a result,
+// either by transforming each element (a map) or by keeping the elements a
+// comparison holds for (a filter). It interprets each candidate on the examples
+// and grounds the one it keeps by running it. It returns the loop body as Go and
+// false when nothing within the bound fits.
+func (e *Engine) SynthesizeListReturn(param string, ins, outs [][]int, run func(string) (string, bool)) (string, bool) {
+	if len(ins) < 2 || len(ins) != len(outs) {
+		return "", false
+	}
+	for _, t := range e.genExprs([]string{"x"}, []string{"0", "1", "2"}, loopMaxOps) {
+		if !usesVar(t, "x") {
+			continue // a transform that ignores the element is no map
+		}
+		if mapInterprets(t, ins, outs) {
+			if body, ok := e.mapBody(param, t); ok && e.listGrounds(param, body, ins, outs, run) {
+				return body, true
+			}
+		}
+	}
+	for _, c := range filterConsts(ins) {
+		for _, cmp := range []string{">", "<", "=="} {
+			if filterInterprets(cmp, c, ins, outs) {
+				body := e.filterBody(param, cmp, c)
+				if e.listGrounds(param, body, ins, outs, run) {
+					return body, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// mapInterprets reports whether transforming each element by the candidate yields
+// the output list, for every example.
+func mapInterprets(t Computation, ins, outs [][]int) bool {
+	for i, list := range ins {
+		if len(list) != len(outs[i]) {
+			return false
+		}
+		for j, x := range list {
+			v, ok := evalExpr(t, map[string]int{"x": x})
+			if !ok || v != outs[i][j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// filterInterprets reports whether keeping the elements the comparison holds for
+// yields the output list, for every example.
+func filterInterprets(cmp string, c int, ins, outs [][]int) bool {
+	for i, list := range ins {
+		var kept []int
+		for _, x := range list {
+			if compareInt(cmp, x, c) {
+				kept = append(kept, x)
+			}
+		}
+		if !sameInts(kept, outs[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// compareInt evaluates a comparison the filter turns on.
+func compareInt(cmp string, a, b int) bool {
+	switch cmp {
+	case ">":
+		return a > b
+	case "<":
+		return a < b
+	case "==":
+		return a == b
+	}
+	return false
+}
+
+// sameInts reports whether two integer lists are equal.
+func sameInts(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// mapBody writes the loop a map means: build a result, range the list appending
+// the transform of each element, return it.
+func (e *Engine) mapBody(param string, t Computation) (string, bool) {
+	step, ok := e.ToCode(t)
+	if !ok {
+		return "", false
+	}
+	return "b := []int{}; for _, x := range " + param + " { b = append(b, " + step + ") }; return b", true
+}
+
+// filterBody writes the loop a filter means: build a result, range the list
+// appending each element the comparison keeps, return it.
+func (e *Engine) filterBody(param, cmp string, c int) string {
+	return "b := []int{}; for _, x := range " + param + " { if x " + cmp + " " + strconv.Itoa(c) +
+		" { b = append(b, x) } }; return b"
+}
+
+// filterConsts are the thresholds a filter's comparison is tried against: the
+// distinct values across the example lists, plus zero, one, and two, so a split
+// between kept and dropped elements is reachable.
+func filterConsts(ins [][]int) []int {
+	seen := map[int]bool{0: true, 1: true, 2: true}
+	out := []int{0, 1, 2}
+	for _, list := range ins {
+		for _, x := range list {
+			if !seen[x] {
+				seen[x] = true
+				out = append(out, x)
+			}
+		}
+	}
+	return out
+}
+
+// listGrounds runs the synthesized list loop over each example and checks it yields
+// the output list, the grounding that decides the program. The body is wrapped in a
+// function literal returning a slice, so it runs as the Go it is.
+func (e *Engine) listGrounds(param, body string, ins, outs [][]int, run func(string) (string, bool)) bool {
+	for i, list := range ins {
+		src := "(func(" + param + " []int) []int { " + body + " })(" + intList(list) + ")"
+		val, ok := run(src)
+		if !ok || val != intResult(outs[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// intResult writes an integer list the way a run reports it, "[5 9]", so a
+// grounded list output is compared in the form it comes back.
+func intResult(xs []int) string {
+	parts := make([]string, len(xs))
+	for i, x := range xs {
+		parts[i] = strconv.Itoa(x)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}

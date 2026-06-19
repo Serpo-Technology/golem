@@ -1706,6 +1706,19 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				return wire.Response{OK: true, Say: line}, false, false
 			}
+			// A function whose result is a list is shown the same way, list in and list
+			// out, and assembled as a map or a filter loop, grounded by running.
+			if name, ins, outs, ok := d.code.ComprehendListReturnExamples(req.Content); ok {
+				op, found := d.synthesizeListReturn(name, ins, outs)
+				if !found {
+					return wire.Response{OK: true, Say: "I could not find a rule that fits those examples."}, false, false
+				}
+				line, err := d.learnFunction(op)
+				if err != nil {
+					return wire.Response{Error: err.Error()}, false, false
+				}
+				return wire.Response{OK: true, Say: line}, false, false
+			}
 		}
 		// What is warm before the utterance is captured now, to ground the words
 		// in once the planner has read the clause.

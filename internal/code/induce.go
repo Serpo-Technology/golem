@@ -67,16 +67,9 @@ func (e *Engine) ComprehendListExamples(text string) (name string, lists [][]str
 			return "", nil, nil, false
 		}
 		out := strings.TrimSpace(rest[isAt+len(" is "):])
-		comp, ok := e.comprehendLiteral(strings.Fields(strings.TrimSpace(rest[:isAt])))
-		if !ok || comp.Op != listWord || !isNumber(out) {
+		nums, ok := e.listLiteralNums(strings.TrimSpace(rest[:isAt]))
+		if !ok || !isNumber(out) {
 			return "", nil, nil, false
-		}
-		nums := make([]string, 0, len(comp.Args))
-		for _, el := range comp.Args {
-			if el.Op != "" || el.Var != "" || !isNumber(el.Lit) {
-				return "", nil, nil, false
-			}
-			nums = append(nums, el.Lit)
 		}
 		lists = append(lists, nums)
 		outs = append(outs, out)
@@ -85,6 +78,61 @@ func (e *Engine) ComprehendListExamples(text string) (name string, lists [][]str
 		return "", nil, nil, false
 	}
 	return name, lists, outs, true
+}
+
+// ComprehendListReturnExamples reads a function shown by example whose result is a
+// LIST, "the big of the list of 1 and 5 and 2 is the list of 5 and the big of the
+// list of 4 and 1 is the list of 4", into the name, the example input lists, and
+// the output lists. Clauses split on the repeated "and the <name> of"; the input
+// and output list literals split on the clause's " is ". At least two pairs.
+func (e *Engine) ComprehendListReturnExamples(text string) (name string, ins, outs [][]string, ok bool) {
+	toks := strings.Fields(text)
+	if len(toks) < 2 || toks[0] != "the" {
+		return "", nil, nil, false
+	}
+	name = toks[1]
+	head := "the " + name + " of "
+	for i, clause := range strings.Split(text, " and "+head) {
+		if i > 0 {
+			clause = head + clause
+		}
+		rest, ok := strings.CutPrefix(clause, head)
+		if !ok {
+			return "", nil, nil, false
+		}
+		isAt := strings.Index(rest, " is ")
+		if isAt < 0 {
+			return "", nil, nil, false
+		}
+		inNums, iok := e.listLiteralNums(strings.TrimSpace(rest[:isAt]))
+		outNums, ook := e.listLiteralNums(strings.TrimSpace(rest[isAt+len(" is "):]))
+		if !iok || !ook {
+			return "", nil, nil, false
+		}
+		ins = append(ins, inNums)
+		outs = append(outs, outNums)
+	}
+	if len(ins) < 2 {
+		return "", nil, nil, false
+	}
+	return name, ins, outs, true
+}
+
+// listLiteralNums comprehends "the list of A and B and ..." into its number
+// elements, declining anything that is not a list of numbers.
+func (e *Engine) listLiteralNums(text string) ([]string, bool) {
+	comp, ok := e.comprehendLiteral(strings.Fields(text))
+	if !ok || comp.Op != listWord {
+		return nil, false
+	}
+	nums := make([]string, 0, len(comp.Args))
+	for _, el := range comp.Args {
+		if el.Op != "" || el.Var != "" || !isNumber(el.Lit) {
+			return nil, false
+		}
+		nums = append(nums, el.Lit)
+	}
+	return nums, true
 }
 
 // minRecursiveExamples is how many pairs a recursive rule needs before it is

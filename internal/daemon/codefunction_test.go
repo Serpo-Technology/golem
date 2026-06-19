@@ -109,6 +109,28 @@ func TestSynthesizesFoldFromListExamples(t *testing.T) {
 	}
 }
 
+// A function whose result is a list is synthesized as a map or a filter loop, the
+// structure emerging from list-in, list-out examples and grounded by running.
+func TestSynthesizesListReturnFromExamples(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the big of the list of 1 and 5 and 2 and 9 is the list of 5 and 9 and the big of the list of 4 and 1 and 7 is the list of 4 and 7")
+	if !strings.Contains(resp.Say, "I learned big") || !strings.Contains(resp.Say, "if x") {
+		t.Fatalf("a filter loop should be synthesized: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the big of the list of 3 and 8 and 1"); !strings.Contains(r.Say, "[3 8]") {
+		t.Fatalf("the synthesized filter should run on a new list: %q", r.Say)
+	}
+	resp = say(t, d, "the doubled of the list of 1 and 2 and 3 is the list of 2 and 4 and 6 and the doubled of the list of 5 and 0 is the list of 10 and 0")
+	if !strings.Contains(resp.Say, "I learned doubled") {
+		t.Fatalf("a map loop should be synthesized: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the doubled of the list of 3 and 4"); !strings.Contains(r.Say, "[6 8]") {
+		t.Fatalf("the synthesized map should run on a new list: %q", r.Say)
+	}
+}
+
 // A binary function taught in language is learned, called with two operands, and
 // kept across a recompile with both parameters intact.
 func TestLearnsAndCallsABinaryFunction(t *testing.T) {

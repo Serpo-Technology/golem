@@ -62,31 +62,65 @@ func (d *Daemon) synthesizeFold(name string, lists [][]string, outs []string) (c
 	if name == "" || name == listParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
-	ilists := make([][]int, len(lists))
-	for i, row := range lists {
-		nums := make([]int, len(row))
-		for j, s := range row {
-			n, err := strconv.Atoi(s)
-			if err != nil {
-				return code.Op{}, false
-			}
-			nums[j] = n
-		}
-		ilists[i] = nums
-	}
-	iouts := make([]int, len(outs))
-	for i, s := range outs {
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return code.Op{}, false
-		}
-		iouts[i] = n
+	ilists, ok := toIntLists(lists)
+	iouts, iok := toInts(outs)
+	if !ok || !iok {
+		return code.Op{}, false
 	}
 	body, ok := d.code.SynthesizeFold(listParam, ilists, iouts, d.evalCode)
 	if !ok {
 		return code.Op{}, false
 	}
 	return code.Op{Name: name, Word: name, Params: []string{listParam}, ParamTypes: []string{"list"}, Ret: "int", Raw: body}, true
+}
+
+// synthesizeListReturn works out a list-to-list function from the example lists it
+// was shown, the loop assembled and grounded: the faculty searches for a program
+// that maps or filters each example input to its output list and runs it to decide.
+// It refuses a name that shadows a primitive or built-in.
+func (d *Daemon) synthesizeListReturn(name string, ins, outs [][]string) (code.Op, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return code.Op{}, false
+	}
+	if name == "" || name == listParam || d.code.Primitive(name) {
+		return code.Op{}, false
+	}
+	ilists, iok := toIntLists(ins)
+	olists, ook := toIntLists(outs)
+	if !iok || !ook {
+		return code.Op{}, false
+	}
+	body, ok := d.code.SynthesizeListReturn(listParam, ilists, olists, d.evalCode)
+	if !ok {
+		return code.Op{}, false
+	}
+	return code.Op{Name: name, Word: name, Params: []string{listParam}, ParamTypes: []string{"list"}, Ret: "list", Raw: body}, true
+}
+
+// toIntLists parses a set of number-string lists into integers.
+func toIntLists(rows [][]string) ([][]int, bool) {
+	out := make([][]int, len(rows))
+	for i, row := range rows {
+		nums, ok := toInts(row)
+		if !ok {
+			return nil, false
+		}
+		out[i] = nums
+	}
+	return out, true
+}
+
+// toInts parses number strings into integers.
+func toInts(row []string) ([]int, bool) {
+	nums := make([]int, len(row))
+	for j, s := range row {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return nil, false
+		}
+		nums[j] = n
+	}
+	return nums, true
 }
 
 // encodeParams writes an operation's parameters for storage: a list parameter

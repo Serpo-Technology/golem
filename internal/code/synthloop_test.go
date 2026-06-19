@@ -37,3 +37,26 @@ func TestFoldInterpretsAndRenders(t *testing.T) {
 		t.Fatalf("the fold should render its loop:\n got %q\nwant %q", body, want)
 	}
 }
+
+// A list-returning candidate interpreted over the examples carries them, and the
+// loop it means writes the Go a runtime would run: a map builds the transform of
+// each element, a filter keeps the elements a comparison holds for.
+func TestListReturnInterpretsAndRenders(t *testing.T) {
+	e := listEngine()
+	dbl := Computation{Op: "add", Args: []Computation{{Var: "x"}, {Var: "x"}}}
+	if !mapInterprets(dbl, [][]int{{1, 2, 3}}, [][]int{{2, 4, 6}}) {
+		t.Fatal("x + x should map to the doubles")
+	}
+	body, ok := e.mapBody("numbers", dbl)
+	wantMap := "b := []int{}; for _, x := range numbers { b = append(b, x + x) }; return b"
+	if !ok || body != wantMap {
+		t.Fatalf("the map should render its loop:\n got %q\nwant %q", body, wantMap)
+	}
+	if !filterInterprets(">", 2, [][]int{{1, 5, 2, 9}}, [][]int{{5, 9}}) {
+		t.Fatal("x > 2 should keep 5 and 9")
+	}
+	wantFilter := "b := []int{}; for _, x := range numbers { if x > 2 { b = append(b, x) } }; return b"
+	if fb := e.filterBody("numbers", ">", 2); fb != wantFilter {
+		t.Fatalf("the filter should render its loop:\n got %q\nwant %q", fb, wantFilter)
+	}
+}
