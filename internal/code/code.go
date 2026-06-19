@@ -1067,7 +1067,9 @@ func (e *Engine) renderOperand(c Computation, self string, flat bool) (string, b
 
 // rendersAsCall reports whether a computation renders as a call or a
 // parenthesized literal, a primary expression that needs no grouping as an
-// operand: a self-call, or a call to a recursive function.
+// operand: a self-call, a built-in collection operation, a synthesized function
+// (which renders as a parenthesized function literal applied to its argument), or
+// a call to a recursive function.
 func (e *Engine) rendersAsCall(c Computation, self string) bool {
 	if c.Op == "" {
 		return false
@@ -1076,7 +1078,7 @@ func (e *Engine) rendersAsCall(c Computation, self string) bool {
 		return true
 	}
 	op, ok := e.byName[c.Op]
-	return ok && (op.Form != "" || e.recursive(op))
+	return ok && (op.Form != "" || op.Raw != "" || e.recursive(op))
 }
 
 // genCond writes a conditional as a parenthesized immediately-invoked function

@@ -49,62 +49,83 @@ func (e *Engine) SynthesizeExpr(param string, ins, outs []string, run func(strin
 	}
 	wantKey := want.String()
 
+	leaves := make([]Computation, 0)
+	for _, lit := range synthConstants(ins, outs) {
+		leaves = append(leaves, Computation{Lit: lit})
+	}
+	leaves = append(leaves, Computation{Var: param})
+
+	// The search prunes by behaviour: an expression whose results on the example
+	// inputs match a kept one is interchangeable, so only the first of each is grown
+	// from, and the match is the one whose behaviour is the wanted outputs and which
+	// grounds by running.
+	seen := map[string]bool{}
+	var found Computation
+	got := false
+	e.buildExprs(leaves, synthMaxOps, synthPoolCap, func(c Computation, ops int) (bool, bool) {
+		key, ok := behaviourKey(c, envs)
+		if !ok || seen[key] {
+			return false, false
+		}
+		seen[key] = true
+		if key == wantKey && e.bodyFits(c, param, ins, outs, run) {
+			found, got = c, true
+			return true, true
+		}
+		return true, false
+	})
+	return found, got
+}
+
+// buildExprs grows expression trees over the leaves up to maxOps, combining them
+// with the arithmetic primitives. visit is called on each leaf and each freshly
+// built tree with its operator count; it returns keep (the tree is new by the
+// caller's deduplication and should be grown from) and stop (a match was found,
+// halt). The pruning lives in visit, because a target search prunes by behaviour
+// while a pool of body candidates prunes by code, but the growth is the one shared
+// enumeration here. It stops at the cap so the search ends.
+func (e *Engine) buildExprs(leaves []Computation, maxOps, cap int, visit func(Computation, int) (keep, stop bool)) {
 	type cand struct {
 		c   Computation
 		ops int
 	}
-	seen := map[string]bool{}
 	var pool []cand
-
-	// add records an expression under its behaviour if that behaviour is new, and
-	// reports the expression when it both matches the examples and grounds by
-	// running, so the kept program's effect is the deciding test.
-	add := func(c Computation, ops int) (Computation, bool) {
-		key, ok := behaviourKey(c, envs)
-		if !ok || seen[key] {
-			return Computation{}, false
+	consider := func(c Computation, ops int) bool {
+		keep, stop := visit(c, ops)
+		if keep {
+			pool = append(pool, cand{c, ops})
 		}
-		seen[key] = true
-		pool = append(pool, cand{c, ops})
-		if key == wantKey && e.bodyFits(c, param, ins, outs, run) {
-			return c, true
-		}
-		return Computation{}, false
+		return stop
 	}
-
-	for _, lit := range synthConstants(ins, outs) {
-		if win, ok := add(Computation{Lit: lit}, 0); ok {
-			return win, true
+	for _, l := range leaves {
+		if consider(l, 0) {
+			return
 		}
-	}
-	if win, ok := add(Computation{Var: param}, 0); ok {
-		return win, true
 	}
 	prims := e.primitives()
-	for grew := true; grew && len(pool) < synthPoolCap; {
+	for grew := true; grew && len(pool) < cap; {
 		grew = false
 		snapshot := append([]cand(nil), pool...)
 		for _, a := range snapshot {
 			for _, b := range snapshot {
-				if a.ops+b.ops+1 > synthMaxOps {
+				if a.ops+b.ops+1 > maxOps {
 					continue
 				}
 				for _, op := range prims {
 					before := len(pool)
-					if win, ok := add(Computation{Op: op.Name, Args: []Computation{a.c, b.c}}, a.ops+b.ops+1); ok {
-						return win, true
+					if consider(Computation{Op: op.Name, Args: []Computation{a.c, b.c}}, a.ops+b.ops+1) {
+						return
 					}
 					if len(pool) > before {
 						grew = true
 					}
-					if len(pool) >= synthPoolCap {
-						return Computation{}, false
+					if len(pool) >= cap {
+						return
 					}
 				}
 			}
 		}
 	}
-	return Computation{}, false
 }
 
 // behaviourKey is an expression's results on the example inputs, the signature

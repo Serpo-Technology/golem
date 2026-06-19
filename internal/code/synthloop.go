@@ -25,47 +25,27 @@ const (
 // are deduped by the code they generate, so the same expression is not tried
 // twice, and capped so the enumeration ends.
 func (e *Engine) genExprs(vars, consts []string, maxOps int) []Computation {
-	type sized struct {
-		c   Computation
-		ops int
-	}
-	seen := map[string]bool{}
-	var pool []sized
-	add := func(c Computation, ops int) {
-		key, ok := e.ToCode(c)
-		if !ok || seen[key] {
-			return
-		}
-		seen[key] = true
-		pool = append(pool, sized{c, ops})
-	}
+	leaves := make([]Computation, 0, len(vars)+len(consts))
 	for _, v := range vars {
-		add(Computation{Var: v}, 0)
+		leaves = append(leaves, Computation{Var: v})
 	}
 	for _, c := range consts {
-		add(Computation{Lit: c}, 0)
+		leaves = append(leaves, Computation{Lit: c})
 	}
-	prims := e.primitives()
-	for round := 1; round <= maxOps && len(pool) < loopExprCap; round++ {
-		snapshot := append([]sized(nil), pool...)
-		for _, a := range snapshot {
-			for _, b := range snapshot {
-				if a.ops+b.ops+1 > maxOps {
-					continue
-				}
-				for _, op := range prims {
-					add(Computation{Op: op.Name, Args: []Computation{a.c, b.c}}, a.ops+b.ops+1)
-					if len(pool) >= loopExprCap {
-						break
-					}
-				}
-			}
+	// Here the pruning is by code: an expression already generated is not generated
+	// again. Every distinct one is kept, since a loop body uses them in a context
+	// (the accumulator changing each step) where behaviour cannot be judged ahead.
+	seen := map[string]bool{}
+	var out []Computation
+	e.buildExprs(leaves, maxOps, loopExprCap, func(c Computation, ops int) (bool, bool) {
+		key, ok := e.ToCode(c)
+		if !ok || seen[key] {
+			return false, false
 		}
-	}
-	out := make([]Computation, len(pool))
-	for i, p := range pool {
-		out[i] = p.c
-	}
+		seen[key] = true
+		out = append(out, c)
+		return true, false
+	})
 	return out
 }
 
