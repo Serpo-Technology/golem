@@ -170,6 +170,23 @@ func (p *Params) definiteNP(lang, role, np string) string {
 	return np
 }
 
+// Conjugate, DefiniteNP, and Sentence expose the generation morphology for a caller
+// rendering a clause's slots through the shared traverser, so a slot is inflected and
+// marked by the same engine Speak uses rather than reimplemented. They read the compiled
+// parameters and change nothing; Conjugate defaults the Turkish person agreement to third
+// singular, the form a clause about a thing takes.
+func (p *Params) Conjugate(lang, base string, plural, past, negate bool) string {
+	return p.get().conjugate(lang, base, plural, past, negate, trPerson3sg)
+}
+
+func (p *Params) DefiniteNP(lang, role, np string) string {
+	return p.get().definiteNP(lang, role, np)
+}
+
+func Sentence(s string) string {
+	return sentence(s, ".")
+}
+
 // hasDeterminer reports whether a phrase already opens with a determiner or a
 // pronoun, so the definite marker is not stacked onto one.
 func hasDeterminer(np string) bool {
