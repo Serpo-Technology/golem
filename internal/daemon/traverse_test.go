@@ -66,7 +66,7 @@ func TestTraverseRendersCode(t *testing.T) {
 		cond(">", mk("6"), mk("4"), mk("6"), mk("4")),        // a conditional
 	}
 	for _, root := range roots {
-		got, ok := d.traverse(goSurface{}, g, root)
+		got, ok := d.traverse(goSurface{}, g, root, nil)
 		want, wok := d.genCodeFromGraph(root)
 		if !ok || !wok || got.src != want {
 			t.Fatalf("traversed %q (ok %v) should equal genCode %q (ok %v)", got.src, ok, want, wok)
@@ -104,7 +104,7 @@ func TestTraverseRendersClause(t *testing.T) {
 	link(moment, mk("dog"), memory.RelAgent)
 	link(moment, mk("cat"), memory.RelPatient)
 
-	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment)
+	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
 	if !ok {
 		t.Fatal("the clause should traverse")
 	}
@@ -122,5 +122,42 @@ func TestTraverseRendersClause(t *testing.T) {
 	}
 	if got.src != want {
 		t.Fatalf("the traversed clause %q should match Speak %q", got.src, want)
+	}
+}
+
+// The Go surface widens to calls and recursion: walking a call subgraph through the
+// driver inlines a non-recursive function (binding its parameters to the rendered
+// arguments and walking the body) and writes a recursive one as its local-function form,
+// matching genCode and running the same. The shapes come from the daemon's own
+// comprehension, materialized as a subgraph.
+func TestTraverseRendersCalls(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the triple of a number is the product of the number and 3")
+	say(t, d, "the factorial of a number is 1 if the number is below 1 else the product of the number and the factorial of the difference of the number and 1")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, utterance := range []string{"the triple of 4", "the factorial of 5"} {
+		comp, ok := d.code.Comprehend(utterance)
+		if !ok {
+			t.Fatalf("the engine should comprehend %q", utterance)
+		}
+		g := newScratchGraph()
+		root, mok := d.materializeCode(g, comp, "", map[string]uint64{})
+		if !mok {
+			t.Fatalf("the computation should materialize: %q", utterance)
+		}
+		got, gok := d.traverse(goSurface{}, g, root, nil)
+		want, _, wok := d.genCode(g, root, nil, 0)
+		if !gok || !wok || got.src != want {
+			t.Fatalf("%q: traversed %q (ok %v) should equal genCode %q (ok %v)", utterance, got.src, gok, want, wok)
+		}
+		gv, gvok := d.evalCode(got.src)
+		wv, wvok := d.evalCode(want)
+		if !gvok || !wvok || gv != wv {
+			t.Fatalf("%q: traversed %q (=%q) should run to genCode %q (=%q)", utterance, got.src, gv, want, wv)
+		}
 	}
 }
