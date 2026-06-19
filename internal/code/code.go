@@ -921,8 +921,7 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		if !lok || !bok {
 			return "", false
 		}
-		return "(func() []int { out := []int{}; for _, " + c.Map.Var + " := range " + list +
-			" { out = append(out, " + body + ") }; return out }())", true
+		return "(func() []int { " + mapLoop("out", c.Map.Var, list, body) + " }())", true
 	}
 	if c.Each {
 		return c.Var, true // the element, inside a map's per-element body

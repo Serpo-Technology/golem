@@ -232,7 +232,17 @@ func (e *Engine) mapBody(param string, t Computation) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return "b := []int{}; for _, x := range " + param + " { b = append(b, " + step + ") }; return b", true
+	return mapLoop("b", "x", param, step), true
+}
+
+// mapLoop writes a range over a list that builds a new list by appending the body
+// computed for each element, the one form a map takes whether it was synthesized
+// from examples (here) or comprehended from a told "each" definition (the Map
+// render). The variable names are the caller's so the two sites read as they did
+// while sharing the single shape.
+func mapLoop(resultVar, elemVar, listExpr, bodyExpr string) string {
+	return resultVar + " := []int{}; for _, " + elemVar + " := range " + listExpr +
+		" { " + resultVar + " = append(" + resultVar + ", " + bodyExpr + ") }; return " + resultVar
 }
 
 // filterBody writes the loop a filter means: build a result, range the list
