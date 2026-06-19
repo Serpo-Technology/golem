@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -137,5 +138,108 @@ func TestCodeGraphTraversalConditional(t *testing.T) {
 	}
 	if v, vok := d.evalCode(lsrc); !vok || v != "100" {
 		t.Fatalf("100 if 2 < 9 else 200 should run to 100, got %q from %q", v, lsrc)
+	}
+}
+
+// The traverser widens to ordered children: a list literal's elements are bound to
+// their positions through slot nodes, so the surface follows the ordinal rather than
+// storage order and a value can repeat at two positions (the case a plain edge could
+// not represent, since the links primary key is (from, to, rel)). Each shape is
+// checked against the typed render and grounded by running, the same bar the other
+// traversal tests hold.
+func TestCodeGraphTraversalList(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	// listOf builds a list-literal subgraph: a root grounded in the list concept, with
+	// one slot per element binding a value node to its position. Slots are added in the
+	// given order, so passing positions out of order proves that the ordinal decides
+	// the surface and storage order does not.
+	listOf := func(positions []int, values []uint64) uint64 {
+		root := mk("")
+		if err := s.LinkRel(root, mk("list"), memory.RelGrounds, 1); err != nil {
+			t.Fatal(err)
+		}
+		for i, pos := range positions {
+			slot := mk("")
+			if err := s.LinkRel(root, slot, elemRel, 1); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.LinkRel(slot, mk(strconv.Itoa(pos)), rankRel, 1); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.LinkRel(slot, values[i], holdsRel, 1); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return root
+	}
+	op := func(name string, l, r uint64) uint64 {
+		root := mk("")
+		if err := s.LinkRel(root, mk(name), memory.RelGrounds, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(root, l, operand0Rel, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(root, r, operand1Rel, 1); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+
+	// A flat list emits the composite literal, matches the typed render, and both run
+	// to the same value.
+	flat := listOf([]int{0, 1, 2}, []uint64{mk("1"), mk("2"), mk("3")})
+	src, ok := d.genCodeFromGraph(flat)
+	want := "[]int{1, 2, 3}"
+	if !ok || src != want {
+		t.Fatalf("the list should emit %q, got %q ok %v", want, src, ok)
+	}
+	comp := code.Computation{Op: "list", Args: []code.Computation{{Lit: "1"}, {Lit: "2"}, {Lit: "3"}}}
+	typed, tok := d.code.ToCode(comp)
+	if !tok || typed != want {
+		t.Fatalf("the typed render should match the traversal: %q vs %q", typed, src)
+	}
+	gotVal, gok := d.evalCode(src)
+	wantVal, wok := d.evalCode(typed)
+	if !gok || !wok || gotVal != wantVal {
+		t.Fatalf("the traversed source %q (=%q) should run to the typed render %q (=%q)", src, gotVal, typed, wantVal)
+	}
+
+	// Order is meaning: slots added out of position order still emit position-sorted.
+	ooo := listOf([]int{2, 0, 1}, []uint64{mk("30"), mk("10"), mk("20")})
+	osrc, ook := d.genCodeFromGraph(ooo)
+	if !ook || osrc != "[]int{10, 20, 30}" {
+		t.Fatalf("the ordinal should decide the surface, got %q ok %v", osrc, ook)
+	}
+
+	// A repeat binds one value node at two distinct slots, which a plain elem edge
+	// could not (the second would collide on the primary key and place once).
+	five := mk("5")
+	rep := listOf([]int{0, 1}, []uint64{five, five})
+	rsrc, rok := d.genCodeFromGraph(rep)
+	if !rok || rsrc != "[]int{5, 5}" {
+		t.Fatalf("a repeated value should place twice, got %q ok %v", rsrc, rok)
+	}
+	if v, vok := d.evalCode(rsrc); !vok || v != "[5 5]" {
+		t.Fatalf("[]int{5, 5} should run to [5 5], got %q", v)
+	}
+
+	// A held value recurses through the traverser: a list holding an operation node.
+	nested := listOf([]int{0}, []uint64{op("add", mk("6"), mk("7"))})
+	nsrc, nok := d.genCodeFromGraph(nested)
+	if !nok || nsrc != "[]int{6 + 7}" {
+		t.Fatalf("a nested element should recurse, got %q ok %v", nsrc, nok)
+	}
+	if v, vok := d.evalCode(nsrc); !vok || v != "[13]" {
+		t.Fatalf("[]int{6 + 7} should run to [13], got %q", v)
 	}
 }

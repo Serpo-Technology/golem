@@ -1,23 +1,34 @@
 package daemon
 
 import (
+	"sort"
+	"strconv"
+	"strings"
+
 	"golem/internal/memory"
 )
 
 // Code generation by graph traversal: a prototype of the north-star where a
 // program's meaning is a SUBGRAPH the engine walks to emit source, rather than a
-// Go type it renders. A node is one of three shapes: an OPERATION (grounded in its
+// Go type it renders. A node is one of four shapes: an OPERATION (grounded in its
 // operation concept, with ordered operand0/operand1 edges) rendered as an infix
 // expression; a CONDITIONAL (the comparison operator as its content, with named
 // condLeft/condRight/condThen/condElse edges) rendered as the branch function
-// literal; or a LEAF read by its content -- a literal or a variable reference
-// alike, since both emit their token. Operands recurse and are parenthesized so
-// precedence is kept. It is grounded the same way every construction is, by running
-// the source it emits, and checked against the typed render. This sits alongside
-// the typed render; it proves the pattern (now over operations, variables, and
-// conditionals -- a whole conditional function body). The open design question for
-// the wider arc: ordered/n-ary children in the graph (calls and list literals;
-// positional rels do not scale -- an order field on the edge or operand-slot nodes).
+// literal; a LIST (grounded in the list concept, its elements held in ordered slot
+// nodes) rendered as a composite literal; or a LEAF read by its content, a literal
+// or a variable reference alike, since both emit their token. Operands recurse and
+// are parenthesized so precedence is kept. It is grounded the same way every
+// construction is, by running the source it emits, and checked against the typed
+// render. This sits alongside the typed render; it proves the pattern over
+// operations, variables, conditionals, and ordered children.
+//
+// Ordered children (a list's elements; an n-ary call's arguments, next) bind each
+// child to its position through a distinct slot node: root --elem--> slot, slot
+// --rank--> ordinal, slot --holds--> value. The slot is the per-occurrence binding,
+// the ordinal the position the walk sorts by, the value what sits there. Distinct
+// slots let one value node sit at more than one position, so a repeat ([]int{5, 5})
+// places the same item twice without the (from, to, rel) primary key colliding. This
+// is positional coding: each item bound to a position, which a plain chain cannot do.
 const (
 	operand0Rel = "operand0"
 	operand1Rel = "operand1"
@@ -28,6 +39,13 @@ const (
 	condRightRel = "condRight"
 	condThenRel  = "condThen"
 	condElseRel  = "condElse"
+
+	// Ordered children bind each child to its position through a slot node, so order
+	// is meaning and a value can repeat: root --elem--> slot, slot --rank--> ordinal,
+	// slot --holds--> value. A list literal uses them; an n-ary call will reuse them.
+	elemRel  = "elem"
+	rankRel  = "rank"
+	holdsRel = "holds"
 )
 
 // genCodeFromGraph walks a code-meaning subgraph from its root and emits the Go
@@ -37,6 +55,9 @@ const (
 func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
 	if d.firstDest(nodeID, condThenRel) != 0 {
 		return d.genCondFromGraph(nodeID)
+	}
+	if d.firstDest(nodeID, elemRel) != 0 {
+		return d.genListFromGraph(nodeID)
 	}
 	left := d.firstDest(nodeID, operand0Rel)
 	right := d.firstDest(nodeID, operand1Rel)
@@ -93,6 +114,62 @@ func (d *Daemon) genCondFromGraph(nodeID uint64) (string, bool) {
 	}
 	return "(func() int { if " + left + " " + n.Content + " " + right +
 		" { return " + then + " }; return " + els + " }())", true
+}
+
+// genListFromGraph renders a list-literal node as the Go composite literal the typed
+// render produces. The node grounds in the list concept, which fixes the surface
+// wrapper; its elements are held in ordered slot nodes that orderedChildren reads in
+// position order.
+func (d *Daemon) genListFromGraph(nodeID uint64) (string, bool) {
+	concept := d.fragByID(d.firstDest(nodeID, memory.RelGrounds))
+	if concept == nil || concept.Content != "list" {
+		return "", false
+	}
+	elems, ok := d.orderedChildren(nodeID)
+	if !ok {
+		return "", false
+	}
+	return "[]int{" + strings.Join(elems, ", ") + "}", true
+}
+
+// orderedChildren renders a node's ordered children in position order. Each child is
+// reached through a slot node carrying its ordinal (rank) and the value it holds. The
+// slot is the per-occurrence binding, so one value node can sit at more than one
+// position without the edge's primary key colliding. The held values recurse through
+// genCodeFromGraph, so a child may be a literal, a variable, or a nested sub-meaning.
+// This is the walk an n-ary call's arguments will share.
+func (d *Daemon) orderedChildren(nodeID uint64) ([]string, bool) {
+	slots, err := d.store.LinksFromRel([]uint64{nodeID}, elemRel)
+	if err != nil || len(slots) == 0 {
+		return nil, false
+	}
+	type child struct {
+		rank int
+		src  string
+	}
+	children := make([]child, 0, len(slots))
+	for _, slot := range slots {
+		ordinal := d.fragByID(d.firstDest(slot.To, rankRel))
+		held := d.firstDest(slot.To, holdsRel)
+		if ordinal == nil || held == 0 {
+			return nil, false
+		}
+		rank, err := strconv.Atoi(ordinal.Content)
+		if err != nil {
+			return nil, false
+		}
+		src, ok := d.genCodeFromGraph(held)
+		if !ok {
+			return nil, false
+		}
+		children = append(children, child{rank: rank, src: src})
+	}
+	sort.Slice(children, func(i, j int) bool { return children[i].rank < children[j].rank })
+	out := make([]string, len(children))
+	for i, c := range children {
+		out[i] = c.src
+	}
+	return out, true
 }
 
 // firstDest is the first node a relation edge leaves the node for, 0 when none.
