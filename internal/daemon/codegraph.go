@@ -64,23 +64,37 @@ const (
 	bodyRel  = "body"
 )
 
+// boundArg is a rendered argument bound to a parameter: its source and whether that
+// source is a bare infix expression. The flag rides with the binding so that when a
+// body uses the parameter as an operand, a compound argument is parenthesized there the
+// way the typed render parenthesizes a substituted operation.
+type boundArg struct {
+	src      string
+	compound bool
+}
+
 // genCodeFromGraph walks a code-meaning subgraph in the persistent store from its root
 // and emits the Go expression it means. It is the entry with no names in scope; genCode
 // carries the parameter binding a call inlines under and the graph it reads, so the one
 // traverser serves a stored subgraph or a transient one alike.
 func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
-	return d.genCode(d.storeView(), nodeID, nil)
+	src, _, ok := d.genCode(d.storeView(), nodeID, nil)
+	return src, ok
 }
 
 // genCode walks a code-meaning subgraph in g under a binding of names to already-
-// rendered sources (the parameters a call has bound to its arguments, empty at the top
-// level). A node is a conditional (named branches), an ordered-children node (a list
-// literal or a call, told apart by what it grounds in), an operation (ordered
-// operands), or a leaf. A leaf emits its bound source when the binding holds its
-// content, else the content itself -- a literal or a free variable alike.
-func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+// rendered arguments (the parameters a call has bound, empty at the top level). It
+// returns the source, whether that source is a bare infix expression (compound) an
+// operand position must parenthesize, and ok. A node is a conditional (named branches),
+// an ordered-children node (a list literal or a call, told apart by what it grounds
+// in), an operation (ordered operands), or a leaf. A leaf emits its bound argument when
+// the binding holds its content -- carrying that argument's own compound flag, so a
+// compound argument lands parenthesized where the body uses it -- else the content
+// itself, a literal or a free variable.
+func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool, bool) {
 	if firstDest(g, nodeID, condThenRel) != 0 {
-		return d.genConditional(g, nodeID, env)
+		s, ok := d.genConditional(g, nodeID, env)
+		return s, false, ok // a conditional renders as a parenthesized literal, a primary
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
 		return d.genOrderedNode(g, nodeID, env)
@@ -90,31 +104,32 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]string) (str
 	if left == 0 && right == 0 {
 		c := g.content(nodeID)
 		if c == "" {
-			return "", false
+			return "", false, false
 		}
 		if bound, ok := env[c]; ok {
-			return bound, true
+			return bound.src, bound.compound, true
 		}
-		return c, true
+		return c, false, true // a literal or a free variable is a single token
 	}
 	sym := d.opSymbol(g.content(firstDest(g, nodeID, memory.RelGrounds)))
 	l, lok := d.genOperand(g, left, env)
 	r, rok := d.genOperand(g, right, env)
 	if sym == "" || !lok || !rok {
-		return "", false
+		return "", false, false
 	}
-	return l + " " + sym + " " + r, true
+	return l + " " + sym + " " + r, true, true // an infix expression is compound
 }
 
-// genOperand renders an operand under the binding, wrapping a nested operation in
-// parentheses so the emitted expression keeps its grouping whatever the operators'
-// precedence, the same care the typed render takes.
-func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
-	s, ok := d.genCode(g, nodeID, env)
+// genOperand renders an operand under the binding, wrapping a compound (bare infix)
+// source in parentheses so the emitted expression keeps its grouping whatever the
+// operators' precedence. The compound flag comes from the walk, so an inlined call or a
+// substituted compound argument is parenthesized as faithfully as a literal operation.
+func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool) {
+	s, compound, ok := d.genCode(g, nodeID, env)
 	if !ok {
 		return "", false
 	}
-	if firstDest(g, nodeID, operand0Rel) != 0 {
+	if compound {
 		return "(" + s + ")", true
 	}
 	return s, true
@@ -123,17 +138,18 @@ func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]string) (
 // genConditional renders a conditional node -- a comparison choosing between two
 // branches -- as the parenthesized function literal the typed render uses, so a
 // choice composes as an expression and runs (a bare leading function literal would
-// not). The comparison operator is the node's content; the sides and branches are
-// named roles, each walked under the binding.
-func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+// not). The comparison operator is the node's content; the sides go through genOperand
+// (so a compound side is parenthesized) and the branches render bare, the same shape
+// the typed render takes.
+func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool) {
 	cmp := g.content(nodeID)
 	if cmp != ">" && cmp != "<" && cmp != "==" {
 		return "", false
 	}
 	left, lok := d.genOperand(g, firstDest(g, nodeID, condLeftRel), env)
 	right, rok := d.genOperand(g, firstDest(g, nodeID, condRightRel), env)
-	then, tok := d.genCode(g, firstDest(g, nodeID, condThenRel), env)
-	els, eok := d.genCode(g, firstDest(g, nodeID, condElseRel), env)
+	then, _, tok := d.genCode(g, firstDest(g, nodeID, condThenRel), env)
+	els, _, eok := d.genCode(g, firstDest(g, nodeID, condElseRel), env)
 	if !lok || !rok || !tok || !eok {
 		return "", false
 	}
@@ -143,42 +159,49 @@ func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]strin
 
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
 // call -- told apart by what it grounds in. The list concept gives a composite
-// literal; a function concept (one carrying a body subgraph) gives an inlined call.
-func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+// literal (a primary); a function concept (one carrying a body subgraph) gives an
+// inlined call, whose compound flag is the inlined body's, so the call parenthesizes in
+// an operand position exactly when the body would.
+func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool, bool) {
 	fn := firstDest(g, nodeID, memory.RelGrounds)
 	if g.content(fn) == "list" {
 		elems, ok := d.orderedChildren(g, nodeID, elemRel, env)
 		if !ok {
-			return "", false
+			return "", false, false
 		}
-		return "[]int{" + strings.Join(elems, ", ") + "}", true
+		parts := make([]string, len(elems))
+		for i, e := range elems {
+			parts[i] = e.src
+		}
+		return "[]int{" + strings.Join(parts, ", ") + "}", false, true
 	}
 	if firstDest(g, fn, bodyRel) != 0 {
 		return d.genCall(g, nodeID, fn, env)
 	}
-	return "", false
+	return "", false, false
 }
 
 // genCall inlines a call by traversal: it binds the function's ordered parameters to
 // the call's rendered arguments and walks the function's body under that binding, the
 // graph counterpart of the typed render's inline + substitute. Arguments are rendered
-// in the caller's binding; the body then sees only its parameters, so a body leaf that
-// names a parameter emits its argument and the call expands to the body in place.
-func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]string) (string, bool) {
+// in the caller's binding, each keeping its compound flag, so the body parenthesizes a
+// compound argument where it uses the parameter as an operand. A body leaf that names a
+// parameter emits its argument, and the call expands to the body in place.
+func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]boundArg) (string, bool, bool) {
 	body := firstDest(g, fn, bodyRel)
 	if body == 0 {
-		return "", false
+		return "", false, false
 	}
 	params, pok := d.orderedSlots(g, fn, paramRel)
 	args, aok := d.orderedChildren(g, nodeID, elemRel, env)
 	if !pok || !aok || len(params) != len(args) {
-		return "", false
+		return "", false, false
 	}
-	binding := make(map[string]string, len(params))
+	binding := make(map[string]boundArg, len(params))
 	for i, p := range params {
 		name := g.content(p)
 		if name == "" {
-			return "", false
+			return "", false, false
 		}
 		binding[name] = args[i]
 	}
@@ -217,20 +240,21 @@ func (d *Daemon) orderedSlots(g codeGraph, nodeID uint64, rel string) ([]uint64,
 }
 
 // orderedChildren renders a node's ordered children in position order, each held value
-// walked under the binding so a child may be a literal, a variable, or a nested
-// sub-meaning. A list's elements and a call's arguments share it.
-func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map[string]string) ([]string, bool) {
+// walked under the binding and keeping its compound flag, so a child may be a literal,
+// a variable, or a nested sub-meaning. A list's elements and a call's arguments share
+// it (the list takes the sources, a call also takes the flags for operand hygiene).
+func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map[string]boundArg) ([]boundArg, bool) {
 	ids, ok := d.orderedSlots(g, nodeID, rel)
 	if !ok {
 		return nil, false
 	}
-	out := make([]string, len(ids))
+	out := make([]boundArg, len(ids))
 	for i, id := range ids {
-		src, ok := d.genCode(g, id, env)
+		src, compound, ok := d.genCode(g, id, env)
 		if !ok {
 			return nil, false
 		}
-		out[i] = src
+		out[i] = boundArg{src: src, compound: compound}
 	}
 	return out, true
 }

@@ -451,6 +451,46 @@ func TestCodeGraphShadowsCalls(t *testing.T) {
 	}
 }
 
+// With operand parenthesizing in the walk, a call composes anywhere: a compound argument
+// is parenthesized where the body uses its parameter as an operand, and a call in an
+// operand position is parenthesized as the operation it inlines to. The walked source
+// matches the engine's inlined render and runs alike.
+func TestCodeGraphShadowsCompoundCalls(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the triple of a number is the product of the number and 3")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	lit := func(s string) code.Computation { return code.Computation{Lit: s} }
+	add := func(a, b code.Computation) code.Computation {
+		return code.Computation{Op: "add", Args: []code.Computation{a, b}}
+	}
+	triple := func(a code.Computation) code.Computation {
+		return code.Computation{Op: "triple", Args: []code.Computation{a}}
+	}
+
+	cases := []struct {
+		comp   code.Computation
+		want   string
+		runsTo string
+	}{
+		{triple(add(lit("6"), lit("7"))), "(6 + 7) * 3", "39"}, // a compound argument
+		{add(triple(lit("4")), lit("5")), "(4 * 3) + 5", "17"}, // a call in an operand position
+	}
+	for _, tc := range cases {
+		walked, wok := d.shadowCheck(tc.comp)
+		typed, tok := d.code.ToCode(tc.comp)
+		if !wok || !tok || walked != tc.want || typed != tc.want {
+			t.Fatalf("want %q: walked %q (ok %v), typed %q (ok %v)", tc.want, walked, wok, typed, tok)
+		}
+		if v, ok := d.evalCode(walked); !ok || v != tc.runsTo {
+			t.Fatalf("%q should run to %s, got %q", walked, tc.runsTo, v)
+		}
+	}
+}
+
 // On the live runcode path the shadow is wired in and silent: the reply is the engine's
 // result as before, and because the graph the daemon materializes agrees with the
 // render, nothing is logged. A mismatch would print, so an empty log is the agreement.

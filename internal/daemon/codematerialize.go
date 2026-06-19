@@ -9,14 +9,10 @@ import (
 // subgraph the traverser reads, the inverse of genCode. It mirrors the read shapes: a
 // literal or variable leaf, a binary primitive operation, a conditional, a list
 // literal, and a call of a defined function (materialized as a graph: the function's
-// ordered parameters and its body). seen carries the functions being materialized so a
-// recursive call is refused rather than looped.
-//
-// The shadow stays within the inliner's reach: a defined call may not sit in an operand
-// or comparison position (an inlined call there would need parenthesizing the traverser
-// does not yet apply), and a call's arguments must be simple leaves (a compound argument
-// needs the same hygiene). Those shapes return false, so the shadow skips them rather
-// than reporting a false gap.
+// ordered parameters and its body). The traverser parenthesizes a compound operand
+// faithfully, so a call may sit in any position and its arguments may be compound. seen
+// carries the functions being materialized so a recursive call is refused rather than
+// looped (recursion cannot inline); that is the one shape the shadow still skips.
 func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, seen map[string]bool) (uint64, bool) {
 	// A leaf carries its token as content. An "each" reference lives only inside a map
 	// body, which is not materialized, so it is not a leaf here.
@@ -30,12 +26,8 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, seen map[s
 		return 0, false
 	}
 	// A conditional: the comparison operator as content, its two sides and two branches
-	// as named edges. A call in a comparison side is refused; the branches render bare,
-	// so a call there composes.
+	// as named edges.
 	if c.Cond != nil {
-		if d.isCall(c.Cond.Left) || d.isCall(c.Cond.Right) {
-			return 0, false
-		}
 		root := g.add(c.Cond.Cmp)
 		if d.materializeInto(g, root, condLeftRel, c.Cond.Left, seen) &&
 			d.materializeInto(g, root, condRightRel, c.Cond.Right, seen) &&
@@ -46,7 +38,7 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, seen map[s
 		return 0, false
 	}
 	// A list literal: a root grounding in the list concept, its elements held in ordered
-	// slots. Elements render bare, so a call element composes.
+	// slots.
 	if c.Op == "list" {
 		root := g.add("")
 		g.link(root, g.add("list"), memory.RelGrounds)
@@ -56,11 +48,8 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, seen map[s
 		return 0, false
 	}
 	// A binary primitive operation: a root grounding in the operation concept with its
-	// two operands. A call in an operand is refused, as in a comparison side.
+	// two operands.
 	if len(c.Args) == 2 && d.opSymbol(c.Op) != "" {
-		if d.isCall(c.Args[0]) || d.isCall(c.Args[1]) {
-			return 0, false
-		}
 		root := g.add("")
 		g.link(root, g.add(c.Op), memory.RelGrounds)
 		if d.materializeInto(g, root, operand0Rel, c.Args[0], seen) &&
@@ -78,8 +67,8 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, seen map[s
 
 // materializeCall builds a call subgraph: the function as a graph (its ordered parameter
 // names and its body) and the call grounding in it with ordered arguments. It is refused
-// unless the arguments are simple leaves and the function is known, non-recursive, and
-// has a materializable body, keeping the shadow within what genCall inlines.
+// unless the function is known, non-recursive, and has a materializable body, keeping
+// the shadow within what genCall inlines (recursion is the one shape it cannot).
 func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, seen map[string]bool) (uint64, bool) {
 	if seen[c.Op] {
 		return 0, false // a recursive call is not inlined
@@ -87,11 +76,6 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, seen map[s
 	op, ok := d.opByName(c.Op)
 	if !ok || op.Body == nil || op.Raw != "" || len(op.Params) != len(c.Args) {
 		return 0, false
-	}
-	for _, a := range c.Args {
-		if !isLeaf(a) {
-			return 0, false // a compound argument needs operand hygiene not yet built
-		}
 	}
 	seen[c.Op] = true
 	defer delete(seen, c.Op)
@@ -139,12 +123,6 @@ func (d *Daemon) isCall(c code.Computation) bool {
 	return c.Op != "" && c.Op != "list" && d.opSymbol(c.Op) == ""
 }
 
-// isLeaf reports whether c is a literal or a variable reference, the shape that emits a
-// single token and so needs no parenthesizing wherever it lands.
-func isLeaf(c code.Computation) bool {
-	return c.Op == "" && c.Cond == nil && c.Map == nil && !c.Each && (c.Lit != "" || c.Var != "")
-}
-
 // shadowCheck closes the loop on a comprehended computation: it materializes the
 // computation as a transient subgraph and walks it the way the prototype walks any
 // graph, returning the source. ok is false when the shape is not one the materializer
@@ -155,5 +133,6 @@ func (d *Daemon) shadowCheck(comp code.Computation) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return d.genCode(g, root, nil)
+	src, _, sok := d.genCode(g, root, nil)
+	return src, sok
 }
