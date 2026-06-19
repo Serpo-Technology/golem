@@ -50,25 +50,27 @@ func (e *Engine) genExprs(vars, consts []string, maxOps int) []Computation {
 }
 
 // SynthesizeFold searches for a program that folds a list to a number, the
-// structure assembled rather than given: an accumulator started at zero or one,
-// updated each step by an expression over the accumulator and the element, and
-// returned. It interprets each candidate on the examples and grounds the one it
-// keeps by running it. lists are the example inputs, outs their wanted results. It
-// returns the loop body as Go and false when nothing within the bound fits.
+// structure assembled rather than given: an accumulator started at a constant or
+// at the list's first element, updated each step by an expression over the
+// accumulator and the element, plainly or only when the element compares to the
+// accumulator, and returned. The plain update from zero is a running total or
+// count; the guarded update from the first element is a running maximum; an
+// unchanging accumulator from the first element is the first element itself. It
+// interprets each candidate on the examples and grounds the one it keeps by
+// running it. lists are the example inputs, outs their wanted results. It returns
+// the loop body as Go and false when nothing within the bound fits.
 func (e *Engine) SynthesizeFold(param string, lists [][]int, outs []int, run func(string) (string, bool)) (string, bool) {
 	if len(lists) < 2 || len(lists) != len(outs) {
 		return "", false
 	}
 	const acc = "a"
-	for _, expr := range e.genExprs([]string{acc, "x"}, []string{"0", "1", "2"}, loopMaxOps) {
-		if !usesVar(expr, acc) {
-			continue // an update that ignores the accumulator is no fold
-		}
-		for _, init := range []int{0, 1} {
-			if !foldInterprets(expr, acc, init, lists, outs) {
+	exprs := e.genExprs([]string{acc, "x"}, []string{"0", "1", "2"}, loopMaxOps)
+	for _, up := range foldUpdates(exprs, acc) {
+		for _, init := range foldInits() {
+			if !foldInterprets(up, acc, init, lists, outs) {
 				continue
 			}
-			body, ok := e.foldBody(param, acc, init, expr)
+			body, ok := e.foldBody(param, acc, init, up)
 			if ok && e.foldGrounds(param, body, lists, outs, run) {
 				return body, true
 			}
@@ -77,35 +79,110 @@ func (e *Engine) SynthesizeFold(param string, lists [][]int, outs []int, run fun
 	return "", false
 }
 
-// foldInterprets reports whether the candidate fold maps every example list to its
-// output, the quick check the search prunes by before grounding.
-func foldInterprets(update Computation, acc string, init int, lists [][]int, outs []int) bool {
-	for i, list := range lists {
-		a := init
-		ok := true
-		for _, x := range list {
-			a, ok = evalExpr(update, map[string]int{acc: a, "x": x})
-			if !ok {
-				break
-			}
+// foldInit is a fold's starting accumulator: a constant, or the list's first
+// element, the start a running maximum or the first element itself needs.
+type foldInit struct {
+	lit   string
+	first bool
+}
+
+// foldInits are the starts the search tries, the constants ahead of the first
+// element so a plain total or count is found before a first-element form is.
+func foldInits() []foldInit {
+	return []foldInit{{lit: "0"}, {lit: "1"}, {first: true}}
+}
+
+// foldUpdate is a fold's per-step update: a new accumulator value, applied every
+// step, or only when the element compares to the accumulator (the guard a running
+// maximum turns on).
+type foldUpdate struct {
+	expr  Computation
+	guard string // "", ">", or "<": when set, the update applies only if x <guard> a
+}
+
+// foldUpdates are the updates the search tries: the plain updates that read the
+// accumulator (a fold has to carry state), then the guarded ones, whose guard
+// reads the accumulator so any body is still a fold. Plain ahead of guarded so a
+// simple fold is found before a guarded one.
+func foldUpdates(exprs []Computation, acc string) []foldUpdate {
+	var out []foldUpdate
+	for _, ex := range exprs {
+		if usesVar(ex, acc) {
+			out = append(out, foldUpdate{expr: ex})
 		}
-		if !ok || a != outs[i] {
+	}
+	for _, ex := range exprs {
+		for _, g := range []string{">", "<"} {
+			out = append(out, foldUpdate{expr: ex, guard: g})
+		}
+	}
+	return out
+}
+
+// foldInterprets reports whether the candidate fold maps every example list to its
+// output, the quick check the search prunes by before grounding. The accumulator
+// starts where the init says, the update applies each step (a guarded one only
+// when the element compares to the accumulator), and an empty list with a
+// first-element start cannot fold.
+func foldInterprets(up foldUpdate, acc string, init foldInit, lists [][]int, outs []int) bool {
+	for i, list := range lists {
+		a, ok := foldStart(init, list)
+		if !ok {
+			return false
+		}
+		for _, x := range list {
+			if up.guard != "" && !compareInt(up.guard, x, a) {
+				continue
+			}
+			v, vok := evalExpr(up.expr, map[string]int{acc: a, "x": x})
+			if !vok {
+				return false
+			}
+			a = v
+		}
+		if a != outs[i] {
 			return false
 		}
 	}
 	return true
 }
 
+// foldStart is the accumulator a fold begins with on a list: the constant, or the
+// list's first element when the init says so (and there is one).
+func foldStart(init foldInit, list []int) (int, bool) {
+	if init.first {
+		if len(list) == 0 {
+			return 0, false
+		}
+		return list[0], true
+	}
+	n, err := strconv.Atoi(init.lit)
+	return n, err == nil
+}
+
 // foldBody writes the loop the fold means as Go: start the accumulator, range the
-// list updating it, return it. The element is the loop variable and the
-// accumulator the carried state, the two names the update expression is over.
-func (e *Engine) foldBody(param, acc string, init int, update Computation) (string, bool) {
-	step, ok := e.ToCode(update)
+// list updating it, return it. A guarded update assigns only when the element
+// compares to the accumulator. A fold whose accumulator never changes is just its
+// start, so a first-element start with an unchanging update reads as the first
+// element rather than a pointless loop.
+func (e *Engine) foldBody(param, acc string, init foldInit, up foldUpdate) (string, bool) {
+	step, ok := e.ToCode(up.expr)
 	if !ok {
 		return "", false
 	}
-	return acc + " := " + strconv.Itoa(init) + "; for _, x := range " + param +
-		" { " + acc + " = " + step + " }; return " + acc, true
+	start := init.lit
+	if init.first {
+		start = param + "[0]"
+	}
+	if up.guard == "" && step == acc {
+		return "return " + start, true
+	}
+	assign := acc + " = " + step
+	if up.guard != "" {
+		assign = "if x " + up.guard + " " + acc + " { " + assign + " }"
+	}
+	return acc + " := " + start + "; for _, x := range " + param +
+		" { " + assign + " }; return " + acc, true
 }
 
 // foldGrounds runs the synthesized loop over each example list and checks it

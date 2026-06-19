@@ -24,17 +24,41 @@ func TestGenExprsReachesFoldUpdates(t *testing.T) {
 // exercised end to end in the daemon against the real runtime.
 func TestFoldInterpretsAndRenders(t *testing.T) {
 	e := listEngine()
-	sum := Computation{Op: "add", Args: []Computation{{Var: "a"}, {Var: "x"}}}
-	if !foldInterprets(sum, "a", 0, [][]int{{1, 2, 3}, {2, 4}}, []int{6, 6}) {
+	sum := foldUpdate{expr: Computation{Op: "add", Args: []Computation{{Var: "a"}, {Var: "x"}}}}
+	if !foldInterprets(sum, "a", foldInit{lit: "0"}, [][]int{{1, 2, 3}, {2, 4}}, []int{6, 6}) {
 		t.Fatal("a + x should fold to the total")
 	}
-	if foldInterprets(sum, "a", 1, [][]int{{1, 2, 3}}, []int{6}) {
+	if foldInterprets(sum, "a", foldInit{lit: "1"}, [][]int{{1, 2, 3}}, []int{6}) {
 		t.Fatal("the wrong init should not fold to the total")
 	}
-	body, ok := e.foldBody("numbers", "a", 0, sum)
+	body, ok := e.foldBody("numbers", "a", foldInit{lit: "0"}, sum)
 	want := "a := 0; for _, x := range numbers { a = a + x }; return a"
 	if !ok || body != want {
 		t.Fatalf("the fold should render its loop:\n got %q\nwant %q", body, want)
+	}
+}
+
+// The fold search reaches the running maximum and the first element: a guarded
+// update from the first element keeps the max, and an unchanging accumulator from
+// the first element reads as the first element itself.
+func TestFoldFindsFirstAndMax(t *testing.T) {
+	e := listEngine()
+	max := foldUpdate{expr: Computation{Var: "x"}, guard: ">"}
+	if !foldInterprets(max, "a", foldInit{first: true}, [][]int{{1, 5, 2}, {4, 1}}, []int{5, 4}) {
+		t.Fatal("a guarded update from the first element should fold to the max")
+	}
+	body, ok := e.foldBody("numbers", "a", foldInit{first: true}, max)
+	wantMax := "a := numbers[0]; for _, x := range numbers { if x > a { a = x } }; return a"
+	if !ok || body != wantMax {
+		t.Fatalf("the max fold should render its guarded loop:\n got %q\nwant %q", body, wantMax)
+	}
+	first := foldUpdate{expr: Computation{Var: "a"}}
+	if !foldInterprets(first, "a", foldInit{first: true}, [][]int{{1, 2, 3}, {4, 5}}, []int{1, 4}) {
+		t.Fatal("an unchanging accumulator from the first element should fold to the first")
+	}
+	body, ok = e.foldBody("numbers", "a", foldInit{first: true}, first)
+	if !ok || body != "return numbers[0]" {
+		t.Fatalf("an unchanging fold from the first element should read as the first: %q", body)
 	}
 }
 
