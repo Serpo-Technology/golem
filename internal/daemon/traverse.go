@@ -208,18 +208,21 @@ func joinRendered(parts []rendered) string {
 	return strings.Join(out, ", ")
 }
 
-// nlSurface renders a transitive clause from a proposition node: a moment grounded in
-// its relation, with agent and patient edges to the argument CONCEPTS (the moment's
-// content marks past tense). Each role concept resolves to a word by the graph -- its
-// firmest naming word in the language, or a participant's pronoun -- the same conceptName
-// every answer uses, so the proposition's concepts are the meaning and the words are
-// looked up, not pre-rendered. The slots then lay out in the language's word order (the
-// verb closing a verb-final clause), the verb is conjugated and the object marked
-// definite by grammar's morphology, and co-arguments on a role coordinate, the same Speak
-// does. A given referent's pronoun is a discourse choice carried by the meaning, not the
-// proposition's structure, so it stays with Speak's Meaning render for now.
+// nlSurface renders a transitive clause from a stored proposition: a moment its relation
+// grounds into, with agent and patient edges to the argument CONCEPTS. The relation is
+// read by the reverse grounds edge (a proposition stores the relation grounding into the
+// telling moment), and tense is supplied as a render parameter the way renderFacts
+// supplies it. Each role concept resolves to a word by the graph -- its firmest naming
+// word in the language, or a participant's pronoun -- the same conceptName every answer
+// uses, so the proposition's concepts are the meaning and the words are looked up. The
+// slots then lay out in the language's word order (the verb closing a verb-final clause),
+// the verb is conjugated and the arguments marked definite by grammar's morphology (the
+// answer-render marking renderFacts uses), and co-arguments on a role coordinate, the same
+// Speak does. A given referent's pronoun is a discourse choice carried across clauses, not
+// the single proposition's structure, so it stays with the answer path for now.
 type nlSurface struct {
 	lang string
+	past bool
 }
 
 func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (construction, bool) {
@@ -227,21 +230,24 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 	if lang == "" {
 		lang = "en"
 	}
-	relNode := firstDest(g, node, memory.RelGrounds)
-	verb := d.conceptName(relNode, g.content(relNode), lang)
+	relID := d.groundedRelation(node)
+	verb := d.conceptName(relID, g.content(relID), lang)
 	agents := d.roleWords(g, node, memory.RelAgent, lang)
 	patients := d.roleWords(g, node, memory.RelPatient, lang)
 	if verb == "" || len(agents) == 0 || len(patients) == 0 {
 		return construction{}, false
 	}
-	past := g.content(node) == "past"
 	coord := d.gram.Coordinator(lang)
+	subject := make([]string, len(agents))
+	for i, a := range agents {
+		subject[i] = d.gram.DefiniteNP(lang, "agent", a)
+	}
 	object := make([]string, len(patients))
 	for i, p := range patients {
 		object[i] = d.gram.DefiniteNP(lang, "patient", p)
 	}
-	agent := rendered{src: joinCoord(agents, coord)}
-	verbLeaf := rendered{src: d.gram.Conjugate(lang, verb, len(agents) > 1, past, false)}
+	agent := rendered{src: joinCoord(subject, coord)}
+	verbLeaf := rendered{src: d.gram.Conjugate(lang, verb, len(agents) > 1, s.past, false)}
 	patient := rendered{src: joinCoord(object, coord)}
 	slots := []slot{{leaf: agent}, {leaf: verbLeaf}, {leaf: patient}}
 	if d.gram.VerbFinal(lang) {
@@ -254,6 +260,26 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 		}
 		return rendered{src: grammar.Sentence(strings.Join(words, " "))}, true
 	}}, true
+}
+
+// groundedRelation is the relation concept a proposition's moment grounds: a proposition
+// stores the relation grounding into the moment (chase grounds in the telling), so the
+// relation is the concept whose grounds edge points at the moment, read in reverse.
+func (d *Daemon) groundedRelation(moment uint64) uint64 {
+	edges, err := d.store.LinksToRel([]uint64{moment}, memory.RelGrounds)
+	if err != nil || len(edges) == 0 {
+		return 0
+	}
+	return edges[0].From
+}
+
+// speakProposition renders a stored proposition to a clause by walking it through the
+// shared traverser's language surface, the NL counterpart of traverseCode. Tense is
+// supplied the way renderFacts supplies it. It shadows the answer path's per-clause render
+// today; the switch onto it is a later, deliberate step.
+func (d *Daemon) speakProposition(momentID uint64, lang string, past bool) (string, bool) {
+	r, ok := d.traverse(nlSurface{lang: lang, past: past}, d.storeView(), momentID, nil)
+	return r.src, ok
 }
 
 // roleWords resolves the concepts a role's edges leave a node for to their words in the

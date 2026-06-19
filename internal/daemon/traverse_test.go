@@ -97,21 +97,22 @@ func TestTraverseRendersClause(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A proposition: the dog chased the cat (past). The moment grounds in its relation
-	// and binds the agent and patient; its content marks the past tense.
-	moment := mk("past")
-	link(moment, mk("chase"), memory.RelGrounds)
+	// A real proposition: the dog chased the cat. The relation grounds into the telling
+	// moment, which binds the agent and patient; tense is a render parameter.
+	moment := mk("")
+	chase := mk("chase")
+	link(chase, moment, memory.RelGrounds)
 	link(moment, mk("dog"), memory.RelAgent)
 	link(moment, mk("cat"), memory.RelPatient)
 
-	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
+	got, ok := d.traverse(nlSurface{lang: "en", past: true}, d.storeView(), moment, nil)
 	if !ok {
 		t.Fatal("the clause should traverse")
 	}
 	want, wok := d.gram.Speak("en", grammar.Meaning{
 		Relation: grammar.Term{Phrase: "chase"},
 		Roles: map[string]grammar.Term{
-			"agent":   {Phrase: "dog"},
+			"agent":   {Phrase: "dog", Definite: true},
 			"patient": {Phrase: "cat", Definite: true},
 		},
 		Past: true,
@@ -144,19 +145,20 @@ func TestTraverseRendersClauseTR(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	moment := mk("past")
-	link(moment, mk("kovala"), memory.RelGrounds)
+	moment := mk("")
+	kovala := mk("kovala")
+	link(kovala, moment, memory.RelGrounds)
 	link(moment, mk("köpek"), memory.RelAgent)
 	link(moment, mk("kedi"), memory.RelPatient)
 
-	got, ok := d.traverse(nlSurface{lang: "tr"}, d.storeView(), moment, nil)
+	got, ok := d.traverse(nlSurface{lang: "tr", past: true}, d.storeView(), moment, nil)
 	if !ok {
 		t.Fatal("the Turkish clause should traverse")
 	}
 	want, wok := d.gram.Speak("tr", grammar.Meaning{
 		Relation: grammar.Term{Phrase: "kovala"},
 		Roles: map[string]grammar.Term{
-			"agent":   {Phrase: "köpek"},
+			"agent":   {Phrase: "köpek", Definite: true},
 			"patient": {Phrase: "kedi", Definite: true},
 		},
 		Past: true,
@@ -206,19 +208,19 @@ func TestTraverseRendersClauseFromConcepts(t *testing.T) {
 	name(dog, "dog", "en")
 	name(cat, "cat", "en")
 	name(chase, "chase", "en")
-	moment := mk("past")
-	link(moment, chase, memory.RelGrounds)
+	moment := mk("")
+	link(chase, moment, memory.RelGrounds)
 	link(moment, dog, memory.RelAgent)
 	link(moment, cat, memory.RelPatient)
 
-	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
+	got, ok := d.traverse(nlSurface{lang: "en", past: true}, d.storeView(), moment, nil)
 	if !ok {
 		t.Fatal("the clause should traverse from concepts")
 	}
 	want, wok := d.gram.Speak("en", grammar.Meaning{
 		Relation: grammar.Term{Phrase: "chase"},
 		Roles: map[string]grammar.Term{
-			"agent":   {Phrase: "dog"},
+			"agent":   {Phrase: "dog", Definite: true},
 			"patient": {Phrase: "cat", Definite: true},
 		},
 		Past: true,
@@ -249,20 +251,21 @@ func TestTraverseRendersCoordination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	moment := mk("past")
-	link(moment, mk("chase"), memory.RelGrounds)
+	moment := mk("")
+	chase := mk("chase")
+	link(chase, moment, memory.RelGrounds)
 	link(moment, mk("dog"), memory.RelAgent)
 	link(moment, mk("cat"), memory.RelPatient)
 	link(moment, mk("mouse"), memory.RelPatient)
 
-	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
+	got, ok := d.traverse(nlSurface{lang: "en", past: true}, d.storeView(), moment, nil)
 	if !ok {
 		t.Fatal("the coordinated clause should traverse")
 	}
 	want, wok := d.gram.Speak("en", grammar.Meaning{
 		Relation: grammar.Term{Phrase: "chase"},
 		Roles: map[string]grammar.Term{
-			"agent":   {Phrase: "dog"},
+			"agent":   {Phrase: "dog", Definite: true},
 			"patient": {Phrase: "cat", With: []string{"mouse"}, Definite: true},
 		},
 		Past: true,
@@ -273,6 +276,37 @@ func TestTraverseRendersCoordination(t *testing.T) {
 	}
 	if got.src != want {
 		t.Fatalf("the traversed coordinated clause %q should match Speak %q", got.src, want)
+	}
+}
+
+// The driver shadows production on a REAL stored proposition: a told "a dog chased a cat"
+// leaves a moment in the store, and speakProposition walks that real moment to the same
+// clause renderFacts produces for it. So the shared traverser is confirmed production-
+// capable for language on genuine graph data, without replacing the answer path.
+func TestSpeakPropositionShadowsRenderFacts(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+
+	resp := say(t, d, "a dog chased a cat")
+	moment := resp.Observe.FragmentID
+	if moment == 0 {
+		t.Fatal("the telling should leave a moment")
+	}
+
+	got, ok := d.speakProposition(moment, "en", true)
+	if !ok {
+		t.Fatal("the stored proposition should speak through the driver")
+	}
+	want, wok := d.renderFacts("en", d.conceptName(dog.ID, dog.Content, "en"), d.gatherFacts(dog, "", ""), true, false)
+	if !wok {
+		t.Fatal("renderFacts should render the proposition")
+	}
+	if got != want {
+		t.Fatalf("the driver's clause %q should match the production render %q", got, want)
+	}
+	if got != "The dog chased the cat." {
+		t.Fatalf("the clause should read \"The dog chased the cat.\", got %q", got)
 	}
 }
 
