@@ -81,52 +81,57 @@ func TestComprehendExamples(t *testing.T) {
 	}
 }
 
-// The search infers the rule the examples mean: a constant multiple for double,
-// and the parameter against itself for square.
-func TestInduceBodyInfersConstantAndSquare(t *testing.T) {
+// The search assembles an expression that carries the examples, decided by
+// running: double, square, a successor, and the two-step n*n + 1 and cube all
+// emerge by composing the operators and grounding. The found rule is checked on a
+// held-out input, not by its exact shape, since expressions that agree on the
+// examples are interchangeable.
+func TestSynthesizesExpressions(t *testing.T) {
 	e := testEngine()
-	body, ok := e.InduceBody("number", []string{"3", "5"}, []string{"6", "10"}, arith)
-	if !ok {
-		t.Fatal("double should be inferred")
+	cases := []struct {
+		ins, outs   []string
+		probe, want string
+	}{
+		{[]string{"3", "5"}, []string{"6", "10"}, "7", "14"},             // double
+		{[]string{"3", "4"}, []string{"9", "16"}, "5", "25"},             // square
+		{[]string{"3", "10"}, []string{"4", "11"}, "8", "9"},             // successor
+		{[]string{"1", "2", "3"}, []string{"2", "5", "10"}, "4", "17"},   // n*n + 1
+		{[]string{"2", "3", "5"}, []string{"8", "27", "125"}, "4", "64"}, // cube
 	}
-	if src, _ := e.ToCode(body); src != "number * 2" {
-		t.Fatalf("double should read as times two: %q", src)
-	}
-	body, ok = e.InduceBody("number", []string{"3", "4"}, []string{"9", "16"}, arith)
-	if !ok {
-		t.Fatal("square should be inferred")
-	}
-	if src, _ := e.ToCode(body); src != "number * number" {
-		t.Fatalf("square should read as the parameter against itself: %q", src)
+	for _, tc := range cases {
+		body, ok := e.SynthesizeExpr("number", tc.ins, tc.outs, arith)
+		if !ok {
+			t.Fatalf("a rule for %v -> %v should be synthesized", tc.ins, tc.outs)
+		}
+		if got := evalBody(t, e, body, tc.probe); got != tc.want {
+			t.Fatalf("the rule for %v should give %s at %s, got %s", tc.ins, tc.want, tc.probe, got)
+		}
 	}
 }
 
-// An offset rule is found from two pairs; a two-step rule is reached once there
-// are pairs enough to constrain it; and a rule beyond two steps declines rather
-// than forcing a wrong guess.
-func TestInduceBodyOffsetMultiStepAndMiss(t *testing.T) {
+// A rule beyond the search's reach declines rather than forcing a wrong guess:
+// 2^n is no bounded arithmetic expression over the parameter, and the examples
+// constrain it enough that nothing within the bound fits.
+func TestSynthesizeDeclinesBeyondReach(t *testing.T) {
 	e := testEngine()
-	body, ok := e.InduceBody("number", []string{"3", "10"}, []string{"4", "11"}, arith)
+	if _, ok := e.SynthesizeExpr("number", []string{"1", "2", "3", "4"}, []string{"2", "4", "8", "16"}, arith); ok {
+		t.Fatal("an exponential is not a bounded arithmetic expression and should decline")
+	}
+}
+
+// evalBody runs a synthesized body on a probe input and returns its value, so a
+// rule is checked by what it computes rather than how it is written.
+func evalBody(t *testing.T, e *Engine, body Computation, in string) string {
+	t.Helper()
+	src, ok := e.ToCode(substitute(body, map[string]Computation{"number": {Lit: in}}))
 	if !ok {
-		t.Fatal("successor should be inferred")
+		t.Fatalf("the body should render: %+v", body)
 	}
-	if src, _ := e.ToCode(body); src != "number + 1" {
-		t.Fatalf("successor should read as plus one: %q", src)
-	}
-	// n*n + 1 is two operations: no one-step rule fits, but the composed search
-	// finds it now that there are three pairs to ground it on.
-	body, ok = e.InduceBody("number", []string{"1", "2", "3"}, []string{"2", "5", "10"}, arith)
+	v, ok := arith(src)
 	if !ok {
-		t.Fatal("n*n + 1 should be inferred as a two-step rule")
+		t.Fatalf("the body should evaluate: %q", src)
 	}
-	if src, _ := e.ToCode(body); src != "(number * number) + 1" {
-		t.Fatalf("n*n + 1 should read as the square plus one: %q", src)
-	}
-	// 2^n is no composition of two arithmetic operations, so even the wider search
-	// declines rather than forcing a wrong guess.
-	if _, ok := e.InduceBody("number", []string{"1", "2", "3"}, []string{"2", "4", "8"}, arith); ok {
-		t.Fatal("a rule beyond two steps should not be forced to fit")
-	}
+	return v
 }
 
 // Recursion is searched only with examples enough to pin it: two pairs are too
@@ -139,24 +144,5 @@ func TestInduceRecursiveNeedsExamples(t *testing.T) {
 	}
 	if _, ok := e.InduceRecursive("f", "number", []string{"1", "2"}, []string{"1", "2"}, called); ok {
 		t.Fatal("recursion should not be induced from two pairs")
-	}
-}
-
-// A two-step rule is found only with enough examples: cube needs three pairs,
-// since two points alone could be a coincidence a composed rule overfits.
-func TestInduceBodyMultiStepNeedsEnoughExamples(t *testing.T) {
-	e := testEngine()
-	// Cube over three pairs: the parameter squared, times the parameter again.
-	body, ok := e.InduceBody("number", []string{"2", "3", "5"}, []string{"8", "27", "125"}, arith)
-	if !ok {
-		t.Fatal("cube should be inferred from three pairs")
-	}
-	if src, _ := e.ToCode(body); src != "(number * number) * number" {
-		t.Fatalf("cube should read as the square times the parameter: %q", src)
-	}
-	// The same rule from only two pairs is withheld: a composition is not grounded
-	// on two points.
-	if _, ok := e.InduceBody("number", []string{"2", "3"}, []string{"8", "27"}, arith); ok {
-		t.Fatal("a two-step rule should not be induced from two pairs")
 	}
 }

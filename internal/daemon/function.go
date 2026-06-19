@@ -24,12 +24,16 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 	if name == "" || name == inducedParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
-	if body, ok := d.code.InduceBody(inducedParam, ins, outs, d.evalCode); ok {
+	// The rule is searched for, not fitted to a template: the engine assembles
+	// expressions over the parameter and runs them, keeping the smallest whose
+	// effect is the examples. The procedure emerges from composing the Go floor and
+	// is grounded by running.
+	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok {
 		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
 	}
-	// Beyond a fixed number of steps, search for a simple recursive rule: factorial
-	// and the running total fit no fixed-step rule, but a base case and a self-call
-	// over the predecessor carry them. The recursion is grounded by running.
+	// A rule that is no single expression, like factorial, is a base case and a
+	// self-call over the predecessor; that recursive shape is searched separately
+	// and grounded by running.
 	if op, ok := d.code.InduceRecursive(name, inducedParam, ins, outs, d.evalCode); ok {
 		return op, true
 	}

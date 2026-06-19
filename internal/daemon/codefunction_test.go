@@ -49,29 +49,29 @@ func TestInducesAFunctionFromExamples(t *testing.T) {
 	d.cfg.RuntimeEnabled = true
 
 	resp := say(t, d, "the double of 3 is 6 and the double of 5 is 10")
-	if !strings.Contains(resp.Say, "double") || !strings.Contains(resp.Say, "number * 2") {
-		t.Fatalf("GOLEM should infer double = number * 2 from the pairs: %q", resp.Say)
+	if !strings.Contains(resp.Say, "I learned double") {
+		t.Fatalf("GOLEM should work out double from the pairs: %q", resp.Say)
 	}
 	resp = say(t, d, "what is the double of 20")
 	if !strings.Contains(resp.Say, "40") {
-		t.Fatalf("the inferred function should run on a new number: %q", resp.Say)
+		t.Fatalf("the synthesized function should run on a new number: %q", resp.Say)
 	}
 }
 
-// A rule of two operations is induced when the examples constrain it: cube is no
-// one-step rule, so the search composes the square with one more multiply and
-// grounds it by running over every pair.
+// A rule of two operations is searched out and grounded: cube is no one-step
+// rule, so the search composes multiplies until one carries every pair, then runs
+// it on a number the examples never named.
 func TestInducesCubeFromExamples(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
 
 	resp := say(t, d, "the cube of 2 is 8 and the cube of 3 is 27 and the cube of 5 is 125")
-	if !strings.Contains(resp.Say, "cube") || !strings.Contains(resp.Say, "(number * number) * number") {
-		t.Fatalf("GOLEM should infer cube = (number * number) * number: %q", resp.Say)
+	if !strings.Contains(resp.Say, "I learned cube") {
+		t.Fatalf("GOLEM should work out cube from the pairs: %q", resp.Say)
 	}
 	resp = say(t, d, "what is the cube of 4")
 	if !strings.Contains(resp.Say, "64") {
-		t.Fatalf("the inferred cube should run on a new number: %q", resp.Say)
+		t.Fatalf("the synthesized cube should run on a new number: %q", resp.Say)
 	}
 }
 
