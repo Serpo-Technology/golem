@@ -491,6 +491,34 @@ func TestCodeGraphShadowsCompoundCalls(t *testing.T) {
 	}
 }
 
+// Recursion is the last shape: a function whose body calls itself cannot inline, so a
+// call to it is written as the self-referential local-function form the engine uses. The
+// materialized graph carries the self-call as a reference back to the function node, and
+// the walk emits the same recursive expression, which runs to the same value.
+func TestCodeGraphShadowsRecursion(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the factorial of a number is 1 if the number is below 1 else the product of the number and the factorial of the difference of the number and 1")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	comp, ok := d.code.Comprehend("the factorial of 5")
+	if !ok {
+		t.Fatal("the engine should comprehend the factorial call")
+	}
+	walked, wok := d.shadowCheck(comp)
+	typed, tok := d.code.ToCode(comp)
+	if !wok || !tok || walked != typed {
+		t.Fatalf("the recursive call should walk to the render:\n walked %q (ok %v)\n typed  %q (ok %v)", walked, wok, typed, tok)
+	}
+	gv, gok := d.evalCode(walked)
+	wv, wvok := d.evalCode(typed)
+	if !gok || !wvok || gv != wv || gv != "120" {
+		t.Fatalf("the recursive call should run to 120: walked ran to %q, typed to %q", gv, wv)
+	}
+}
+
 // On the live runcode path the shadow is wired in and silent: the reply is the engine's
 // result as before, and because the graph the daemon materializes agrees with the
 // render, nothing is logged. A mismatch would print, so an empty log is the agreement.

@@ -74,16 +74,18 @@ type boundArg struct {
 }
 
 // genCodeFromGraph walks a code-meaning subgraph in the persistent store from its root
-// and emits the Go expression it means. It is the entry with no names in scope; genCode
-// carries the parameter binding a call inlines under and the graph it reads, so the one
-// traverser serves a stored subgraph or a transient one alike.
+// and emits the Go expression it means. It is the entry with no names in scope and no
+// function being emitted; genCode carries the parameter binding a call inlines under,
+// the graph it reads, and self, the function node a recursive body is being written
+// inside, so the one traverser serves a stored subgraph or a transient one alike.
 func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
-	src, _, ok := d.genCode(d.storeView(), nodeID, nil)
+	src, _, ok := d.genCode(d.storeView(), nodeID, nil, 0)
 	return src, ok
 }
 
 // genCode walks a code-meaning subgraph in g under a binding of names to already-
-// rendered arguments (the parameters a call has bound, empty at the top level). It
+// rendered arguments (empty at the top level) and self, the function node a recursive
+// body is being written inside (0 when none, so a call to self is a plain self-call). It
 // returns the source, whether that source is a bare infix expression (compound) an
 // operand position must parenthesize, and ok. A node is a conditional (named branches),
 // an ordered-children node (a list literal or a call, told apart by what it grounds
@@ -91,13 +93,13 @@ func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
 // the binding holds its content -- carrying that argument's own compound flag, so a
 // compound argument lands parenthesized where the body uses it -- else the content
 // itself, a literal or a free variable.
-func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool, bool) {
+func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool, bool) {
 	if firstDest(g, nodeID, condThenRel) != 0 {
-		s, ok := d.genConditional(g, nodeID, env)
+		s, ok := d.genConditional(g, nodeID, env, self)
 		return s, false, ok // a conditional renders as a parenthesized literal, a primary
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
-		return d.genOrderedNode(g, nodeID, env)
+		return d.genOrderedNode(g, nodeID, env, self)
 	}
 	left := firstDest(g, nodeID, operand0Rel)
 	right := firstDest(g, nodeID, operand1Rel)
@@ -112,8 +114,8 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg) (s
 		return c, false, true // a literal or a free variable is a single token
 	}
 	sym := d.opSymbol(g.content(firstDest(g, nodeID, memory.RelGrounds)))
-	l, lok := d.genOperand(g, left, env)
-	r, rok := d.genOperand(g, right, env)
+	l, lok := d.genOperand(g, left, env, self)
+	r, rok := d.genOperand(g, right, env, self)
 	if sym == "" || !lok || !rok {
 		return "", false, false
 	}
@@ -124,8 +126,8 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg) (s
 // source in parentheses so the emitted expression keeps its grouping whatever the
 // operators' precedence. The compound flag comes from the walk, so an inlined call or a
 // substituted compound argument is parenthesized as faithfully as a literal operation.
-func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool) {
-	s, compound, ok := d.genCode(g, nodeID, env)
+func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool) {
+	s, compound, ok := d.genCode(g, nodeID, env, self)
 	if !ok {
 		return "", false
 	}
@@ -141,15 +143,15 @@ func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]boundArg)
 // not). The comparison operator is the node's content; the sides go through genOperand
 // (so a compound side is parenthesized) and the branches render bare, the same shape
 // the typed render takes.
-func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool) {
+func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool) {
 	cmp := g.content(nodeID)
 	if cmp != ">" && cmp != "<" && cmp != "==" {
 		return "", false
 	}
-	left, lok := d.genOperand(g, firstDest(g, nodeID, condLeftRel), env)
-	right, rok := d.genOperand(g, firstDest(g, nodeID, condRightRel), env)
-	then, _, tok := d.genCode(g, firstDest(g, nodeID, condThenRel), env)
-	els, _, eok := d.genCode(g, firstDest(g, nodeID, condElseRel), env)
+	left, lok := d.genOperand(g, firstDest(g, nodeID, condLeftRel), env, self)
+	right, rok := d.genOperand(g, firstDest(g, nodeID, condRightRel), env, self)
+	then, _, tok := d.genCode(g, firstDest(g, nodeID, condThenRel), env, self)
+	els, _, eok := d.genCode(g, firstDest(g, nodeID, condElseRel), env, self)
 	if !lok || !rok || !tok || !eok {
 		return "", false
 	}
@@ -159,13 +161,11 @@ func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]bound
 
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
 // call -- told apart by what it grounds in. The list concept gives a composite
-// literal (a primary); a function concept (one carrying a body subgraph) gives an
-// inlined call, whose compound flag is the inlined body's, so the call parenthesizes in
-// an operand position exactly when the body would.
-func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]boundArg) (string, bool, bool) {
+// literal (a primary); a function concept (one carrying a body subgraph) gives a call.
+func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool, bool) {
 	fn := firstDest(g, nodeID, memory.RelGrounds)
 	if g.content(fn) == "list" {
-		elems, ok := d.orderedChildren(g, nodeID, elemRel, env)
+		elems, ok := d.orderedChildren(g, nodeID, elemRel, env, self)
 		if !ok {
 			return "", false, false
 		}
@@ -176,24 +176,37 @@ func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]bound
 		return "[]int{" + strings.Join(parts, ", ") + "}", false, true
 	}
 	if firstDest(g, fn, bodyRel) != 0 {
-		return d.genCall(g, nodeID, fn, env)
+		return d.genCall(g, nodeID, fn, env, self)
 	}
 	return "", false, false
 }
 
-// genCall inlines a call by traversal: it binds the function's ordered parameters to
-// the call's rendered arguments and walks the function's body under that binding, the
-// graph counterpart of the typed render's inline + substitute. Arguments are rendered
-// in the caller's binding, each keeping its compound flag, so the body parenthesizes a
-// compound argument where it uses the parameter as an operand. A body leaf that names a
-// parameter emits its argument, and the call expands to the body in place.
-func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]boundArg) (string, bool, bool) {
+// genCall renders a call. A call to the function currently being written (self) is a
+// plain call to its recursive local variable. A call to a recursive function is written
+// as the local-function form (genRecursive); a second recursive function reached while
+// one is already being written is out of this step's scope and refused. Any other call
+// is inlined: its parameters bound to the rendered arguments, its body walked in place,
+// each argument keeping its compound flag so a compound one parenthesizes where used.
+func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]boundArg, self uint64) (string, bool, bool) {
+	if fn == self {
+		args, ok := d.orderedChildren(g, nodeID, elemRel, env, self)
+		if !ok {
+			return "", false, false
+		}
+		return g.content(fn) + "(" + joinSrc(args) + ")", false, true
+	}
+	if d.isRecursive(g, fn) {
+		if self != 0 {
+			return "", false, false // a second recursive function while one is open
+		}
+		return d.genRecursive(g, nodeID, fn, env)
+	}
 	body := firstDest(g, fn, bodyRel)
 	if body == 0 {
 		return "", false, false
 	}
 	params, pok := d.orderedSlots(g, fn, paramRel)
-	args, aok := d.orderedChildren(g, nodeID, elemRel, env)
+	args, aok := d.orderedChildren(g, nodeID, elemRel, env, self)
 	if !pok || !aok || len(params) != len(args) {
 		return "", false, false
 	}
@@ -205,7 +218,7 @@ func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]boundArg
 		}
 		binding[name] = args[i]
 	}
-	return d.genCode(g, body, binding)
+	return d.genCode(g, body, binding, self)
 }
 
 // orderedSlots returns the held nodes of a node's ordered children in position order,
@@ -243,20 +256,173 @@ func (d *Daemon) orderedSlots(g codeGraph, nodeID uint64, rel string) ([]uint64,
 // walked under the binding and keeping its compound flag, so a child may be a literal,
 // a variable, or a nested sub-meaning. A list's elements and a call's arguments share
 // it (the list takes the sources, a call also takes the flags for operand hygiene).
-func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map[string]boundArg) ([]boundArg, bool) {
+func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map[string]boundArg, self uint64) ([]boundArg, bool) {
 	ids, ok := d.orderedSlots(g, nodeID, rel)
 	if !ok {
 		return nil, false
 	}
 	out := make([]boundArg, len(ids))
 	for i, id := range ids {
-		src, compound, ok := d.genCode(g, id, env)
+		src, compound, ok := d.genCode(g, id, env, self)
 		if !ok {
 			return nil, false
 		}
 		out[i] = boundArg{src: src, compound: compound}
 	}
 	return out, true
+}
+
+// joinSrc joins rendered children by their sources, the form a call's argument list and
+// the argument list of the local-function form both take.
+func joinSrc(args []boundArg) string {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = a.src
+	}
+	return strings.Join(parts, ", ")
+}
+
+// genRecursive writes a call to a recursive function as the local-function form the
+// typed render uses: a function-typed local variable assigned a closure that calls
+// itself through the variable, then invoked on the arguments. The body is written as
+// statements with self set to the function node, so a self-call inside it is a plain
+// call. The whole thing is a parenthesized IIFE, a primary that yields its value.
+func (d *Daemon) genRecursive(g codeGraph, nodeID, fn uint64, env map[string]boundArg) (string, bool, bool) {
+	name := g.content(fn)
+	op, ok := d.opByName(name)
+	body := firstDest(g, fn, bodyRel)
+	if !ok || body == 0 {
+		return "", false, false
+	}
+	stmts, sok := d.genBody(g, body, fn)
+	args, aok := d.orderedChildren(g, nodeID, elemRel, env, 0)
+	if !sok || !aok {
+		return "", false, false
+	}
+	rt := goCodeType(d.inferType(g, body, paramTypeMap(op)))
+	return "(func() " + rt + " { var " + name + " " + funcType(op, rt) + "; " +
+		name + " = func(" + sigParams(op) + ") " + rt + " { " + stmts + " }; " +
+		"return " + name + "(" + joinSrc(args) + ") }())", false, true
+}
+
+// genBody writes a recursive function's body as the statements inside its braces, with
+// self the function node so a self-call is a plain call: a conditional becomes the
+// branch form "if test { return then }; return else", any other body a single return.
+// The parameters are in scope as themselves, so the body is walked with no binding.
+func (d *Daemon) genBody(g codeGraph, body, self uint64) (string, bool) {
+	if firstDest(g, body, condThenRel) != 0 {
+		cmp := g.content(body)
+		if cmp != ">" && cmp != "<" && cmp != "==" {
+			return "", false
+		}
+		left, lok := d.genOperand(g, firstDest(g, body, condLeftRel), nil, self)
+		right, rok := d.genOperand(g, firstDest(g, body, condRightRel), nil, self)
+		then, _, tok := d.genCode(g, firstDest(g, body, condThenRel), nil, self)
+		els, _, eok := d.genCode(g, firstDest(g, body, condElseRel), nil, self)
+		if !lok || !rok || !tok || !eok {
+			return "", false
+		}
+		return "if " + left + " " + cmp + " " + right + " { return " + then + " }; return " + els, true
+	}
+	src, _, ok := d.genCode(g, body, nil, self)
+	if !ok {
+		return "", false
+	}
+	return "return " + src, true
+}
+
+// isRecursive reports whether a function's body calls the function itself, the mark of a
+// call that is written as a self-referential local function rather than inlined.
+func (d *Daemon) isRecursive(g codeGraph, fn uint64) bool {
+	return d.reaches(g, firstDest(g, fn, bodyRel), fn, map[uint64]bool{})
+}
+
+// reaches reports whether a node, or anything under its structural edges, grounds in
+// target -- how a body is searched for a call back to its own function. It does not
+// cross the grounding edge, so the search does not loop through the function it seeks.
+func (d *Daemon) reaches(g codeGraph, nodeID, target uint64, seen map[uint64]bool) bool {
+	if nodeID == 0 || seen[nodeID] {
+		return false
+	}
+	seen[nodeID] = true
+	if firstDest(g, nodeID, memory.RelGrounds) == target {
+		return true
+	}
+	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, elemRel, holdsRel} {
+		for _, dest := range g.dests(nodeID, rel) {
+			if d.reaches(g, dest, target, seen) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// inferType is the value type a body evaluates to ("int" or "list"), read from the
+// graph: a conditional takes its chosen branch's type, a list its own, an operation a
+// number, and a leaf a number or, for a parameter reference, the parameter's type. It
+// matches the engine's type for the shapes a function returns, the return type the
+// recursive form is written with.
+func (d *Daemon) inferType(g codeGraph, nodeID uint64, paramTypes map[string]string) string {
+	if then := firstDest(g, nodeID, condThenRel); then != 0 {
+		return d.inferType(g, then, paramTypes)
+	}
+	if firstDest(g, nodeID, elemRel) != 0 {
+		if g.content(firstDest(g, nodeID, memory.RelGrounds)) == "list" {
+			return "list"
+		}
+		return "int" // a call, taken as a number in the common case
+	}
+	if firstDest(g, nodeID, operand0Rel) != 0 {
+		return "int" // arithmetic
+	}
+	if t, ok := paramTypes[g.content(nodeID)]; ok {
+		return t
+	}
+	return "int" // a literal
+}
+
+// goCodeType is a value type's Go form, a list written as a slice.
+func goCodeType(t string) string {
+	if t == "list" {
+		return "[]int"
+	}
+	return "int"
+}
+
+// paramTypeAt is a parameter's declared type, "int" when none is recorded.
+func paramTypeAt(op code.Op, i int) string {
+	if i < len(op.ParamTypes) && op.ParamTypes[i] != "" {
+		return op.ParamTypes[i]
+	}
+	return "int"
+}
+
+// paramTypeMap maps each parameter name to its type, for reading a body's value type.
+func paramTypeMap(op code.Op) map[string]string {
+	m := make(map[string]string, len(op.Params))
+	for i, p := range op.Params {
+		m[p] = paramTypeAt(op, i)
+	}
+	return m
+}
+
+// sigParams writes a function's parameter list with Go types, "number int".
+func sigParams(op code.Op) string {
+	parts := make([]string, len(op.Params))
+	for i, p := range op.Params {
+		parts[i] = p + " " + goCodeType(paramTypeAt(op, i))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// funcType writes a function's type, "func(int) int", for the recursive local variable.
+func funcType(op code.Op, ret string) string {
+	parts := make([]string, len(op.Params))
+	for i := range op.Params {
+		parts[i] = goCodeType(paramTypeAt(op, i))
+	}
+	return "func(" + strings.Join(parts, ", ") + ") " + ret
 }
 
 // opByName finds a seeded or learned operation by name, read from the code engine so
