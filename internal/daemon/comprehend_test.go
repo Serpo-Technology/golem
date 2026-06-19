@@ -1667,6 +1667,42 @@ func TestRepairCorrectsReferent(t *testing.T) {
 	}
 }
 
+// The discourse move a speech-act verb carries is derived from the graph, not a
+// seeded category string: a seeded verb reads its move from its link to a move
+// concept, and a fresh speech word linked to a move derives that move after a
+// recompile. This is the proof the speech colon-class lives in the graph.
+func TestSpeechMoveDerivedFromGraph(t *testing.T) {
+	d, s := testDaemon(t)
+	if f := d.gram.ParseHint("explain", "en", d.resolveConcept); f.Speech != "clarify" {
+		t.Fatalf("a seeded speech verb should derive clarify from the graph: %q", f.Speech)
+	}
+	var recallID uint64
+	for id, name := range d.speechMoves {
+		if name == "recall" {
+			recallID = id
+		}
+	}
+	if recallID == 0 {
+		t.Fatal("the recall move concept should exist after boot")
+	}
+	// A fresh closed-class speech word carries no seeded move; its move is whatever
+	// it is linked to in the graph.
+	fw := &memory.Fragment{Kind: memory.KindGrammar, Channel: "grammar", Content: "ravel",
+		Template: "fw:en:ravel", Lang: "en", Category: "speech", Time: time.Now()}
+	if _, err := s.Encode(fw); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(fw.ID, recallID, memory.RelMarks, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if f := d.gram.ParseHint("ravel", "en", d.resolveConcept); f.Speech != "recall" {
+		t.Fatalf("a word linked to the recall move should derive recall, not %q", f.Speech)
+	}
+}
+
 // "What do you mean" elaborates the subject in mind rather than reading as a fresh
 // question, so a turn can ask GOLEM to say more about what it just said.
 func TestClarifyElaboratesTopic(t *testing.T) {

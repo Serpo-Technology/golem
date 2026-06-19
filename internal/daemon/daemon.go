@@ -222,6 +222,12 @@ type Daemon struct {
 	userID uint64
 	bothID uint64
 
+	// speechMoves are the discourse-move concepts a speech-act verb marks (clarify,
+	// recall), by concept id. They are graph concepts the verbs link to, so the
+	// grammar derives a verb's move from the graph rather than a seeded category
+	// string; like the participants, they sit outside the grown concept layer.
+	speechMoves map[uint64]string
+
 	// lastMode is the determination the loop last carried out (consolidate,
 	// pursue, idle), the inertia a held goal leans on and the transition the
 	// trail records. lastPursuit paces the active mulling of a goal's topic.
@@ -596,6 +602,61 @@ func (d *Daemon) ensureConcept(template, content string) uint64 {
 		return 0
 	}
 	return c.ID
+}
+
+// ensureSpeechMoves makes the discourse moves a speech-act verb can carry into
+// graph concepts (clarify, recall) and links each seeded speech-act verb to its
+// move, so the move taxonomy lives in the graph rather than as a colon-suffixed
+// category string in the seed. The grammar compile then derives each verb's move
+// from these links. Idempotent: the concepts and edges are reused if present, so
+// any brain self-heals at boot with no migration.
+func (d *Daemon) ensureSpeechMoves() error {
+	d.speechMoves = map[uint64]string{}
+	moves := []struct {
+		template, name string
+		verbs          []string
+	}{
+		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated"}},
+		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told"}},
+	}
+	// The closed-class verbs are grammar nodes; map each by its template so a verb
+	// is linked to its move by the same word the seed names it with.
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return err
+	}
+	idByTemplate := make(map[string]uint64, len(gnodes))
+	for _, n := range gnodes {
+		idByTemplate[n.Template] = n.ID
+	}
+	for _, m := range moves {
+		id := d.ensureConcept(m.template, m.name)
+		if id == 0 {
+			continue
+		}
+		d.speechMoves[id] = m.name
+		for _, v := range m.verbs {
+			fwID, ok := idByTemplate["fw:en:"+v]
+			if !ok {
+				continue
+			}
+			if err := d.store.LinkRel(fwID, id, memory.RelMarks, 1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// isSystemConcept reports whether a concept is innate scaffolding rather than part
+// of the grown layer: a conversation participant or a speech-act move. Such a
+// concept is kept out of the concept listing the way the participants are.
+func (d *Daemon) isSystemConcept(id uint64) bool {
+	if d.isParticipant(id) {
+		return true
+	}
+	_, ok := d.speechMoves[id]
+	return ok
 }
 
 // Run blocks until the daemon is stopped by a signal or a stop command.

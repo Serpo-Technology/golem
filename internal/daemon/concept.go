@@ -936,8 +936,8 @@ func (d *Daemon) conceptInfos() ([]*wire.ConceptInfo, error) {
 	}
 	infos := make([]*wire.ConceptInfo, 0, len(concepts))
 	for _, c := range concepts {
-		if d.isParticipant(c.ID) {
-			continue // the innate participants are not part of the grown layer
+		if d.isSystemConcept(c.ID) {
+			continue // the innate participants and the speech moves are not grown concepts
 		}
 		sort.Strings(namesOf[c.ID])
 		sort.Strings(featuresOf[c.ID])

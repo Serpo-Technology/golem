@@ -57,6 +57,11 @@ const (
 	// told the relation is transitive, not baked into any construction, so the
 	// chaining is a fact about the relation rather than the grammar.
 	RelTransitive = "transitive"
+	// RelMarks links a closed-class word to a concept it marks, so a grammatical
+	// category the engine reads is derived from the graph rather than a seeded
+	// string. A speech-act verb marks the discourse move it carries (clarify,
+	// recall), the first colon-class category moved into the graph.
+	RelMarks = "marks"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."
