@@ -698,6 +698,16 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		{"rel:after", "after", []string{"sonra"}},
 		{"rel:before", "before", []string{"önce"}},
 		{"property:transitive", "transitive", []string{"transitive"}},
+		// Interrogative type: English wh words name their own type, so only the
+		// forms that need translating link; "what:be" carries the copula nedir folds
+		// in ("what is"), read back by whInfo's type-then-copula split.
+		{"wh:what", "what", []string{"ne", "neyi"}},
+		{"wh:who", "who", []string{"kim"}},
+		{"wh:where", "where", []string{"nerede"}},
+		{"wh:why", "why", []string{"neden", "niye"}},
+		{"wh:how", "how", []string{"nasıl"}},
+		{"wh:which", "which", []string{"hangi"}},
+		{"wh:what:be", "what:be", []string{"nedir"}},
 	}
 	// The closed-class words are grammar nodes; map each by its surface so a word is
 	// linked to its refinement whatever tongue seeds it.

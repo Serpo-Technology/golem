@@ -80,7 +80,7 @@ func TestTurkishParse(t *testing.T) {
 		t.Fatalf("before-questions parse the same way: %q %q", grel, ganchor.Phrase)
 	}
 
-	h := Parse("make test nedir", nil)
+	h := rp.Parse("make test nedir", nil)
 	if h.Lang != "tr" || h.Force != ForceQuestion || h.Action.Phrase != "be" {
 		t.Fatalf("nedir asks for a definition: %+v", h)
 	}
@@ -88,12 +88,12 @@ func TestTurkishParse(t *testing.T) {
 		t.Fatalf("the definition topic precedes nedir: %q", h.Patient.Phrase)
 	}
 
-	c := Parse("make test kaç kez oldu", nil)
+	c := rp.Parse("make test kaç kez oldu", nil)
 	if !c.Counting || !c.Past || c.Patient.Phrase != "make test" {
 		t.Fatalf("kaç kez counts in the past: %+v", c)
 	}
 
-	w := Parse("ne zaman make test oldu", nil)
+	w := rp.Parse("ne zaman make test oldu", nil)
 	if w.Wh != "when" || !w.Past {
 		t.Fatalf("ne zaman asks when: %+v", w)
 	}

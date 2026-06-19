@@ -144,23 +144,23 @@ fw:tr:bizi	bizi	tr	deixis
 fw:tr:defa	defa	tr	fn
 fw:tr:değil	değil	tr	neg
 fw:tr:genellikle	genellikle	tr	adv
-fw:tr:hangi	hangi	tr	wh:which
+fw:tr:hangi	hangi	tr	wh
 fw:tr:hep	hep	tr	adv
 fw:tr:hiç	hiç	tr	neg
 fw:tr:kaç	kaç	tr	cnt
 fw:tr:kere	kere	tr	fn
 fw:tr:kez	kez	tr	fn
-fw:tr:kim	kim	tr	wh:who
+fw:tr:kim	kim	tr	wh
 fw:tr:mi	mi	tr	fn
 fw:tr:mu	mu	tr	fn
 fw:tr:mü	mü	tr	fn
 fw:tr:mı	mı	tr	fn
-fw:tr:nasıl	nasıl	tr	wh:how
-fw:tr:ne	ne	tr	wh:what
-fw:tr:neden	neden	tr	wh:why
-fw:tr:nedir	nedir	tr	wh:what:be
-fw:tr:nerede	nerede	tr	wh:where
-fw:tr:niye	niye	tr	wh:why
+fw:tr:nasıl	nasıl	tr	wh
+fw:tr:ne	ne	tr	wh
+fw:tr:neden	neden	tr	wh
+fw:tr:nedir	nedir	tr	wh
+fw:tr:nerede	nerede	tr	wh
+fw:tr:niye	niye	tr	wh
 fw:tr:sen	sen	tr	deixis
 fw:tr:seni	seni	tr	deixis
 fw:tr:sonra	sonra	tr	rel
@@ -237,7 +237,7 @@ surface:tr:pronoun.patient	onu	tr
 suffix:tr:verbpast	DI	tr
 suffix:tr:aorist	Ir	tr
 surface:tr:proverb	yaptı yapar	tr
-fw:tr:neyi	neyi	tr	wh:what
+fw:tr:neyi	neyi	tr	wh
 suffix:tr:verbneg	mA	tr
 surface:en:yes	yes	en
 surface:en:no	no	en

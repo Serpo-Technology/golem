@@ -320,6 +320,15 @@ func refinedBuiltin() *Params {
 		Param{Key: "fw:en:transitive", Value: "transitive", Lang: "en", Category: "property:transitive", Weight: 1},
 		Param{Key: "fw:tr:sonra", Value: "sonra", Lang: "tr", Category: "rel:after", Weight: 1},
 		Param{Key: "fw:tr:önce", Value: "önce", Lang: "tr", Category: "rel:before", Weight: 1},
+		Param{Key: "fw:tr:ne", Value: "ne", Lang: "tr", Category: "wh:what", Weight: 1},
+		Param{Key: "fw:tr:neyi", Value: "neyi", Lang: "tr", Category: "wh:what", Weight: 1},
+		Param{Key: "fw:tr:kim", Value: "kim", Lang: "tr", Category: "wh:who", Weight: 1},
+		Param{Key: "fw:tr:nerede", Value: "nerede", Lang: "tr", Category: "wh:where", Weight: 1},
+		Param{Key: "fw:tr:neden", Value: "neden", Lang: "tr", Category: "wh:why", Weight: 1},
+		Param{Key: "fw:tr:niye", Value: "niye", Lang: "tr", Category: "wh:why", Weight: 1},
+		Param{Key: "fw:tr:nasıl", Value: "nasıl", Lang: "tr", Category: "wh:how", Weight: 1},
+		Param{Key: "fw:tr:hangi", Value: "hangi", Lang: "tr", Category: "wh:which", Weight: 1},
+		Param{Key: "fw:tr:nedir", Value: "nedir", Lang: "tr", Category: "wh:what:be", Weight: 1},
 	)
 	return Compile(refined, nil).SetConstructions(Constructions()).SetDecl(Curriculum()).SetArgConstructions(Constructions())
 }
