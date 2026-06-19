@@ -135,11 +135,11 @@ func (d *Daemon) isCall(c code.Computation) bool {
 	return c.Op != "" && c.Op != "list" && d.opSymbol(c.Op) == ""
 }
 
-// shadowCheck closes the loop on a comprehended computation: it materializes the
-// computation as a transient subgraph and walks it the way the prototype walks any
-// graph, returning the source. ok is false when the shape is not one the materializer
-// builds yet, so the caller skips the comparison rather than reporting a false gap.
-func (d *Daemon) shadowCheck(comp code.Computation) (string, bool) {
+// traverseCode generates Go from a comprehended computation by graph traversal: it
+// materializes the computation as a transient subgraph and walks it for the source. This
+// is the production generator on the runcode path. ok is false when the shape is not one
+// the materializer builds yet (a map), so the caller falls back to the typed render.
+func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	g := newScratchGraph()
 	root, ok := d.materializeCode(g, comp, "", map[string]uint64{})
 	if !ok {

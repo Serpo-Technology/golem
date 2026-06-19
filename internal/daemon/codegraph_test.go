@@ -400,7 +400,7 @@ func TestCodeGraphClosesTheLoop(t *testing.T) {
 		if !ok {
 			t.Fatalf("the engine should comprehend %q", utterance)
 		}
-		walked, wok := d.shadowCheck(comp)
+		walked, wok := d.traverseCode(comp)
 		typed, tok := d.code.ToCode(comp)
 		if !wok || !tok || walked != typed {
 			t.Fatalf("%q: the materialized graph should walk to the render: %q vs %q (walked ok %v)", utterance, walked, typed, wok)
@@ -438,7 +438,7 @@ func TestCodeGraphShadowsCalls(t *testing.T) {
 		if !ok {
 			t.Fatalf("the engine should comprehend %q", utterance)
 		}
-		walked, wok := d.shadowCheck(comp)
+		walked, wok := d.traverseCode(comp)
 		typed, tok := d.code.ToCode(comp)
 		if !wok || !tok || walked != typed {
 			t.Fatalf("%q: the materialized call should walk to the render: %q vs %q (walked ok %v)", utterance, walked, typed, wok)
@@ -480,7 +480,7 @@ func TestCodeGraphShadowsCompoundCalls(t *testing.T) {
 		{add(triple(lit("4")), lit("5")), "(4 * 3) + 5", "17"}, // a call in an operand position
 	}
 	for _, tc := range cases {
-		walked, wok := d.shadowCheck(tc.comp)
+		walked, wok := d.traverseCode(tc.comp)
 		typed, tok := d.code.ToCode(tc.comp)
 		if !wok || !tok || walked != tc.want || typed != tc.want {
 			t.Fatalf("want %q: walked %q (ok %v), typed %q (ok %v)", tc.want, walked, wok, typed, tok)
@@ -507,7 +507,7 @@ func TestCodeGraphShadowsRecursion(t *testing.T) {
 	if !ok {
 		t.Fatal("the engine should comprehend the factorial call")
 	}
-	walked, wok := d.shadowCheck(comp)
+	walked, wok := d.traverseCode(comp)
 	typed, tok := d.code.ToCode(comp)
 	if !wok || !tok || walked != typed {
 		t.Fatalf("the recursive call should walk to the render:\n walked %q (ok %v)\n typed  %q (ok %v)", walked, wok, typed, tok)
@@ -519,20 +519,32 @@ func TestCodeGraphShadowsRecursion(t *testing.T) {
 	}
 }
 
-// On the live runcode path the shadow is wired in and silent: the reply is the engine's
-// result as before, and because the graph the daemon materializes agrees with the
-// render, nothing is logged. A mismatch would print, so an empty log is the agreement.
-func TestRuncodeShadowAgreesOnLivePath(t *testing.T) {
+// The production runcode path now generates by traversal: it materializes the
+// comprehended computation as a subgraph and walks it for the source it runs, with the
+// typed render as a cross-check. Across the shapes (arithmetic, a list, a recursive
+// call) the reply is the right value and nothing is logged, so the traversal is
+// load-bearing and agrees with the render on real input.
+func TestRuncodeGeneratesViaTraversal(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
+	say(t, d, "the factorial of a number is 1 if the number is below 1 else the product of the number and the factorial of the difference of the number and 1")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
 
 	var buf bytes.Buffer
 	d.out = &buf
-	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the sum of 6 and 7"}, nil)
-	if !resp.OK || !strings.Contains(resp.Say, "13") {
-		t.Fatalf("runcode should still compute 13, got %q (ok %v)", resp.Say, resp.OK)
+	for _, tc := range []struct{ in, want string }{
+		{"the sum of 6 and 7", "13"},
+		{"the list of 1 and 2 and 3", "[1 2 3]"},
+		{"the factorial of 5", "120"},
+	} {
+		resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: tc.in}, nil)
+		if !resp.OK || !strings.Contains(resp.Say, tc.want) {
+			t.Fatalf("runcode %q should say %q, got %q (ok %v)", tc.in, tc.want, resp.Say, resp.OK)
+		}
 	}
-	if strings.Contains(buf.String(), "shadow mismatch") {
-		t.Fatalf("the live shadow should agree, but logged: %q", buf.String())
+	if strings.Contains(buf.String(), "mismatch") {
+		t.Fatalf("the traversal should agree with the render on the live path, but logged: %q", buf.String())
 	}
 }
