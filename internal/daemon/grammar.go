@@ -62,10 +62,11 @@ func (d *Daemon) loadGrammar() error {
 	if _, err := d.seedParams(cnodes, memory.KindConstruction, grammar.Constructions()); err != nil {
 		return err
 	}
-	// The discourse moves are graph concepts the speech-act verbs link to; ensure
-	// them and the links before the compile, which derives each verb's move from
+	// The category refinements (a verb's discourse move, a relator's direction, a
+	// predicate's property) are graph concepts the words link to; ensure them and
+	// the links before the compile, which derives each word's refined category from
 	// the graph rather than a seeded category string.
-	if err := d.ensureSpeechMoves(); err != nil {
+	if err := d.ensureCategoryRefinements(); err != nil {
 		return err
 	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
@@ -129,7 +130,7 @@ func (d *Daemon) recompileGrammar() error {
 	// and the declarative grammar the general engine runs; each compile step
 	// reads the slice it understands and ignores the rest.
 	gparams := paramsOf(gnodes)
-	d.deriveSpeechMoves(gnodes, gparams)
+	d.deriveCategoryRefinements(gnodes, gparams)
 	cparams := paramsOf(cnodes)
 	d.gram = grammar.Compile(gparams, mass).
 		SetConstructions(cparams).
@@ -139,40 +140,44 @@ func (d *Daemon) recompileGrammar() error {
 	return nil
 }
 
-// deriveSpeechMoves rewrites each speech-act verb's category with the discourse
-// move it is linked to in the graph, "speech:clarify" for a verb marking the
-// clarify move, so the refinement the parser reads is derived from the graph
-// concepts rather than a seeded colon-suffixed string. A grammar node and its
-// compiled param line up by index (paramsOf preserves order), so the move read
-// off a verb's node is written onto its param. A speech node with no link keeps
-// its bare category and carries no move, the honest gap.
-func (d *Daemon) deriveSpeechMoves(gnodes []*memory.Fragment, gparams []grammar.Param) {
-	if len(d.speechMoves) == 0 {
+// deriveCategoryRefinements rewrites each closed-class word's category with the
+// refinement it is linked to in the graph: "speech:clarify" for a verb marking
+// the clarify move, "rel:after" for a relator marking the after direction,
+// "property:transitive" for a predicate marking transitivity. So the colon-refined
+// category the parser reads is derived from the graph concepts rather than a
+// seeded colon-suffixed string. A grammar node and its compiled param line up by
+// index (paramsOf preserves order), so the refinement read off a word's node is
+// written onto its param, keeping the broad class and replacing the refinement. A
+// word with no refinement link keeps its bare category, the honest gap. A marks
+// edge to a non-refinement concept (a deictic participant) is left alone.
+func (d *Daemon) deriveCategoryRefinements(gnodes []*memory.Fragment, gparams []grammar.Param) {
+	if len(d.refinements) == 0 {
 		return
 	}
-	ids := make([]uint64, 0)
-	at := make(map[uint64]int)
+	ids := make([]uint64, len(gnodes))
+	at := make(map[uint64]int, len(gnodes))
 	for i, n := range gnodes {
-		if strings.HasPrefix(n.Category, "speech") {
-			ids = append(ids, n.ID)
-			at[n.ID] = i
-		}
-	}
-	if len(ids) == 0 {
-		return
+		ids[i] = n.ID
+		at[n.ID] = i
 	}
 	edges, err := d.store.LinksFromRel(ids, memory.RelMarks)
 	if err != nil {
 		return
 	}
 	for _, e := range edges {
-		move, ok := d.speechMoves[e.To]
+		ref, ok := d.refinements[e.To]
 		if !ok {
 			continue
 		}
-		if i, ok := at[e.From]; ok {
-			gparams[i].Category = "speech:" + move
+		i, ok := at[e.From]
+		if !ok {
+			continue
 		}
+		base := gparams[i].Category
+		if c := strings.IndexByte(base, ':'); c >= 0 {
+			base = base[:c]
+		}
+		gparams[i].Category = base + ":" + ref
 	}
 }
 

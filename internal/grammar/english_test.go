@@ -310,8 +310,22 @@ func TestRealizeWhenceAnswers(t *testing.T) {
 // the subject, and the inverted "is outrank transitive" asks it. This is the
 // hook a learned relation-property routes off, the way a speech-act verb routes
 // a discourse move.
+// refinedBuiltin compiles the seed with the colon-refined categories the daemon
+// derives from the graph in a real run; the refinement lives in the graph, not the
+// seed, so a pure-package parser test supplies it here to exercise the parser's
+// handling of a refined category.
+func refinedBuiltin() *Params {
+	refined := append([]Param{}, Curriculum()...)
+	refined = append(refined,
+		Param{Key: "fw:en:transitive", Value: "transitive", Lang: "en", Category: "property:transitive", Weight: 1},
+		Param{Key: "fw:tr:sonra", Value: "sonra", Lang: "tr", Category: "rel:after", Weight: 1},
+		Param{Key: "fw:tr:önce", Value: "önce", Lang: "tr", Category: "rel:before", Weight: 1},
+	)
+	return Compile(refined, nil).SetConstructions(Constructions()).SetDecl(Curriculum()).SetArgConstructions(Constructions())
+}
+
 func TestPropertyAssertionParses(t *testing.T) {
-	p := Builtin()
+	p := refinedBuiltin()
 	f := p.Parse("outrank is transitive", nil)
 	if f.Property != "transitive" {
 		t.Fatalf("the predicate should be read as the property: %q", f.Property)

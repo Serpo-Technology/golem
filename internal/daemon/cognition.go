@@ -25,13 +25,13 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The speech-move concepts are grammar scaffolding the verbs link to, not part
-	// of the grown layer, so they are kept out of the reasoning view (they carry no
-	// features and so never resemble anything regardless).
-	if len(d.speechMoves) > 0 {
+	// The refinement concepts are grammar scaffolding the closed-class words link
+	// to, not part of the grown layer, so they are kept out of the reasoning view
+	// (they carry no features and so never resemble anything regardless).
+	if len(d.refinements) > 0 {
 		grown := make([]*memory.Fragment, 0, len(concepts))
 		for _, c := range concepts {
-			if _, ok := d.speechMoves[c.ID]; ok {
+			if _, ok := d.refinements[c.ID]; ok {
 				continue
 			}
 			grown = append(grown, c)

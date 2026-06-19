@@ -222,11 +222,13 @@ type Daemon struct {
 	userID uint64
 	bothID uint64
 
-	// speechMoves are the discourse-move concepts a speech-act verb marks (clarify,
-	// recall), by concept id. They are graph concepts the verbs link to, so the
-	// grammar derives a verb's move from the graph rather than a seeded category
-	// string; like the participants, they sit outside the grown concept layer.
-	speechMoves map[uint64]string
+	// refinements are the category-refinement concepts a closed-class word marks: a
+	// speech-act verb's discourse move (clarify, recall), a relator's direction
+	// (after, before), a predicate's relation property (transitive). They are graph
+	// concepts the words link to, so the grammar derives a word's colon-refined
+	// category from the graph; like the participants, they sit outside the grown
+	// concept layer.
+	refinements map[uint64]string
 
 	// deicticByForm resolves a deictic pronoun to the participant it points at,
 	// built from the graph: each deixis word is linked to its participant concept,
@@ -677,39 +679,46 @@ func (d *Daemon) ensureConcept(template, content string) uint64 {
 	return c.ID
 }
 
-// ensureSpeechMoves makes the discourse moves a speech-act verb can carry into
-// graph concepts (clarify, recall) and links each seeded speech-act verb to its
-// move, so the move taxonomy lives in the graph rather than as a colon-suffixed
-// category string in the seed. The grammar compile then derives each verb's move
-// from these links. Idempotent: the concepts and edges are reused if present, so
-// any brain self-heals at boot with no migration.
-func (d *Daemon) ensureSpeechMoves() error {
-	d.speechMoves = map[uint64]string{}
-	moves := []struct {
+// ensureCategoryRefinements makes the refinement a closed-class word carries into
+// a graph concept and links each word to it, so the colon-class taxonomy lives in
+// the graph rather than as a colon-suffixed category string in the seed: a
+// speech-act verb's discourse move, a relator's direction, a predicate's relation
+// property. The grammar compile then derives each word's refined category from
+// these links. Idempotent: the concepts and edges are reused if present, so any
+// brain self-heals at boot with no migration. English relators name their own
+// direction, so only the forms that need translating are linked.
+func (d *Daemon) ensureCategoryRefinements() error {
+	d.refinements = map[uint64]string{}
+	refs := []struct {
 		template, name string
-		verbs          []string
+		words          []string
 	}{
 		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated"}},
 		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told"}},
+		{"rel:after", "after", []string{"sonra"}},
+		{"rel:before", "before", []string{"önce"}},
+		{"property:transitive", "transitive", []string{"transitive"}},
 	}
-	// The closed-class verbs are grammar nodes; map each by its template so a verb
-	// is linked to its move by the same word the seed names it with.
+	// The closed-class words are grammar nodes; map each by its surface so a word is
+	// linked to its refinement whatever tongue seeds it.
 	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {
 		return err
 	}
-	idByTemplate := make(map[string]uint64, len(gnodes))
+	idByWord := make(map[string]uint64, len(gnodes))
 	for _, n := range gnodes {
-		idByTemplate[n.Template] = n.ID
+		if strings.HasPrefix(n.Template, "fw:") {
+			idByWord[strings.ToLower(n.Content)] = n.ID
+		}
 	}
-	for _, m := range moves {
-		id := d.ensureConcept(m.template, m.name)
+	for _, r := range refs {
+		id := d.ensureConcept(r.template, r.name)
 		if id == 0 {
 			continue
 		}
-		d.speechMoves[id] = m.name
-		for _, v := range m.verbs {
-			fwID, ok := idByTemplate["fw:en:"+v]
+		d.refinements[id] = r.name
+		for _, w := range r.words {
+			fwID, ok := idByWord[w]
 			if !ok {
 				continue
 			}
@@ -722,13 +731,13 @@ func (d *Daemon) ensureSpeechMoves() error {
 }
 
 // isSystemConcept reports whether a concept is innate scaffolding rather than part
-// of the grown layer: a conversation participant or a speech-act move. Such a
+// of the grown layer: a conversation participant or a category refinement. Such a
 // concept is kept out of the concept listing the way the participants are.
 func (d *Daemon) isSystemConcept(id uint64) bool {
 	if d.isParticipant(id) {
 		return true
 	}
-	_, ok := d.speechMoves[id]
+	_, ok := d.refinements[id]
 	return ok
 }
 

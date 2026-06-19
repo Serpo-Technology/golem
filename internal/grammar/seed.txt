@@ -83,7 +83,7 @@ fw:en:times	times	en	fn
 fw:en:to	to	en	fn
 fw:en:than	than	en	than
 fw:en:told	told	en	speech
-fw:en:transitive	transitive	en	property:transitive
+fw:en:transitive	transitive	en	property
 fw:en:try	try	en	imp
 fw:en:us	us	en	deixis
 fw:en:usually	usually	en	adv
@@ -163,10 +163,10 @@ fw:tr:nerede	nerede	tr	wh:where
 fw:tr:niye	niye	tr	wh:why
 fw:tr:sen	sen	tr	deixis
 fw:tr:seni	seni	tr	deixis
-fw:tr:sonra	sonra	tr	rel:after
+fw:tr:sonra	sonra	tr	rel
 fw:tr:ve	ve	tr	fn
 fw:tr:zaman	zaman	tr	time
-fw:tr:önce	önce	tr	rel:before
+fw:tr:önce	önce	tr	rel
 sortal:tr:eylem	eylem	tr	action
 sortal:tr:eylemler	eylemler	tr	action
 sortal:tr:komut	komut	tr	command

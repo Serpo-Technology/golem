@@ -1677,7 +1677,7 @@ func TestSpeechMoveDerivedFromGraph(t *testing.T) {
 		t.Fatalf("a seeded speech verb should derive clarify from the graph: %q", f.Speech)
 	}
 	var recallID uint64
-	for id, name := range d.speechMoves {
+	for id, name := range d.refinements {
 		if name == "recall" {
 			recallID = id
 		}

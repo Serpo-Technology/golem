@@ -62,7 +62,10 @@ func TestTurkishSuffixHarmony(t *testing.T) {
 // The SOV parser reads the anchor from before its relator, strips the
 // case suffix, and lands in the same frame the English parser fills.
 func TestTurkishParse(t *testing.T) {
-	f := Parse("make test'ten sonra ne gelir", nil)
+	// The relator's direction is a colon-refined category the daemon derives from
+	// the graph, so the parser test supplies it through refinedBuiltin.
+	rp := refinedBuiltin()
+	f := rp.Parse("make test'ten sonra ne gelir", nil)
 	if f.Lang != "tr" || f.Force != ForceQuestion || f.Wh != "what" {
 		t.Fatalf("a Turkish question should be detected and typed: %+v", f)
 	}
@@ -71,7 +74,7 @@ func TestTurkishParse(t *testing.T) {
 		t.Fatalf("the anchor precedes its relator in SOV: %q %q", rel, anchor.Phrase)
 	}
 
-	g := Parse("make deploy'dan önce ne olur", nil)
+	g := rp.Parse("make deploy'dan önce ne olur", nil)
 	grel, ganchor := g.FirstQual()
 	if grel != "before" || ganchor.Phrase != "make deploy" {
 		t.Fatalf("before-questions parse the same way: %q %q", grel, ganchor.Phrase)
