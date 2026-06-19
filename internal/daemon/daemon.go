@@ -366,8 +366,8 @@ const untrustedNameScale = 0.5
 // template pair earns a bonus and a reward spike, and recall both rewards
 // the chemistry and strengthens the paths it walked.
 const (
-	linkWindow        = 30 * time.Second
-	maxLinkFanout     = 8
+	linkWindow    = 30 * time.Second
+	maxLinkFanout = 8
 	// linkWeight is the strength of a fresh bond between a word and the moment it
 	// kept company with. It is a constant: naming reads the RATIO of a word's
 	// company across situations, so the rate it bonds is fixed, not modulated by
