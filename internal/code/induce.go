@@ -141,13 +141,16 @@ func (e *Engine) listLiteralNums(text string) ([]string, bool) {
 const minRecursiveExamples = 4
 
 // InduceRecursive searches for a simple recursive rule that carries each input to
-// its output, the synthesis beyond a fixed number of steps: the function is a
-// base value for the smallest inputs, otherwise the input combined with the
-// function of its predecessor, "factorial(n) = 1 if n < 1 else n * factorial(n -
-// 1)". The base, its threshold, and the combining operation are searched over a
-// small space, and each candidate is grounded by running it over every pair, the
-// recursion run as the self-referential function the call generates. It declines
-// unless there are pairs enough to pin a recursion, and when no candidate fits.
+// its output: the function is a base value for the smallest inputs, otherwise a
+// searched combination of the input and the function of its predecessor. The base
+// and its threshold are searched over a small space, and the COMBINE over the
+// input, the predecessor's result, and small constants -- the same expression
+// enumeration the rest of the synthesis uses, not a fixed pair of operations -- so
+// factorial (number times the predecessor's result), a running sum (number plus
+// it), and a doubling recurrence (it plus it) are all reachable. Each candidate is
+// interpreted to prune and the one kept is grounded by running the recursion as the
+// self-referential function the call generates. It declines unless there are pairs
+// enough to pin a recursion, and when none fits.
 func (e *Engine) InduceRecursive(name, param string, ins, outs []string, run func(string) (string, bool)) (Op, bool) {
 	if len(ins) < minRecursiveExamples || len(ins) != len(outs) {
 		return Op{}, false
@@ -155,18 +158,26 @@ func (e *Engine) InduceRecursive(name, param string, ins, outs []string, run fun
 	if _, ok := e.byName["subtract"]; !ok {
 		return Op{}, false // no way to step toward the base
 	}
-	for _, threshold := range []string{"1", "0", "2"} {
-		for _, base := range []string{"1", "0"} {
-			for _, comb := range []string{"multiply", "add"} {
-				if _, ok := e.byName[comb]; !ok {
+	inN, outN, ok := numberPairs(ins, outs)
+	if !ok {
+		return Op{}, false
+	}
+	selfCall := Computation{Op: name, Args: []Computation{
+		{Op: "subtract", Args: []Computation{{Var: param}, {Lit: "1"}}}}}
+	combines := e.genExprs([]string{param, recVar}, []string{"0", "1", "2"}, recMaxOps)
+	for _, threshold := range []int{1, 0, 2} {
+		for _, base := range []int{1, 0} {
+			for _, combine := range combines {
+				if !usesVar(combine, recVar) {
+					continue // a combine that ignores the predecessor's result is no recursion
+				}
+				if !recFits(combine, threshold, base, param, inN, outN) {
 					continue
 				}
-				step := Computation{Op: name, Args: []Computation{
-					{Op: "subtract", Args: []Computation{{Var: param}, {Lit: "1"}}}}}
 				body := Computation{Cond: &Conditional{
-					Cmp: "<", Left: Computation{Var: param}, Right: Computation{Lit: threshold},
-					Then: Computation{Lit: base},
-					Else: Computation{Op: comb, Args: []Computation{{Var: param}, step}}}}
+					Cmp: "<", Left: Computation{Var: param}, Right: Computation{Lit: strconv.Itoa(threshold)},
+					Then: Computation{Lit: strconv.Itoa(base)},
+					Else: substitute(combine, map[string]Computation{recVar: selfCall})}}
 				hyp := Op{Name: name, Word: name, Params: []string{param}, Body: &body}
 				if e.recursiveFits(hyp, ins, outs, run) {
 					return hyp, true
@@ -175,6 +186,59 @@ func (e *Engine) InduceRecursive(name, param string, ins, outs []string, run fun
 		}
 	}
 	return Op{}, false
+}
+
+// recVar stands for the recursive result, the function of the predecessor, inside a
+// combine candidate before it is substituted by the self-call.
+const recVar = "rec"
+
+// recMaxOps bounds the combine searched for a recursive rule, and recDepthCap
+// guards the interpreter against an unbounded descent.
+const recMaxOps = 2
+const recDepthCap = 10000
+
+// recFits reports whether the recursive rule maps every input to its output when
+// interpreted, the quick check before the candidate is grounded by running.
+func recFits(combine Computation, threshold, base int, param string, ins, outs []int) bool {
+	for i, n := range ins {
+		v, ok := recEval(combine, threshold, base, param, n, 0)
+		if !ok || v != outs[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// recEval evaluates a recursive candidate at n: the base below the threshold, else
+// the combine over the input and the predecessor's result, descending toward the
+// base and guarded against running away.
+func recEval(combine Computation, threshold, base int, param string, n, depth int) (int, bool) {
+	if depth > recDepthCap {
+		return 0, false
+	}
+	if n < threshold {
+		return base, true
+	}
+	prev, ok := recEval(combine, threshold, base, param, n-1, depth+1)
+	if !ok {
+		return 0, false
+	}
+	return evalExpr(combine, map[string]int{param: n, recVar: prev})
+}
+
+// numberPairs parses example input/output strings into integers.
+func numberPairs(ins, outs []string) (in, out []int, ok bool) {
+	in = make([]int, len(ins))
+	out = make([]int, len(outs))
+	for i := range ins {
+		a, e1 := strconv.Atoi(ins[i])
+		b, e2 := strconv.Atoi(outs[i])
+		if e1 != nil || e2 != nil {
+			return nil, nil, false
+		}
+		in[i], out[i] = a, b
+	}
+	return in, out, true
 }
 
 // recursiveFits reports whether a recursive candidate maps every input to its
