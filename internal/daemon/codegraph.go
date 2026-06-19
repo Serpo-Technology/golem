@@ -4,26 +4,40 @@ import (
 	"golem/internal/memory"
 )
 
-// Code generation by graph traversal: the first prototype of the north-star where
-// a program's meaning is a SUBGRAPH the engine walks to emit source, rather than a
-// Go type it renders. A computation is a root node grounded in its operation with
-// ordered operand edges (operand0, operand1); the walk reads the operation's
-// symbol from the code engine, renders each operand (a literal leaf by its
-// content, an operation by recursion, parenthesized so precedence is kept), and
-// lays them out as the expression. It is grounded the same way every construction
-// is, by running the source it emits. This sits alongside the typed render, not in
-// place of it; it proves the pattern on the smallest shape. Two design questions
-// it deliberately surfaces for the wider arc: ordered/n-ary children in the graph
-// (positional rels do not scale) and where the shared traverser eventually lives.
+// Code generation by graph traversal: a prototype of the north-star where a
+// program's meaning is a SUBGRAPH the engine walks to emit source, rather than a
+// Go type it renders. A node is one of three shapes: an OPERATION (grounded in its
+// operation concept, with ordered operand0/operand1 edges) rendered as an infix
+// expression; a CONDITIONAL (the comparison operator as its content, with named
+// condLeft/condRight/condThen/condElse edges) rendered as the branch function
+// literal; or a LEAF read by its content -- a literal or a variable reference
+// alike, since both emit their token. Operands recurse and are parenthesized so
+// precedence is kept. It is grounded the same way every construction is, by running
+// the source it emits, and checked against the typed render. This sits alongside
+// the typed render; it proves the pattern (now over operations, variables, and
+// conditionals -- a whole conditional function body). The open design question for
+// the wider arc: ordered/n-ary children in the graph (calls and list literals;
+// positional rels do not scale -- an order field on the edge or operand-slot nodes).
 const (
 	operand0Rel = "operand0"
 	operand1Rel = "operand1"
+
+	// A conditional's parts are named roles, not ordered operands: the comparison's
+	// two sides and the two branches. The comparison operator is the node's content.
+	condLeftRel  = "condLeft"
+	condRightRel = "condRight"
+	condThenRel  = "condThen"
+	condElseRel  = "condElse"
 )
 
 // genCodeFromGraph walks a code-meaning subgraph from its root and emits the Go
-// expression it means. A node with operand edges is an operation; a node without is
-// a literal leaf, read by its content.
+// expression it means: a conditional node (named branches) as a choice, an
+// operation node (ordered operands) as an infix expression, and a leaf as its
+// content -- a literal or a variable reference alike, since both emit their token.
 func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
+	if d.firstDest(nodeID, condThenRel) != 0 {
+		return d.genCondFromGraph(nodeID)
+	}
 	left := d.firstDest(nodeID, operand0Rel)
 	right := d.firstDest(nodeID, operand1Rel)
 	if left == 0 && right == 0 {
@@ -58,6 +72,27 @@ func (d *Daemon) genCodeOperand(nodeID uint64) (string, bool) {
 		return "(" + s + ")", true
 	}
 	return s, true
+}
+
+// genCondFromGraph renders a conditional node -- a comparison choosing between two
+// branches -- as the parenthesized function literal the typed render uses, so a
+// choice composes as an expression and runs (a bare leading function literal would
+// not). The comparison operator is the node's content; the sides and branches are
+// named roles.
+func (d *Daemon) genCondFromGraph(nodeID uint64) (string, bool) {
+	n := d.fragByID(nodeID)
+	if n == nil || (n.Content != ">" && n.Content != "<" && n.Content != "==") {
+		return "", false
+	}
+	left, lok := d.genCodeOperand(d.firstDest(nodeID, condLeftRel))
+	right, rok := d.genCodeOperand(d.firstDest(nodeID, condRightRel))
+	then, tok := d.genCodeFromGraph(d.firstDest(nodeID, condThenRel))
+	els, eok := d.genCodeFromGraph(d.firstDest(nodeID, condElseRel))
+	if !lok || !rok || !tok || !eok {
+		return "", false
+	}
+	return "(func() int { if " + left + " " + n.Content + " " + right +
+		" { return " + then + " }; return " + els + " }())", true
 }
 
 // firstDest is the first node a relation edge leaves the node for, 0 when none.

@@ -79,3 +79,63 @@ func TestCodeGraphTraversalEmitsRunnableGo(t *testing.T) {
 		}
 	}
 }
+
+// The traverser widens to variable references and conditionals: a conditional
+// function body over variables emits the branch function literal the typed render
+// uses (grounded by applying it to arguments), and a conditional over literals runs
+// standalone. Variables ride the leaf case, since a leaf emits its token either way.
+func TestCodeGraphTraversalConditional(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	cond := func(cmp string, l, r, then, els uint64) uint64 {
+		root := mk(cmp)
+		link := func(rel string, to uint64) {
+			if err := s.LinkRel(root, to, rel, 1); err != nil {
+				t.Fatal(err)
+			}
+		}
+		link(condLeftRel, l)
+		link(condRightRel, r)
+		link(condThenRel, then)
+		link(condElseRel, els)
+		return root
+	}
+
+	// larger(a, b) = a if a > b else b: a conditional over variable references.
+	larger := cond(">", mk("a"), mk("b"), mk("a"), mk("b"))
+	src, ok := d.genCodeFromGraph(larger)
+	want := "(func() int { if a > b { return a }; return b }())"
+	if !ok || src != want {
+		t.Fatalf("the conditional body should emit %q, got %q ok %v", want, src, ok)
+	}
+	comp := code.Computation{Cond: &code.Conditional{Cmp: ">",
+		Left: code.Computation{Var: "a"}, Right: code.Computation{Var: "b"},
+		Then: code.Computation{Var: "a"}, Else: code.Computation{Var: "b"}}}
+	if typed, tok := d.code.ToCode(comp); !tok || typed != want {
+		t.Fatalf("the typed render should match the traversal: %q vs %q", typed, src)
+	}
+	// Grounded by running: wrap the body in its parameters and apply (the vars are
+	// undefined standalone, as they are for the typed render too).
+	wrapped := "(func(a int, b int) int { return " + src + " })(6, 4)"
+	if v, vok := d.evalCode(wrapped); !vok || v != "6" {
+		t.Fatalf("larger(6, 4) should run to 6, got %q from %q", v, wrapped)
+	}
+
+	// A conditional over literals runs standalone: 100 if 2 < 9 else 200.
+	lit := cond("<", mk("2"), mk("9"), mk("100"), mk("200"))
+	lsrc, lok := d.genCodeFromGraph(lit)
+	if !lok {
+		t.Fatal("the literal conditional should emit")
+	}
+	if v, vok := d.evalCode(lsrc); !vok || v != "100" {
+		t.Fatalf("100 if 2 < 9 else 200 should run to 100, got %q from %q", v, lsrc)
+	}
+}
