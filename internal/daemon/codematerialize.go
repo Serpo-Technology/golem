@@ -136,15 +136,17 @@ func (d *Daemon) isCall(c code.Computation) bool {
 }
 
 // traverseCode generates Go from a comprehended computation by graph traversal: it
-// materializes the computation as a transient subgraph and walks it for the source. This
-// is the production generator on the runcode path. ok is false when the shape is not one
-// the materializer builds yet (a map), so the caller falls back to the typed render.
+// materializes the computation as a transient subgraph and walks it through the shared
+// traverser's Go surface for the source. This is the production generator on the runcode
+// path, so the one traverser that renders language renders code here too. ok is false
+// when the shape is not one the materializer builds yet (a map), so the caller falls back
+// to the typed render.
 func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	g := newScratchGraph()
 	root, ok := d.materializeCode(g, comp, "", map[string]uint64{})
 	if !ok {
 		return "", false
 	}
-	src, _, sok := d.genCode(g, root, nil, 0)
-	return src, sok
+	r, rok := d.traverse(goSurface{}, g, root, nil)
+	return r.src, rok
 }
