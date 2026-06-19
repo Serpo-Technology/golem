@@ -1,12 +1,15 @@
 package daemon
 
 import (
+	"bytes"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"golem/internal/code"
 	"golem/internal/memory"
+	"golem/wire"
 )
 
 // A code computation represented as a graph subgraph is traversed to emit Go that
@@ -376,5 +379,53 @@ func TestCodeGraphTraversalCall(t *testing.T) {
 	}
 	if v, vok := d.evalCode(largerSrc); !vok || v != "6" {
 		t.Fatalf("larger(6, 4) should run to 6, got %q from %q", v, largerSrc)
+	}
+}
+
+// The loop closes on the daemon's own comprehension: a computation comprehended from a
+// real utterance is materialized as a subgraph (not hand-built), and walking that
+// subgraph emits the same source the engine's typed render does and runs to the same
+// value. This is the bridge from test-built graphs to graphs the daemon produces.
+func TestCodeGraphClosesTheLoop(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	for _, utterance := range []string{
+		"the sum of 6 and 7",
+		"6 * (7 + 1)",
+		"the difference of 10 and 4",
+	} {
+		comp, ok := d.code.Comprehend(utterance)
+		if !ok {
+			t.Fatalf("the engine should comprehend %q", utterance)
+		}
+		walked, wok := d.shadowCheck(comp)
+		typed, tok := d.code.ToCode(comp)
+		if !wok || !tok || walked != typed {
+			t.Fatalf("%q: the materialized graph should walk to the render: %q vs %q (walked ok %v)", utterance, walked, typed, wok)
+		}
+		gv, gok := d.evalCode(walked)
+		wv, wvok := d.evalCode(typed)
+		if !gok || !wvok || gv != wv {
+			t.Fatalf("%q: the walked source %q (=%q) should run to the render %q (=%q)", utterance, walked, gv, typed, wv)
+		}
+	}
+}
+
+// On the live runcode path the shadow is wired in and silent: the reply is the engine's
+// result as before, and because the graph the daemon materializes agrees with the
+// render, nothing is logged. A mismatch would print, so an empty log is the agreement.
+func TestRuncodeShadowAgreesOnLivePath(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	var buf bytes.Buffer
+	d.out = &buf
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the sum of 6 and 7"}, nil)
+	if !resp.OK || !strings.Contains(resp.Say, "13") {
+		t.Fatalf("runcode should still compute 13, got %q (ok %v)", resp.Say, resp.OK)
+	}
+	if strings.Contains(buf.String(), "shadow mismatch") {
+		t.Fatalf("the live shadow should agree, but logged: %q", buf.String())
 	}
 }

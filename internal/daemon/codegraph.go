@@ -63,45 +63,42 @@ const (
 	bodyRel  = "body"
 )
 
-// genCodeFromGraph walks a code-meaning subgraph from its root and emits the Go
-// expression it means. It is the entry with no names in scope; genCode carries the
-// parameter binding a call inlines under.
+// genCodeFromGraph walks a code-meaning subgraph in the persistent store from its root
+// and emits the Go expression it means. It is the entry with no names in scope; genCode
+// carries the parameter binding a call inlines under and the graph it reads, so the one
+// traverser serves a stored subgraph or a transient one alike.
 func (d *Daemon) genCodeFromGraph(nodeID uint64) (string, bool) {
-	return d.genCode(nodeID, nil)
+	return d.genCode(d.storeView(), nodeID, nil)
 }
 
-// genCode walks a code-meaning subgraph under a binding of names to already-rendered
-// sources (the parameters a call has bound to its arguments, empty at the top level).
-// A node is a conditional (named branches), an ordered-children node (a list literal
-// or a call, told apart by what it grounds in), an operation (ordered operands), or a
-// leaf. A leaf emits its bound source when the binding holds its content, else the
-// content itself -- a literal or a free variable alike.
-func (d *Daemon) genCode(nodeID uint64, env map[string]string) (string, bool) {
-	if d.firstDest(nodeID, condThenRel) != 0 {
-		return d.genConditional(nodeID, env)
+// genCode walks a code-meaning subgraph in g under a binding of names to already-
+// rendered sources (the parameters a call has bound to its arguments, empty at the top
+// level). A node is a conditional (named branches), an ordered-children node (a list
+// literal or a call, told apart by what it grounds in), an operation (ordered
+// operands), or a leaf. A leaf emits its bound source when the binding holds its
+// content, else the content itself -- a literal or a free variable alike.
+func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+	if firstDest(g, nodeID, condThenRel) != 0 {
+		return d.genConditional(g, nodeID, env)
 	}
-	if d.firstDest(nodeID, elemRel) != 0 {
-		return d.genOrderedNode(nodeID, env)
+	if firstDest(g, nodeID, elemRel) != 0 {
+		return d.genOrderedNode(g, nodeID, env)
 	}
-	left := d.firstDest(nodeID, operand0Rel)
-	right := d.firstDest(nodeID, operand1Rel)
+	left := firstDest(g, nodeID, operand0Rel)
+	right := firstDest(g, nodeID, operand1Rel)
 	if left == 0 && right == 0 {
-		n := d.fragByID(nodeID)
-		if n == nil || n.Content == "" {
+		c := g.content(nodeID)
+		if c == "" {
 			return "", false
 		}
-		if bound, ok := env[n.Content]; ok {
+		if bound, ok := env[c]; ok {
 			return bound, true
 		}
-		return n.Content, true
+		return c, true
 	}
-	op := d.fragByID(d.firstDest(nodeID, memory.RelGrounds))
-	if op == nil {
-		return "", false
-	}
-	sym := d.opSymbol(op.Content)
-	l, lok := d.genOperand(left, env)
-	r, rok := d.genOperand(right, env)
+	sym := d.opSymbol(g.content(firstDest(g, nodeID, memory.RelGrounds)))
+	l, lok := d.genOperand(g, left, env)
+	r, rok := d.genOperand(g, right, env)
 	if sym == "" || !lok || !rok {
 		return "", false
 	}
@@ -111,12 +108,12 @@ func (d *Daemon) genCode(nodeID uint64, env map[string]string) (string, bool) {
 // genOperand renders an operand under the binding, wrapping a nested operation in
 // parentheses so the emitted expression keeps its grouping whatever the operators'
 // precedence, the same care the typed render takes.
-func (d *Daemon) genOperand(nodeID uint64, env map[string]string) (string, bool) {
-	s, ok := d.genCode(nodeID, env)
+func (d *Daemon) genOperand(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+	s, ok := d.genCode(g, nodeID, env)
 	if !ok {
 		return "", false
 	}
-	if d.firstDest(nodeID, operand0Rel) != 0 {
+	if firstDest(g, nodeID, operand0Rel) != 0 {
 		return "(" + s + ")", true
 	}
 	return s, true
@@ -127,40 +124,36 @@ func (d *Daemon) genOperand(nodeID uint64, env map[string]string) (string, bool)
 // choice composes as an expression and runs (a bare leading function literal would
 // not). The comparison operator is the node's content; the sides and branches are
 // named roles, each walked under the binding.
-func (d *Daemon) genConditional(nodeID uint64, env map[string]string) (string, bool) {
-	n := d.fragByID(nodeID)
-	if n == nil || (n.Content != ">" && n.Content != "<" && n.Content != "==") {
+func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+	cmp := g.content(nodeID)
+	if cmp != ">" && cmp != "<" && cmp != "==" {
 		return "", false
 	}
-	left, lok := d.genOperand(d.firstDest(nodeID, condLeftRel), env)
-	right, rok := d.genOperand(d.firstDest(nodeID, condRightRel), env)
-	then, tok := d.genCode(d.firstDest(nodeID, condThenRel), env)
-	els, eok := d.genCode(d.firstDest(nodeID, condElseRel), env)
+	left, lok := d.genOperand(g, firstDest(g, nodeID, condLeftRel), env)
+	right, rok := d.genOperand(g, firstDest(g, nodeID, condRightRel), env)
+	then, tok := d.genCode(g, firstDest(g, nodeID, condThenRel), env)
+	els, eok := d.genCode(g, firstDest(g, nodeID, condElseRel), env)
 	if !lok || !rok || !tok || !eok {
 		return "", false
 	}
-	return "(func() int { if " + left + " " + n.Content + " " + right +
+	return "(func() int { if " + left + " " + cmp + " " + right +
 		" { return " + then + " }; return " + els + " }())", true
 }
 
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
 // call -- told apart by what it grounds in. The list concept gives a composite
 // literal; a function concept (one carrying a body subgraph) gives an inlined call.
-func (d *Daemon) genOrderedNode(nodeID uint64, env map[string]string) (string, bool) {
-	fn := d.firstDest(nodeID, memory.RelGrounds)
-	concept := d.fragByID(fn)
-	if concept == nil {
-		return "", false
-	}
-	if concept.Content == "list" {
-		elems, ok := d.orderedChildren(nodeID, elemRel, env)
+func (d *Daemon) genOrderedNode(g codeGraph, nodeID uint64, env map[string]string) (string, bool) {
+	fn := firstDest(g, nodeID, memory.RelGrounds)
+	if g.content(fn) == "list" {
+		elems, ok := d.orderedChildren(g, nodeID, elemRel, env)
 		if !ok {
 			return "", false
 		}
 		return "[]int{" + strings.Join(elems, ", ") + "}", true
 	}
-	if d.firstDest(fn, bodyRel) != 0 {
-		return d.genCall(nodeID, fn, env)
+	if firstDest(g, fn, bodyRel) != 0 {
+		return d.genCall(g, nodeID, fn, env)
 	}
 	return "", false
 }
@@ -170,25 +163,25 @@ func (d *Daemon) genOrderedNode(nodeID uint64, env map[string]string) (string, b
 // graph counterpart of the typed render's inline + substitute. Arguments are rendered
 // in the caller's binding; the body then sees only its parameters, so a body leaf that
 // names a parameter emits its argument and the call expands to the body in place.
-func (d *Daemon) genCall(nodeID, fn uint64, env map[string]string) (string, bool) {
-	body := d.firstDest(fn, bodyRel)
+func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]string) (string, bool) {
+	body := firstDest(g, fn, bodyRel)
 	if body == 0 {
 		return "", false
 	}
-	params, pok := d.orderedSlots(fn, paramRel)
-	args, aok := d.orderedChildren(nodeID, elemRel, env)
+	params, pok := d.orderedSlots(g, fn, paramRel)
+	args, aok := d.orderedChildren(g, nodeID, elemRel, env)
 	if !pok || !aok || len(params) != len(args) {
 		return "", false
 	}
 	binding := make(map[string]string, len(params))
 	for i, p := range params {
-		name := d.fragByID(p)
-		if name == nil || name.Content == "" {
+		name := g.content(p)
+		if name == "" {
 			return "", false
 		}
-		binding[name.Content] = args[i]
+		binding[name] = args[i]
 	}
-	return d.genCode(body, binding)
+	return d.genCode(g, body, binding)
 }
 
 // orderedSlots returns the held nodes of a node's ordered children in position order,
@@ -196,9 +189,9 @@ func (d *Daemon) genCall(nodeID, fn uint64, env map[string]string) (string, bool
 // slot is the per-occurrence binding, so one node can be held at more than one position
 // without the edge's primary key colliding. Parameters read the held nodes by name;
 // arguments and list elements render them.
-func (d *Daemon) orderedSlots(nodeID uint64, rel string) ([]uint64, bool) {
-	slots, err := d.store.LinksFromRel([]uint64{nodeID}, rel)
-	if err != nil || len(slots) == 0 {
+func (d *Daemon) orderedSlots(g codeGraph, nodeID uint64, rel string) ([]uint64, bool) {
+	slots := g.dests(nodeID, rel)
+	if len(slots) == 0 {
 		return nil, false
 	}
 	type held struct {
@@ -207,13 +200,9 @@ func (d *Daemon) orderedSlots(nodeID uint64, rel string) ([]uint64, bool) {
 	}
 	items := make([]held, 0, len(slots))
 	for _, slot := range slots {
-		ordinal := d.fragByID(d.firstDest(slot.To, rankRel))
-		id := d.firstDest(slot.To, holdsRel)
-		if ordinal == nil || id == 0 {
-			return nil, false
-		}
-		rank, err := strconv.Atoi(ordinal.Content)
-		if err != nil {
+		id := firstDest(g, slot, holdsRel)
+		rank, err := strconv.Atoi(g.content(firstDest(g, slot, rankRel)))
+		if id == 0 || err != nil {
 			return nil, false
 		}
 		items = append(items, held{rank: rank, id: id})
@@ -229,41 +218,20 @@ func (d *Daemon) orderedSlots(nodeID uint64, rel string) ([]uint64, bool) {
 // orderedChildren renders a node's ordered children in position order, each held value
 // walked under the binding so a child may be a literal, a variable, or a nested
 // sub-meaning. A list's elements and a call's arguments share it.
-func (d *Daemon) orderedChildren(nodeID uint64, rel string, env map[string]string) ([]string, bool) {
-	ids, ok := d.orderedSlots(nodeID, rel)
+func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map[string]string) ([]string, bool) {
+	ids, ok := d.orderedSlots(g, nodeID, rel)
 	if !ok {
 		return nil, false
 	}
 	out := make([]string, len(ids))
 	for i, id := range ids {
-		src, ok := d.genCode(id, env)
+		src, ok := d.genCode(g, id, env)
 		if !ok {
 			return nil, false
 		}
 		out[i] = src
 	}
 	return out, true
-}
-
-// firstDest is the first node a relation edge leaves the node for, 0 when none.
-func (d *Daemon) firstDest(nodeID uint64, rel string) uint64 {
-	edges, err := d.store.LinksFromRel([]uint64{nodeID}, rel)
-	if err != nil || len(edges) == 0 {
-		return 0
-	}
-	return edges[0].To
-}
-
-// fragByID reads one fragment by id, nil when absent.
-func (d *Daemon) fragByID(id uint64) *memory.Fragment {
-	if id == 0 {
-		return nil
-	}
-	frags, err := d.store.FragmentsByIDs([]uint64{id})
-	if err != nil || len(frags) != 1 {
-		return nil
-	}
-	return frags[0]
 }
 
 // opSymbol is the operator symbol of a seeded operation by name ("add" -> "+"),
@@ -278,4 +246,87 @@ func (d *Daemon) opSymbol(name string) string {
 		}
 	}
 	return ""
+}
+
+// codeGraph is the read view the traverser needs: a node's content, and the nodes a
+// relation leaves it for. The persistent store and a transient scratch graph both
+// satisfy it, so the traverser walks "a graph" rather than a particular store.
+type codeGraph interface {
+	content(id uint64) string
+	dests(id uint64, rel string) []uint64
+}
+
+// firstDest is the first node a relation leaves the node for, 0 when none.
+func firstDest(g codeGraph, nodeID uint64, rel string) uint64 {
+	ds := g.dests(nodeID, rel)
+	if len(ds) == 0 {
+		return 0
+	}
+	return ds[0]
+}
+
+// storeGraph adapts the persistent store to the read view, reading a node's content
+// and a relation's destinations from memory. d.storeView is the production graph.
+type storeGraph struct{ s *memory.Store }
+
+func (d *Daemon) storeView() storeGraph { return storeGraph{s: d.store} }
+
+func (g storeGraph) content(id uint64) string {
+	if id == 0 {
+		return ""
+	}
+	frags, err := g.s.FragmentsByIDs([]uint64{id})
+	if err != nil || len(frags) != 1 {
+		return ""
+	}
+	return frags[0].Content
+}
+
+func (g storeGraph) dests(id uint64, rel string) []uint64 {
+	edges, err := g.s.LinksFromRel([]uint64{id}, rel)
+	if err != nil {
+		return nil
+	}
+	out := make([]uint64, len(edges))
+	for i, e := range edges {
+		out[i] = e.To
+	}
+	return out
+}
+
+// scratchGraph is a transient in-memory code graph. The shadow check materializes a
+// comprehended computation into one, walks it, and discards it, so the check leaves no
+// scaffolding behind in memory. Ids start at 1, leaving 0 as the "no node" sentinel
+// the traverser reads as absence.
+type scratchGraph struct {
+	next     uint64
+	contents map[uint64]string
+	edges    map[uint64]map[string][]uint64
+}
+
+func newScratchGraph() *scratchGraph {
+	return &scratchGraph{contents: map[uint64]string{}, edges: map[uint64]map[string][]uint64{}}
+}
+
+// add mints a node holding content and returns its id. link adds a relation edge.
+func (g *scratchGraph) add(content string) uint64 {
+	g.next++
+	g.contents[g.next] = content
+	return g.next
+}
+
+func (g *scratchGraph) link(from, to uint64, rel string) {
+	if g.edges[from] == nil {
+		g.edges[from] = map[string][]uint64{}
+	}
+	g.edges[from][rel] = append(g.edges[from][rel], to)
+}
+
+func (g *scratchGraph) content(id uint64) string { return g.contents[id] }
+
+func (g *scratchGraph) dests(id uint64, rel string) []uint64 {
+	if g.edges[id] == nil {
+		return nil
+	}
+	return g.edges[id][rel]
 }

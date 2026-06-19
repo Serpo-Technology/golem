@@ -1801,6 +1801,13 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				if generated, ok := d.code.ToCode(comp); ok {
 					src = generated
+					// Close the loop without changing it: build the comprehended computation
+					// as a transient subgraph and walk it the prototype's way, checking the
+					// source matches the engine's render. The response still runs the engine's
+					// source; a disagreement is logged for a person, never run.
+					if walked, ok := d.shadowCheck(comp); ok && walked != generated {
+						fmt.Fprintf(d.out, "codegraph shadow mismatch: %q vs %q\n", walked, generated)
+					}
 				}
 				return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
 			}
