@@ -119,26 +119,7 @@ const (
 
 	listWord = "list" // the literal surface, "the list of 1 and 2 and 3"
 	eachWord = "each" // the element of a map, "the double of each number"
-
-	listOpParam = "numbers" // the list the built-in list operations range over
 )
-
-// builtinListOps is the floor of operations over a list: a fold to a total, the
-// count, the first element, and the largest. Each takes one list and yields a
-// number, carried as the Go loop it runs as, the same Raw form the synthesizer
-// assembles, so a reduction and a synthesized fold are the one kind of operation
-// and share the one render path.
-func builtinListOps() []Op {
-	listOp := func(name, raw string) Op {
-		return Op{Name: name, Word: name, Params: []string{listOpParam}, ParamTypes: []string{typeList}, Ret: typeInt, Raw: raw}
-	}
-	return []Op{
-		listOp("total", "a := 0; for _, x := range "+listOpParam+" { a = a + x }; return a"),
-		listOp("length", "return len("+listOpParam+")"),
-		listOp("first", "return "+listOpParam+"[0]"),
-		listOp("largest", "m := "+listOpParam+"[0]; for _, x := range "+listOpParam+" { if x > m { m = x } }; return m"),
-	}
-}
 
 // Engine carries the code constructions and runs them both ways. It is built
 // from the seeded primitives and the functions learned since, indexed by each
@@ -161,11 +142,6 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		e.byName[o.Name] = o
 	}
 	for _, o := range prims {
-		index(o)
-	}
-	// The built-in collection operations are the floor for working over a list, the
-	// way the arithmetic primitives are the floor for working over a number.
-	for _, o := range builtinListOps() {
 		index(o)
 	}
 	for _, d := range defs {
@@ -947,7 +923,7 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return "", false
 	}
 	if op.Raw != "" {
-		// An imperative function (a built-in reduction or a synthesized loop) runs as
+		// An imperative function (a list reduction or a synthesized loop) runs as
 		// its statements in a function literal applied to the arguments, so the loop
 		// composes as an expression. A call to it stores flat as a plain call, the way
 		// the body of a function that uses one is serialized; the function's own raw

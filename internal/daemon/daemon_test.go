@@ -322,6 +322,29 @@ func testDaemonOn(t *testing.T, s *memory.Store) *Daemon {
 	return d
 }
 
+// teachReductions teaches the named list reductions by example, the way a brain
+// acquires them now that they are no longer floor; each must learn or the test
+// cannot rely on it. The largest example includes an all-negative list so the
+// running maximum starts from the first element, not zero.
+func teachReductions(t *testing.T, d *Daemon, names ...string) {
+	t.Helper()
+	examples := map[string]string{
+		"total":   "the total of the list of 1 and 2 and 3 is 6 and the total of the list of 4 and 5 is 9 and the total of the list of 10 and 20 and 30 is 60",
+		"length":  "the length of the list of 1 and 2 and 3 is 3 and the length of the list of 4 and 5 is 2 and the length of the list of 7 and 8 and 9 and 10 is 4",
+		"first":   "the first of the list of 1 and 2 and 3 is 1 and the first of the list of 4 and 5 is 4 and the first of the list of 7 and 8 and 9 is 7",
+		"largest": "the largest of the list of -5 and -2 and -8 is -2 and the largest of the list of 1 and 5 and 2 is 5 and the largest of the list of 4 and 1 is 4",
+	}
+	for _, name := range names {
+		ex, ok := examples[name]
+		if !ok {
+			t.Fatalf("no example set for reduction %q", name)
+		}
+		if resp := say(t, d, ex); !strings.Contains(resp.Say, "I learned "+name) {
+			t.Fatalf("the %s reduction should be taught by example: %q", name, resp.Say)
+		}
+	}
+}
+
 // encodeAt stores one moment with a chosen surprise and time.
 func encodeAt(t *testing.T, s *memory.Store, channel, content string, surprise float64, at time.Time) *memory.Fragment {
 	t.Helper()

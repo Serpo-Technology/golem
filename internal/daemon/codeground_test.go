@@ -72,6 +72,7 @@ func TestComputeAdmitsIllFormedComputation(t *testing.T) {
 func TestComputesOverLists(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "total", "length", "first", "largest")
 
 	cases := []struct{ surface, want string }{
 		{"the total of the list of 1 and 2 and 3", "6"},
@@ -89,6 +90,17 @@ func TestComputesOverLists(t *testing.T) {
 	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the total of 5"}, nil)
 	if strings.Contains(resp.Say, "error:") {
 		t.Fatalf("a list operation on a number should be admitted, not leaked: %q", resp.Say)
+	}
+}
+
+// The list reductions are no longer floor: a brain that has not learned total
+// cannot compute it, and admits the gap by name rather than running broken code.
+func TestReductionsRetiredFromFloor(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the total of the list of 1 and 2 and 3"}, nil)
+	if !strings.Contains(resp.Say, "do not know") {
+		t.Fatalf("an untaught reduction should admit the gap, not compute: %q", resp.Say)
 	}
 }
 

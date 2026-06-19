@@ -208,6 +208,7 @@ func TestLearnsAndRunsRecursion(t *testing.T) {
 func TestLearnsAndCallsAListFunction(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "total", "length")
 
 	resp := say(t, d, "the average of a list of numbers is the quotient of the total of the numbers and the length of the numbers")
 	if !strings.Contains(resp.Say, "average") || !strings.Contains(resp.Say, "numbers []int") {
@@ -230,6 +231,7 @@ func TestLearnsAndCallsAListFunction(t *testing.T) {
 func TestLearnsAndCallsAMap(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "total", "largest")
 
 	say(t, d, "the double of a number is the product of the number and 2")
 	resp := say(t, d, "the doubled of a list of numbers is the double of each number")
