@@ -243,3 +243,138 @@ func TestCodeGraphTraversalList(t *testing.T) {
 		t.Fatalf("[]int{6 + 7} should run to [13], got %q", v)
 	}
 }
+
+// The traverser widens to n-ary calls: a function is itself a graph (ordered parameter
+// slots and a body subgraph), and a call inlines by walking that body with the
+// parameters bound to the call's arguments, the graph counterpart of the typed render's
+// inline + substitute. Each call is matched to the typed render (the same function
+// taught to the engine) and grounded by running. Scope is simple arguments; a compound
+// argument's operand-position parenthesizing and recursion are not exercised here.
+func TestCodeGraphTraversalCall(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	// Teach the functions the realistic way, so the engine can render the typed call to
+	// compare against; recompile so d.code carries them.
+	say(t, d, "the triple of a number is the product of the number and 3")
+	say(t, d, "the gap of a high and a low is the difference of the high and the low")
+	say(t, d, "the square of a number is the product of the number and the number")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	// slotInto attaches one ordered child to a parent under rel: a slot at the given
+	// rank holding the value node.
+	slotInto := func(parent uint64, rel string, rank int, value uint64) {
+		slot := mk("")
+		if err := s.LinkRel(parent, slot, rel, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(slot, mk(strconv.Itoa(rank)), rankRel, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(slot, value, holdsRel, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	op := func(name string, l, r uint64) uint64 {
+		root := mk("")
+		if err := s.LinkRel(root, mk(name), memory.RelGrounds, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(root, l, operand0Rel, 1); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(root, r, operand1Rel, 1); err != nil {
+			t.Fatal(err)
+		}
+		return root
+	}
+	// fn builds a function as a graph: a named concept with ordered parameter slots and
+	// a body subgraph. call builds an application of it: a node grounding in the function
+	// with its arguments as ordered children.
+	fn := func(name string, params []string, body uint64) uint64 {
+		f := mk(name)
+		for i, p := range params {
+			slotInto(f, paramRel, i, mk(p))
+		}
+		if err := s.LinkRel(f, body, bodyRel, 1); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	call := func(f uint64, args ...uint64) uint64 {
+		c := mk("")
+		if err := s.LinkRel(c, f, memory.RelGrounds, 1); err != nil {
+			t.Fatal(err)
+		}
+		for i, a := range args {
+			slotInto(c, elemRel, i, a)
+		}
+		return c
+	}
+	// matchesAndRuns checks the traversed source equals the typed render of the call and
+	// that both run to the same value.
+	matchesAndRuns := func(label, src string, ok bool, want string, comp code.Computation) {
+		if !ok || src != want {
+			t.Fatalf("%s should emit %q, got %q ok %v", label, want, src, ok)
+		}
+		typed, tok := d.code.ToCode(comp)
+		if !tok || typed != want {
+			t.Fatalf("%s typed render should match the traversal: %q vs %q", label, typed, src)
+		}
+		gv, gok := d.evalCode(src)
+		wv, wok := d.evalCode(typed)
+		if !gok || !wok || gv != wv {
+			t.Fatalf("%s traversed %q (=%q) should run to the typed render %q (=%q)", label, src, gv, typed, wv)
+		}
+	}
+
+	// 1-ary: triple(4) inlines product(number, 3) with number bound to 4.
+	tripleSrc, tok := d.genCodeFromGraph(call(fn("triple", []string{"number"}, op("multiply", mk("number"), mk("3"))), mk("4")))
+	matchesAndRuns("triple(4)", tripleSrc, tok, "4 * 3",
+		code.Computation{Op: "triple", Args: []code.Computation{{Lit: "4"}}})
+
+	// 2-ary: gap(9, 4) binds two distinct parameters by position.
+	gapSrc, gok := d.genCodeFromGraph(call(fn("gap", []string{"high", "low"}, op("subtract", mk("high"), mk("low"))), mk("9"), mk("4")))
+	matchesAndRuns("gap(9, 4)", gapSrc, gok, "9 - 4",
+		code.Computation{Op: "gap", Args: []code.Computation{{Lit: "9"}, {Lit: "4"}}})
+
+	// A parameter used twice: square(5) fills every occurrence from one argument.
+	squareSrc, sok := d.genCodeFromGraph(call(fn("square", []string{"number"}, op("multiply", mk("number"), mk("number"))), mk("5")))
+	matchesAndRuns("square(5)", squareSrc, sok, "5 * 5",
+		code.Computation{Op: "square", Args: []code.Computation{{Lit: "5"}}})
+
+	// A conditional body: larger(6, 4) inlines the branch literal with the arguments
+	// bound, proving the binding threads through a conditional, not only arithmetic.
+	// Built directly as a graph and grounded by running.
+	cond := func(cmp string, l, r, then, els uint64) uint64 {
+		root := mk(cmp)
+		link := func(rel string, to uint64) {
+			if err := s.LinkRel(root, to, rel, 1); err != nil {
+				t.Fatal(err)
+			}
+		}
+		link(condLeftRel, l)
+		link(condRightRel, r)
+		link(condThenRel, then)
+		link(condElseRel, els)
+		return root
+	}
+	largerBody := cond(">", mk("a"), mk("b"), mk("a"), mk("b"))
+	largerSrc, lok := d.genCodeFromGraph(call(fn("larger", []string{"a", "b"}, largerBody), mk("6"), mk("4")))
+	wantLarger := "(func() int { if 6 > 4 { return 6 }; return 4 }())"
+	if !lok || largerSrc != wantLarger {
+		t.Fatalf("larger(6, 4) should emit %q, got %q ok %v", wantLarger, largerSrc, lok)
+	}
+	if v, vok := d.evalCode(largerSrc); !vok || v != "6" {
+		t.Fatalf("larger(6, 4) should run to 6, got %q from %q", v, largerSrc)
+	}
+}
