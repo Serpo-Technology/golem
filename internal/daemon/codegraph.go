@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"golem/internal/code"
 	"golem/internal/memory"
 )
 
@@ -234,18 +235,28 @@ func (d *Daemon) orderedChildren(g codeGraph, nodeID uint64, rel string, env map
 	return out, true
 }
 
-// opSymbol is the operator symbol of a seeded operation by name ("add" -> "+"),
-// read from the code engine so the walk reuses the one operator inventory.
-func (d *Daemon) opSymbol(name string) string {
+// opByName finds a seeded or learned operation by name, read from the code engine so
+// the walk and the materializer reuse the one operation inventory.
+func (d *Daemon) opByName(name string) (code.Op, bool) {
 	if d.code == nil {
-		return ""
+		return code.Op{}, false
 	}
 	for _, o := range d.code.Ops() {
 		if o.Name == name {
-			return o.Symbol
+			return o, true
 		}
 	}
-	return ""
+	return code.Op{}, false
+}
+
+// opSymbol is the operator symbol of a primitive operation by name ("add" -> "+"),
+// empty when the name is not a primitive (a defined function carries no symbol).
+func (d *Daemon) opSymbol(name string) string {
+	op, ok := d.opByName(name)
+	if !ok {
+		return ""
+	}
+	return op.Symbol
 }
 
 // codeGraph is the read view the traverser needs: a node's content, and the nodes a
@@ -320,6 +331,16 @@ func (g *scratchGraph) link(from, to uint64, rel string) {
 		g.edges[from] = map[string][]uint64{}
 	}
 	g.edges[from][rel] = append(g.edges[from][rel], to)
+}
+
+// attachSlot binds held to parent as the rank-th ordered child under rel: a distinct
+// slot node carrying the ordinal and holding the value, the write side of the slot walk
+// orderedSlots reads.
+func (g *scratchGraph) attachSlot(parent uint64, rel string, rank int, held uint64) {
+	slot := g.add("")
+	g.link(parent, slot, rel)
+	g.link(slot, g.add(strconv.Itoa(rank)), rankRel)
+	g.link(slot, held, holdsRel)
 }
 
 func (g *scratchGraph) content(id uint64) string { return g.contents[id] }

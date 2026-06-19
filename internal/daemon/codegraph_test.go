@@ -394,6 +394,7 @@ func TestCodeGraphClosesTheLoop(t *testing.T) {
 		"the sum of 6 and 7",
 		"6 * (7 + 1)",
 		"the difference of 10 and 4",
+		"the list of 1 and 2 and 3",
 	} {
 		comp, ok := d.code.Comprehend(utterance)
 		if !ok {
@@ -408,6 +409,44 @@ func TestCodeGraphClosesTheLoop(t *testing.T) {
 		wv, wvok := d.evalCode(typed)
 		if !gok || !wvok || gv != wv {
 			t.Fatalf("%q: the walked source %q (=%q) should run to the render %q (=%q)", utterance, walked, gv, typed, wv)
+		}
+	}
+}
+
+// The shadow widens to calls: a computation that calls a defined function is
+// materialized by building the function itself as a graph (its ordered parameters and
+// its body) and inlining it, so the walked source matches the engine's inlined render
+// and runs to the same value. The body may be arithmetic over the parameters or a
+// conditional, the larger case proving a function whose body is a choice materializes.
+func TestCodeGraphShadowsCalls(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	say(t, d, "the triple of a number is the product of the number and 3")
+	say(t, d, "the gap of a high and a low is the difference of the high and the low")
+	say(t, d, "the larger of a number and a count is the number if the number is above the count else the count")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, utterance := range []string{
+		"the triple of 4",
+		"the gap of 9 and 4",
+		"the larger of 6 and 4",
+	} {
+		comp, ok := d.code.Comprehend(utterance)
+		if !ok {
+			t.Fatalf("the engine should comprehend %q", utterance)
+		}
+		walked, wok := d.shadowCheck(comp)
+		typed, tok := d.code.ToCode(comp)
+		if !wok || !tok || walked != typed {
+			t.Fatalf("%q: the materialized call should walk to the render: %q vs %q (walked ok %v)", utterance, walked, typed, wok)
+		}
+		gv, gok := d.evalCode(walked)
+		wv, wvok := d.evalCode(typed)
+		if !gok || !wvok || gv != wv {
+			t.Fatalf("%q: the walked call %q (=%q) should run to the render %q (=%q)", utterance, walked, gv, typed, wv)
 		}
 	}
 }
