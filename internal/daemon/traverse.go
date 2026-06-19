@@ -208,20 +208,22 @@ func joinRendered(parts []rendered) string {
 	return strings.Join(out, ", ")
 }
 
-// nlSurface renders an English transitive clause from a proposition node: a moment
-// grounded in its relation, with agent and patient edges to the argument concepts (the
-// moment's content marks past tense). The slots lay out in citation order; the verb is
-// conjugated and the object marked definite by grammar's morphology, the same Speak
-// applies, and the clause is assembled into a sentence.
+// nlSurface renders a transitive clause from a proposition node: a moment grounded in
+// its relation, with agent and patient edges to the argument concepts (the moment's
+// content marks past tense). The slots lay out in the language's word order (the verb
+// closing a verb-final clause), the verb is conjugated and the object marked definite by
+// grammar's morphology, and co-arguments on a role coordinate, the same Speak does.
+// A given referent's pronoun is a discourse choice carried by the meaning, not the
+// proposition's structure, so it stays with Speak's Meaning render for now.
 type nlSurface struct {
 	lang string
 }
 
 func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (construction, bool) {
 	verb := g.content(firstDest(g, node, memory.RelGrounds))
-	agent := g.content(firstDest(g, node, memory.RelAgent))
-	patient := g.content(firstDest(g, node, memory.RelPatient))
-	if verb == "" || agent == "" || patient == "" {
+	agents := roleNames(g, node, memory.RelAgent)
+	patients := roleNames(g, node, memory.RelPatient)
+	if verb == "" || len(agents) == 0 || len(patients) == 0 {
 		return construction{}, false
 	}
 	lang := s.lang
@@ -229,18 +231,44 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 		lang = "en"
 	}
 	past := g.content(node) == "past"
-	return construction{
-		slots: []slot{
-			{leaf: rendered{src: agent}},
-			{leaf: rendered{src: d.gram.Conjugate(lang, verb, false, past, false)}},
-			{leaf: rendered{src: d.gram.DefiniteNP(lang, "patient", patient)}},
-		},
-		assemble: func(parts []rendered) (rendered, bool) {
-			words := make([]string, len(parts))
-			for i, p := range parts {
-				words[i] = p.src
-			}
-			return rendered{src: grammar.Sentence(strings.Join(words, " "))}, true
-		},
-	}, true
+	coord := d.gram.Coordinator(lang)
+	object := make([]string, len(patients))
+	for i, p := range patients {
+		object[i] = d.gram.DefiniteNP(lang, "patient", p)
+	}
+	agent := rendered{src: joinCoord(agents, coord)}
+	verbLeaf := rendered{src: d.gram.Conjugate(lang, verb, len(agents) > 1, past, false)}
+	patient := rendered{src: joinCoord(object, coord)}
+	slots := []slot{{leaf: agent}, {leaf: verbLeaf}, {leaf: patient}}
+	if d.gram.VerbFinal(lang) {
+		slots = []slot{{leaf: agent}, {leaf: patient}, {leaf: verbLeaf}}
+	}
+	return construction{slots: slots, assemble: func(parts []rendered) (rendered, bool) {
+		words := make([]string, len(parts))
+		for i, p := range parts {
+			words[i] = p.src
+		}
+		return rendered{src: grammar.Sentence(strings.Join(words, " "))}, true
+	}}, true
+}
+
+// roleNames reads the names of the concepts a role's edges leave a node for, in storage
+// order, so a role with more than one filler coordinates them.
+func roleNames(g codeGraph, node uint64, rel string) []string {
+	dests := g.dests(node, rel)
+	out := make([]string, 0, len(dests))
+	for _, dst := range dests {
+		if c := g.content(dst); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// joinCoord joins fillers with the language's coordinator, "the cat and the mouse".
+func joinCoord(items []string, coord string) string {
+	if coord == "" {
+		return strings.Join(items, " ")
+	}
+	return strings.Join(items, " "+coord+" ")
 }

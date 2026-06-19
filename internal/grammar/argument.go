@@ -183,6 +183,12 @@ func (p *Params) DefiniteNP(lang, role, np string) string {
 	return p.get().definiteNP(lang, role, np)
 }
 
+// VerbFinal reports a language's word order, so a caller laying a clause's slots out
+// through the shared traverser puts the verb where the language does (SOV closes with it).
+func (p *Params) VerbFinal(lang string) bool {
+	return p.get().verbFinal(lang)
+}
+
 func Sentence(s string) string {
 	return sentence(s, ".")
 }

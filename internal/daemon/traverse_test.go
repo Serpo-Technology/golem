@@ -125,6 +125,95 @@ func TestTraverseRendersClause(t *testing.T) {
 	}
 }
 
+// The same clause render serves Turkish through the language's parameters: the verb closes
+// the clause (verb-final) and the object takes the accusative, the layout and morphology
+// coming from grammar. The traversed clause matches Speak in Turkish too, so one driver
+// renders the clause across languages.
+func TestTraverseRendersClauseTR(t *testing.T) {
+	d, s := testDaemon(t)
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	link := func(from, to uint64, rel string) {
+		if err := s.LinkRel(from, to, rel, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moment := mk("past")
+	link(moment, mk("kovala"), memory.RelGrounds)
+	link(moment, mk("köpek"), memory.RelAgent)
+	link(moment, mk("kedi"), memory.RelPatient)
+
+	got, ok := d.traverse(nlSurface{lang: "tr"}, d.storeView(), moment, nil)
+	if !ok {
+		t.Fatal("the Turkish clause should traverse")
+	}
+	want, wok := d.gram.Speak("tr", grammar.Meaning{
+		Relation: grammar.Term{Phrase: "kovala"},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: "köpek"},
+			"patient": {Phrase: "kedi", Definite: true},
+		},
+		Past: true,
+		Lang: "tr",
+	})
+	if !wok {
+		t.Fatal("grammar should speak the Turkish clause")
+	}
+	if got.src != want {
+		t.Fatalf("the traversed Turkish clause %q should match Speak %q", got.src, want)
+	}
+}
+
+// A role with more than one filler coordinates: a clause whose patient binds two concepts
+// speaks them joined by the coordinator, matching Speak's co-argument render.
+func TestTraverseRendersCoordination(t *testing.T) {
+	d, s := testDaemon(t)
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	link := func(from, to uint64, rel string) {
+		if err := s.LinkRel(from, to, rel, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moment := mk("past")
+	link(moment, mk("chase"), memory.RelGrounds)
+	link(moment, mk("dog"), memory.RelAgent)
+	link(moment, mk("cat"), memory.RelPatient)
+	link(moment, mk("mouse"), memory.RelPatient)
+
+	got, ok := d.traverse(nlSurface{lang: "en"}, d.storeView(), moment, nil)
+	if !ok {
+		t.Fatal("the coordinated clause should traverse")
+	}
+	want, wok := d.gram.Speak("en", grammar.Meaning{
+		Relation: grammar.Term{Phrase: "chase"},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: "dog"},
+			"patient": {Phrase: "cat", With: []string{"mouse"}, Definite: true},
+		},
+		Past: true,
+		Lang: "en",
+	})
+	if !wok {
+		t.Fatal("grammar should speak the coordinated clause")
+	}
+	if got.src != want {
+		t.Fatalf("the traversed coordinated clause %q should match Speak %q", got.src, want)
+	}
+}
+
 // The Go surface widens to calls and recursion: walking a call subgraph through the
 // driver inlines a non-recursive function (binding its parameters to the rendered
 // arguments and walking the body) and writes a recursive one as its local-function form,
