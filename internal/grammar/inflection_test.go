@@ -39,6 +39,32 @@ func TestLearnsSyntheticLanguage(t *testing.T) {
 	}
 }
 
+// GOLEM learns a HARMONIC suffix from examples -- the Turkish -DI past, whose vowel bends to
+// the stem's last vowel -- and generalizes it to held-out stems, the suffix vowel chosen by
+// backness and rounding. The vowel features are seeded phonetics; the harmony rule is learned.
+func TestLearnsVowelHarmony(t *testing.T) {
+	p := Compile(nil, nil)
+	if !p.LearnInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, // back unround a -> ı
+		{"gel", "geldi"},       // front unround e -> i
+		{"oku", "okudu"},       // back round u -> u
+		{"gör", "gördü"},       // front round ö -> ü
+	}) {
+		t.Fatal("the harmonic -DI past should be learned")
+	}
+	// Held-out stems, vowel- or voiced-final so the vowel harmony alone is correct Turkish.
+	for base, want := range map[string]string{
+		"ara":  "aradı",  // back unround -> ı
+		"bil":  "bildi",  // front unround -> i
+		"uyu":  "uyudu",  // back round -> u
+		"yürü": "yürüdü", // front round -> ü
+	} {
+		if got, ok := p.Inflect("tr", "past", base); !ok || got != want {
+			t.Fatalf("harmony should inflect %s -> %s, got %q (ok %v)", base, want, got, ok)
+		}
+	}
+}
+
 // Pairs no single regular rule explains are declined, the Occam guard, and nothing is left
 // to inflect with.
 func TestDeclinesInconsistent(t *testing.T) {
