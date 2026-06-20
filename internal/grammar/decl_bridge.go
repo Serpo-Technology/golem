@@ -299,15 +299,24 @@ func (p *Params) RealizeDecl(f Frame, chem limbic.State) (string, bool) {
 	if lang == "" {
 		lang = "en"
 	}
-	if f.Action.Phrase != "be" {
+	if p.decl[lang] == nil {
 		return "", false
 	}
+	switch f.Action.Phrase {
+	case "be":
+		return p.realizeCopula(lang, f)
+	case "follow", "precede", "happen", "run", "fail":
+		return p.realizeEvent(lang, f, chem)
+	}
+	return "", false
+}
+
+// realizeCopula builds the copula clause, statement or question, through the engine. The agent
+// and complement ride verbatim (the frame hands them already rendered); the copula form
+// (is/are/was/were, the Turkish -DIr) and the clause order come from grammar data.
+func (p *Params) realizeCopula(lang string, f Frame) (string, bool) {
 	if len(f.Quals) > 0 || f.Hedge || f.Habit || f.Last {
 		return "", false // the copula branch ignores these; declining keeps the shadow honest
-	}
-	g := p.decl[lang]
-	if g == nil {
-		return "", false
 	}
 	comp := f.Patient.Speak()
 	if comp == "" {
@@ -383,6 +392,57 @@ func (p *Params) RealizeDecl(f Frame, chem limbic.State) (string, bool) {
 		"subj": Leaf(subjPhrase, fs{"cat": "comp", "num": num}),
 		"cop":  Leaf(copLemma, fs{"cat": "cop"}),
 		"comp": Leaf(comp, fs{"cat": "comp"}),
+	})
+	surface, _, ok := p.Generate(lang, root)
+	if !ok {
+		return "", false
+	}
+	return Sentence(surface), true
+}
+
+// realizeEvent builds the plain event clause ("the dog follows the cat") through the engine,
+// reusing the proposition clause's rules so the verb's form comes from the same minted and
+// learned morphology while the agent and patient ride verbatim. It declines the aspected,
+// negated, hedged, place-marked, adjuncted, and Turkish shapes, each a later stage, so the
+// shadow stays honest.
+func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, bool) {
+	if f.Force != ForceStatement {
+		return "", false
+	}
+	if p.Article(lang) == "" {
+		return "", false // Turkish event verbs are a suppletive paradigm, a later stage
+	}
+	if f.Negate || f.Hedge || f.Habit || f.Last || f.At != "" || len(f.Quals) > 0 {
+		return "", false // aspect, the place complement, and fronted adjuncts are later stages
+	}
+	if chem.Oxytocin < limbic.OxytocinBaseline {
+		return "", false // a corrected system hedges, where Realize would say "may follow"
+	}
+	if f.Agent.Empty() || f.Agent.Given {
+		return "", false
+	}
+	subject := f.Agent.Speak()
+	if subject == "" {
+		return "", false
+	}
+	// The first person and the plural both take the base form, the way finiteVerb does.
+	num := "sg"
+	if subject == "I" || f.Agent.Plural {
+		num = "pl"
+	}
+	clause := fs{}
+	if f.Past {
+		clause["tense"] = "past"
+	}
+	vpRule := "vp"
+	vpKids := map[string]*GenNode{"v": Leaf(f.Action.Phrase, fs{"cat": "v"})}
+	if !f.Patient.Empty() {
+		vpRule = "vpt"
+		vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+	}
+	root := Phrase("s", clause, map[string]*GenNode{
+		"subj": Leaf(subject, fs{"cat": "comp", "num": num}),
+		"vp":   Phrase(vpRule, nil, vpKids),
 	})
 	surface, _, ok := p.Generate(lang, root)
 	if !ok {

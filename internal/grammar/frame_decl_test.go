@@ -42,6 +42,69 @@ func TestRealizeDeclMatchesRealize(t *testing.T) {
 	}
 }
 
+// RealizeDecl reproduces the coded Realize for the plain event clause, the verb's form coming
+// from the same morphology the proposition clause uses while the agent and patient ride
+// verbatim. Agreement follows finiteVerb: the first person and the plural take the base form.
+func TestRealizeDeclEventVerbs(t *testing.T) {
+	p := Builtin()
+	chem := limbic.State{Oxytocin: limbic.OxytocinBaseline} // at baseline, not hedged
+	ev := func(f Frame) Frame { f.Force = ForceStatement; return f }
+	cases := []struct {
+		name string
+		f    Frame
+		want string
+	}{
+		{"transitive present", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}}), "The dog follows the cat."},
+		{"transitive past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Past: true}), "The dog followed the cat."},
+		{"plural subject", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dogs", Plural: true}, Patient: Term{Phrase: "the cat"}}), "The dogs follow the cat."},
+		{"first person", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "the cat"}}), "I follow the cat."},
+		{"intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}}), "Make test happens."},
+		{"precede past", ev(Frame{Action: Term{Phrase: "precede"}, Agent: Term{Phrase: "make test"}, Patient: Term{Phrase: "make deploy"}, Past: true}), "Make test preceded make deploy."},
+	}
+	for _, c := range cases {
+		got, ok := p.RealizeDecl(c.f, chem)
+		want := p.Realize(c.f, chem)
+		if !ok {
+			t.Fatalf("%s: RealizeDecl declined a clause it should speak", c.name)
+		}
+		if got != want || got != c.want {
+			t.Fatalf("%s: RealizeDecl %q should match Realize %q (want %q)", c.name, got, want, c.want)
+		}
+	}
+}
+
+// The event clause declines its aspected, negated, hedged, place-marked, adjuncted, and Turkish
+// shapes, each a later stage, so the shadow stays silent and the coded realizer stands.
+func TestRealizeDeclEventDeclines(t *testing.T) {
+	p := Builtin()
+	base := limbic.State{Oxytocin: limbic.OxytocinBaseline}
+	ev := func(f Frame) Frame {
+		f.Action = Term{Phrase: "follow"}
+		f.Force = ForceStatement
+		f.Agent = Term{Phrase: "the dog"}
+		f.Patient = Term{Phrase: "the cat"}
+		return f
+	}
+	cases := []struct {
+		name string
+		f    Frame
+		chem limbic.State
+	}{
+		{"habitual", ev(Frame{Habit: true}), base},
+		{"hedged", ev(Frame{Hedge: true}), base},
+		{"negated", ev(Frame{Negate: true}), base},
+		{"low oxytocin hedges", ev(Frame{}), limbic.State{Oxytocin: 0}},
+		{"with adjunct", ev(Frame{Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), base},
+		{"with place", ev(Frame{At: "09:14"}), base},
+		{"turkish event", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}}, base},
+	}
+	for _, c := range cases {
+		if got, ok := p.RealizeDecl(c.f, c.chem); ok {
+			t.Fatalf("%s: RealizeDecl should decline, got %q", c.name, got)
+		}
+	}
+}
+
 // RealizeDecl declines the shapes the copula stage does not cover, so the shadow stays silent
 // and the coded realizer stands.
 func TestRealizeDeclDeclines(t *testing.T) {

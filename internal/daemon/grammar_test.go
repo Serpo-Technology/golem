@@ -123,6 +123,32 @@ func TestRealizeAsCopulaShadow(t *testing.T) {
 	}
 }
 
+// The event clause routes through RealizeDecl at realizeAs too: a plain "follow" frame is
+// covered by the declarative engine and agrees with Realize, the verb formed by the same
+// morphology the proposition clause uses.
+func TestRealizeAsEventShadow(t *testing.T) {
+	d, _ := testDaemon(t)
+	var buf bytes.Buffer
+	d.out = &buf
+	d.shadowVerbose = true
+	f := grammar.Frame{
+		Action:  grammar.Term{Phrase: "follow"},
+		Force:   grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: "the dog"},
+		Patient: grammar.Term{Phrase: "the cat"},
+	}
+	if got := d.realizeAs("en", f, limbic.State{Oxytocin: limbic.OxytocinBaseline}); got != "The dog follows the cat." {
+		t.Fatalf("realizeAs should answer the event clause \"The dog follows the cat.\", got %q", got)
+	}
+	log := buf.String()
+	if strings.Contains(log, "framegen mismatch") {
+		t.Fatalf("the declarative engine should agree with Realize on the event clause; log: %q", log)
+	}
+	if !strings.Contains(log, "framegen ok") {
+		t.Fatalf("RealizeDecl should have covered the event clause (framegen ok); log: %q", log)
+	}
+}
+
 // A Turkish inflection taught through the daemon drives generation in the declarative engine:
 // after teaching the -DI past, SpeakDecl speaks the clause with the verb formed by the learned
 // rule, matching the coded Speak. This is the payoff end to end: teach a rule into memory, and
