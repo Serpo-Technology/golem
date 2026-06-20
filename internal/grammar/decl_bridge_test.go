@@ -53,7 +53,6 @@ func TestSpeakDeclDeclinesOutOfScope(t *testing.T) {
 		m    Meaning
 	}{
 		{"negation", Meaning{Relation: Term{Phrase: "chase"}, Roles: transitive, Negate: true}},
-		{"unseeded verb", Meaning{Relation: Term{Phrase: "zorp"}, Roles: transitive}},
 		{"given referent", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
 			"agent": {Given: true}, "patient": {Phrase: "cat", Definite: true}}}},
 		{"coordination", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
@@ -66,6 +65,25 @@ func TestSpeakDeclDeclinesOutOfScope(t *testing.T) {
 		if got, ok := p.SpeakDecl("en", c.m); ok {
 			t.Fatalf("%s: SpeakDecl should decline, got %q", c.name, got)
 		}
+	}
+}
+
+// SpeakDecl renders open vocabulary the curriculum never seeded by minting a lexical entry
+// from the coded morphology, so the shadow fires on learned words and still matches Speak: the
+// minted verb and noun forms come from the same rules Speak conjugates from.
+func TestSpeakDeclMintsOpenVocabulary(t *testing.T) {
+	p := Builtin()
+	m := Meaning{Relation: Term{Phrase: "watch"}, Roles: map[string]Term{
+		"agent":   {Phrase: "wolf", Definite: true},
+		"patient": {Phrase: "fox", Definite: true},
+	}, Past: true}
+	want, wok := p.Speak("en", m)
+	got, gok := p.SpeakDecl("en", m)
+	if !gok {
+		t.Fatal("SpeakDecl should mint entries for unseeded vocabulary and speak the clause")
+	}
+	if !wok || got != want || got != "The wolf watched the fox." {
+		t.Fatalf("SpeakDecl %q should match Speak %q (want \"The wolf watched the fox.\")", got, want)
 	}
 }
 

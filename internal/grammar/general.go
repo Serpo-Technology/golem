@@ -76,6 +76,9 @@ type DeclGrammar struct {
 	// keyed by the agreement value that selected the form (the plural, the past). It is how a
 	// taught language inflects by rule rather than storing every form of every word.
 	inflect func(feature, lemma string) (string, bool)
+	// mint synthesizes a lexical entry for a learned word the curriculum never seeded, from its
+	// category and the language's coded morphology, so the engine renders open vocabulary.
+	mint func(lemma, cat string) (lexEntry, bool)
 }
 
 // GenNode is a node of the meaning tree the engine realizes: a phrase
@@ -123,6 +126,12 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 	}
 	if n.Rule == "" {
 		e, ok := g.lex[n.Lemma]
+		if !ok && g.mint != nil {
+			// No stored entry: mint one for a learned word from its category, so the engine
+			// renders vocabulary the curriculum never seeded. The category rides on the leaf's
+			// features, set by the caller building the tree.
+			e, ok = g.mint(n.Lemma, n.Feats["cat"])
+		}
 		if !ok {
 			return "", nil, nil, false
 		}
@@ -253,6 +262,7 @@ func (p *Params) SetDecl(entries []Param) *Params {
 				rules:   map[string]synRule{},
 				lex:     map[string]lexEntry{},
 				inflect: func(feature, lemma string) (string, bool) { return p.inflectRule(lang, feature, lemma) },
+				mint:    func(lemma, cat string) (lexEntry, bool) { return p.mintLex(lang, lemma, cat) },
 			}
 			decl[lang] = g
 		}

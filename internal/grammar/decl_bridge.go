@@ -26,9 +26,6 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 	if verb == "" {
 		return "", false
 	}
-	if _, seeded := g.lex[verb]; !seeded {
-		return "", false // an unseeded verb has no declarative lexical entry
-	}
 	roles := map[string]*GenNode{}
 	for _, s := range cxn.Slots {
 		if s.Role == cxn.Pred {
@@ -45,7 +42,7 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 		return "", false
 	}
 	vpRule := "vp"
-	vpKids := map[string]*GenNode{"v": Leaf(verb, nil)}
+	vpKids := map[string]*GenNode{"v": Leaf(verb, fs{"cat": "v"})}
 	if obj, ok := roles["patient"]; ok {
 		vpRule = "vpt"
 		vpKids["obj"] = obj
@@ -74,7 +71,7 @@ func nounPhrase(p *Params, g *DeclGrammar, lang string, t Term) (*GenNode, bool)
 		return nil, false
 	}
 	word := t.Speak()
-	if _, ok := g.lex[word]; !ok {
+	if word == "" {
 		return nil, false
 	}
 	art := p.Article(lang)
@@ -88,8 +85,29 @@ func nounPhrase(p *Params, g *DeclGrammar, lang string, t Term) (*GenNode, bool)
 	if t.Plural {
 		num = "pl"
 	}
+	// The noun carries its category so the engine can mint a lexical entry for it when the
+	// curriculum never seeded the word, the open-vocabulary path.
 	return Phrase("np", fs{"num": num}, map[string]*GenNode{
 		"det": Leaf(art, nil),
-		"n":   Leaf(word, fs{"num": num}),
+		"n":   Leaf(word, fs{"num": num, "cat": "n"}),
 	}), true
+}
+
+// mintLex synthesizes a lexical entry for a word the curriculum never seeded, so the
+// declarative engine renders open vocabulary. The forms come from the same coded morphology
+// Speak conjugates from (the verb's principal parts, the noun's plural), so a minted clause
+// matches the coded clause. English only: these are English rules, and a learned language
+// inflects by its own rules through the inflect fallback instead.
+func (p *Params) mintLex(lang, lemma, cat string) (lexEntry, bool) {
+	if lang != "en" || lemma == "" {
+		return lexEntry{}, false
+	}
+	switch cat {
+	case "n":
+		return lexEntry{cat: "n", forms: map[string]string{"sg": lemma, "pl": pluralEN(lemma)}}, true
+	case "v":
+		v := p.verb(lemma)
+		return lexEntry{cat: "v", forms: map[string]string{"sg": v.third, "pl": v.base, "past": v.past}}, true
+	}
+	return lexEntry{}, false
 }

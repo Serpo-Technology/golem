@@ -46,30 +46,31 @@ func TestGeneralEngineFromMemory(t *testing.T) {
 	}
 }
 
-// The declarative engine agrees with the live Speak clause on a real stored proposition: the
-// renderFacts shadow fires on seeded vocabulary and logs no mismatch, and SpeakDecl speaks the
-// same answer, so routing the answer through it would not regress the clause.
+// The declarative engine agrees with the live Speak clause on a real stored proposition, even
+// for vocabulary the curriculum never seeded: the engine mints a lexical entry for the learned
+// words from the coded morphology, so the renderFacts shadow fires and logs no mismatch, and
+// SpeakDecl speaks the same answer. This is what broadens the shadow from seeds to live speech.
 func TestRenderFactsDeclarativeShadow(t *testing.T) {
 	d, _ := testDaemon(t)
-	dog := groundNoun(t, d, "dog")
-	groundNoun(t, d, "cat")
-	say(t, d, "a dog chased a cat")
+	wolf := groundNoun(t, d, "wolf") // none of wolf, fox, watch is in the seeded lexicon
+	groundNoun(t, d, "fox")
+	say(t, d, "a wolf watched a fox")
 
 	var buf bytes.Buffer
 	d.out = &buf
-	got, ok := d.renderFacts("en", d.conceptName(dog.ID, dog.Content, "en"), d.gatherFacts(dog, "", ""), true, false)
-	if !ok || got != "The dog chased the cat." {
-		t.Fatalf("renderFacts should answer \"The dog chased the cat.\", got %q (ok %v)", got, ok)
+	got, ok := d.renderFacts("en", d.conceptName(wolf.ID, wolf.Content, "en"), d.gatherFacts(wolf, "", ""), true, false)
+	if !ok || got != "The wolf watched the fox." {
+		t.Fatalf("renderFacts should answer \"The wolf watched the fox.\", got %q (ok %v)", got, ok)
 	}
 	if strings.Contains(buf.String(), "declgen mismatch") {
 		t.Fatalf("the declarative engine should agree with Speak on this clause; log: %q", buf.String())
 	}
-	m := grammar.Meaning{Relation: grammar.Term{Phrase: "chase"}, Roles: map[string]grammar.Term{
-		"agent":   {Phrase: "dog", Definite: true},
-		"patient": {Phrase: "cat", Definite: true},
+	m := grammar.Meaning{Relation: grammar.Term{Phrase: "watch"}, Roles: map[string]grammar.Term{
+		"agent":   {Phrase: "wolf", Definite: true},
+		"patient": {Phrase: "fox", Definite: true},
 	}, Past: true}
 	if alt, dok := d.gram.SpeakDecl("en", m); !dok || alt != got {
-		t.Fatalf("SpeakDecl should fire on the seeded vocabulary and match the answer: %q %v vs %q", alt, dok, got)
+		t.Fatalf("SpeakDecl should mint the learned vocabulary and match the answer: %q %v vs %q", alt, dok, got)
 	}
 }
 
