@@ -27,6 +27,8 @@ func TestRealizeDeclMatchesRealize(t *testing.T) {
 		{"negated", be(Frame{Agent: Term{Phrase: "the lion"}, Patient: Term{Phrase: "bigger than the mouse"}, Negate: true}), "The lion is not bigger than the mouse."},
 		{"turkish", be(Frame{Lang: "tr", Agent: Term{Phrase: "make test"}, Patient: Term{Phrase: "bir eylem"}}), "Make test bir eylemdir."},
 		{"turkish suffixes the last word", be(Frame{Lang: "tr", Agent: Term{Phrase: "köpek"}, Patient: Term{Phrase: "bir şey"}}), "Köpek bir şeydir."},
+		{"english question", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion, Patient: Term{Phrase: "flibber"}}, "What is flibber?"},
+		{"turkish question", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion, Lang: "tr", Patient: Term{Phrase: "make test"}}, "Make test nedir?"},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -49,7 +51,7 @@ func TestRealizeDeclDeclines(t *testing.T) {
 		name string
 		f    Frame
 	}{
-		{"question", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion, Patient: Term{Phrase: "flibber"}}},
+		{"question with no patient", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion}},
 		{"non-be action", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}}},
 		{"given subject", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Given: true}, Patient: Term{Phrase: "an animal"}}},
 		{"first person", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "an animal"}}},

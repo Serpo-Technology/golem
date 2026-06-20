@@ -299,10 +299,7 @@ func (p *Params) RealizeDecl(f Frame, chem limbic.State) (string, bool) {
 	if lang == "" {
 		lang = "en"
 	}
-	if f.Action.Phrase != "be" || f.Force != ForceStatement {
-		return "", false
-	}
-	if f.Agent.Empty() || f.Patient.Empty() || f.Agent.Given {
+	if f.Action.Phrase != "be" {
 		return "", false
 	}
 	if len(f.Quals) > 0 || f.Hedge || f.Habit || f.Last {
@@ -312,8 +309,41 @@ func (p *Params) RealizeDecl(f Frame, chem limbic.State) (string, bool) {
 	if g == nil {
 		return "", false
 	}
-	subjPhrase, comp := f.Agent.Speak(), f.Patient.Speak()
-	if subjPhrase == "" || comp == "" {
+	comp := f.Patient.Speak()
+	if comp == "" {
+		return "", false
+	}
+	if f.Force == ForceQuestion {
+		// "What is X?" / "X nedir?": the asked thing rides verbatim, the interrogative frame
+		// from grammar data. Turkish fronts the thing and closes with "nedir", English fronts
+		// the wh word and the copula.
+		var root *GenNode
+		if p.Article(lang) == "" {
+			root = Phrase("qcop", nil, map[string]*GenNode{
+				"comp": Leaf(comp, fs{"cat": "comp"}),
+				"q":    Leaf("nedir", fs{"cat": "q"}),
+			})
+		} else {
+			root = Phrase("qcop", nil, map[string]*GenNode{
+				"wh":   Leaf("what", fs{"cat": "wh"}),
+				"cop":  Leaf("be", fs{"cat": "cop", "num": "sg"}),
+				"comp": Leaf(comp, fs{"cat": "comp"}),
+			})
+		}
+		surface, _, ok := p.Generate(lang, root)
+		if !ok {
+			return "", false
+		}
+		return sentence(surface, "?"), true
+	}
+	if f.Force != ForceStatement {
+		return "", false
+	}
+	if f.Agent.Empty() || f.Agent.Given {
+		return "", false
+	}
+	subjPhrase := f.Agent.Speak()
+	if subjPhrase == "" {
 		return "", false
 	}
 	if p.Article(lang) == "" {
