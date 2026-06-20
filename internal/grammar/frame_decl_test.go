@@ -87,6 +87,54 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 	}
 }
 
+// The Turkish event clause speaks the suppletive verb from its seeded paradigm, verb-final, with
+// the past person suffix, matching realizeTurkish across present, past, person, negation, hedge.
+func TestRealizeDeclTurkishEvent(t *testing.T) {
+	p := Builtin()
+	chem := limbic.State{Oxytocin: limbic.OxytocinBaseline}
+	ev := func(f Frame) Frame {
+		f.Action = Term{Phrase: "follow"}
+		f.Force = ForceStatement
+		f.Lang = "tr"
+		return f
+	}
+	cases := []struct {
+		name string
+		f    Frame
+		want string
+	}{
+		{"present", ev(Frame{Agent: Term{Phrase: "make deploy"}}), "Make deploy gelir."},
+		{"past", ev(Frame{Agent: Term{Phrase: "make deploy"}, Past: true}), "Make deploy geldi."},
+		{"past first person", ev(Frame{Agent: Term{Phrase: "ben"}, Past: true}), "Ben geldim."},
+		{"negative present", ev(Frame{Agent: Term{Phrase: "make deploy"}, Negate: true}), "Make deploy gelmez."},
+		{"hedged", ev(Frame{Agent: Term{Phrase: "make deploy"}, Hedge: true}), "Make deploy gelebilir."},
+	}
+	for _, c := range cases {
+		got, ok := p.RealizeDecl(c.f, chem)
+		want := p.Realize(c.f, chem)
+		if !ok || got != want || got != c.want {
+			t.Fatalf("%s: RealizeDecl %q should match Realize %q (want %q)", c.name, got, want, c.want)
+		}
+	}
+}
+
+// The Turkish event clause declines a verb with no seeded paradigm and the fronting adverbs and
+// adjuncts, each a later stage, so they fall back to the coded path.
+func TestRealizeDeclTurkishEventDeclines(t *testing.T) {
+	p := Builtin()
+	base := limbic.State{Oxytocin: limbic.OxytocinBaseline}
+	cases := []Frame{
+		{Action: Term{Phrase: "run"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make test"}},
+		{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}, Habit: true},
+		{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}},
+	}
+	for i, f := range cases {
+		if got, ok := p.RealizeDecl(f, base); ok {
+			t.Fatalf("case %d: RealizeDecl should decline, got %q", i, got)
+		}
+	}
+}
+
 // A corrected system (low oxytocin) hedges an affirmative event clause even without the hedge
 // flag, the way Realize does, and the declarative engine matches it.
 func TestRealizeDeclEventLowOxytocinHedges(t *testing.T) {
@@ -119,7 +167,6 @@ func TestRealizeDeclEventDeclines(t *testing.T) {
 	}{
 		{"precede with adjunct", Frame{Action: Term{Phrase: "precede"}, Force: ForceStatement, Agent: Term{Phrase: "make test"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make deploy"}}}}, base},
 		{"with place", ev(Frame{At: "09:14"}), base},
-		{"turkish event", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}}, base},
 	}
 	for _, c := range cases {
 		if got, ok := p.RealizeDecl(c.f, c.chem); ok {

@@ -74,6 +74,11 @@ func TestDeclShadowSoak(t *testing.T) {
 				d.realizeAs("en", fr, limbic.State{Oxytocin: limbic.OxytocinBaseline})
 			}
 		}
+		trFollow := grammar.Frame{Action: grammar.Term{Phrase: "follow"}, Force: grammar.ForceStatement, Agent: grammar.Term{Phrase: d.conceptName(c.ID, c.Content, "tr")}}
+		for _, past := range []bool{false, true} {
+			trFollow.Past = past
+			d.realizeAs("tr", trFollow, limbic.State{Oxytocin: limbic.OxytocinBaseline})
+		}
 	}
 	log := buf.String()
 	covered := strings.Count(log, "declgen ok")

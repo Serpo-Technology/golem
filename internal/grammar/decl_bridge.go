@@ -409,18 +409,18 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 	if f.Force != ForceStatement {
 		return "", false
 	}
-	if p.Article(lang) == "" {
-		return "", false // Turkish event verbs are a suppletive paradigm, a later stage
-	}
-	if f.At != "" {
-		return "", false // the place complement is a later stage
-	}
 	if f.Agent.Empty() || f.Agent.Given {
 		return "", false
 	}
 	subject := f.Agent.Speak()
 	if subject == "" {
 		return "", false
+	}
+	if p.Article(lang) == "" {
+		return p.realizeEventTR(lang, f, chem, subject)
+	}
+	if f.At != "" {
+		return "", false // the place complement is a later stage
 	}
 	// The first person and the plural both take the base form, the way finiteVerb does.
 	num := "sg"
@@ -524,6 +524,52 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 		return "", false
 	}
 	return Sentence(surface), true
+}
+
+// realizeEventTR builds the intransitive Turkish event clause: the subject and the verb's
+// paradigm form, verb-final. The event verb is suppletive (follow -> gelir / geldi), so its
+// form is selected from the seeded paradigm and carries the past person suffix the way
+// finiteVerbTR forms it; the clause-fronting adverbs and the adjuncts are a later stage.
+func (p *Params) realizeEventTR(lang string, f Frame, chem limbic.State, subject string) (string, bool) {
+	v, ok := p.verbsTR[f.Action.Phrase]
+	if !ok {
+		return "", false // only the seeded suppletive event verbs
+	}
+	if len(f.Quals) > 0 || f.Habit || f.Last || f.At != "" {
+		return "", false
+	}
+	hedge := f.Hedge || chem.Oxytocin < limbic.OxytocinBaseline
+	form := selectTRVerb(v, f.Past, f.Negate, hedge)
+	if f.Past && !hedge {
+		form += pastPersonSuffixTR(p.trPersonOf(subject))
+	}
+	root := Phrase("si", nil, map[string]*GenNode{
+		"subj": Leaf(subject, fs{"cat": "comp"}),
+		"v":    Leaf(form, fs{"cat": "comp"}),
+	})
+	surface, _, gok := p.Generate(lang, root)
+	if !gok {
+		return "", false
+	}
+	return Sentence(surface), true
+}
+
+// selectTRVerb picks the paradigm form finiteVerbFormTR would, by tense, polarity, and hedge.
+func selectTRVerb(v verbTR, past, negate, hedge bool) string {
+	switch {
+	case hedge && past:
+		return v.hedgedPast
+	case hedge:
+		return v.potential
+	case negate && past:
+		return v.pastNeg
+	case negate:
+		return v.aoristNeg
+	case past:
+		return v.past
+	default:
+		return v.aorist
+	}
 }
 
 // mintLex synthesizes a lexical entry for a word the curriculum never seeded, so the
