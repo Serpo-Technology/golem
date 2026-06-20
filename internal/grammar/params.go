@@ -56,6 +56,9 @@ type Params struct {
 	// role, the pro-verbs. Keyed lang then name, so the engine reads them rather
 	// than carrying any in its code.
 	surface map[string]map[string]string
+	// learnedInfl holds inflection patterns induced from examples rather than
+	// coded, keyed "lang:feature" (the seed of morphology as learned constructions).
+	learnedInfl map[string]inflection
 }
 
 func sortedKeys[V any](m map[string]V) []string {
