@@ -220,6 +220,12 @@ syn:en:vpn	aux neg v obj | | aux	en
 syn:en:vpni	aux neg v | | aux	en
 lex:en:do	cat=aux;sg=does;pl=do;past=did	en
 lex:en:not	cat=neg;any=not	en
+syn:en:vpm	modal v obj | | modal	en
+syn:en:vpmi	modal v | | modal	en
+syn:en:vpmp	modal aux v obj | | modal	en
+syn:en:vpmpi	modal aux v | | modal	en
+lex:en:may	cat=modal;any=may	en
+lex:en:have	cat=aux;any=have	en
 syn:en:sadj	adj s | | s	en
 syn:tr:qcop	comp q | | comp	tr
 lex:tr:nedir	cat=q;any=nedir	tr

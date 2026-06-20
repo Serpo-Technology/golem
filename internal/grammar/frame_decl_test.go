@@ -71,6 +71,9 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 		{"fronted adjunct", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), "After make test, make deploy follows."},
 		{"adjunct with habit", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make deploy"}, Habit: true, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), "After make test, make deploy usually happens."},
 		{"two adjuncts", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}, {Rel: "before", Anchor: Term{Phrase: "make ship"}}}}), "After make test and before make ship, make deploy happens."},
+		{"hedged present", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Hedge: true}), "The dog may follow the cat."},
+		{"hedged past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Hedge: true, Past: true}), "The dog may have followed the cat."},
+		{"hedged intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Hedge: true}), "Make test may happen."},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -84,8 +87,21 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 	}
 }
 
-// The event clause declines its aspected, negated, hedged, place-marked, adjuncted, and Turkish
-// shapes, each a later stage, so the shadow stays silent and the coded realizer stands.
+// A corrected system (low oxytocin) hedges an affirmative event clause even without the hedge
+// flag, the way Realize does, and the declarative engine matches it.
+func TestRealizeDeclEventLowOxytocinHedges(t *testing.T) {
+	p := Builtin()
+	low := limbic.State{Oxytocin: 0}
+	f := Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}}
+	got, ok := p.RealizeDecl(f, low)
+	want := p.Realize(f, low)
+	if !ok || got != want || got != "The dog may follow the cat." {
+		t.Fatalf("low oxytocin should hedge: RealizeDecl %q vs Realize %q", got, want)
+	}
+}
+
+// The event clause declines its place-marked and Turkish shapes, and a non-fronting verb's
+// adjuncts, each a later stage, so the shadow stays silent and the coded realizer stands.
 func TestRealizeDeclEventDeclines(t *testing.T) {
 	p := Builtin()
 	base := limbic.State{Oxytocin: limbic.OxytocinBaseline}
@@ -101,8 +117,6 @@ func TestRealizeDeclEventDeclines(t *testing.T) {
 		f    Frame
 		chem limbic.State
 	}{
-		{"hedged", ev(Frame{Hedge: true}), base},
-		{"low oxytocin hedges", ev(Frame{}), limbic.State{Oxytocin: 0}},
 		{"precede with adjunct", Frame{Action: Term{Phrase: "precede"}, Force: ForceStatement, Agent: Term{Phrase: "make test"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make deploy"}}}}, base},
 		{"with place", ev(Frame{At: "09:14"}), base},
 		{"turkish event", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}}, base},
@@ -124,7 +138,7 @@ func TestRealizeDeclDeclines(t *testing.T) {
 		f    Frame
 	}{
 		{"question with no patient", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion}},
-		{"non-be action", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}}},
+		{"unhandled action", Frame{Action: Term{Phrase: "know"}, Force: ForceStatement, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "the cat"}}},
 		{"given subject", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Given: true}, Patient: Term{Phrase: "an animal"}}},
 		{"first person", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "an animal"}}},
 		{"hedged be", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "an animal"}, Hedge: true}},

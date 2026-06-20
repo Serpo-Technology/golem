@@ -415,11 +415,6 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 	if f.At != "" {
 		return "", false // the place complement is a later stage
 	}
-	// Negation outranks the hedge in Realize, so a corrected system hedges only an affirmative
-	// clause; the hedge itself is a later stage.
-	if !f.Negate && (f.Hedge || chem.Oxytocin < limbic.OxytocinBaseline) {
-		return "", false
-	}
 	if f.Agent.Empty() || f.Agent.Given {
 		return "", false
 	}
@@ -437,9 +432,13 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 		clause["tense"] = "past"
 	}
 	hasObj := !f.Patient.Empty()
+	// The verb group follows the coded order of precedence: negation, then the hedge a corrected
+	// system reaches for, then the habitual or last adverb, then the plain finite verb.
+	hedge := !f.Negate && (f.Hedge || chem.Oxytocin < limbic.OxytocinBaseline)
 	var vpRule string
 	var vpKids map[string]*GenNode
-	if f.Negate {
+	switch {
+	case f.Negate:
 		// Do-support: the auxiliary carries agreement and tense, the main verb stays its base.
 		vpKids = map[string]*GenNode{
 			"aux": Leaf("do", fs{"cat": "aux"}),
@@ -451,7 +450,27 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 			vpRule = "vpn"
 			vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
 		}
-	} else {
+	case hedge:
+		// The modal carries no agreement; the present takes the base, the past "have" plus the
+		// participle, which for these regular verbs is the past form.
+		vpKids = map[string]*GenNode{"modal": Leaf("may", fs{"cat": "modal"})}
+		if f.Past {
+			vpKids["aux"] = Leaf("have", fs{"cat": "aux"})
+			vpKids["v"] = Leaf(f.Action.Phrase, fs{"cat": "v", "tense": "past"})
+			vpRule = "vpmpi"
+			if hasObj {
+				vpRule = "vpmp"
+				vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+			}
+		} else {
+			vpKids["v"] = Leaf(f.Action.Phrase, fs{"cat": "v", "num": "pl"})
+			vpRule = "vpmi"
+			if hasObj {
+				vpRule = "vpm"
+				vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+			}
+		}
+	default:
 		// The habitual and the last occurrence prefix an adverb; the habit wins when both are set.
 		adv := ""
 		if f.Habit {
