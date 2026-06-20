@@ -412,8 +412,8 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 	if p.Article(lang) == "" {
 		return "", false // Turkish event verbs are a suppletive paradigm, a later stage
 	}
-	if f.At != "" || len(f.Quals) > 0 {
-		return "", false // the place complement and the fronted adjuncts are later stages
+	if f.At != "" {
+		return "", false // the place complement is a later stage
 	}
 	// Negation outranks the hedge in Realize, so a corrected system hedges only an affirmative
 	// clause; the hedge itself is a later stage.
@@ -481,6 +481,25 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 		"subj": Leaf(subject, fs{"cat": "comp", "num": num}),
 		"vp":   Phrase(vpRule, nil, vpKids),
 	})
+	if len(f.Quals) > 0 {
+		// The temporal adjuncts front the clause, but only for the verbs Realize fronts; the
+		// others drop them, so decline rather than risk a silent divergence. Each is the relator
+		// and its anchor, coordinated, the whole closed by a comma the layout joins to the clause.
+		if f.Action.Phrase != "follow" && f.Action.Phrase != "happen" && f.Action.Phrase != "run" {
+			return "", false
+		}
+		parts := make([]string, 0, len(f.Quals))
+		for _, q := range f.Quals {
+			if q.Anchor.Empty() {
+				return "", false
+			}
+			parts = append(parts, relWord(q.Rel)+" "+q.Anchor.Speak())
+		}
+		root = Phrase("sadj", nil, map[string]*GenNode{
+			"adj": Leaf(strings.Join(parts, " and ")+",", fs{"cat": "comp"}),
+			"s":   root,
+		})
+	}
 	surface, _, ok := p.Generate(lang, root)
 	if !ok {
 		return "", false

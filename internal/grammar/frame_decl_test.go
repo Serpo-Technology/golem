@@ -68,6 +68,9 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 		{"negated plural", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dogs", Plural: true}, Patient: Term{Phrase: "the cat"}, Negate: true}), "The dogs do not follow the cat."},
 		{"negated past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Negate: true, Past: true}), "The dog did not follow the cat."},
 		{"negated intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Negate: true}), "Make test does not happen."},
+		{"fronted adjunct", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), "After make test, make deploy follows."},
+		{"adjunct with habit", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make deploy"}, Habit: true, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), "After make test, make deploy usually happens."},
+		{"two adjuncts", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}, {Rel: "before", Anchor: Term{Phrase: "make ship"}}}}), "After make test and before make ship, make deploy happens."},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -100,7 +103,7 @@ func TestRealizeDeclEventDeclines(t *testing.T) {
 	}{
 		{"hedged", ev(Frame{Hedge: true}), base},
 		{"low oxytocin hedges", ev(Frame{}), limbic.State{Oxytocin: 0}},
-		{"with adjunct", ev(Frame{Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), base},
+		{"precede with adjunct", Frame{Action: Term{Phrase: "precede"}, Force: ForceStatement, Agent: Term{Phrase: "make test"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make deploy"}}}}, base},
 		{"with place", ev(Frame{At: "09:14"}), base},
 		{"turkish event", Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}}, base},
 	}

@@ -220,6 +220,7 @@ syn:en:vpn	aux neg v obj | | aux	en
 syn:en:vpni	aux neg v | | aux	en
 lex:en:do	cat=aux;sg=does;pl=do;past=did	en
 lex:en:not	cat=neg;any=not	en
+syn:en:sadj	adj s | | s	en
 syn:tr:qcop	comp q | | comp	tr
 lex:tr:nedir	cat=q;any=nedir	tr
 cxn:en:introspect:report	I was thinking: {thought}	en	
