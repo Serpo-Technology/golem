@@ -210,7 +210,6 @@ syn:en:scop	subj cop comp | num:subj>cop | cop	en
 lex:en:be	cat=cop;sg=is;pl=are;past:sg=was;past:pl=were	en
 lex:en:be_neg	cat=cop;sg=is not;pl=are not;past:sg=was not;past:pl=were not	en
 syn:tr:scop	subj comp | | comp	tr
-syn:tr:si	subj v | | v	tr
 syn:en:qcop	wh cop comp | | comp	en
 lex:en:what	cat=wh;any=what	en
 syn:en:vpa	adv v obj | | v	en
@@ -230,6 +229,7 @@ lex:en:have	cat=aux;any=have	en
 syn:en:sadj	adj s | | s	en
 syn:tr:qcop	comp q | | comp	tr
 lex:tr:nedir	cat=q;any=nedir	tr
+syn:en:splace	s place | | s	en
 cxn:en:introspect:report	I was thinking: {thought}	en	
 cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
 cxn:en:definition:plain	{subject} is {kind}.	en	

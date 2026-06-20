@@ -27,6 +27,7 @@ func TestRealizeDeclMatchesRealize(t *testing.T) {
 		{"negated", be(Frame{Agent: Term{Phrase: "the lion"}, Patient: Term{Phrase: "bigger than the mouse"}, Negate: true}), "The lion is not bigger than the mouse."},
 		{"turkish", be(Frame{Lang: "tr", Agent: Term{Phrase: "make test"}, Patient: Term{Phrase: "bir eylem"}}), "Make test bir eylemdir."},
 		{"turkish suffixes the last word", be(Frame{Lang: "tr", Agent: Term{Phrase: "köpek"}, Patient: Term{Phrase: "bir şey"}}), "Köpek bir şeydir."},
+		{"turkish negation ignored", be(Frame{Lang: "tr", Agent: Term{Phrase: "köpek"}, Patient: Term{Phrase: "bir şey"}, Negate: true}), "Köpek bir şeydir."},
 		{"english question", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion, Patient: Term{Phrase: "flibber"}}, "What is flibber?"},
 		{"turkish question", Frame{Action: Term{Phrase: "be"}, Force: ForceQuestion, Lang: "tr", Patient: Term{Phrase: "make test"}}, "Make test nedir?"},
 	}
@@ -74,6 +75,7 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 		{"hedged present", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Hedge: true}), "The dog may follow the cat."},
 		{"hedged past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Hedge: true, Past: true}), "The dog may have followed the cat."},
 		{"hedged intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Hedge: true}), "Make test may happen."},
+		{"place complement", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Last: true, Past: true, At: "Jun 11 at 09:14"}), "Make test last happened on Jun 11 at 09:14."},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -108,6 +110,9 @@ func TestRealizeDeclTurkishEvent(t *testing.T) {
 		{"past first person", ev(Frame{Agent: Term{Phrase: "ben"}, Past: true}), "Ben geldim."},
 		{"negative present", ev(Frame{Agent: Term{Phrase: "make deploy"}, Negate: true}), "Make deploy gelmez."},
 		{"hedged", ev(Frame{Agent: Term{Phrase: "make deploy"}, Hedge: true}), "Make deploy gelebilir."},
+		{"habitual", ev(Frame{Agent: Term{Phrase: "make deploy"}, Habit: true}), "Genellikle make deploy gelir."},
+		{"fronted adjunct", ev(Frame{Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), "Make test'ten sonra make deploy gelir."},
+		{"place complement", Frame{Action: Term{Phrase: "happen"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make test"}, Last: true, Past: true, At: "09:14"}, "En son make test 09:14 oldu."},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -118,20 +123,14 @@ func TestRealizeDeclTurkishEvent(t *testing.T) {
 	}
 }
 
-// The Turkish event clause declines a verb with no seeded paradigm and the fronting adverbs and
-// adjuncts, each a later stage, so they fall back to the coded path.
+// The Turkish event clause declines a verb with no seeded paradigm, which falls back to the
+// coded path's regular rules.
 func TestRealizeDeclTurkishEventDeclines(t *testing.T) {
 	p := Builtin()
 	base := limbic.State{Oxytocin: limbic.OxytocinBaseline}
-	cases := []Frame{
-		{Action: Term{Phrase: "run"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make test"}},
-		{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}, Habit: true},
-		{Action: Term{Phrase: "follow"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make deploy"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}},
-	}
-	for i, f := range cases {
-		if got, ok := p.RealizeDecl(f, base); ok {
-			t.Fatalf("case %d: RealizeDecl should decline, got %q", i, got)
-		}
+	f := Frame{Action: Term{Phrase: "run"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "make test"}}
+	if got, ok := p.RealizeDecl(f, base); ok {
+		t.Fatalf("a verb with no paradigm should decline, got %q", got)
 	}
 }
 
@@ -148,30 +147,14 @@ func TestRealizeDeclEventLowOxytocinHedges(t *testing.T) {
 	}
 }
 
-// The event clause declines its place-marked and Turkish shapes, and a non-fronting verb's
-// adjuncts, each a later stage, so the shadow stays silent and the coded realizer stands.
+// The event clause declines a non-fronting verb's temporal adjuncts (only follow/happen/run
+// front them, as in the coded path), so that shape falls back rather than risk a divergence.
 func TestRealizeDeclEventDeclines(t *testing.T) {
 	p := Builtin()
 	base := limbic.State{Oxytocin: limbic.OxytocinBaseline}
-	ev := func(f Frame) Frame {
-		f.Action = Term{Phrase: "follow"}
-		f.Force = ForceStatement
-		f.Agent = Term{Phrase: "the dog"}
-		f.Patient = Term{Phrase: "the cat"}
-		return f
-	}
-	cases := []struct {
-		name string
-		f    Frame
-		chem limbic.State
-	}{
-		{"precede with adjunct", Frame{Action: Term{Phrase: "precede"}, Force: ForceStatement, Agent: Term{Phrase: "make test"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make deploy"}}}}, base},
-		{"with place", ev(Frame{At: "09:14"}), base},
-	}
-	for _, c := range cases {
-		if got, ok := p.RealizeDecl(c.f, c.chem); ok {
-			t.Fatalf("%s: RealizeDecl should decline, got %q", c.name, got)
-		}
+	f := Frame{Action: Term{Phrase: "precede"}, Force: ForceStatement, Agent: Term{Phrase: "make test"}, Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make deploy"}}}}
+	if got, ok := p.RealizeDecl(f, base); ok {
+		t.Fatalf("a non-fronting verb's adjuncts should decline, got %q", got)
 	}
 }
 
@@ -189,7 +172,6 @@ func TestRealizeDeclDeclines(t *testing.T) {
 		{"given subject", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Given: true}, Patient: Term{Phrase: "an animal"}}},
 		{"first person", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "an animal"}}},
 		{"hedged be", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "an animal"}, Hedge: true}},
-		{"turkish negation", Frame{Action: Term{Phrase: "be"}, Force: ForceStatement, Lang: "tr", Agent: Term{Phrase: "köpek"}, Patient: Term{Phrase: "bir şey"}, Negate: true}},
 	}
 	for _, c := range cases {
 		if got, ok := p.RealizeDecl(c.f, chem); ok {
