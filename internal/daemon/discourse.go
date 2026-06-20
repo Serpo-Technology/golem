@@ -524,22 +524,24 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 			roles["agent"], roles["patient"] = co, focus
 		}
 		meaning := grammar.Meaning{Relation: grammar.Term{Phrase: d.relationName(k.rel, lang)}, Roles: roles, Past: past}
-		if line, ok := d.gram.Speak(lang, meaning); ok {
+		// The declarative engine drives the clause when it can speak the meaning; the coded
+		// Speak stays as the fallback for the shapes it does not yet cover, and as a tripwire
+		// that logs any divergence on the shapes it does.
+		line, ok := d.gram.Speak(lang, meaning)
+		alt, dok := d.gram.SpeakDecl(lang, meaning)
+		switch {
+		case dok && ok && alt != line:
+			fmt.Fprintf(d.out, "declgen mismatch: %q vs Speak %q\n", alt, line)
+		case dok && d.shadowVerbose:
+			fmt.Fprintf(d.out, "declgen ok\n")
+		case !dok && ok && d.shadowVerbose:
+			fmt.Fprintf(d.out, "declgen decline: %q\n", line)
+		}
+		if dok {
+			line, ok = alt, true
+		}
+		if ok {
 			clauses = append(clauses, line)
-			// Shadow the declarative engine against the live clause: when it can speak this
-			// meaning and disagrees, log it. The Speak output still stands, so this changes
-			// nothing until the declarative path is proven across the answer surface.
-			if lang == "en" || lang == "tr" {
-				alt, ok := d.gram.SpeakDecl(lang, meaning)
-				switch {
-				case ok && alt != line:
-					fmt.Fprintf(d.out, "declgen mismatch: %q vs Speak %q\n", alt, line)
-				case ok && d.shadowVerbose:
-					fmt.Fprintf(d.out, "declgen ok\n")
-				case !ok && d.shadowVerbose:
-					fmt.Fprintf(d.out, "declgen decline: %q\n", line)
-				}
-			}
 		}
 	}
 	if len(clauses) == 0 {
