@@ -596,42 +596,34 @@ func resolveTerm(phrase string, resolve func(string) *memory.Fragment) Term {
 	return Term{Concept: resolve(phrase), Phrase: phrase}
 }
 
-// Realize runs the innate grammar forward with the built-in parameter
-// seed, for callers without a memory-backed grammar.
+// Realize realizes a frame with the built-in seed, for callers without a memory-backed grammar:
+// the declarative engine where it composes the clause (the copula, the event verbs), the coded
+// residual where the construction is an idiom (know, see, name, propose).
 func Realize(f Frame, chem limbic.State) string {
-	return Builtin().Realize(f, chem)
+	p := Builtin()
+	if s, ok := p.RealizeDecl(f, chem); ok {
+		return s
+	}
+	return p.Realize(f, chem)
 }
 
-// Realize runs the innate grammar forward: a frame becomes a sentence,
-// assembled as adjunct, subject, predicate, complement, never as a
-// stored string. The frame's language picks the parameter setting; the
-// chemistry reads the same either way. Oxytocin decides whether an
-// inferential claim asserts ("usually follows") or hedges ("may
-// follow"): a system whose judgement was recently corrected should
-// sound like it.
+// RealizeDecl realizes a frame through the declarative engine with the built-in seed, for
+// callers without a memory-backed grammar.
+func RealizeDecl(f Frame, chem limbic.State) (string, bool) {
+	return Builtin().RealizeDecl(f, chem)
+}
+
+// Realize is the coded residual for the idiomatic constructions the declarative engine does not
+// compose: knowledge claims ("I do not know what followed make test yet"), the experiential
+// perfect ("I have seen that twice"), naming, and proposing. The compositional clauses (the
+// copula and the event verbs) generate through RealizeDecl instead; this is reached only when
+// that declines. The frame's language picks the parameter setting; the chemistry reads the same.
 func (p *Params) Realize(f Frame, chem limbic.State) string {
 	p = p.get()
 	if f.Lang == "tr" && p.verbFinal("tr") {
 		return p.realizeTurkish(f, chem)
 	}
 	var b strings.Builder
-	// Temporal adjuncts front the clause only when the predicate is the
-	// ordered event itself; for "know" the anchors live inside the
-	// embedded clause instead. Two qualifiers coordinate: "after X and
-	// before Y, ...".
-	rel, anchor := f.FirstQual()
-	if rel != "" && !anchor.Empty() && f.Force != ForceQuestion &&
-		(f.Action.Phrase == "follow" || f.Action.Phrase == "happen" || f.Action.Phrase == "run") {
-		parts := make([]string, 0, len(f.Quals))
-		for _, q := range f.Quals {
-			if !q.Anchor.Empty() {
-				parts = append(parts, relWord(q.Rel)+" "+q.Anchor.Speak())
-			}
-		}
-		b.WriteString(strings.Join(parts, " and "))
-		b.WriteString(", ")
-	}
-
 	subject := f.Agent.Speak()
 	if subject == "" {
 		subject = "I"
@@ -641,35 +633,6 @@ func (p *Params) Realize(f Frame, chem limbic.State) string {
 	b.WriteString(subject)
 
 	switch f.Action.Phrase {
-	case "follow", "precede", "happen", "fail", "run":
-		verb := f.Action.Phrase
-		b.WriteString(" ")
-		switch {
-		case f.Negate:
-			// A denial must never come out as its opposite. The
-			// auxiliary carries agreement and tense; do-support works
-			// the same for every verb here.
-			b.WriteString(negatedVerb(p, verb, firstPerson, plural, f.Past))
-		case chem.Oxytocin < limbic.OxytocinBaseline || f.Hedge:
-			// A recently corrected system hedges its inferences.
-			b.WriteString(hedgedVerb(p, verb, f.Past))
-		case f.Habit:
-			b.WriteString("usually ")
-			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
-		case f.Last:
-			b.WriteString("last ")
-			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
-		default:
-			b.WriteString(finiteVerb(p, verb, firstPerson, plural, f.Past))
-		}
-		if !f.Patient.Empty() {
-			b.WriteString(" ")
-			b.WriteString(f.Patient.Speak())
-		}
-		if f.At != "" {
-			b.WriteString(" on ")
-			b.WriteString(f.At)
-		}
 	case "know":
 		// A knowledge claim is about now even when the gap it names is
 		// about then: "I do not know what followed make test yet." The
@@ -683,18 +646,6 @@ func (p *Params) Realize(f Frame, chem limbic.State) string {
 		b.WriteString(" ")
 		b.WriteString(embeddedClause(p, f))
 		b.WriteString(" yet")
-	case "be":
-		if f.Force == ForceQuestion {
-			return sentence("what is "+f.Patient.Speak(), "?")
-		}
-		b.WriteString(" ")
-		be := beForm(firstPerson, plural, f.Past)
-		if f.Negate {
-			be += " not"
-		}
-		b.WriteString(be)
-		b.WriteString(" ")
-		b.WriteString(f.Patient.Speak())
 	case "name":
 		b.WriteString(" ")
 		if f.Hedge {

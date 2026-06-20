@@ -80,22 +80,6 @@ func pastPart(p *Params, base string) string {
 	return p.verb(base).part
 }
 
-// beForm is the copula, the one verb whose agreement survives the past.
-func beForm(firstPerson, plural, past bool) string {
-	switch {
-	case past && plural:
-		return "were"
-	case past:
-		return "was"
-	case plural:
-		return "are"
-	case firstPerson:
-		return "am"
-	default:
-		return "is"
-	}
-}
-
 // regularVerbEN derives a verb's principal parts by the English spelling
 // rules, the fallback when memory holds no seeded entry for a lemma. A
 // silent e takes -d in the past, a consonant before -y turns to -ied, a

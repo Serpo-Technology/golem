@@ -33,12 +33,11 @@ func TestRealizeDeclMatchesRealize(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
-		want := p.Realize(c.f, chem)
 		if !ok {
 			t.Fatalf("%s: RealizeDecl declined a clause it should speak", c.name)
 		}
-		if got != want || got != c.want {
-			t.Fatalf("%s: RealizeDecl %q should match Realize %q (want %q)", c.name, got, want, c.want)
+		if got != c.want {
+			t.Fatalf("%s: RealizeDecl %q should be %q", c.name, got, c.want)
 		}
 	}
 }
@@ -79,12 +78,11 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
-		want := p.Realize(c.f, chem)
 		if !ok {
 			t.Fatalf("%s: RealizeDecl declined a clause it should speak", c.name)
 		}
-		if got != want || got != c.want {
-			t.Fatalf("%s: RealizeDecl %q should match Realize %q (want %q)", c.name, got, want, c.want)
+		if got != c.want {
+			t.Fatalf("%s: RealizeDecl %q should be %q", c.name, got, c.want)
 		}
 	}
 }
@@ -116,9 +114,8 @@ func TestRealizeDeclTurkishEvent(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
-		want := p.Realize(c.f, chem)
-		if !ok || got != want || got != c.want {
-			t.Fatalf("%s: RealizeDecl %q should match Realize %q (want %q)", c.name, got, want, c.want)
+		if !ok || got != c.want {
+			t.Fatalf("%s: RealizeDecl %q should be %q", c.name, got, c.want)
 		}
 	}
 }
@@ -141,9 +138,8 @@ func TestRealizeDeclEventLowOxytocinHedges(t *testing.T) {
 	low := limbic.State{Oxytocin: 0}
 	f := Frame{Action: Term{Phrase: "follow"}, Force: ForceStatement, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}}
 	got, ok := p.RealizeDecl(f, low)
-	want := p.Realize(f, low)
-	if !ok || got != want || got != "The dog may follow the cat." {
-		t.Fatalf("low oxytocin should hedge: RealizeDecl %q vs Realize %q", got, want)
+	if !ok || got != "The dog may follow the cat." {
+		t.Fatalf("low oxytocin should hedge: RealizeDecl %q should be \"The dog may follow the cat.\"", got)
 	}
 }
 

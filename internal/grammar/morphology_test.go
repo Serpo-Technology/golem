@@ -51,25 +51,6 @@ func TestNegationDoSupport(t *testing.T) {
 	}
 }
 
-// The copula keeps agreement in the past, alone among the verbs here.
-func TestBeForms(t *testing.T) {
-	cases := []struct {
-		first, plural, past bool
-		want                string
-	}{
-		{false, false, false, "is"},
-		{false, true, false, "are"},
-		{true, false, false, "am"},
-		{false, false, true, "was"},
-		{false, true, true, "were"},
-	}
-	for _, c := range cases {
-		if got := beForm(c.first, c.plural, c.past); got != c.want {
-			t.Fatalf("be(first=%v plural=%v past=%v) = %q, want %q",
-				c.first, c.plural, c.past, got, c.want)
-		}
-	}
-}
 
 // Noun number runs on the rule table with the irregulars beside it.
 func TestNounPlurals(t *testing.T) {
@@ -161,7 +142,7 @@ func TestTenseParsesAndRealizes(t *testing.T) {
 		Past:   true,
 		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
-	if got := Realize(past, calm); got != "After make test, make deploy usually followed." {
+	if got, _ := RealizeDecl(past, calm); got != "After make test, make deploy usually followed." {
 		t.Fatalf("past habitual form wrong: %q", got)
 	}
 	denied := Frame{
@@ -172,7 +153,7 @@ func TestTenseParsesAndRealizes(t *testing.T) {
 		Past:    true,
 		Patient: Term{Phrase: "make test"},
 	}
-	if got := Realize(denied, calm); got != "Make deploy did not follow make test." {
+	if got, _ := RealizeDecl(denied, calm); got != "Make deploy did not follow make test." {
 		t.Fatalf("past denial form wrong: %q", got)
 	}
 	hedgedPast := Frame{
@@ -182,7 +163,7 @@ func TestTenseParsesAndRealizes(t *testing.T) {
 		Past:   true,
 		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
-	if got := Realize(hedgedPast, limbic.State{Oxytocin: 0.2}); got != "After make test, make deploy may have followed." {
+	if got, _ := RealizeDecl(hedgedPast, limbic.State{Oxytocin: 0.2}); got != "After make test, make deploy may have followed." {
 		t.Fatalf("hedged past form wrong: %q", got)
 	}
 }
@@ -198,7 +179,7 @@ func TestPluralSubjectAgrees(t *testing.T) {
 		Habit:  true,
 		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
-	if got := Realize(f, calm); got != "After make test, make deploy and make lint usually follow." {
+	if got, _ := RealizeDecl(f, calm); got != "After make test, make deploy and make lint usually follow." {
 		t.Fatalf("plural agreement wrong: %q", got)
 	}
 }

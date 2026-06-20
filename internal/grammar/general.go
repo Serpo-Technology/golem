@@ -130,7 +130,13 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 	}
 	if n.Rule == "" {
 		e, ok := g.lex[n.Lemma]
-		if !ok && g.mint != nil {
+		switch {
+		case n.Feats["cat"] == "comp" && g.mint != nil:
+			// A complement is a verbatim phrase, not a lexicon entry, so it is minted even when
+			// its words happen to spell a seeded lemma (the name "dog" must not pick up the
+			// noun entry and clash on category).
+			e, ok = g.mint(n.Lemma, "comp")
+		case !ok && g.mint != nil:
 			// No stored entry: mint one for a learned word from its category, so the engine
 			// renders vocabulary the curriculum never seeded. The category rides on the leaf's
 			// features, set by the caller building the tree.

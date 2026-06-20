@@ -584,35 +584,8 @@ func qualPhraseTR(p *Params, q Qualifier) string {
 // what English carries with word order and auxiliaries.
 func (p *Params) realizeTurkish(f Frame, chem limbic.State) string {
 	var b strings.Builder
-	hedge := chem.Oxytocin < limbic.OxytocinBaseline || f.Hedge
 
 	switch f.Action.Phrase {
-	case "follow", "precede", "happen", "run", "fail":
-		var parts []string
-		for _, q := range f.Quals {
-			if !q.Anchor.Empty() {
-				parts = append(parts, qualPhraseTR(p, q))
-			}
-		}
-		if len(parts) > 0 {
-			b.WriteString(strings.Join(parts, " ve "))
-			b.WriteString(" ")
-		}
-		if f.Habit && !f.Negate && !hedge {
-			b.WriteString("genellikle ")
-		}
-		if f.Last {
-			b.WriteString("en son ")
-		}
-		if !f.Agent.Empty() {
-			b.WriteString(f.Agent.Speak())
-			b.WriteString(" ")
-		}
-		if f.At != "" {
-			b.WriteString(f.At)
-			b.WriteString(" ")
-		}
-		b.WriteString(finiteVerbTR(p, f.Action.Phrase, f.Past, f.Negate, hedge, p.trPersonOf(f.Agent.Speak())))
 	case "know":
 		// "Make test'ten sonra ne gelir, henüz bilmiyorum."
 		var gap []string
@@ -631,17 +604,6 @@ func (p *Params) realizeTurkish(f Frame, chem limbic.State) string {
 		default:
 			b.WriteString("henüz bilmiyorum")
 		}
-	case "be":
-		if f.Force == ForceQuestion {
-			return sentence(f.Patient.Speak()+" nedir", "?")
-		}
-		b.WriteString(f.Agent.Speak())
-		b.WriteString(" ")
-		words := strings.Fields(f.Patient.Speak())
-		if len(words) > 0 {
-			words[len(words)-1] = copulaTR(p, words[len(words)-1])
-		}
-		b.WriteString(strings.Join(words, " "))
 	case "name":
 		// "testler, make test demek."
 		b.WriteString(f.Agent.Speak())

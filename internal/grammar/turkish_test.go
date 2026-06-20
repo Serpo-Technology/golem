@@ -112,15 +112,15 @@ func TestTurkishRealize(t *testing.T) {
 		Habit:  true,
 		Quals:  []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}},
 	}
-	if got := Realize(f, calmChem); got != "Make test'ten sonra genellikle make deploy gelir." {
+	if got, _ := RealizeDecl(f, calmChem); got != "Make test'ten sonra genellikle make deploy gelir." {
 		t.Fatalf("assertive Turkish form wrong: %q", got)
 	}
-	if got := Realize(f, limbic.State{Oxytocin: 0.2}); got != "Make test'ten sonra make deploy gelebilir." {
+	if got, _ := RealizeDecl(f, limbic.State{Oxytocin: 0.2}); got != "Make test'ten sonra make deploy gelebilir." {
 		t.Fatalf("hedged Turkish form wrong: %q", got)
 	}
 	f.Negate = true
 	f.Habit = false
-	if got := Realize(f, calmChem); got != "Make test'ten sonra make deploy gelmez." {
+	if got, _ := RealizeDecl(f, calmChem); got != "Make test'ten sonra make deploy gelmez." {
 		t.Fatalf("denied Turkish form wrong: %q", got)
 	}
 
@@ -132,7 +132,7 @@ func TestTurkishRealize(t *testing.T) {
 
 	def := Frame{Lang: "tr", Force: ForceStatement, Agent: Term{Phrase: "make test"},
 		Action: Term{Phrase: "be"}, Patient: Term{Phrase: "bir eylem"}}
-	if got := Realize(def, calmChem); got != "Make test bir eylemdir." {
+	if got, _ := RealizeDecl(def, calmChem); got != "Make test bir eylemdir." {
 		t.Fatalf("Turkish definition form wrong: %q", got)
 	}
 

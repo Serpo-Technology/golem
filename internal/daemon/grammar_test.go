@@ -97,14 +97,11 @@ func TestRenderFactsCoordinationShadow(t *testing.T) {
 	}
 }
 
-// The declarative engine shadows the coded frame realizer at realizeAs: a copula frame routes
-// through RealizeDecl, which covers it and agrees with Realize, so the frame surface can migrate
-// the same way the proposition clause did.
-func TestRealizeAsCopulaShadow(t *testing.T) {
+// realizeAs realizes the copula through the declarative engine: the frame routes to RealizeDecl,
+// which covers it, so the answer comes from the engine. A decline would fall back to the deleted
+// coded copula and not match, so matching proves the engine produced it.
+func TestRealizeAsCopula(t *testing.T) {
 	d, _ := testDaemon(t)
-	var buf bytes.Buffer
-	d.out = &buf
-	d.shadowVerbose = true
 	f := grammar.Frame{
 		Action:  grammar.Term{Phrase: "be"},
 		Force:   grammar.ForceStatement,
@@ -114,23 +111,12 @@ func TestRealizeAsCopulaShadow(t *testing.T) {
 	if got := d.realizeAs("en", f, limbic.State{}); got != "The dog is an animal." {
 		t.Fatalf("realizeAs should answer the copula \"The dog is an animal.\", got %q", got)
 	}
-	log := buf.String()
-	if strings.Contains(log, "framegen mismatch") {
-		t.Fatalf("the declarative engine should agree with Realize on the copula; log: %q", log)
-	}
-	if !strings.Contains(log, "framegen ok") {
-		t.Fatalf("RealizeDecl should have covered the copula (framegen ok); log: %q", log)
-	}
 }
 
-// The event clause routes through RealizeDecl at realizeAs too: a plain "follow" frame is
-// covered by the declarative engine and agrees with Realize, the verb formed by the same
-// morphology the proposition clause uses.
-func TestRealizeAsEventShadow(t *testing.T) {
+// realizeAs realizes the event clause through the declarative engine too, the verb formed by the
+// same morphology the proposition clause uses.
+func TestRealizeAsEvent(t *testing.T) {
 	d, _ := testDaemon(t)
-	var buf bytes.Buffer
-	d.out = &buf
-	d.shadowVerbose = true
 	f := grammar.Frame{
 		Action:  grammar.Term{Phrase: "follow"},
 		Force:   grammar.ForceStatement,
@@ -139,13 +125,6 @@ func TestRealizeAsEventShadow(t *testing.T) {
 	}
 	if got := d.realizeAs("en", f, limbic.State{Oxytocin: limbic.OxytocinBaseline}); got != "The dog follows the cat." {
 		t.Fatalf("realizeAs should answer the event clause \"The dog follows the cat.\", got %q", got)
-	}
-	log := buf.String()
-	if strings.Contains(log, "framegen mismatch") {
-		t.Fatalf("the declarative engine should agree with Realize on the event clause; log: %q", log)
-	}
-	if !strings.Contains(log, "framegen ok") {
-		t.Fatalf("RealizeDecl should have covered the event clause (framegen ok); log: %q", log)
 	}
 }
 
