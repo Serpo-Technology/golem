@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"golem/internal/grammar"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -93,6 +94,32 @@ func TestRenderFactsCoordinationShadow(t *testing.T) {
 	}
 	if strings.Contains(buf.String(), "declgen mismatch") {
 		t.Fatalf("the declarative engine should agree on the coordinated clause; log: %q", buf.String())
+	}
+}
+
+// The declarative engine shadows the coded frame realizer at realizeAs: a copula frame routes
+// through RealizeDecl, which covers it and agrees with Realize, so the frame surface can migrate
+// the same way the proposition clause did.
+func TestRealizeAsCopulaShadow(t *testing.T) {
+	d, _ := testDaemon(t)
+	var buf bytes.Buffer
+	d.out = &buf
+	d.shadowVerbose = true
+	f := grammar.Frame{
+		Action:  grammar.Term{Phrase: "be"},
+		Force:   grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: "the dog"},
+		Patient: grammar.Term{Phrase: grammar.Indefinite("animal")},
+	}
+	if got := d.realizeAs("en", f, limbic.State{}); got != "The dog is an animal." {
+		t.Fatalf("realizeAs should answer the copula \"The dog is an animal.\", got %q", got)
+	}
+	log := buf.String()
+	if strings.Contains(log, "framegen mismatch") {
+		t.Fatalf("the declarative engine should agree with Realize on the copula; log: %q", log)
+	}
+	if !strings.Contains(log, "framegen ok") {
+		t.Fatalf("RealizeDecl should have covered the copula (framegen ok); log: %q", log)
 	}
 }
 

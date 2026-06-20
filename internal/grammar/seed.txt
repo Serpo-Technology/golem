@@ -206,6 +206,10 @@ inflorder:tr:v	pol tense pers	tr
 syn:en:coord	a c b | | b	en
 lex:en:and	cat=c;any=and	en
 lex:en:it	cat=pron;any=it	en
+syn:en:scop	subj cop comp | num:subj>cop | cop	en
+lex:en:be	cat=cop;sg=is;pl=are;past:sg=was;past:pl=were	en
+lex:en:be_neg	cat=cop;sg=is not;pl=are not;past:sg=was not;past:pl=were not	en
+syn:tr:scop	subj comp | | comp	tr
 cxn:en:introspect:report	I was thinking: {thought}	en	
 cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
 cxn:en:definition:plain	{subject} is {kind}.	en	

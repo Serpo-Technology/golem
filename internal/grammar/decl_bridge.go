@@ -1,5 +1,11 @@
 package grammar
 
+import (
+	"strings"
+
+	"golem/internal/limbic"
+)
+
 // SpeakDecl realizes a proposition through the declarative engine, the data-driven dual of
 // Speak: it builds a GenNode tree from the meaning and runs Generate, so the clause's word
 // order, agreement, and morphology come from the grammar parameters rather than coded
@@ -280,6 +286,81 @@ func coordNode(coord string, items []*GenNode) *GenNode {
 	return node
 }
 
+// RealizeDecl realizes a Frame through the declarative engine, the data-driven dual of Realize
+// for the clauses it covers. This handles the copula statement ("the dog is an animal", "make
+// test bir eylemdir") and declines every other shape, so a caller can shadow it against Realize
+// and fall back. The copula's agent and complement arrive already rendered, so they ride as
+// verbatim leaves; what the engine supplies is the clause order and the copula form (is / are /
+// was / were, the Turkish -DIr) from grammar data. chem is taken to match Realize's signature;
+// the copula reads none.
+func (p *Params) RealizeDecl(f Frame, chem limbic.State) (string, bool) {
+	p = p.get()
+	lang := f.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	if f.Action.Phrase != "be" || f.Force != ForceStatement {
+		return "", false
+	}
+	if f.Agent.Empty() || f.Patient.Empty() || f.Agent.Given {
+		return "", false
+	}
+	if len(f.Quals) > 0 || f.Hedge || f.Habit || f.Last {
+		return "", false // the copula branch ignores these; declining keeps the shadow honest
+	}
+	g := p.decl[lang]
+	if g == nil {
+		return "", false
+	}
+	subjPhrase, comp := f.Agent.Speak(), f.Patient.Speak()
+	if subjPhrase == "" || comp == "" {
+		return "", false
+	}
+	if p.Article(lang) == "" {
+		// A tongue whose copula is a suffix: the Turkish -DIr on the complement's last word.
+		if f.Negate {
+			return "", false // Turkish copula negation is a separate form, deferred
+		}
+		words := strings.Fields(comp)
+		words[len(words)-1] = copulaTR(p, words[len(words)-1])
+		root := Phrase("scop", nil, map[string]*GenNode{
+			"subj": Leaf(subjPhrase, fs{"cat": "comp"}),
+			"comp": Leaf(strings.Join(words, " "), fs{"cat": "comp"}),
+		})
+		surface, _, ok := p.Generate(lang, root)
+		if !ok {
+			return "", false
+		}
+		return Sentence(surface), true
+	}
+	// An article tongue with a copula word (English is / are / was / were).
+	if subjPhrase == "I" {
+		return "", false // the first-person copula (am) is not seeded, deferred
+	}
+	num := "sg"
+	if f.Agent.Plural {
+		num = "pl"
+	}
+	copLemma := "be"
+	if f.Negate {
+		copLemma = "be_neg" // the " not" rides in the seeded form, no do-support
+	}
+	clause := fs{}
+	if f.Past {
+		clause["tense"] = "past"
+	}
+	root := Phrase("scop", clause, map[string]*GenNode{
+		"subj": Leaf(subjPhrase, fs{"cat": "comp", "num": num}),
+		"cop":  Leaf(copLemma, fs{"cat": "cop"}),
+		"comp": Leaf(comp, fs{"cat": "comp"}),
+	})
+	surface, _, ok := p.Generate(lang, root)
+	if !ok {
+		return "", false
+	}
+	return Sentence(surface), true
+}
+
 // mintLex synthesizes a lexical entry for a word the curriculum never seeded, so the
 // declarative engine renders open vocabulary. The forms come from the same coded morphology
 // Speak conjugates from (the verb's principal parts, the noun's plural), so a minted clause
@@ -288,6 +369,10 @@ func coordNode(coord string, items []*GenNode) *GenNode {
 func (p *Params) mintLex(lang, lemma, cat string) (lexEntry, bool) {
 	if lemma == "" {
 		return lexEntry{}, false
+	}
+	if cat == "comp" {
+		// A pre-rendered phrase (a copula's agent or complement) rides verbatim as one form.
+		return lexEntry{cat: "comp", forms: map[string]string{"any": lemma}}, true
 	}
 	switch lang {
 	case "en":

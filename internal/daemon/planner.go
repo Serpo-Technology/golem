@@ -627,7 +627,20 @@ func (d *Daemon) conceptDecision(c *memory.Fragment) (Decision, error) {
 // frame's language is the one knob the planner sets on every reply.
 func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) string {
 	f.Lang = lang
-	return d.gram.Realize(f, chem)
+	line := d.gram.Realize(f, chem)
+	// Shadow the declarative engine against the coded frame realizer: when it can speak this
+	// frame and disagrees, log it. Realize still stands, so this changes nothing until the
+	// declarative path is proven across the frame surface.
+	alt, dok := d.gram.RealizeDecl(f, chem)
+	switch {
+	case dok && alt != line:
+		fmt.Fprintf(d.out, "framegen mismatch: %q vs Realize %q\n", alt, line)
+	case dok && d.shadowVerbose:
+		fmt.Fprintf(d.out, "framegen ok\n")
+	case !dok && d.shadowVerbose:
+		fmt.Fprintf(d.out, "framegen decline: %q\n", line)
+	}
+	return line
 }
 
 // plan acts on one parsed frame. It returns the sentence GOLEM says
