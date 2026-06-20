@@ -18,12 +18,16 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 	if g == nil {
 		return "", false
 	}
-	cxn, ok := p.selectArg(lang, m)
-	if !ok {
-		return "", false
-	}
 	verb := m.Relation.Speak()
 	if verb == "" {
+		return "", false
+	}
+	if p.Article(lang) == "" {
+		// A tongue that marks definiteness by case rather than an article (Turkish).
+		return p.speakDeclCased(g, lang, m, verb)
+	}
+	cxn, ok := p.selectArg(lang, m)
+	if !ok {
 		return "", false
 	}
 	roles := map[string]*GenNode{}
@@ -54,6 +58,34 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 	root := Phrase("s", clause, map[string]*GenNode{
 		"subj": subj,
 		"vp":   Phrase(vpRule, nil, vpKids),
+	})
+	surface, _, ok := p.Generate(lang, root)
+	if !ok {
+		return "", false
+	}
+	return Sentence(surface), true
+}
+
+// speakDeclCased speaks a clause for a tongue that marks definiteness by case rather than an
+// article (Turkish): the subject is bare nominative, the definite object takes the accusative,
+// the verb closes the clause (the syn rule's SOV order), and the verb's past comes from the
+// learned harmony rule. It is transitive past only for now; every other shape declines, so the
+// shadow stays silent and the caller keeps the coded clause.
+func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb string) (string, bool) {
+	if !m.Past || !p.HasInflection(lang, "past") {
+		return "", false // the verb morphology must be a learned rule, else fall back
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	if agent.Empty() || agent.Given || len(agent.With) > 0 || agent.Speak() == "" {
+		return "", false
+	}
+	if patient.Empty() || patient.Given || len(patient.With) > 0 || !patient.Definite || patient.Speak() == "" {
+		return "", false
+	}
+	root := Phrase("s", fs{"tense": "past"}, map[string]*GenNode{
+		"subj": Leaf(agent.Speak(), fs{"cat": "n"}),
+		"obj":  Leaf(patient.Speak(), fs{"cat": "n", "case": "acc"}),
+		"v":    Leaf(verb, fs{"cat": "v"}),
 	})
 	surface, _, ok := p.Generate(lang, root)
 	if !ok {
@@ -99,15 +131,34 @@ func nounPhrase(p *Params, g *DeclGrammar, lang string, t Term) (*GenNode, bool)
 // matches the coded clause. English only: these are English rules, and a learned language
 // inflects by its own rules through the inflect fallback instead.
 func (p *Params) mintLex(lang, lemma, cat string) (lexEntry, bool) {
-	if lang != "en" || lemma == "" {
+	if lemma == "" {
 		return lexEntry{}, false
 	}
-	switch cat {
-	case "n":
-		return lexEntry{cat: "n", forms: map[string]string{"sg": lemma, "pl": pluralEN(lemma)}}, true
-	case "v":
-		v := p.verb(lemma)
-		return lexEntry{cat: "v", forms: map[string]string{"sg": v.third, "pl": v.base, "past": v.past}}, true
+	switch lang {
+	case "en":
+		switch cat {
+		case "n":
+			return lexEntry{cat: "n", forms: map[string]string{"sg": lemma, "pl": pluralEN(lemma)}}, true
+		case "v":
+			v := p.verb(lemma)
+			return lexEntry{cat: "v", forms: map[string]string{"sg": v.third, "pl": v.base, "past": v.past}}, true
+		}
+	case "tr":
+		switch cat {
+		case "n":
+			// The bare lemma is the nominative; the accusative stays coded phonology (the
+			// y-buffer and final-stop softening the learned harmonic rule does not yet model).
+			// Built from the suffix recipe directly, the way accusativeCommonTR does.
+			stem := lemma
+			if !endsVowelTR(lemma) {
+				stem = softenFinalTR(lemma)
+			}
+			acc := stem + applySuffixTR(lemma, p.suffix("accusative", "(y)I"))
+			return lexEntry{cat: "n", forms: map[string]string{"any": lemma, "acc": acc}}, true
+		case "v":
+			// No stored forms: the verb's tense comes from the learned harmony rule.
+			return lexEntry{cat: "v", forms: map[string]string{}}, true
+		}
 	}
 	return lexEntry{}, false
 }

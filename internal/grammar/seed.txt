@@ -199,6 +199,7 @@ lex:en:sleep	cat=v;sg=sleeps;pl=sleep	en
 syn:en:vpt	v obj | | v	en
 lex:en:chase	cat=v;sg=chases;pl=chase;past=chased	en
 lex:en:follow	cat=v;sg=follows;pl=follow;past=followed	en
+syn:tr:s	subj obj v | | v	tr
 cxn:en:introspect:report	I was thinking: {thought}	en	
 cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
 cxn:en:definition:plain	{subject} is {kind}.	en	

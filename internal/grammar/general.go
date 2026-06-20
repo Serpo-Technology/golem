@@ -155,13 +155,24 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 			form = e.forms[feats["num"]]
 		}
 		if form == "" {
-			form = e.forms["any"]
+			form = e.forms[feats["case"]]
 		}
+		// No stored form: inflect from a learned rule for whichever feature affixes this word
+		// (a verb's tense, a noun's case or number), tried before the bare form so a marked
+		// word is not left bare when a rule could mark it.
 		source := "lex:"
 		if form == "" && g.inflect != nil {
-			if inflected, ok := g.inflect(feats["num"], n.Lemma); ok {
-				form, source = inflected, "infl:"
+			for _, feat := range []string{"tense", "case", "num"} {
+				if v := feats[feat]; v != "" {
+					if inflected, ok := g.inflect(v, n.Lemma); ok {
+						form, source = inflected, "infl:"
+						break
+					}
+				}
 			}
+		}
+		if form == "" {
+			form = e.forms["any"]
 		}
 		if form == "" {
 			return "", nil, nil, false

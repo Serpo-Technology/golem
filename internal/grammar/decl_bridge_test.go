@@ -87,6 +87,39 @@ func TestSpeakDeclMintsOpenVocabulary(t *testing.T) {
 	}
 }
 
+// The learned Turkish harmony rule drives the verb of a clause the engine generates: with the
+// -DI past taught, SpeakDecl speaks "Köpek kuşu kovaladı." through the declarative grammar,
+// matching the coded Speak, and without the rule it declines (the verb has no other source), so
+// the verb form can only have come from the learned rule. The accusative object stays coded
+// phonology, minted to match Speak. This is the payoff: taught morphology generating an answer.
+func TestSpeakDeclTurkishLearnedVerb(t *testing.T) {
+	p := Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
+	m := Meaning{Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{
+		"agent":   {Phrase: "köpek", Definite: true},
+		"patient": {Phrase: "kuş", Definite: true},
+	}, Past: true}
+	if _, ok := p.SpeakDecl("tr", m); ok {
+		t.Fatal("without the learned past rule the verb is not formable; SpeakDecl should decline")
+	}
+	if !p.LearnInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"},
+		{"gör", "gördü"}, {"bak", "baktı"}, {"geç", "geçti"},
+	}) {
+		t.Fatal("the harmonic -DI past should be learned")
+	}
+	want, wok := p.Speak("tr", m)
+	got, gok := p.SpeakDecl("tr", m)
+	if !gok {
+		t.Fatal("with the rule taught, SpeakDecl should speak the clause")
+	}
+	if !wok || got != want || got != "Köpek kuşu kovaladı." {
+		t.Fatalf("SpeakDecl %q should match Speak %q (want \"Köpek kuşu kovaladı.\")", got, want)
+	}
+}
+
 // SpeakDecl inflects the subject noun for number from the lexicon, which the coded Speak path
 // leaves to its caller. The live shadow never sets the plural flag, so this divergence does
 // not fire there; it is the declarative engine doing from data what Speak does not.

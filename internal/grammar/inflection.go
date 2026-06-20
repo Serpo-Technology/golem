@@ -288,6 +288,13 @@ func (p *Params) Inflect(lang, feature, base string) (string, bool) {
 	return p.get().inflectRule(lang, feature, base)
 }
 
+// HasInflection reports whether a learned rule exists for a language and feature, so a caller
+// can decline a clause whose morphology is not learnable yet rather than render it wrong.
+func (p *Params) HasInflection(lang, feature string) bool {
+	_, ok := p.get().learnedInfl[lang+":"+feature]
+	return ok
+}
+
 // inflectRule is the lookup without the nil-Params default, so the declarative engine can
 // bind it at compile without drawing in the builtin seed (which is itself compiled, so going
 // through get would be a cycle).

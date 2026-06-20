@@ -74,6 +74,29 @@ func TestRenderFactsDeclarativeShadow(t *testing.T) {
 	}
 }
 
+// A Turkish inflection taught through the daemon drives generation in the declarative engine:
+// after teaching the -DI past, SpeakDecl speaks the clause with the verb formed by the learned
+// rule, matching the coded Speak. This is the payoff end to end: teach a rule into memory, and
+// it generates a live answer through the data-driven engine rather than coded morphology.
+func TestSpeakDeclTurkishFromTaughtRule(t *testing.T) {
+	d, _ := testDaemon(t)
+	if err := d.teachInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"},
+		{"gör", "gördü"}, {"bak", "baktı"}, {"geç", "geçti"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m := grammar.Meaning{Relation: grammar.Term{Phrase: "kovala"}, Roles: map[string]grammar.Term{
+		"agent":   {Phrase: "köpek", Definite: true},
+		"patient": {Phrase: "kuş", Definite: true},
+	}, Past: true}
+	want, wok := d.gram.Speak("tr", m)
+	got, gok := d.gram.SpeakDecl("tr", m)
+	if !gok || !wok || got != want || got != "Köpek kuşu kovaladı." {
+		t.Fatalf("a rule taught through the daemon should drive SpeakDecl: %q (ok %v) vs Speak %q (ok %v)", got, gok, want, wok)
+	}
+}
+
 // A taught inflection persists to the store and a fresh boot reloads it, so morphology
 // learned from examples is a fluid weight rather than a code change: GOLEM is taught the
 // Turkish -DI past from four examples, and a reboot inflects a held-out stem by harmony.

@@ -529,7 +529,7 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 			// Shadow the declarative engine against the live clause: when it can speak this
 			// meaning and disagrees, log it. The Speak output still stands, so this changes
 			// nothing until the declarative path is proven across the answer surface.
-			if lang == "en" {
+			if lang == "en" || lang == "tr" {
 				if alt, ok := d.gram.SpeakDecl(lang, meaning); ok && alt != line {
 					fmt.Fprintf(d.out, "declgen mismatch: %q vs Speak %q\n", alt, line)
 				}
