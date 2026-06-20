@@ -279,6 +279,51 @@ func TestTraverseRendersCoordination(t *testing.T) {
 	}
 }
 
+// A referent already in play takes its pronoun, the anaphora renderFacts does across
+// clauses: a proposition rendered with the agent given speaks "It chased the cat",
+// matching Speak's pronoun for the in-play role, so the surface covers anaphora.
+func TestTraverseRendersGivenReferent(t *testing.T) {
+	d, s := testDaemon(t)
+
+	mk := func(content string) uint64 {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f.ID
+	}
+	link := func(from, to uint64, rel string) {
+		if err := s.LinkRel(from, to, rel, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	moment := mk("")
+	chase := mk("chase")
+	link(chase, moment, memory.RelGrounds)
+	link(moment, mk("dog"), memory.RelAgent)
+	link(moment, mk("cat"), memory.RelPatient)
+
+	got, ok := d.speakProposition(moment, "en", true, "agent")
+	if !ok {
+		t.Fatal("the clause should traverse with a given agent")
+	}
+	want, wok := d.gram.Speak("en", grammar.Meaning{
+		Relation: grammar.Term{Phrase: "chase"},
+		Roles: map[string]grammar.Term{
+			"agent":   {Given: true},
+			"patient": {Phrase: "cat", Definite: true},
+		},
+		Past: true,
+		Lang: "en",
+	})
+	if !wok {
+		t.Fatal("grammar should speak the clause with a given agent")
+	}
+	if got != want {
+		t.Fatalf("the given-agent clause %q should match Speak %q", got, want)
+	}
+}
+
 // The driver shadows production on a REAL stored proposition: a told "a dog chased a cat"
 // leaves a moment in the store, and speakProposition walks that real moment to the same
 // clause renderFacts produces for it. So the shared traverser is confirmed production-
@@ -294,7 +339,7 @@ func TestSpeakPropositionShadowsRenderFacts(t *testing.T) {
 		t.Fatal("the telling should leave a moment")
 	}
 
-	got, ok := d.speakProposition(moment, "en", true)
+	got, ok := d.speakProposition(moment, "en", true, "")
 	if !ok {
 		t.Fatal("the stored proposition should speak through the driver")
 	}

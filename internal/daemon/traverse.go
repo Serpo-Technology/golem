@@ -223,6 +223,9 @@ func joinRendered(parts []rendered) string {
 type nlSurface struct {
 	lang string
 	past bool
+	// given is the role of a referent already in play, spoken as the language's pronoun
+	// (the anaphora renderFacts does across clauses); empty when both roles are named.
+	given string
 }
 
 func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (construction, bool) {
@@ -238,17 +241,9 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 		return construction{}, false
 	}
 	coord := d.gram.Coordinator(lang)
-	subject := make([]string, len(agents))
-	for i, a := range agents {
-		subject[i] = d.gram.DefiniteNP(lang, "agent", a)
-	}
-	object := make([]string, len(patients))
-	for i, p := range patients {
-		object[i] = d.gram.DefiniteNP(lang, "patient", p)
-	}
-	agent := rendered{src: joinCoord(subject, coord)}
+	agent := rendered{src: d.roleLeaf(lang, "agent", agents, s.given, coord)}
 	verbLeaf := rendered{src: d.gram.Conjugate(lang, verb, len(agents) > 1, s.past, false)}
-	patient := rendered{src: joinCoord(object, coord)}
+	patient := rendered{src: d.roleLeaf(lang, "patient", patients, s.given, coord)}
 	slots := []slot{{leaf: agent}, {leaf: verbLeaf}, {leaf: patient}}
 	if d.gram.VerbFinal(lang) {
 		slots = []slot{{leaf: agent}, {leaf: patient}, {leaf: verbLeaf}}
@@ -260,6 +255,20 @@ func (s nlSurface) construct(d *Daemon, g codeGraph, node uint64, _ any) (constr
 		}
 		return rendered{src: grammar.Sentence(strings.Join(words, " "))}, true
 	}}, true
+}
+
+// roleLeaf renders a role's filler: the in-play referent's pronoun when the role is the
+// given one, else its concept words marked definite and coordinated, the same choice
+// renderFiller makes from a Term's flags.
+func (d *Daemon) roleLeaf(lang, role string, words []string, given, coord string) string {
+	if role == given {
+		return d.gram.Pronoun(lang, role)
+	}
+	marked := make([]string, len(words))
+	for i, w := range words {
+		marked[i] = d.gram.DefiniteNP(lang, role, w)
+	}
+	return joinCoord(marked, coord)
 }
 
 // groundedRelation is the relation concept a proposition's moment grounds: a proposition
@@ -277,8 +286,8 @@ func (d *Daemon) groundedRelation(moment uint64) uint64 {
 // shared traverser's language surface, the NL counterpart of traverseCode. Tense is
 // supplied the way renderFacts supplies it. It shadows the answer path's per-clause render
 // today; the switch onto it is a later, deliberate step.
-func (d *Daemon) speakProposition(momentID uint64, lang string, past bool) (string, bool) {
-	r, ok := d.traverse(nlSurface{lang: lang, past: past}, d.storeView(), momentID, nil)
+func (d *Daemon) speakProposition(momentID uint64, lang string, past bool, given string) (string, bool) {
+	r, ok := d.traverse(nlSurface{lang: lang, past: past, given: given}, d.storeView(), momentID, nil)
 	return r.src, ok
 }
 
