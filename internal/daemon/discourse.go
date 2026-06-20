@@ -494,6 +494,25 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 	var clauses []string
 	for _, k := range order {
 		names := coargs[k]
+		// A locative relation speaks as a copula with a preposition ("the leaf is on
+		// the tree"), not as a verb. The figure is the relation's agent and the
+		// ground its patient, so the focus is the figure when it stood as agent and
+		// the ground when it stood as patient; the co-arguments fill the other side.
+		if d.factIsLocative(k.rel) {
+			prep := d.relationName(k.rel, lang)
+			given := continuation || len(clauses) > 0
+			for _, co := range names {
+				figure, ground := focusName, co
+				figGiven := given
+				if k.role == "patient" {
+					figure, ground, figGiven = co, focusName, false
+				}
+				if cl, ok := d.locativeClause(lang, figure, prep, ground, figGiven, false, d.chem.Snapshot()); ok {
+					clauses = append(clauses, cl)
+				}
+			}
+			continue
+		}
 		// The focus plays k.role and the co-arguments fill the other. A participant
 		// in the patient role takes its object case ("the dog chased me"), so the
 		// patient-side filler is cased before the clause is built.

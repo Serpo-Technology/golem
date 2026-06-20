@@ -701,6 +701,12 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		{"rel:after", "after", []string{"sonra"}},
 		{"rel:before", "before", []string{"önce"}},
 		{"property:transitive", "transitive", []string{"transitive"}},
+		// Locative prepositions: the closed class whose use as a copula's complement
+		// ("the leaf is on the tree") marks its relation locative. The refinement rides
+		// on the function-word category so the parser still reads "fn"; only the
+		// locative-marking path reads the spec. Linked here so an existing brain gains
+		// it at boot rather than needing a re-seed.
+		{"fn:locative", "locative", []string{"on", "in", "under"}},
 		// Interrogative type: English wh words name their own type, so only the
 		// forms that need translating link; "what:be" carries the copula nedir folds
 		// in ("what is"), read back by whInfo's type-then-copula split.

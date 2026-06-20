@@ -85,6 +85,7 @@ fw:en:than	than	en	than
 fw:en:told	told	en	speech
 fw:en:transitive	transitive	en	property
 fw:en:try	try	en	imp
+fw:en:under	under	en	fn
 fw:en:us	us	en	deixis
 fw:en:usually	usually	en	adv
 fw:en:was	was	en	cop

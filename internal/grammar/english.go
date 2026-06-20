@@ -334,6 +334,13 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			f.Negate = true
 			flush()
 		case catImp, catDet, catFn, catTime:
+			// A locative preposition in a copula clause marks the clause a place
+			// question ("is the leaf on the tree"), not a category one. The word
+			// itself fills no slot, so it is still flushed; the mark routes the
+			// clause away from the is-a reading to the place reading.
+			if cat == catFn && p.LocativePrep(lang, tok) {
+				f.LocPrep = tok
+			}
 			flush()
 		case catSpeech:
 			// A speech-act verb is the predicate, but the move it carries (clarify,

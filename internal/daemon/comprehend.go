@@ -61,6 +61,14 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		fmt.Fprintf(d.out, "relation mint error: %v\n", err)
 		return false
 	}
+	// A relation spoken as a copula with a locative preposition ("the leaf is on
+	// the tree") places its figure at its ground. The construction teaches the
+	// relation's locativity: it is marked on the relation concept, so a "where"
+	// query reads it and the clause renders with the preposition rather than as a
+	// verb. The mark is idempotent, refreshed each time the construction is used.
+	if d.gram.LocativePrep(frame.Lang, m.Relation.Phrase) {
+		d.markLocative(rel.ID)
+	}
 	var patientID uint64
 	var patientGloss string
 	if patient := m.Roles["patient"]; patient.Concept != nil {
@@ -589,6 +597,12 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	// surface template, so any phrasing that parses to them is answered alike. One
 	// grounded argument is a definition ("what is a cat"), left to its own path.
 	if frame.Force != grammar.ForceQuestion || frame.Action.Phrase != "be" {
+		return "", false
+	}
+	// A copula question carrying a locative preposition asks a place ("is the leaf
+	// on the tree"), not a category, so it is left to the polar path which reads the
+	// preposition and assesses the placed proposition.
+	if frame.LocPrep != "" {
 		return "", false
 	}
 	// Subject-auxiliary inversion puts the subject ("a cat") in the patient slot
@@ -1875,15 +1889,28 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		word = d.gram.Word(lang, "no")
 		negate = true
 	}
-	clause, ok := d.gram.Speak(lang, grammar.Meaning{
-		Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
-		Roles: map[string]grammar.Term{
-			"agent":   {Phrase: d.conceptName(agent.ID, agent.Content, lang), Definite: true},
-			"patient": {Phrase: d.objectCase(d.conceptName(patient.ID, patient.Content, lang), lang), Definite: true},
-		},
-		Past:   past,
-		Negate: negate,
-	})
+	var clause string
+	var ok bool
+	if d.relationIsLocative(rel.ID) {
+		// A locative proposition answers as a copula with its preposition ("the leaf
+		// is on the tree"), the same clause the figure's "where" reads, denied for a
+		// "no".
+		clause, ok = d.locativeClause(lang,
+			d.conceptName(agent.ID, agent.Content, lang),
+			d.relationName(rel.Content, lang),
+			d.conceptName(patient.ID, patient.Content, lang),
+			false, negate, d.chem.Snapshot())
+	} else {
+		clause, ok = d.gram.Speak(lang, grammar.Meaning{
+			Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
+			Roles: map[string]grammar.Term{
+				"agent":   {Phrase: d.conceptName(agent.ID, agent.Content, lang), Definite: true},
+				"patient": {Phrase: d.objectCase(d.conceptName(patient.ID, patient.Content, lang), lang), Definite: true},
+			},
+			Past:   past,
+			Negate: negate,
+		})
+	}
 	var answer string
 	switch {
 	case !ok:

@@ -57,6 +57,7 @@ type Frame struct {
 	Force       Force
 	Lang        string      // the language the utterance arrived in; answers go back the same way
 	Wh          string      // the interrogative that opened a question: what, which, when, where, why, who, how
+	LocPrep     string      // a locative preposition seen in a copula clause ("is the leaf ON the tree"): the clause asks a place, not a category
 	Speech      string      // a speech-act verb's move when the clause is about the talk itself: clarify, recall
 	Property    string      // a property predicated of a relation ("before is transitive"): the learned rule the predicate names
 	Agent       Term        // who or what the clause is about

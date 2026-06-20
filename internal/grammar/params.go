@@ -235,6 +235,19 @@ func (p *Params) propertyName(lang, form string) string {
 	return ""
 }
 
+// LocativePrep reports whether a form is a seeded locative preposition (on, in,
+// under), the closed class whose use as a copula's complement marks its relation
+// locative. The locative refinement rides on the function-word category ("fn:
+// locative"), so the broad class the parser reads is still "fn" and the word is
+// filled and flushed exactly as before; only this accessor reads the refinement.
+func (p *Params) LocativePrep(lang, form string) bool {
+	p = p.get()
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "fn:"); ok {
+		return spec == "locative"
+	}
+	return false
+}
+
 // proAnimacy reads a pro-form's animacy preference from its seeded category,
 // "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
 // binding favors the referent it fits. A bare "pro" carries none.

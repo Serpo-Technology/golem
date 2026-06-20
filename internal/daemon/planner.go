@@ -742,6 +742,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,
 	// whether it carried a question mark or not.
+	// "Is the leaf on the tree": a copula question carrying a place, answered from
+	// the placed proposition before the is-a reading, which the preposition rules out.
+	if ans, ok := d.planLocativePolar(frame); ok {
+		return ans, nil
+	}
 	// "Is a cat an animal": an is-a question, recognized from its comprehended
 	// frame (a copular question over two concepts) and settled against the category
 	// hierarchy rather than the relation graph a polar question reads.
@@ -901,7 +906,15 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem)
 	case frame.Counting:
 		return d.planCount(frame, quals, chem)
-	case frame.Wh == "when", frame.Wh == "where":
+	case frame.Wh == "where":
+		// "Where is X" reads the figure's place from its locative relations; an
+		// event "where did X happen" has no such relation and falls through to the
+		// occurrence answer.
+		if ans, ok := d.planWhere(frame, chem); ok {
+			return ans
+		}
+		return d.planWhence(frame, quals, chem)
+	case frame.Wh == "when":
 		return d.planWhence(frame, quals, chem)
 	}
 

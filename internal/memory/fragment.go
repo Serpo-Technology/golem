@@ -57,6 +57,14 @@ const (
 	// told the relation is transitive, not baked into any construction, so the
 	// chaining is a fact about the relation rather than the grammar.
 	RelTransitive = "transitive"
+	// RelLocative marks a relation concept as locative: a self-edge that records
+	// the learned property that the relation places its figure at its ground
+	// ("on", "in", "under"). It is set when GOLEM is told the relation is a place,
+	// so a "where" query reads it and the clause renders as a copula with a
+	// prepositional complement rather than a verb. Like RelTransitive, the
+	// character is a fact about the relation in the graph, not baked into a
+	// construction.
+	RelLocative = "locative"
 	// RelMarks links a closed-class word to a concept it marks, so a grammatical
 	// category the engine reads is derived from the graph rather than a seeded
 	// string. A speech-act verb marks the discourse move it carries (clarify,
