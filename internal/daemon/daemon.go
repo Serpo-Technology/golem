@@ -45,6 +45,9 @@ type Daemon struct {
 	home string
 	cfg  config.Config
 	out  io.Writer
+	// shadowVerbose makes the declarative shadow report every clause it covers or declines, not
+	// only the divergences, so a soak can measure the engine's coverage. Off in normal running.
+	shadowVerbose bool
 
 	store       *memory.Store
 	chem        *limbic.System

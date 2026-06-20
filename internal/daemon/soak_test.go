@@ -36,6 +36,7 @@ func TestDeclShadowSoak(t *testing.T) {
 	t.Cleanup(func() { s.Close() })
 
 	d := testDaemonOn(t, s)
+	d.shadowVerbose = true // report every clause covered or declined, to measure coverage
 	teachTurkishMorphology(t, d)
 
 	concepts, err := s.Concepts()
@@ -44,7 +45,6 @@ func TestDeclShadowSoak(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	d.out = &buf
-	rendered := 0
 	for _, c := range concepts {
 		facts := d.gatherFacts(c, "", "")
 		if len(facts) == 0 {
@@ -55,23 +55,36 @@ func TestDeclShadowSoak(t *testing.T) {
 			for _, past := range []bool{true, false} {
 				// continuation true makes the focus speak as its pronoun, exercising that path too
 				for _, cont := range []bool{false, true} {
-					if _, ok := d.renderFacts(lang, name, facts, past, cont); ok {
-						rendered++
-					}
+					d.renderFacts(lang, name, facts, past, cont)
 				}
 			}
 		}
 	}
+	log := buf.String()
+	covered := strings.Count(log, "declgen ok")
+	declined := strings.Count(log, "declgen decline")
 	var mismatches []string
-	for _, line := range strings.Split(buf.String(), "\n") {
+	for _, line := range strings.Split(log, "\n") {
 		if strings.Contains(line, "declgen mismatch") {
 			mismatches = append(mismatches, line)
 		}
 	}
-	t.Logf("soak: %d concepts, %d answers rendered, %d mismatches", len(concepts), rendered, len(mismatches))
+	total := covered + declined
+	pct := 0.0
+	if total > 0 {
+		pct = 100 * float64(covered) / float64(total)
+	}
+	t.Logf("soak: %d concepts, %d clauses (%d covered %.0f%%, %d declined), %d mismatches",
+		len(concepts), total, covered, pct, declined, len(mismatches))
+	shown := 0
+	for _, line := range strings.Split(log, "\n") {
+		if strings.Contains(line, "declgen decline") && shown < 12 {
+			t.Logf("  %s", line)
+			shown++
+		}
+	}
 	for i, m := range mismatches {
 		if i >= 20 {
-			t.Logf("  ... and %d more", len(mismatches)-20)
 			break
 		}
 		t.Logf("  %s", m)
