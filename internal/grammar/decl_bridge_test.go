@@ -53,11 +53,6 @@ func TestSpeakDeclDeclinesOutOfScope(t *testing.T) {
 		m    Meaning
 	}{
 		{"negation", Meaning{Relation: Term{Phrase: "chase"}, Roles: transitive, Negate: true}},
-		{"given referent", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
-			"agent": {Given: true}, "patient": {Phrase: "cat", Definite: true}}}},
-		{"coordination", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
-			"agent":   {Phrase: "dog", Definite: true},
-			"patient": {Phrase: "cat", Definite: true, With: []string{"mouse"}}}}},
 		{"indefinite", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
 			"agent": {Phrase: "dog"}, "patient": {Phrase: "cat", Definite: true}}}},
 	}
@@ -84,6 +79,40 @@ func TestSpeakDeclMintsOpenVocabulary(t *testing.T) {
 	}
 	if !wok || got != want || got != "The wolf watched the fox." {
 		t.Fatalf("SpeakDecl %q should match Speak %q (want \"The wolf watched the fox.\")", got, want)
+	}
+}
+
+// SpeakDecl speaks the coordinated and pronominal clauses that multi-clause answers produce,
+// matching Speak: a coordinated object joins its parts with the coordinator, and a referent in
+// play speaks as its pronoun. These are what renderFacts emits beyond the first plain clause.
+func TestSpeakDeclCoordinationAndPronoun(t *testing.T) {
+	p := Builtin()
+	cases := []struct {
+		name string
+		m    Meaning
+	}{
+		{"coordinated object", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
+			"agent":   {Phrase: "dog", Definite: true},
+			"patient": {Phrase: "cat", Definite: true, With: []string{"mouse"}},
+		}, Past: true}},
+		{"given agent", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
+			"agent":   {Given: true},
+			"patient": {Phrase: "cat", Definite: true},
+		}, Past: true}},
+		{"given patient", Meaning{Relation: Term{Phrase: "chase"}, Roles: map[string]Term{
+			"agent":   {Phrase: "dog", Definite: true},
+			"patient": {Given: true},
+		}, Past: true}},
+	}
+	for _, c := range cases {
+		want, wok := p.Speak("en", c.m)
+		got, gok := p.SpeakDecl("en", c.m)
+		if !gok {
+			t.Fatalf("%s: SpeakDecl should speak the clause", c.name)
+		}
+		if !wok || got != want {
+			t.Fatalf("%s: SpeakDecl %q should match Speak %q", c.name, got, want)
+		}
 	}
 }
 

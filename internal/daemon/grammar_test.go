@@ -74,6 +74,28 @@ func TestRenderFactsDeclarativeShadow(t *testing.T) {
 	}
 }
 
+// The declarative shadow agrees on a coordinated answer: a dog that chased two things renders
+// one clause coordinating them, and SpeakDecl reproduces it, so the broadened English path
+// covers what a multi-co-argument answer produces with no mismatch.
+func TestRenderFactsCoordinationShadow(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog chased a mouse")
+
+	var buf bytes.Buffer
+	d.out = &buf
+	got, ok := d.renderFacts("en", d.conceptName(dog.ID, dog.Content, "en"), d.gatherFacts(dog, "", ""), true, false)
+	if !ok || !strings.Contains(got, " and ") {
+		t.Fatalf("renderFacts should coordinate the two patients in one clause, got %q (ok %v)", got, ok)
+	}
+	if strings.Contains(buf.String(), "declgen mismatch") {
+		t.Fatalf("the declarative engine should agree on the coordinated clause; log: %q", buf.String())
+	}
+}
+
 // A Turkish inflection taught through the daemon drives generation in the declarative engine:
 // after teaching the -DI past, SpeakDecl speaks the clause with the verb formed by the learned
 // rule, matching the coded Speak. This is the payoff end to end: teach a rule into memory, and

@@ -35,7 +35,7 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 		if s.Role == cxn.Pred {
 			continue
 		}
-		np, ok := nounPhrase(p, g, lang, m.Roles[s.Role])
+		np, ok := nounPhrase(p, g, lang, s.Role, m.Roles[s.Role])
 		if !ok {
 			return "", false
 		}
@@ -112,11 +112,53 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 // seeded declarative grammar does not yet render: a referent in play (a pronoun), a
 // coordinated co-argument, an indefinite or bare phrase, or a word with no lexical entry. The
 // noun carries its number, and the phrase takes the tongue's definite determiner.
-func nounPhrase(p *Params, g *DeclGrammar, lang string, t Term) (*GenNode, bool) {
-	if t.Empty() || t.Given || len(t.With) > 0 || !t.Definite {
+func nounPhrase(p *Params, g *DeclGrammar, lang, role string, t Term) (*GenNode, bool) {
+	if t.Empty() {
 		return nil, false
 	}
-	word := t.Speak()
+	// A referent already in play speaks as the role's pronoun.
+	if t.Given {
+		pron := p.Pronoun(lang, role)
+		if pron == "" {
+			return nil, false
+		}
+		if _, ok := g.lex[pron]; !ok {
+			return nil, false
+		}
+		return Leaf(pron, fs{"cat": "pron", "num": "sg"}), true
+	}
+	if !t.Definite {
+		return nil, false // indefinite noun phrases are a later stage
+	}
+	head, ok := definiteNoun(p, g, lang, t.Speak(), t.Plural)
+	if !ok {
+		return nil, false
+	}
+	if len(t.With) == 0 {
+		return head, true
+	}
+	// Coordinated co-arguments: the head and each, joined by the tongue's coordinator.
+	items := []*GenNode{head}
+	for _, w := range t.With {
+		np, ok := definiteNoun(p, g, lang, w, false)
+		if !ok {
+			return nil, false
+		}
+		items = append(items, np)
+	}
+	coord := p.Coordinator(lang)
+	if coord == "" {
+		return nil, false
+	}
+	if _, ok := g.lex[coord]; !ok {
+		return nil, false
+	}
+	return coordNode(coord, items), true
+}
+
+// definiteNoun builds a definite noun phrase: the tongue's determiner and the noun, the noun
+// carrying its number and category so the engine can mint an entry for a learned word.
+func definiteNoun(p *Params, g *DeclGrammar, lang, word string, plural bool) (*GenNode, bool) {
 	if word == "" {
 		return nil, false
 	}
@@ -128,15 +170,27 @@ func nounPhrase(p *Params, g *DeclGrammar, lang string, t Term) (*GenNode, bool)
 		return nil, false
 	}
 	num := "sg"
-	if t.Plural {
+	if plural {
 		num = "pl"
 	}
-	// The noun carries its category so the engine can mint a lexical entry for it when the
-	// curriculum never seeded the word, the open-vocabulary path.
 	return Phrase("np", fs{"num": num}, map[string]*GenNode{
 		"det": Leaf(art, nil),
 		"n":   Leaf(word, fs{"num": num, "cat": "n"}),
 	}), true
+}
+
+// coordNode right-nests a coordination over the items, so "the cat and the mouse and the bird"
+// reads as a chain of the coordinator rule, the coordinator between each pair.
+func coordNode(coord string, items []*GenNode) *GenNode {
+	node := items[len(items)-1]
+	for i := len(items) - 2; i >= 0; i-- {
+		node = Phrase("coord", nil, map[string]*GenNode{
+			"a": items[i],
+			"c": Leaf(coord, fs{"cat": "c"}),
+			"b": node,
+		})
+	}
+	return node
 }
 
 // mintLex synthesizes a lexical entry for a word the curriculum never seeded, so the

@@ -200,6 +200,9 @@ syn:en:vpt	v obj | | v	en
 lex:en:chase	cat=v;sg=chases;pl=chase;past=chased	en
 lex:en:follow	cat=v;sg=follows;pl=follow;past=followed	en
 syn:tr:s	subj obj v | | v	tr
+syn:en:coord	a c b | | b	en
+lex:en:and	cat=c;any=and	en
+lex:en:it	cat=pron;any=it	en
 cxn:en:introspect:report	I was thinking: {thought}	en	
 cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
 cxn:en:definition:plain	{subject} is {kind}.	en	
