@@ -235,7 +235,7 @@ func (d *Daemon) conceptName(id uint64, content, lang string) string {
 	}
 	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelNames)
 	if err != nil || len(edges) == 0 {
-		return content
+		return d.borrowedName(id, content, lang)
 	}
 	weight := map[uint64]float64{}
 	for _, e := range edges {
@@ -276,7 +276,71 @@ func (d *Daemon) conceptName(id uint64, content, lang string) string {
 		return content
 	}
 	if best == "" {
+		return d.borrowedName(id, content, lang)
+	}
+	return best
+}
+
+// nameBorrowThreshold is how near a neighbor must sit before its word is borrowed for a
+// concept the graph cannot name: the vector proposes a word only when it is confidently
+// close, so a loosely related neighbor does not put words in a concept's mouth.
+const nameBorrowThreshold = 0.5
+
+// borrowedName proposes a word for a concept the graph cannot name in a language: it takes
+// the concept's embedding and borrows the nearest named neighbor's word, the vector layer
+// proposing where the naming edges are silent. It returns the concept's content when there
+// is no embedding or no near-enough named neighbor, so naming never regresses below the
+// gloss it had before.
+func (d *Daemon) borrowedName(id uint64, content, lang string) string {
+	vec, ok := d.store.Vector(id)
+	if !ok {
 		return content
+	}
+	matches, err := d.store.NearestVectors(vec, memory.KindConcept, 8, id)
+	if err != nil {
+		return content
+	}
+	for _, m := range matches {
+		if m.Score < nameBorrowThreshold {
+			break // sorted strongest first, so nothing further clears the bar
+		}
+		if w := d.namingWord(m.ID, lang); w != "" {
+			return w
+		}
+	}
+	return content
+}
+
+// namingWord is the firmest word naming a concept in a language, "" when none. It is the
+// direct naming lookup a borrow reads on a neighbor, without the participant, own-name, or
+// borrow handling conceptName layers on, so a borrow cannot recurse into another borrow.
+func (d *Daemon) namingWord(id uint64, lang string) string {
+	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelNames)
+	if err != nil || len(edges) == 0 {
+		return ""
+	}
+	weight := map[uint64]float64{}
+	for _, e := range edges {
+		if e.Weight > weight[e.From] {
+			weight[e.From] = e.Weight
+		}
+	}
+	ids := make([]uint64, 0, len(weight))
+	for wid := range weight {
+		ids = append(ids, wid)
+	}
+	words, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return ""
+	}
+	best, bestW := "", 0.0
+	for _, w := range words {
+		if w.Kind != memory.KindWord || w.Lang != lang {
+			continue
+		}
+		if best == "" || weight[w.ID] > bestW {
+			best, bestW = w.Content, weight[w.ID]
+		}
 	}
 	return best
 }
