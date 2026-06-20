@@ -35,11 +35,12 @@ type Request struct {
 	Content string `json:"content,omitempty"`
 	Query   string `json:"query,omitempty"`
 	Command string `json:"command,omitempty"`
-	Lang    string `json:"lang,omitempty"`  // language tag for tell; empty means English
-	Mind    bool   `json:"mind,omitempty"`  // teach: ground the word to a thought operation, not a command
-	Say     bool   `json:"say,omitempty"`   // teach: add a construction (Content is the intent, Command the template)
-	Force   bool   `json:"force,omitempty"` // observe: a deliberate teaching percept, encoded past the attention gate (ambient senses leave this off)
-	Arg     string `json:"arg,omitempty"`   // voice subcommand: status, on, off, use (the name rides in Content)
+	Lang    string `json:"lang,omitempty"`    // language tag for tell; empty means English
+	Mind    bool   `json:"mind,omitempty"`    // teach: ground the word to a thought operation, not a command
+	Say     bool   `json:"say,omitempty"`     // teach: add a construction (Content is the intent, Command the template)
+	Inflect bool   `json:"inflect,omitempty"` // teach: induce an inflection (Content is the feature, Command the base:inflected pairs)
+	Force   bool   `json:"force,omitempty"`   // observe: a deliberate teaching percept, encoded past the attention gate (ambient senses leave this off)
+	Arg     string `json:"arg,omitempty"`     // voice subcommand: status, on, off, use (the name rides in Content)
 	// The editor's raw surgery names a node by id and carries the new value:
 	// Content for an edit, Weight for a reweight.
 	ID     uint64  `json:"id,omitempty"`

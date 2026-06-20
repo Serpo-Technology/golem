@@ -2034,6 +2034,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			}
 			return wire.Response{OK: true}, false, false
 		}
+		if req.Inflect {
+			pairs, err := parseInflectPairs(strings.Fields(req.Command))
+			if err != nil {
+				return wire.Response{Error: err.Error()}, false, false
+			}
+			if err := d.teachInflection(req.Lang, req.Content, pairs); err != nil {
+				return wire.Response{Error: err.Error()}, false, false
+			}
+			return wire.Response{OK: true}, false, false
+		}
 		if req.Content == "" || req.Command == "" {
 			return wire.Response{Error: "teach needs a cue and a command"}, false, false
 		}

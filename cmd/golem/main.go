@@ -82,6 +82,10 @@ Usage:
                                   with {slot} markers the engine fills, e.g.
                                   introspect "my mind was on {thought}"; it
                                   outweighs the seed until forgotten
+  golem teach --inflect <lang> <feature> <base:inflected>...
+                                  induce an inflection rule from examples and
+                                  keep it as a fluid weight, e.g. tr past
+                                  kovala:kovaladı gel:geldi oku:okudu
   golem propose <cue>             weigh the actions grounded to a cue and
                                   propose one, or ask when it is ambiguous
   golem approve                   approve the pending proposal
@@ -294,6 +298,14 @@ func main() {
 			}
 			call(home, wire.Request{Cmd: "teach", Say: true, Content: args[2], Command: strings.Join(args[3:], " ")})
 			fmt.Printf("taught a way to say %q: %q\n", args[2], strings.Join(args[3:], " "))
+			return
+		}
+		if len(args) >= 2 && args[1] == "--inflect" {
+			if len(args) < 6 {
+				fail(fmt.Errorf("usage: golem teach --inflect <lang> <feature> <base:inflected>...   (e.g. tr past kovala:kovaladı gel:geldi oku:okudu)"))
+			}
+			call(home, wire.Request{Cmd: "teach", Inflect: true, Lang: args[2], Content: args[3], Command: strings.Join(args[4:], " ")})
+			fmt.Printf("taught the %s %s inflection from %d examples\n", args[2], args[3], len(args)-4)
 			return
 		}
 		if len(args) < 3 {

@@ -84,14 +84,15 @@ func parseHap(category string) hapEntry {
 // to sustained contrary usage with no special case.
 func Compile(entries []Param, lexMass map[string]float64) *Params {
 	p := &Params{
-		categories: map[string]map[string]string{},
-		sortals:    map[string]map[string]string{},
-		haps:       map[string]map[string]hapEntry{},
-		verbs:      map[string]verbEN{},
-		verbsTR:    map[string]verbTR{},
-		verbFinals: map[string]bool{},
-		suffixes:   map[string]string{},
-		surface:    map[string]map[string]string{},
+		categories:  map[string]map[string]string{},
+		sortals:     map[string]map[string]string{},
+		haps:        map[string]map[string]hapEntry{},
+		verbs:       map[string]verbEN{},
+		verbsTR:     map[string]verbTR{},
+		verbFinals:  map[string]bool{},
+		suffixes:    map[string]string{},
+		surface:     map[string]map[string]string{},
+		learnedInfl: map[string]inflection{},
 	}
 	for _, e := range entries {
 		kind, lang, name, ok := splitKey(e.Key)
@@ -134,6 +135,10 @@ func Compile(entries []Param, lexMass map[string]float64) *Params {
 			p.suffixes[name] = e.Value
 		case "surface":
 			ensure(p.surface, lang)[name] = e.Value
+		case "infl":
+			if rule, ok := decodeInflection(e.Value); ok {
+				p.learnedInfl[lang+":"+name] = rule
+			}
 		}
 	}
 	return p

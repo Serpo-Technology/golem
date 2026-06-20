@@ -290,6 +290,75 @@ func (d *Daemon) teachConstruction(intent, template, lang string) error {
 	return d.recompileGrammar()
 }
 
+// teachInflection induces an inflection pattern from example (base, inflected) pairs and
+// stores it as a grammar node, so a taught morphology is a fluid weight that survives a
+// restart and recompiles into the working grammar. Re-teaching a feature replaces its rule
+// rather than duplicating the node, since a language has one rule per feature.
+func (d *Daemon) teachInflection(lang, feature string, pairs [][2]string) error {
+	if lang == "" {
+		lang = "en"
+	}
+	feature = strings.TrimSpace(feature)
+	if feature == "" {
+		return fmt.Errorf("teach --inflect needs a feature")
+	}
+	if strings.ContainsAny(feature, " :") {
+		return fmt.Errorf("a feature is one word, not %q", feature)
+	}
+	value, ok := grammar.InduceInflection(pairs)
+	if !ok {
+		return fmt.Errorf("no single inflection rule fits these examples")
+	}
+	key := "infl:" + lang + ":" + feature
+	nodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return err
+	}
+	for _, n := range nodes {
+		if n.Template == key {
+			if err := d.store.UpdateContent(n.ID, value, key); err != nil {
+				return err
+			}
+			d.event(events.Event{Ev: "grammar", ID: n.ID, Tpl: key, Weight: n.Weight})
+			return d.recompileGrammar()
+		}
+	}
+	node := &memory.Fragment{
+		Kind:     memory.KindGrammar,
+		Channel:  "grammar",
+		Content:  value,
+		Template: key,
+		Lang:     lang,
+		Time:     time.Now(),
+	}
+	id, err := d.store.Encode(node)
+	if err != nil {
+		return err
+	}
+	if err := d.store.SetWeight(id, taughtConstructionWeight); err != nil {
+		return err
+	}
+	d.event(events.Event{Ev: "grammar", ID: id, Tpl: key, Weight: taughtConstructionWeight})
+	return d.recompileGrammar()
+}
+
+// parseInflectPairs reads the "base:inflected" examples a teaching carries into the pairs the
+// induction takes, requiring at least two so a single example cannot masquerade as a rule.
+func parseInflectPairs(toks []string) ([][2]string, error) {
+	if len(toks) < 2 {
+		return nil, fmt.Errorf("teach --inflect needs at least two base:inflected examples")
+	}
+	pairs := make([][2]string, 0, len(toks))
+	for _, t := range toks {
+		base, infl, ok := strings.Cut(t, ":")
+		if !ok || base == "" || infl == "" {
+			return nil, fmt.Errorf("each example is base:inflected, not %q", t)
+		}
+		pairs = append(pairs, [2]string{base, infl})
+	}
+	return pairs, nil
+}
+
 // grammarCompetition is the nightly weighted competition between seeded
 // parameters and lived usage, run during consolidation: a closed-class
 // form whose lexical naming mass is real erodes its grammar node, a

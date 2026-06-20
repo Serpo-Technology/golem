@@ -65,6 +65,35 @@ func TestLearnsVowelHarmony(t *testing.T) {
 	}
 }
 
+// A learned rule reconstructs from an infl: grammar node the way every other parameter
+// compiles from memory, so a taught inflection survives a restart as a fluid weight.
+func TestInflectionPersists(t *testing.T) {
+	value, ok := InduceInflection([][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
+	})
+	if !ok {
+		t.Fatal("the harmonic past should induce a stored value")
+	}
+	p := Compile([]Param{{Key: "infl:tr:past", Value: value, Lang: "tr"}}, nil)
+	if got, ok := p.Inflect("tr", "past", "ara"); !ok || got != "aradı" {
+		t.Fatalf("a compiled rule should inflect ara -> aradı, got %q (ok %v)", got, ok)
+	}
+}
+
+// Both shapes survive the stored form unchanged.
+func TestInflectionEncodeRoundTrip(t *testing.T) {
+	for _, want := range []inflection{
+		{add: "ed"},
+		{del: "e", add: "ed"},
+		{harmonic: true, frameBefore: "d", kind: "high"},
+		{harmonic: true, frameBefore: "l", frameAfter: "r", kind: "low"},
+	} {
+		if got, ok := decodeInflection(want.encode()); !ok || got != want {
+			t.Fatalf("rule %+v should round-trip, got %+v (ok %v)", want, got, ok)
+		}
+	}
+}
+
 // Pairs no single regular rule explains are declined, the Occam guard, and nothing is left
 // to inflect with.
 func TestDeclinesInconsistent(t *testing.T) {

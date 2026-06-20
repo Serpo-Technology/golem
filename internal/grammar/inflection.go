@@ -227,3 +227,35 @@ func (p *Params) Inflect(lang, feature, base string) (string, bool) {
 	}
 	return applyInflection(rule, base)
 }
+
+// encode serializes a rule as a grammar node's value, tagged and pipe-delimited so a fixed
+// and a harmonic suffix both round-trip through memory.
+func (r inflection) encode() string {
+	if r.harmonic {
+		return strings.Join([]string{"harm", r.del, r.frameBefore, r.frameAfter, r.kind}, "|")
+	}
+	return strings.Join([]string{"fixed", r.del, r.add}, "|")
+}
+
+// decodeInflection reads a stored rule back, false when the value is not one.
+func decodeInflection(s string) (inflection, bool) {
+	parts := strings.Split(s, "|")
+	switch {
+	case len(parts) == 3 && parts[0] == "fixed":
+		return inflection{del: parts[1], add: parts[2]}, true
+	case len(parts) == 5 && parts[0] == "harm" && (parts[4] == "high" || parts[4] == "low"):
+		return inflection{del: parts[1], harmonic: true, frameBefore: parts[2], frameAfter: parts[3], kind: parts[4]}, true
+	}
+	return inflection{}, false
+}
+
+// InduceInflection induces a rule from example pairs and returns its stored form, false when
+// no single rule fits. The daemon writes the value under an "infl:<lang>:<feature>" grammar
+// node, so a taught inflection becomes a fluid weight that recompiles into the grammar.
+func InduceInflection(pairs [][2]string) (string, bool) {
+	rule, ok := induceInflection(pairs)
+	if !ok {
+		return "", false
+	}
+	return rule.encode(), true
+}

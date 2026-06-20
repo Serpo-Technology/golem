@@ -44,6 +44,45 @@ func TestGeneralEngineFromMemory(t *testing.T) {
 	}
 }
 
+// A taught inflection persists to the store and a fresh boot reloads it, so morphology
+// learned from examples is a fluid weight rather than a code change: GOLEM is taught the
+// Turkish -DI past from four examples, and a reboot inflects a held-out stem by harmony.
+func TestTaughtInflectionSurvivesReboot(t *testing.T) {
+	d, s := testDaemon(t)
+	if err := d.teachInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := d.gram.Inflect("tr", "past", "ara"); !ok || got != "aradı" {
+		t.Fatalf("the taught rule should inflect ara -> aradı, got %q (ok %v)", got, ok)
+	}
+	// A second daemon over the same store is a fresh boot; the rule reloads from memory and
+	// still generalizes to a stem it never saw.
+	reboot := testDaemonOn(t, s)
+	if got, ok := reboot.gram.Inflect("tr", "past", "yürü"); !ok || got != "yürüdü" {
+		t.Fatalf("a reboot should reload the rule and inflect yürü -> yürüdü, got %q (ok %v)", got, ok)
+	}
+
+	// Re-teaching the feature replaces the rule rather than duplicating its node.
+	if err := d.teachInflection("tr", "past", [][2]string{{"al", "aldı"}, {"ver", "verdi"}}); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err := s.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, n := range nodes {
+		if n.Template == "infl:tr:past" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("re-teaching should keep one infl:tr:past node, got %d", count)
+	}
+}
+
 // The grammar seeds into starter memory on first run, through the same
 // encode path everything takes: a function word's category and a verb's
 // principal parts are ordinary nodes, readable from a dump.
