@@ -72,8 +72,8 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 // learned harmony rule. It is transitive past only for now; every other shape declines, so the
 // shadow stays silent and the caller keeps the coded clause.
 func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb string) (string, bool) {
-	if !m.Past || !p.HasInflection(lang, "past") {
-		return "", false // the verb morphology must be a learned rule, else fall back
+	if !m.Past {
+		return "", false
 	}
 	agent, patient := m.Roles["agent"], m.Roles["patient"]
 	if agent.Empty() || agent.Given || len(agent.With) > 0 || agent.Speak() == "" {
@@ -82,7 +82,21 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 	if patient.Empty() || patient.Given || len(patient.With) > 0 || !patient.Definite || patient.Speak() == "" {
 		return "", false
 	}
-	root := Phrase("s", fs{"tense": "past"}, map[string]*GenNode{
+	// The past verb agrees with the subject's person; the person rides on the tense key, so the
+	// learned rule for that person forms the verb (kovaladım for "ben", kovaladı for a thing).
+	tense := "past"
+	switch p.trPersonOf(agent.Speak()) {
+	case trPerson1sg:
+		tense = "past1sg"
+	case trPerson2sg:
+		tense = "past2sg"
+	case trPerson1pl:
+		tense = "past1pl"
+	}
+	if !p.HasInflection(lang, tense) {
+		return "", false // the verb morphology must be a learned rule, else fall back
+	}
+	root := Phrase("s", fs{"tense": tense}, map[string]*GenNode{
 		"subj": Leaf(agent.Speak(), fs{"cat": "n"}),
 		"obj":  Leaf(patient.Speak(), fs{"cat": "n", "case": "acc"}),
 		"v":    Leaf(verb, fs{"cat": "v"}),

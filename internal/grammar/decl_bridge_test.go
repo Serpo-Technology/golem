@@ -120,6 +120,41 @@ func TestSpeakDeclTurkishLearnedVerb(t *testing.T) {
 	}
 }
 
+// Turkish person agreement comes from per-person past rules the engine selects by the
+// subject's person: the first-person past is its own learned harmonic rule (the -m suffix
+// riding the harmony, frame d...m), so "Ben kuşu kovaladım." generates with its verb from that
+// rule and matches the coded Speak, while a third-person subject keeps the bare -DI past.
+func TestSpeakDeclTurkishPersonAgreement(t *testing.T) {
+	p := Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
+	p.LearnInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
+	})
+	p.LearnInflection("tr", "past1sg", [][2]string{
+		{"kovala", "kovaladım"}, {"gel", "geldim"}, {"oku", "okudum"}, {"gör", "gördüm"},
+	})
+	cases := map[string]struct {
+		agent string
+		want  string
+	}{
+		"first person": {"ben", "Ben kuşu kovaladım."},
+		"third person": {"köpek", "Köpek kuşu kovaladı."},
+	}
+	for name, c := range cases {
+		m := Meaning{Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{
+			"agent":   {Phrase: c.agent},
+			"patient": {Phrase: "kuş", Definite: true},
+		}, Past: true}
+		want, wok := p.Speak("tr", m)
+		got, gok := p.SpeakDecl("tr", m)
+		if !gok || !wok || got != want || got != c.want {
+			t.Fatalf("%s: SpeakDecl %q should match Speak %q (want %q)", name, got, want, c.want)
+		}
+	}
+}
+
 // SpeakDecl inflects the subject noun for number from the lexicon, which the coded Speak path
 // leaves to its caller. The live shadow never sets the plural flag, so this divergence does
 // not fire there; it is the declarative engine doing from data what Speak does not.
