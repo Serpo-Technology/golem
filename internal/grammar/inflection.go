@@ -10,14 +10,16 @@ import "strings"
 //
 // A pattern is either a fixed suffix substitution {del, add} or a HARMONIC one: a suffix
 // whose vowel bends to the stem's last vowel (the Turkish -DI past: kovaladı / geldi /
-// okudu / gördü). The vowel FEATURE table is seeded phonetics, the floor; the harmony RULE
-// (a consonant frame around a vowel that agrees in backness, and rounding for the 4-way
-// high vowels) is what is LEARNED from the examples. The work is rune-aware, since the
-// vowels it harmonizes are multibyte. Consonant assimilation (the d/t of bak->baktı) is a
-// further refinement; this slice harmonizes the vowel.
+// okudu / gördü) and whose leading consonant assimilates in voicing (baktı / geçti after a
+// voiceless stem). The FEATURE tables (a vowel's backness and rounding, a consonant's
+// voicing) are seeded phonetics, the floor; the harmony RULES (a consonant frame around a
+// vowel that agrees in backness and rounding, the suffix consonant that devoices after a
+// voiceless stem) are what is LEARNED from the examples. The work is rune-aware, since the
+// vowels and consonants it bends are multibyte.
 
 // inflection is a suffix substitution: delete the trailing del, then append either the fixed
-// add or, when harmonic, frameBefore + the harmonizing vowel + frameAfter.
+// add or, when harmonic, frameBefore + the harmonizing vowel + frameAfter, the leading
+// consonant of frameBefore devoicing after a voiceless stem when voiceAssim is set.
 type inflection struct {
 	del string
 	add string
@@ -26,6 +28,7 @@ type inflection struct {
 	frameBefore string
 	frameAfter  string
 	kind        string // "high" (4-way ı/i/u/ü) or "low" (2-way a/e)
+	voiceAssim  bool   // the leading consonant devoices after a voiceless stem (d -> t)
 }
 
 // vowelFeat is a vowel's harmony features; the table is seeded phonetics, the floor the
@@ -56,6 +59,21 @@ func harmonyVowel(kind string, f vowelFeat) rune {
 	default:
 		return 'i'
 	}
+}
+
+// The consonant voicing tables are seeded phonetics too: the voiceless consonants that make a
+// following suffix consonant devoice, and the voiced/voiceless suffix pairs that swap. devoice
+// is read forward when applying a rule (d -> t after a voiceless stem); revoice is its inverse,
+// read when induction lines assimilated examples back up on one frame.
+var voicelessCons = map[rune]bool{'p': true, 'ç': true, 't': true, 'k': true, 'f': true, 'h': true, 's': true, 'ş': true}
+var devoice = map[rune]rune{'d': 't', 'c': 'ç', 'g': 'k', 'b': 'p'}
+var revoice = map[rune]rune{'t': 'd', 'ç': 'c', 'k': 'g', 'p': 'b'}
+
+// endsVoiceless reports whether a stem's last segment is a voiceless consonant, the trigger
+// that devoices the suffix's leading consonant.
+func endsVoiceless(stem string) bool {
+	r := []rune(stem)
+	return len(r) > 0 && voicelessCons[r[len(r)-1]]
 }
 
 // lastVowel is the features of a stem's last vowel, and whether it has one.
@@ -134,9 +152,30 @@ func induceInflection(pairs [][2]string) (inflection, bool) {
 }
 
 // induceHarmonic learns a suffix whose vowel harmonizes: the added tails share a consonant
-// frame around exactly one vowel, and that vowel is what each stem's last vowel calls for
-// (high or low). It tries the 4-way high harmony first, then the 2-way low.
+// frame around exactly one vowel agreeing with each stem's last vowel. It first fits a fixed
+// frame; failing that, it lines the tails up on their voiced form (undoing the devoicing a
+// voiceless stem caused) and fits the frame with assimilation set, so the d/t alternation is
+// learned alongside the vowel. The real apply re-devoices, so grounding settles correctness.
 func induceHarmonic(del string, adds []string, pairs [][2]string) (inflection, bool) {
+	stems := make([]string, len(pairs))
+	for i, pair := range pairs {
+		stems[i] = strings.TrimSuffix(pair[0], del)
+	}
+	if rule, ok := fitHarmony(del, adds, stems, false); ok && grounds(rule, pairs) {
+		return rule, true
+	}
+	if canon, saw := canonicalAdds(adds, stems); saw {
+		if rule, ok := fitHarmony(del, canon, stems, true); ok && grounds(rule, pairs) {
+			return rule, true
+		}
+	}
+	return inflection{}, false
+}
+
+// fitHarmony finds a consonant frame around one harmonizing vowel that the tails share: the
+// frame is their common prefix and suffix, the slot between is one vowel, and the vowel is
+// what each stem's last vowel calls for (the 4-way high tried first, then the 2-way low).
+func fitHarmony(del string, adds, stems []string, assim bool) (inflection, bool) {
 	before, after := adds[0], adds[0]
 	for _, a := range adds[1:] {
 		before = runePrefix(before, a)
@@ -156,20 +195,36 @@ func induceHarmonic(del string, adds []string, pairs [][2]string) (inflection, b
 				fits = false
 				break
 			}
-			stemF, has := lastVowel(pairs[i][0])
+			stemF, has := lastVowel(stems[i])
 			if !has || v != harmonyVowel(kind, stemF) {
 				fits = false
 				break
 			}
 		}
 		if fits {
-			rule := inflection{del: del, harmonic: true, frameBefore: before, frameAfter: after, kind: kind}
-			if grounds(rule, pairs) {
-				return rule, true
-			}
+			return inflection{del: del, harmonic: true, frameBefore: before, frameAfter: after, kind: kind, voiceAssim: assim}, true
 		}
 	}
 	return inflection{}, false
+}
+
+// canonicalAdds rewrites each tail's leading consonant to its voiced form where the stem ends
+// voiceless, so an assimilated suffix lines up on one frame. saw is false when no tail carried
+// a devoiced leading consonant, so assimilation is never claimed without an example showing it.
+func canonicalAdds(adds, stems []string) ([]string, bool) {
+	out := make([]string, len(adds))
+	saw := false
+	for i, a := range adds {
+		ar := []rune(a)
+		if len(ar) > 0 && endsVoiceless(stems[i]) {
+			if v, ok := revoice[ar[0]]; ok {
+				ar[0] = v
+				saw = true
+			}
+		}
+		out[i] = string(ar)
+	}
+	return out, saw
 }
 
 // grounds checks a rule reproduces every example, the "ground by running" the function
@@ -199,7 +254,17 @@ func applyInflection(rule inflection, base string) (string, bool) {
 	if !has {
 		return "", false
 	}
-	return stem + rule.frameBefore + string(harmonyVowel(rule.kind, f)) + rule.frameAfter, true
+	before := rule.frameBefore
+	if rule.voiceAssim && endsVoiceless(stem) {
+		cr := []rune(before)
+		if len(cr) > 0 {
+			if vl, ok := devoice[cr[0]]; ok {
+				cr[0] = vl
+				before = string(cr)
+			}
+		}
+	}
+	return stem + before + string(harmonyVowel(rule.kind, f)) + rule.frameAfter, true
 }
 
 // LearnInflection induces an inflection pattern for a language and feature from example
@@ -232,19 +297,28 @@ func (p *Params) Inflect(lang, feature, base string) (string, bool) {
 // and a harmonic suffix both round-trip through memory.
 func (r inflection) encode() string {
 	if r.harmonic {
-		return strings.Join([]string{"harm", r.del, r.frameBefore, r.frameAfter, r.kind}, "|")
+		assim := "0"
+		if r.voiceAssim {
+			assim = "1"
+		}
+		return strings.Join([]string{"harm", r.del, r.frameBefore, r.frameAfter, r.kind, assim}, "|")
 	}
 	return strings.Join([]string{"fixed", r.del, r.add}, "|")
 }
 
-// decodeInflection reads a stored rule back, false when the value is not one.
+// decodeInflection reads a stored rule back, false when the value is not one. A harmonic rule
+// without the trailing voicing flag reads as no assimilation, so an earlier stored form loads.
 func decodeInflection(s string) (inflection, bool) {
 	parts := strings.Split(s, "|")
 	switch {
 	case len(parts) == 3 && parts[0] == "fixed":
 		return inflection{del: parts[1], add: parts[2]}, true
-	case len(parts) == 5 && parts[0] == "harm" && (parts[4] == "high" || parts[4] == "low"):
-		return inflection{del: parts[1], harmonic: true, frameBefore: parts[2], frameAfter: parts[3], kind: parts[4]}, true
+	case (len(parts) == 5 || len(parts) == 6) && parts[0] == "harm" && (parts[4] == "high" || parts[4] == "low"):
+		rule := inflection{del: parts[1], harmonic: true, frameBefore: parts[2], frameAfter: parts[3], kind: parts[4]}
+		if len(parts) == 6 {
+			rule.voiceAssim = parts[5] == "1"
+		}
+		return rule, true
 	}
 	return inflection{}, false
 }

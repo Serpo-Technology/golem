@@ -65,6 +65,33 @@ func TestLearnsVowelHarmony(t *testing.T) {
 	}
 }
 
+// The -DI past also assimilates in voicing: after a voiceless stem the suffix consonant is t,
+// else d. From examples spanning both, GOLEM learns the assimilation alongside the vowel and
+// generalizes both consonants to held-out stems (kesti / gitti voiceless, aldı / uyudu voiced).
+func TestLearnsConsonantAssimilation(t *testing.T) {
+	p := Compile(nil, nil)
+	if !p.LearnInflection("tr", "past", [][2]string{
+		{"bak", "baktı"}, // voiceless k -> t, back unround a -> ı
+		{"geç", "geçti"}, // voiceless ç -> t, front unround e -> i
+		{"gel", "geldi"}, // voiced l -> d, front unround -> i
+		{"oku", "okudu"}, // vowel -> d, back round -> u
+		{"gör", "gördü"}, // voiced r -> d, front round -> ü
+	}) {
+		t.Fatal("the assimilating -DI past should be learned")
+	}
+	for base, want := range map[string]string{
+		"kes":  "kesti",  // voiceless s -> t
+		"git":  "gitti",  // voiceless t -> t
+		"al":   "aldı",   // voiced l -> d
+		"uyu":  "uyudu",  // vowel -> d
+		"yürü": "yürüdü", // vowel -> d, front round -> ü
+	} {
+		if got, ok := p.Inflect("tr", "past", base); !ok || got != want {
+			t.Fatalf("assimilation should inflect %s -> %s, got %q (ok %v)", base, want, got, ok)
+		}
+	}
+}
+
 // A learned rule reconstructs from an infl: grammar node the way every other parameter
 // compiles from memory, so a taught inflection survives a restart as a fluid weight.
 func TestInflectionPersists(t *testing.T) {
@@ -86,6 +113,7 @@ func TestInflectionEncodeRoundTrip(t *testing.T) {
 		{add: "ed"},
 		{del: "e", add: "ed"},
 		{harmonic: true, frameBefore: "d", kind: "high"},
+		{harmonic: true, frameBefore: "d", kind: "high", voiceAssim: true},
 		{harmonic: true, frameBefore: "l", frameAfter: "r", kind: "low"},
 	} {
 		if got, ok := decodeInflection(want.encode()); !ok || got != want {
