@@ -212,6 +212,14 @@ lex:en:be_neg	cat=cop;sg=is not;pl=are not;past:sg=was not;past:pl=were not	en
 syn:tr:scop	subj comp | | comp	tr
 syn:en:qcop	wh cop comp | | comp	en
 lex:en:what	cat=wh;any=what	en
+syn:en:vpa	adv v obj | | v	en
+syn:en:vpai	adv v | | v	en
+lex:en:usually	cat=adv;any=usually	en
+lex:en:last	cat=adv;any=last	en
+syn:en:vpn	aux neg v obj | | aux	en
+syn:en:vpni	aux neg v | | aux	en
+lex:en:do	cat=aux;sg=does;pl=do;past=did	en
+lex:en:not	cat=neg;any=not	en
 syn:tr:qcop	comp q | | comp	tr
 lex:tr:nedir	cat=q;any=nedir	tr
 cxn:en:introspect:report	I was thinking: {thought}	en	

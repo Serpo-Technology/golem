@@ -412,11 +412,13 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 	if p.Article(lang) == "" {
 		return "", false // Turkish event verbs are a suppletive paradigm, a later stage
 	}
-	if f.Negate || f.Hedge || f.Habit || f.Last || f.At != "" || len(f.Quals) > 0 {
-		return "", false // aspect, the place complement, and fronted adjuncts are later stages
+	if f.At != "" || len(f.Quals) > 0 {
+		return "", false // the place complement and the fronted adjuncts are later stages
 	}
-	if chem.Oxytocin < limbic.OxytocinBaseline {
-		return "", false // a corrected system hedges, where Realize would say "may follow"
+	// Negation outranks the hedge in Realize, so a corrected system hedges only an affirmative
+	// clause; the hedge itself is a later stage.
+	if !f.Negate && (f.Hedge || chem.Oxytocin < limbic.OxytocinBaseline) {
+		return "", false
 	}
 	if f.Agent.Empty() || f.Agent.Given {
 		return "", false
@@ -434,11 +436,46 @@ func (p *Params) realizeEvent(lang string, f Frame, chem limbic.State) (string, 
 	if f.Past {
 		clause["tense"] = "past"
 	}
-	vpRule := "vp"
-	vpKids := map[string]*GenNode{"v": Leaf(f.Action.Phrase, fs{"cat": "v"})}
-	if !f.Patient.Empty() {
-		vpRule = "vpt"
-		vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+	hasObj := !f.Patient.Empty()
+	var vpRule string
+	var vpKids map[string]*GenNode
+	if f.Negate {
+		// Do-support: the auxiliary carries agreement and tense, the main verb stays its base.
+		vpKids = map[string]*GenNode{
+			"aux": Leaf("do", fs{"cat": "aux"}),
+			"neg": Leaf("not", fs{"cat": "neg"}),
+			"v":   Leaf(f.Action.Phrase, fs{"cat": "v", "num": "pl"}),
+		}
+		vpRule = "vpni"
+		if hasObj {
+			vpRule = "vpn"
+			vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+		}
+	} else {
+		// The habitual and the last occurrence prefix an adverb; the habit wins when both are set.
+		adv := ""
+		if f.Habit {
+			adv = "usually"
+		} else if f.Last {
+			adv = "last"
+		}
+		vpKids = map[string]*GenNode{"v": Leaf(f.Action.Phrase, fs{"cat": "v"})}
+		if hasObj {
+			vpKids["obj"] = Leaf(f.Patient.Speak(), fs{"cat": "comp"})
+		}
+		if adv != "" {
+			vpKids["adv"] = Leaf(adv, fs{"cat": "adv"})
+		}
+		switch {
+		case adv != "" && hasObj:
+			vpRule = "vpa"
+		case adv != "":
+			vpRule = "vpai"
+		case hasObj:
+			vpRule = "vpt"
+		default:
+			vpRule = "vp"
+		}
 	}
 	root := Phrase("s", clause, map[string]*GenNode{
 		"subj": Leaf(subject, fs{"cat": "comp", "num": num}),

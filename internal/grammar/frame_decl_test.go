@@ -60,6 +60,14 @@ func TestRealizeDeclEventVerbs(t *testing.T) {
 		{"first person", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "I"}, Patient: Term{Phrase: "the cat"}}), "I follow the cat."},
 		{"intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}}), "Make test happens."},
 		{"precede past", ev(Frame{Action: Term{Phrase: "precede"}, Agent: Term{Phrase: "make test"}, Patient: Term{Phrase: "make deploy"}, Past: true}), "Make test preceded make deploy."},
+		{"habitual", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Habit: true}), "The dog usually follows the cat."},
+		{"habitual past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Habit: true, Past: true}), "The dog usually followed the cat."},
+		{"habitual intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Habit: true}), "Make test usually happens."},
+		{"last occurrence", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Last: true, Past: true}), "The dog last followed the cat."},
+		{"negated present", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Negate: true}), "The dog does not follow the cat."},
+		{"negated plural", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dogs", Plural: true}, Patient: Term{Phrase: "the cat"}, Negate: true}), "The dogs do not follow the cat."},
+		{"negated past", ev(Frame{Action: Term{Phrase: "follow"}, Agent: Term{Phrase: "the dog"}, Patient: Term{Phrase: "the cat"}, Negate: true, Past: true}), "The dog did not follow the cat."},
+		{"negated intransitive", ev(Frame{Action: Term{Phrase: "happen"}, Agent: Term{Phrase: "make test"}, Negate: true}), "Make test does not happen."},
 	}
 	for _, c := range cases {
 		got, ok := p.RealizeDecl(c.f, chem)
@@ -90,9 +98,7 @@ func TestRealizeDeclEventDeclines(t *testing.T) {
 		f    Frame
 		chem limbic.State
 	}{
-		{"habitual", ev(Frame{Habit: true}), base},
 		{"hedged", ev(Frame{Hedge: true}), base},
-		{"negated", ev(Frame{Negate: true}), base},
 		{"low oxytocin hedges", ev(Frame{}), limbic.State{Oxytocin: 0}},
 		{"with adjunct", ev(Frame{Quals: []Qualifier{{Rel: "after", Anchor: Term{Phrase: "make test"}}}}), base},
 		{"with place", ev(Frame{At: "09:14"}), base},
