@@ -132,7 +132,8 @@ verb:en:know	know knows knew known	en
 verb:en:name	name names named named	en	
 verb:en:precede	precede precedes preceded preceded	en	
 verb:en:propose	propose proposes proposed proposed	en	
-verb:en:run	run runs ran run	en	
+verb:en:eat	eat eats ate eaten	en
+verb:en:run	run runs ran run	en
 verb:en:see	see sees saw seen	en	
 fw:tr:asla	asla	tr	neg
 fw:tr:bazen	bazen	tr	adv
