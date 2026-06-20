@@ -285,7 +285,13 @@ func (p *Params) LearnInflection(lang, feature string, pairs [][2]string) bool {
 // Inflect applies the learned inflection for a language and feature to a base, false when
 // none is learned or the base falls outside the rule's domain.
 func (p *Params) Inflect(lang, feature, base string) (string, bool) {
-	p = p.get()
+	return p.get().inflectRule(lang, feature, base)
+}
+
+// inflectRule is the lookup without the nil-Params default, so the declarative engine can
+// bind it at compile without drawing in the builtin seed (which is itself compiled, so going
+// through get would be a cycle).
+func (p *Params) inflectRule(lang, feature, base string) (string, bool) {
 	rule, ok := p.learnedInfl[lang+":"+feature]
 	if !ok {
 		return "", false

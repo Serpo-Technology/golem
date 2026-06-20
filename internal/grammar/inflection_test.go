@@ -122,6 +122,42 @@ func TestInflectionEncodeRoundTrip(t *testing.T) {
 	}
 }
 
+// The memory-driven engine inflects from a learned rule when its lexicon stores no matching
+// form, so a taught language generates a plural it was never given: the rule is taught once
+// from other words, and the noun phrase realizes a word the lexicon only knows in the singular.
+func TestGeneralEngineInflectsByLearnedRule(t *testing.T) {
+	entries := []Param{
+		{Key: "syn:xx:np", Value: "det n", Lang: "xx"}, // determiner then noun, number injects into the head noun
+		{Key: "lex:xx:the", Value: "cat=det;any=ta", Lang: "xx"},
+		{Key: "lex:xx:dog", Value: "cat=n;sg=dog", Lang: "xx"}, // only the singular is stored
+	}
+	p := Compile(entries, nil).SetDecl(entries)
+	if !p.LearnInflection("xx", "pl", [][2]string{{"cat", "cats"}, {"bird", "birds"}}) {
+		t.Fatal("the plural rule should be learned")
+	}
+	tree := Phrase("np", fs{"num": "pl"}, map[string]*GenNode{
+		"det": Leaf("the", nil),
+		"n":   Leaf("dog", nil),
+	})
+	got, trace, ok := p.Generate("xx", tree)
+	if !ok || got != "ta dogs" {
+		t.Fatalf("the engine should inflect dog -> dogs by the learned rule: %q %v", got, ok)
+	}
+	// The trace records that the plural came from the rule, not the lexicon.
+	if !containsStr(trace, "infl:dog") {
+		t.Fatalf("the plural should be marked as inflected by rule, trace: %v", trace)
+	}
+}
+
+func containsStr(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
 // Pairs no single regular rule explains are declined, the Occam guard, and nothing is left
 // to inflect with.
 func TestDeclinesInconsistent(t *testing.T) {

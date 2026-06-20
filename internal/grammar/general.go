@@ -72,6 +72,10 @@ type lexEntry struct {
 type DeclGrammar struct {
 	rules map[string]synRule
 	lex   map[string]lexEntry
+	// inflect generates an inflected form from a learned rule when the lexicon stores none,
+	// keyed by the agreement value that selected the form (the plural, the past). It is how a
+	// taught language inflects by rule rather than storing every form of every word.
+	inflect func(feature, lemma string) (string, bool)
 }
 
 // GenNode is a node of the meaning tree the engine realizes: a phrase
@@ -130,10 +134,16 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 		if form == "" {
 			form = e.forms["any"]
 		}
+		source := "lex:"
+		if form == "" && g.inflect != nil {
+			if inflected, ok := g.inflect(feats["num"], n.Lemma); ok {
+				form, source = inflected, "infl:"
+			}
+		}
 		if form == "" {
 			return "", nil, nil, false
 		}
-		return form, feats, []string{"lex:" + n.Lemma}, true
+		return form, feats, []string{source + n.Lemma}, true
 	}
 
 	r, ok := g.rules[n.Rule]
@@ -225,7 +235,11 @@ func (p *Params) SetDecl(entries []Param) *Params {
 	ensureDecl := func(lang string) *DeclGrammar {
 		g := decl[lang]
 		if g == nil {
-			g = &DeclGrammar{rules: map[string]synRule{}, lex: map[string]lexEntry{}}
+			g = &DeclGrammar{
+				rules:   map[string]synRule{},
+				lex:     map[string]lexEntry{},
+				inflect: func(feature, lemma string) (string, bool) { return p.inflectRule(lang, feature, lemma) },
+			}
 			decl[lang] = g
 		}
 		return g
