@@ -82,6 +82,44 @@ func TestSpeakDeclMintsOpenVocabulary(t *testing.T) {
 	}
 }
 
+// The engine stacks Turkish verb morphemes, each a learned rule: negation, tense, and person
+// fold in order, so "Köpek kuşu kovalamadı." and "Ben kuşu kovalamadım." generate from the
+// composed rules and match the coded Speak. This is the agglutinative case, learned morphemes
+// composing rather than one rule per form.
+func TestSpeakDeclTurkishNegationComposes(t *testing.T) {
+	p := Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
+	p.LearnInflection("tr", "neg", [][2]string{
+		{"kovala", "kovalama"}, {"gel", "gelme"}, {"oku", "okuma"}, {"gör", "görme"},
+	})
+	p.LearnInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
+	})
+	p.LearnInflection("tr", "pers1sg", [][2]string{
+		{"kovaladı", "kovaladım"}, {"geldi", "geldim"}, {"okudu", "okudum"}, {"gördü", "gördüm"},
+	})
+	cases := map[string]struct {
+		agent string
+		want  string
+	}{
+		"third person negative": {"köpek", "Köpek kuşu kovalamadı."},
+		"first person negative": {"ben", "Ben kuşu kovalamadım."},
+	}
+	for name, c := range cases {
+		m := Meaning{Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{
+			"agent":   {Phrase: c.agent},
+			"patient": {Phrase: "kuş", Definite: true},
+		}, Past: true, Negate: true}
+		want, wok := p.Speak("tr", m)
+		got, gok := p.SpeakDecl("tr", m)
+		if !gok || !wok || got != want || got != c.want {
+			t.Fatalf("%s: SpeakDecl %q should match Speak %q (want %q)", name, got, want, c.want)
+		}
+	}
+}
+
 // SpeakDecl speaks the coordinated and pronominal clauses that multi-clause answers produce,
 // matching Speak: a coordinated object joins its parts with the coordinator, and a referent in
 // play speaks as its pronoun. These are what renderFacts emits beyond the first plain clause.
@@ -161,8 +199,10 @@ func TestSpeakDeclTurkishPersonAgreement(t *testing.T) {
 	p.LearnInflection("tr", "past", [][2]string{
 		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
 	})
-	p.LearnInflection("tr", "past1sg", [][2]string{
-		{"kovala", "kovaladım"}, {"gel", "geldim"}, {"oku", "okudum"}, {"gör", "gördüm"},
+	// The first person is its own morpheme stacked after the tense, learned from past-to-first
+	// person pairs (the -m suffix), so the engine composes kovaladı + m.
+	p.LearnInflection("tr", "pers1sg", [][2]string{
+		{"kovaladı", "kovaladım"}, {"geldi", "geldim"}, {"okudu", "okudum"}, {"gördü", "gördüm"},
 	})
 	cases := map[string]struct {
 		agent string

@@ -79,6 +79,10 @@ type DeclGrammar struct {
 	// mint synthesizes a lexical entry for a learned word the curriculum never seeded, from its
 	// category and the language's coded morphology, so the engine renders open vocabulary.
 	mint func(lemma, cat string) (lexEntry, bool)
+	// inflorder is the morpheme order a category's word stacks its affixes in, keyed by
+	// category: an agglutinative verb folds negation, tense, and person each from a learned
+	// rule, in this order. Absent for a category that takes a single affix.
+	inflorder map[string][]string
 }
 
 // GenNode is a node of the meaning tree the engine realizes: a phrase
@@ -157,16 +161,37 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 		if form == "" {
 			form = e.forms[feats["case"]]
 		}
-		// No stored form: inflect from a learned rule for whichever feature affixes this word
-		// (a verb's tense, a noun's case or number), tried before the bare form so a marked
-		// word is not left bare when a rule could mark it.
+		// No stored form: inflect from learned rules, tried before the bare form so a marked
+		// word is not left bare. A category with a morpheme order folds its affixes in that
+		// order (an agglutinative verb stacks negation, tense, person); any other category
+		// takes the single affix of whichever feature marks it (a verb's tense, a noun's case).
 		source := "lex:"
 		if form == "" && g.inflect != nil {
-			for _, feat := range []string{"tense", "case", "num"} {
-				if v := feats[feat]; v != "" {
-					if inflected, ok := g.inflect(v, n.Lemma); ok {
-						form, source = inflected, "infl:"
+			if order, ok := g.inflorder[feats["cat"]]; ok {
+				stacked, applied := n.Lemma, false
+				done := true
+				for _, feat := range order {
+					v := feats[feat]
+					if v == "" {
+						continue // this morpheme is not present on the word
+					}
+					out, has := g.inflect(v, stacked)
+					if !has {
+						done = false
 						break
+					}
+					stacked, applied = out, true
+				}
+				if done && applied {
+					form, source = stacked, "infl:"
+				}
+			} else {
+				for _, feat := range []string{"tense", "case", "num"} {
+					if v := feats[feat]; v != "" {
+						if inflected, ok := g.inflect(v, n.Lemma); ok {
+							form, source = inflected, "infl:"
+							break
+						}
 					}
 				}
 			}
@@ -270,10 +295,11 @@ func (p *Params) SetDecl(entries []Param) *Params {
 		g := decl[lang]
 		if g == nil {
 			g = &DeclGrammar{
-				rules:   map[string]synRule{},
-				lex:     map[string]lexEntry{},
-				inflect: func(feature, lemma string) (string, bool) { return p.inflectRule(lang, feature, lemma) },
-				mint:    func(lemma, cat string) (lexEntry, bool) { return p.mintLex(lang, lemma, cat) },
+				rules:     map[string]synRule{},
+				lex:       map[string]lexEntry{},
+				inflorder: map[string][]string{},
+				inflect:   func(feature, lemma string) (string, bool) { return p.inflectRule(lang, feature, lemma) },
+				mint:      func(lemma, cat string) (lexEntry, bool) { return p.mintLex(lang, lemma, cat) },
 			}
 			decl[lang] = g
 		}
@@ -289,6 +315,8 @@ func (p *Params) SetDecl(entries []Param) *Params {
 			ensureDecl(lang).rules[name] = parseSynRule(e.Value)
 		case "lex":
 			ensureDecl(lang).lex[name] = parseLexEntry(e.Value)
+		case "inflorder":
+			ensureDecl(lang).inflorder[name] = strings.Fields(e.Value)
 		}
 	}
 	p.decl = decl

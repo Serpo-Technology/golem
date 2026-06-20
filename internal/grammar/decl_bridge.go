@@ -11,9 +11,6 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 	if lang == "" {
 		lang = "en"
 	}
-	if m.Negate {
-		return "", false // do-support is not in the declarative grammar yet
-	}
 	g := p.decl[lang]
 	if g == nil {
 		return "", false
@@ -23,8 +20,12 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 		return "", false
 	}
 	if p.Article(lang) == "" {
-		// A tongue that marks definiteness by case rather than an article (Turkish).
+		// A tongue that marks definiteness by case rather than an article (Turkish), where the
+		// verb stacks negation as one more learned morpheme.
 		return p.speakDeclCased(g, lang, m, verb)
+	}
+	if m.Negate {
+		return "", false // English do-support negation is not in the declarative grammar yet
 	}
 	cxn, ok := p.selectArg(lang, m)
 	if !ok {
@@ -82,21 +83,31 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 	if patient.Empty() || patient.Given || len(patient.With) > 0 || !patient.Definite || patient.Speak() == "" {
 		return "", false
 	}
-	// The past verb agrees with the subject's person; the person rides on the tense key, so the
-	// learned rule for that person forms the verb (kovaladım for "ben", kovaladı for a thing).
-	tense := "past"
-	switch p.trPersonOf(agent.Speak()) {
-	case trPerson1sg:
-		tense = "past1sg"
-	case trPerson2sg:
-		tense = "past2sg"
-	case trPerson1pl:
-		tense = "past1pl"
-	}
-	if !p.HasInflection(lang, tense) {
+	// The verb stacks its morphemes, each a learned rule the engine folds in order: tense, then
+	// the subject's person, and negation ahead of both. The clause carries the features; the
+	// verb leaf forms itself from them.
+	clause := fs{"tense": "past"}
+	if !p.HasInflection(lang, "past") {
 		return "", false // the verb morphology must be a learned rule, else fall back
 	}
-	root := Phrase("s", fs{"tense": tense}, map[string]*GenNode{
+	switch p.trPersonOf(agent.Speak()) {
+	case trPerson1sg:
+		clause["pers"] = "pers1sg"
+	case trPerson2sg:
+		clause["pers"] = "pers2sg"
+	case trPerson1pl:
+		clause["pers"] = "pers1pl"
+	}
+	if pers := clause["pers"]; pers != "" && !p.HasInflection(lang, pers) {
+		return "", false
+	}
+	if m.Negate {
+		if !p.HasInflection(lang, "neg") {
+			return "", false
+		}
+		clause["pol"] = "neg"
+	}
+	root := Phrase("s", clause, map[string]*GenNode{
 		"subj": Leaf(agent.Speak(), fs{"cat": "n"}),
 		"obj":  Leaf(patient.Speak(), fs{"cat": "n", "case": "acc"}),
 		"v":    Leaf(verb, fs{"cat": "v"}),
