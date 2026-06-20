@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"golem/internal/grammar"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -59,13 +61,28 @@ func TestDeclShadowSoak(t *testing.T) {
 				}
 			}
 		}
+		// Drive the frame realizer's covered shapes on the same real concept names, so the
+		// framegen shadow is exercised alongside the declgen one.
+		enName := d.conceptName(c.ID, c.Content, "en")
+		frames := []grammar.Frame{
+			{Action: grammar.Term{Phrase: "be"}, Force: grammar.ForceStatement, Agent: grammar.Term{Phrase: enName}, Patient: grammar.Term{Phrase: grammar.Indefinite("thing")}},
+			{Action: grammar.Term{Phrase: "follow"}, Force: grammar.ForceStatement, Agent: grammar.Term{Phrase: enName}},
+		}
+		for _, fr := range frames {
+			for _, past := range []bool{false, true} {
+				fr.Past = past
+				d.realizeAs("en", fr, limbic.State{Oxytocin: limbic.OxytocinBaseline})
+			}
+		}
 	}
 	log := buf.String()
 	covered := strings.Count(log, "declgen ok")
 	declined := strings.Count(log, "declgen decline")
+	frameCovered := strings.Count(log, "framegen ok")
+	frameDeclined := strings.Count(log, "framegen decline")
 	var mismatches []string
 	for _, line := range strings.Split(log, "\n") {
-		if strings.Contains(line, "declgen mismatch") {
+		if strings.Contains(line, "mismatch") { // declgen or framegen
 			mismatches = append(mismatches, line)
 		}
 	}
@@ -74,8 +91,8 @@ func TestDeclShadowSoak(t *testing.T) {
 	if total > 0 {
 		pct = 100 * float64(covered) / float64(total)
 	}
-	t.Logf("soak: %d concepts, %d clauses (%d covered %.0f%%, %d declined), %d mismatches",
-		len(concepts), total, covered, pct, declined, len(mismatches))
+	t.Logf("soak: %d concepts, declgen %d clauses (%d covered %.0f%%, %d declined), framegen (%d covered, %d declined), %d mismatches",
+		len(concepts), total, covered, pct, declined, frameCovered, frameDeclined, len(mismatches))
 	shown := 0
 	for _, line := range strings.Split(log, "\n") {
 		if strings.Contains(line, "declgen decline") && shown < 12 {
