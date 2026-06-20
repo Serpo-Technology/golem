@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"strings"
 
 	"golem/internal/grammar"
@@ -522,8 +523,17 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 		} else {
 			roles["agent"], roles["patient"] = co, focus
 		}
-		if line, ok := d.gram.Speak(lang, grammar.Meaning{Relation: grammar.Term{Phrase: d.relationName(k.rel, lang)}, Roles: roles, Past: past}); ok {
+		meaning := grammar.Meaning{Relation: grammar.Term{Phrase: d.relationName(k.rel, lang)}, Roles: roles, Past: past}
+		if line, ok := d.gram.Speak(lang, meaning); ok {
 			clauses = append(clauses, line)
+			// Shadow the declarative engine against the live clause: when it can speak this
+			// meaning and disagrees, log it. The Speak output still stands, so this changes
+			// nothing until the declarative path is proven across the answer surface.
+			if lang == "en" {
+				if alt, ok := d.gram.SpeakDecl(lang, meaning); ok && alt != line {
+					fmt.Fprintf(d.out, "declgen mismatch: %q vs Speak %q\n", alt, line)
+				}
+			}
 		}
 	}
 	if len(clauses) == 0 {

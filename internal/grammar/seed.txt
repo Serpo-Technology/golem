@@ -194,8 +194,11 @@ syn:en:np	det n | | n	en
 lex:en:the	cat=det;any=the	en	
 lex:en:dog	cat=n;sg=dog;pl=dogs	en	
 lex:en:cat	cat=n;sg=cat;pl=cats	en	
-lex:en:run	cat=v;sg=runs;pl=run	en	
+lex:en:run	cat=v;sg=runs;pl=run;past=ran	en	
 lex:en:sleep	cat=v;sg=sleeps;pl=sleep	en	
+syn:en:vpt	v obj | | v	en
+lex:en:chase	cat=v;sg=chases;pl=chase;past=chased	en
+lex:en:follow	cat=v;sg=follows;pl=follow;past=followed	en
 cxn:en:introspect:report	I was thinking: {thought}	en	
 cxn:en:introspect_idle:plain	I have not been thinking about anything.	en	
 cxn:en:definition:plain	{subject} is {kind}.	en	

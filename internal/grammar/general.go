@@ -130,7 +130,21 @@ func (g *DeclGrammar) gen(n *GenNode) (string, fs, []string, bool) {
 		if !ok {
 			return "", nil, nil, false
 		}
-		form := e.forms[feats["num"]]
+		// A tense feature selects a tense-keyed form ahead of the number-keyed one, so a
+		// past clause takes the stored past form; with no tense this is the number lookup
+		// unchanged, the form a present clause and a bare noun phrase take.
+		form := ""
+		if t := feats["tense"]; t != "" {
+			if num := feats["num"]; num != "" {
+				form = e.forms[t+":"+num]
+			}
+			if form == "" {
+				form = e.forms[t]
+			}
+		}
+		if form == "" {
+			form = e.forms[feats["num"]]
+		}
 		if form == "" {
 			form = e.forms["any"]
 		}

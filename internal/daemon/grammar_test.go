@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +43,33 @@ func TestGeneralEngineFromMemory(t *testing.T) {
 	}
 	if got, _, ok := d.gram.Generate("en", tree); !ok || got != "run the dogs" {
 		t.Fatalf("editing the order rule should reorder the clause: %q %v", got, ok)
+	}
+}
+
+// The declarative engine agrees with the live Speak clause on a real stored proposition: the
+// renderFacts shadow fires on seeded vocabulary and logs no mismatch, and SpeakDecl speaks the
+// same answer, so routing the answer through it would not regress the clause.
+func TestRenderFactsDeclarativeShadow(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+
+	var buf bytes.Buffer
+	d.out = &buf
+	got, ok := d.renderFacts("en", d.conceptName(dog.ID, dog.Content, "en"), d.gatherFacts(dog, "", ""), true, false)
+	if !ok || got != "The dog chased the cat." {
+		t.Fatalf("renderFacts should answer \"The dog chased the cat.\", got %q (ok %v)", got, ok)
+	}
+	if strings.Contains(buf.String(), "declgen mismatch") {
+		t.Fatalf("the declarative engine should agree with Speak on this clause; log: %q", buf.String())
+	}
+	m := grammar.Meaning{Relation: grammar.Term{Phrase: "chase"}, Roles: map[string]grammar.Term{
+		"agent":   {Phrase: "dog", Definite: true},
+		"patient": {Phrase: "cat", Definite: true},
+	}, Past: true}
+	if alt, dok := d.gram.SpeakDecl("en", m); !dok || alt != got {
+		t.Fatalf("SpeakDecl should fire on the seeded vocabulary and match the answer: %q %v vs %q", alt, dok, got)
 	}
 }
 
