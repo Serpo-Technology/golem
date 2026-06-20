@@ -628,9 +628,9 @@ func (d *Daemon) conceptDecision(c *memory.Fragment) (Decision, error) {
 func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) string {
 	f.Lang = lang
 	line := d.gram.Realize(f, chem)
-	// Shadow the declarative engine against the coded frame realizer: when it can speak this
-	// frame and disagrees, log it. Realize still stands, so this changes nothing until the
-	// declarative path is proven across the frame surface.
+	// The declarative engine drives the frame when it can speak it; the coded Realize stays as
+	// the fallback for the shapes it does not yet cover, and as a tripwire that logs any
+	// divergence on the shapes it does.
 	alt, dok := d.gram.RealizeDecl(f, chem)
 	switch {
 	case dok && alt != line:
@@ -639,6 +639,9 @@ func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) stri
 		fmt.Fprintf(d.out, "framegen ok\n")
 	case !dok && d.shadowVerbose:
 		fmt.Fprintf(d.out, "framegen decline: %q\n", line)
+	}
+	if dok {
+		line = alt
 	}
 	return line
 }
