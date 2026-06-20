@@ -83,6 +83,9 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 	if patient.Empty() || patient.Given || len(patient.With) > 0 || !patient.Definite || patient.Speak() == "" {
 		return "", false
 	}
+	if hasDeterminer(patient.Speak()) {
+		return "", false // a name already carrying a determiner takes no accusative here
+	}
 	// The verb stacks its morphemes, each a learned rule the engine folds in order: tense, then
 	// the subject's person, and negation ahead of both. The clause carries the features; the
 	// verb leaf forms itself from them.
@@ -172,6 +175,9 @@ func nounPhrase(p *Params, g *DeclGrammar, lang, role string, t Term) (*GenNode,
 func definiteNoun(p *Params, g *DeclGrammar, lang, word string, plural bool) (*GenNode, bool) {
 	if word == "" {
 		return nil, false
+	}
+	if hasDeterminer(word) {
+		return nil, false // a name already carrying a determiner is left to the coded path
 	}
 	art := p.Article(lang)
 	if art == "" {
