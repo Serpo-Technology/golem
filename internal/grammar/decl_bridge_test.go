@@ -120,6 +120,35 @@ func TestSpeakDeclTurkishNegationComposes(t *testing.T) {
 	}
 }
 
+// The Turkish cased clause speaks given pronouns and coordinated objects too: a referent in
+// play is its pronoun (onu, already accusative), and coordinated objects join under "ve", each
+// taking the accusative, matching the coded Speak.
+func TestSpeakDeclTurkishGivenAndCoordination(t *testing.T) {
+	p := Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
+	p.LearnInflection("tr", "past", [][2]string{
+		{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"},
+	})
+	cases := map[string]Meaning{
+		// a referent in play as the patient speaks as the accusative pronoun "onu"
+		"O köpeği kovaladı.": {Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{
+			"agent": {Given: true}, "patient": {Phrase: "köpek", Definite: true}}, Past: true},
+		// coordinated objects join under "ve", each accusative
+		"Köpek kediyi ve fareyi kovaladı.": {Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{
+			"agent":   {Phrase: "köpek", Definite: true},
+			"patient": {Phrase: "kedi", Definite: true, With: []string{"fare"}}}, Past: true},
+	}
+	for want, m := range cases {
+		got, gok := p.SpeakDecl("tr", m)
+		sp, sok := p.Speak("tr", m)
+		if !gok || !sok || got != sp || got != want {
+			t.Fatalf("SpeakDecl %q should match Speak %q (want %q)", got, sp, want)
+		}
+	}
+}
+
 // SpeakDecl speaks the coordinated and pronominal clauses that multi-clause answers produce,
 // matching Speak: a coordinated object joins its parts with the coordinator, and a referent in
 // play speaks as its pronoun. These are what renderFacts emits beyond the first plain clause.

@@ -77,14 +77,16 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 		return "", false
 	}
 	agent, patient := m.Roles["agent"], m.Roles["patient"]
-	if agent.Empty() || agent.Given || len(agent.With) > 0 || agent.Speak() == "" {
+	if patient.Empty() {
+		return "", false // transitive only
+	}
+	subj, ok := casedNoun(p, g, lang, "agent", agent, false)
+	if !ok {
 		return "", false
 	}
-	if patient.Empty() || patient.Given || len(patient.With) > 0 || !patient.Definite || patient.Speak() == "" {
+	obj, ok := casedNoun(p, g, lang, "patient", patient, true)
+	if !ok {
 		return "", false
-	}
-	if hasDeterminer(patient.Speak()) {
-		return "", false // a name already carrying a determiner takes no accusative here
 	}
 	// The verb stacks its morphemes, each a learned rule the engine folds in order: tense, then
 	// the subject's person, and negation ahead of both. The clause carries the features; the
@@ -111,15 +113,67 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 		clause["pol"] = "neg"
 	}
 	root := Phrase("s", clause, map[string]*GenNode{
-		"subj": Leaf(agent.Speak(), fs{"cat": "n"}),
-		"obj":  Leaf(patient.Speak(), fs{"cat": "n", "case": "acc"}),
+		"subj": subj,
+		"obj":  obj,
 		"v":    Leaf(verb, fs{"cat": "v"}),
 	})
-	surface, _, ok := p.Generate(lang, root)
-	if !ok {
+	surface, _, gok := p.Generate(lang, root)
+	if !gok {
 		return "", false
 	}
 	return Sentence(surface), true
+}
+
+// casedNoun builds a role's node for a case-marking tongue: a referent in play speaks as its
+// pronoun (already the right case), a definite object takes the accusative, the subject is bare
+// nominative, and coordinated co-arguments join under the coordinator, each marked alike.
+func casedNoun(p *Params, g *DeclGrammar, lang, role string, t Term, accusative bool) (*GenNode, bool) {
+	if t.Empty() {
+		return nil, false
+	}
+	if t.Given {
+		pron := p.Pronoun(lang, role)
+		if pron == "" {
+			return nil, false
+		}
+		return Leaf(pron, fs{"cat": "n"}), true // o / onu, already carrying its case
+	}
+	if accusative && !t.Definite {
+		return nil, false // an indefinite object stays nominative, a later stage
+	}
+	mk := func(w string) (*GenNode, bool) {
+		if w == "" || hasDeterminer(w) {
+			return nil, false
+		}
+		f := fs{"cat": "n"}
+		if accusative {
+			f = fs{"cat": "n", "case": "acc"}
+		}
+		return Leaf(w, f), true
+	}
+	head, ok := mk(t.Speak())
+	if !ok {
+		return nil, false
+	}
+	if len(t.With) == 0 {
+		return head, true
+	}
+	items := []*GenNode{head}
+	for _, w := range t.With {
+		np, ok := mk(w)
+		if !ok {
+			return nil, false
+		}
+		items = append(items, np)
+	}
+	coord := p.Coordinator(lang)
+	if coord == "" {
+		return nil, false
+	}
+	if _, ok := g.lex[coord]; !ok {
+		return nil, false
+	}
+	return coordNode(coord, items), true
 }
 
 // nounPhrase builds a definite np GenNode for a role's filler, declining on the cases the

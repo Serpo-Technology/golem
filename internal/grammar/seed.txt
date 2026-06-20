@@ -200,6 +200,8 @@ syn:en:vpt	v obj | | v	en
 lex:en:chase	cat=v;sg=chases;pl=chase;past=chased	en
 lex:en:follow	cat=v;sg=follows;pl=follow;past=followed	en
 syn:tr:s	subj obj v | | v	tr
+syn:tr:coord	a c b | | b	tr
+lex:tr:ve	cat=c;any=ve	tr
 inflorder:tr:v	pol tense pers	tr
 syn:en:coord	a c b | | b	en
 lex:en:and	cat=c;any=and	en
