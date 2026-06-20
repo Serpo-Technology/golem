@@ -82,6 +82,35 @@ func TestSpeakDeclMintsOpenVocabulary(t *testing.T) {
 	}
 }
 
+// The Turkish present is the aorist the engine forms by stem ending: -r after a vowel, the
+// harmonic -Ir after a consonant, and no person suffix, the way the coded present does, so
+// "Köpek kuşu kovalar." and "O topu getirir." generate and match Speak.
+func TestSpeakDeclTurkishAorist(t *testing.T) {
+	p := Compile(Curriculum(), nil).
+		SetConstructions(Constructions()).
+		SetDecl(Curriculum()).
+		SetArgConstructions(Constructions())
+	p.LearnInflection("tr", "aorist", [][2]string{
+		{"kovala", "kovalar"}, {"oku", "okur"}, {"yürü", "yürür"}, {"ara", "arar"},
+	})
+	p.LearnInflection("tr", "aoristC", [][2]string{
+		{"gel", "gelir"}, {"bak", "bakır"}, {"gör", "görür"}, {"bul", "bulur"},
+	})
+	cases := map[string]Meaning{
+		"Köpek kuşu kovalar.": {Relation: Term{Phrase: "kovala"}, Roles: map[string]Term{ // vowel stem -> -r
+			"agent": {Phrase: "köpek", Definite: true}, "patient": {Phrase: "kuş", Definite: true}}},
+		"O topu getirir.": {Relation: Term{Phrase: "getir"}, Roles: map[string]Term{ // consonant stem -> harmonic -Ir
+			"agent": {Given: true}, "patient": {Phrase: "top", Definite: true}}},
+	}
+	for want, m := range cases {
+		got, gok := p.SpeakDecl("tr", m)
+		sp, sok := p.Speak("tr", m)
+		if !gok || !sok || got != sp || got != want {
+			t.Fatalf("SpeakDecl %q should match Speak %q (want %q)", got, sp, want)
+		}
+	}
+}
+
 // The engine stacks Turkish verb morphemes, each a learned rule: negation, tense, and person
 // fold in order, so "Köpek kuşu kovalamadı." and "Ben kuşu kovalamadım." generate from the
 // composed rules and match the coded Speak. This is the agglutinative case, learned morphemes

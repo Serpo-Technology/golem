@@ -73,9 +73,6 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 // learned harmony rule. It is transitive past only for now; every other shape declines, so the
 // shadow stays silent and the caller keeps the coded clause.
 func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb string) (string, bool) {
-	if !m.Past {
-		return "", false
-	}
 	agent, patient := m.Roles["agent"], m.Roles["patient"]
 	if patient.Empty() {
 		return "", false // transitive only
@@ -88,29 +85,48 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 	if !ok {
 		return "", false
 	}
-	// The verb stacks its morphemes, each a learned rule the engine folds in order: tense, then
-	// the subject's person, and negation ahead of both. The clause carries the features; the
-	// verb leaf forms itself from them.
-	clause := fs{"tense": "past"}
-	if !p.HasInflection(lang, "past") {
-		return "", false // the verb morphology must be a learned rule, else fall back
-	}
-	switch p.trPersonOf(agent.Speak()) {
-	case trPerson1sg:
-		clause["pers"] = "pers1sg"
-	case trPerson2sg:
-		clause["pers"] = "pers2sg"
-	case trPerson1pl:
-		clause["pers"] = "pers1pl"
-	}
-	if pers := clause["pers"]; pers != "" && !p.HasInflection(lang, pers) {
-		return "", false
-	}
-	if m.Negate {
-		if !p.HasInflection(lang, "neg") {
+	// The verb stacks its morphemes, each a learned rule the engine folds in order. The clause
+	// carries the features; the verb leaf forms itself from them.
+	clause := fs{}
+	if m.Past {
+		// The past agrees with the subject's person, the suffix riding after the tense, and the
+		// negation goes ahead of both.
+		clause["tense"] = "past"
+		if !p.HasInflection(lang, "past") {
+			return "", false // the verb morphology must be a learned rule, else fall back
+		}
+		switch p.trPersonOf(agent.Speak()) {
+		case trPerson1sg:
+			clause["pers"] = "pers1sg"
+		case trPerson2sg:
+			clause["pers"] = "pers2sg"
+		case trPerson1pl:
+			clause["pers"] = "pers1pl"
+		}
+		if pers := clause["pers"]; pers != "" && !p.HasInflection(lang, pers) {
 			return "", false
 		}
-		clause["pol"] = "neg"
+		if m.Negate {
+			if !p.HasInflection(lang, "neg") {
+				return "", false
+			}
+			clause["pol"] = "neg"
+		}
+	} else {
+		// The present is the aorist: -r after a vowel, the harmonic -Ir after a consonant, with
+		// no person suffix, the way the coded present forms it. The negative aorist (-mAz) is a
+		// separate fused form, deferred to the coded path.
+		if m.Negate {
+			return "", false
+		}
+		tense := "aorist"
+		if !endsVowelTR(verb) {
+			tense = "aoristC"
+		}
+		if !p.HasInflection(lang, tense) {
+			return "", false
+		}
+		clause["tense"] = tense
 	}
 	root := Phrase("s", clause, map[string]*GenNode{
 		"subj": subj,

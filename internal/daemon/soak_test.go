@@ -98,6 +98,8 @@ func teachTurkishMorphology(t *testing.T, d *Daemon) {
 	t.Helper()
 	rules := map[string][][2]string{
 		"past":    {{"kovala", "kovaladı"}, {"gel", "geldi"}, {"oku", "okudu"}, {"gör", "gördü"}, {"bak", "baktı"}, {"geç", "geçti"}},
+		"aorist":  {{"kovala", "kovalar"}, {"oku", "okur"}, {"yürü", "yürür"}, {"ara", "arar"}},
+		"aoristC": {{"gel", "gelir"}, {"bak", "bakır"}, {"gör", "görür"}, {"bul", "bulur"}},
 		"neg":     {{"kovala", "kovalama"}, {"gel", "gelme"}, {"oku", "okuma"}, {"gör", "görme"}},
 		"pers1sg": {{"kovaladı", "kovaladım"}, {"geldi", "geldim"}, {"okudu", "okudum"}, {"gördü", "gördüm"}},
 		"pers2sg": {{"kovaladı", "kovaladın"}, {"geldi", "geldin"}, {"okudu", "okudun"}, {"gördü", "gördün"}},
