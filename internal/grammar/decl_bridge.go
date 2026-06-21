@@ -86,9 +86,6 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 // pick one order and case each noun. It declines a carried-over or coordinated
 // argument, each a later stage, so the clause stays one the comprehension round-trips.
 func (p *Params) speakDeclByCase(lang string, m Meaning, verb string) (string, bool) {
-	if m.Negate {
-		return "", false // verbal negation ("non amat") is a later stage; a denial answers bare
-	}
 	agent := m.Roles["agent"]
 	if agent.Empty() || agent.Given || agent.Speak() == "" {
 		return "", false
@@ -99,6 +96,12 @@ func (p *Params) speakDeclByCase(lang string, m Meaning, verb string) (string, b
 			return "", false
 		}
 		parts = append(parts, patient.Speak()+p.caseEnding(lang, "accusative"))
+	}
+	if m.Negate {
+		// Latin denies the verb with a preverbal "non" ("rosa puellam non amat").
+		if not := p.Word(lang, "not"); not != "" {
+			parts = append(parts, not)
+		}
 	}
 	parts = append(parts, verb)
 	return Sentence(strings.Join(parts, " ")), true

@@ -92,8 +92,8 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	if got := sayLang(t, d, "la", "rosamne puella amat?").Say; got != "Ita, puella rosam amat." {
 		t.Errorf("a free-order question should answer the same: %q", got)
 	}
-	if got := sayLang(t, d, "la", "amatne rosa puellam?").Say; got != "Minime." {
-		t.Errorf("the case should deny rose-loves-girl, untaught: %q", got)
+	if got := sayLang(t, d, "la", "amatne rosa puellam?").Say; got != "Minime, rosa puellam non amat." {
+		t.Errorf("the case should deny rose-loves-girl with a clause: %q", got)
 	}
 }
 

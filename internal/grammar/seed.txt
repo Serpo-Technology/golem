@@ -291,6 +291,7 @@ surface:tr:yes	evet	tr
 surface:tr:no	hayır	tr
 surface:la:yes	ita	la
 surface:la:no	minime	la
+surface:la:not	non	la
 surface:en:probably	probably	en
 surface:tr:probably	muhtemelen	tr
 surface:en:ifso	if so	en
