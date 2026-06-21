@@ -97,6 +97,23 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 }
 
+// A Latin role question carries its interrogative in the case: quis asks the
+// nominative agent, quem and quid the accusative patient. Each reads the asked role
+// from the proposition graph and speaks the whole clause back.
+func TestLatinWhQuestion(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "puella", "la")
+	groundNounLang(t, d, "rosa", "la")
+	sayLang(t, d, "la", "puella rosam amat")
+
+	if got := sayLang(t, d, "la", "quis rosam amat?").Say; got != "Puella rosam amat." {
+		t.Errorf("quis (who) should name the agent: %q", got)
+	}
+	if got := sayLang(t, d, "la", "quem puella amat?").Say; got != "Puella rosam amat." {
+		t.Errorf("quem (whom) should name the patient: %q", got)
+	}
+}
+
 // Latin conjugates across persons and drops the subject: "rosam amo" (I love the
 // rose) is recognized through the first-person ending and the speaker is recovered as
 // the agent, where before only the third person -t was read.

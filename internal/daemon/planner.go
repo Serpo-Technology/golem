@@ -875,6 +875,12 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		return line
 	}
 
+	// A Latin role question carries its interrogative in a word the English-or-Turkish
+	// frame parser does not read, so it is answered from the raw clause through its own
+	// path, the way the Latin polar question is.
+	if line, ok := d.planLatinWh(frame, raw); ok {
+		return line
+	}
 	// "What is on the tree" asks which figures hold a place at the ground: the
 	// preposition filters the locative relations so the answer names the things in
 	// that place, before the role-question and definition paths that would drop it.
