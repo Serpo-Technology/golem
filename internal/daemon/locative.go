@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"golem/internal/grammar"
 	"golem/internal/limbic"
@@ -50,6 +52,18 @@ func (d *Daemon) factIsLocative(relContent string) bool {
 // already glossed; the figure is "it" when the subject is carried from a clause
 // just spoken. It returns false when the engine cannot speak the clause.
 func (d *Daemon) locativeClause(lang, figure, prep, ground string, given, negate bool, chem limbic.State) (string, bool) {
+	if lang == "tr" {
+		// Turkish marks place by the locative case on the ground and carries no
+		// preposition or copula: "yaprak ağaçta". The figure is named (no inflected
+		// pronoun for it here), the ground takes the locative suffix.
+		clause := figure + " " + d.gram.Locative(lang, ground)
+		if negate {
+			if no := d.gram.Word(lang, "notbe"); no != "" {
+				clause += " " + no
+			}
+		}
+		return grammar.Sentence(clause), true
+	}
 	subject := definiteForm(lang, figure)
 	if given {
 		if pron := d.gram.Pronoun(lang, "agent"); pron != "" {
@@ -110,6 +124,77 @@ func (d *Daemon) planLocativePolar(frame grammar.Frame) (string, bool) {
 	}
 	belief, _, supposed := d.assessProposition(figure, rel.Content, ground)
 	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed), true
+}
+
+// comprehendLocativeTR reads a Turkish locative clause, which marks place by the
+// locative case and carries no relation word ("yaprak ağaçta", the leaf is at the
+// tree). The locative-cased noun is the ground and the bare noun the figure. The
+// relation is the locative one warm from a recent telling, so an English "the leaf
+// is on the tree" and its Turkish echo are the one relation; a general Turkish
+// locative is minted when none is warm. It returns false when the clause is not a
+// bare locative (no locative case, a referent unresolved, or more than the two
+// nouns), so the ordinary verb-clause path stands.
+func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
+	tokens := d.gram.ContentTokensLang("tr", raw)
+	if len(tokens) != 2 {
+		return false
+	}
+	groundIdx, ground := -1, (*memory.Fragment)(nil)
+	for i, tok := range tokens {
+		if stem, ok := d.gram.LocativeGround("tr", tok); ok {
+			if c := d.resolveConcept(stem); c != nil {
+				groundIdx, ground = i, c
+				break
+			}
+		}
+	}
+	if ground == nil {
+		return false
+	}
+	figure := d.resolveConcept(tokens[1-groundIdx])
+	if figure == nil || figure.ID == ground.ID {
+		return false
+	}
+	rel := d.locativeRelationTR()
+	if rel == nil {
+		return false
+	}
+	if err := d.store.Propose(rel.ID, momentID, figure.ID, ground.ID, comprehendWeight); err != nil {
+		fmt.Fprintf(d.out, "locative propose error: %v\n", err)
+		return false
+	}
+	d.markLocative(rel.ID)
+	d.noteFocus(figure)
+	d.recordThreadProp(rel.Content, figure.ID, ground.ID, figure.Content, ground.Content)
+	d.ws.excite(rel.ID, exciteSpeech)
+	d.ws.exciteRole(figure.ID, exciteSpeech, "agent")
+	d.ws.exciteRole(ground.ID, exciteSpeech, "patient")
+	return true
+}
+
+// locativeRelationTR resolves the relation a Turkish locative clause stands in:
+// the locative relation warm from a recent telling (so a Turkish place clause spoken
+// right after its English form joins that one relation), or a general Turkish
+// locative concept when none is warm. The general one renders back as the case, not
+// a word, so its English-side lemma is only ever read on a cross-tongue query.
+func (d *Daemon) locativeRelationTR() *memory.Fragment {
+	if warm := d.warmestRelation(); warm != nil && d.relationIsLocative(warm.ID) {
+		return warm
+	}
+	const tpl = "rel:tr:at"
+	if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
+		return c
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "at",
+		Template: tpl, Category: "relation", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "locative relation mint error: %v\n", err)
+		return nil
+	}
+	// Name it so a later query resolves it by content; resolveRelation keeps only a
+	// relation, so sharing the form with the Turkish horse "at" (a noun) is harmless.
+	d.nameRelationInTongue(c, "at", "tr")
+	return c
 }
 
 // planWhere answers "where is X" from the figure's locative relations: it walks

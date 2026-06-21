@@ -37,6 +37,12 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Comparative {
 		return d.storeComparison(frame, momentID)
 	}
+	// A Turkish locative clause marks place by the case and carries no verb
+	// ("yaprak ağaçta"), so the verb-based comprehension would mistake the cased
+	// ground for the predicate. Read it as a place before that path.
+	if frame.Lang == "tr" && d.comprehendLocativeTR(raw, momentID) {
+		return true
+	}
 	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
 	if !ok {
 		return false

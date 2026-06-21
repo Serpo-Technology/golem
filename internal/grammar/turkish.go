@@ -319,6 +319,40 @@ func (p *Params) Ablative(lang, w string) string {
 	return w + applySuffixTR(w, p.get().suffix("ablative", "DAn"))
 }
 
+// Locative forms a common noun's locative ("ağaç" -> "ağaçta"), the case Turkish
+// marks a place with where English uses a preposition. Identity outside Turkish.
+func (p *Params) Locative(lang, w string) string {
+	if lang != "tr" || w == "" {
+		return w
+	}
+	return w + applySuffixTR(w, p.get().suffix("locative", "DA"))
+}
+
+// stripLocativeTR removes a locative case ending (-da/-de/-ta/-te) from a Turkish
+// word, leaving a stem of at least two letters so a short noun is not torn apart.
+func stripLocativeTR(w string) string {
+	for _, suf := range []string{"da", "de", "ta", "te"} {
+		if strings.HasSuffix(w, suf) && len(w) > len(suf)+1 {
+			return w[:len(w)-len(suf)]
+		}
+	}
+	return w
+}
+
+// LocativeGround returns the noun a locative-cased Turkish word names ("ağaçta" ->
+// "ağaç") and whether the word carried the locative case. A locative clause has no
+// relation word, so this is how the case that stands in for the preposition is
+// read. Identity (false) outside Turkish or for an uncased word.
+func (p *Params) LocativeGround(lang, w string) (string, bool) {
+	if lang != "tr" {
+		return w, false
+	}
+	if stem := stripLocativeTR(w); stem != w {
+		return stem, true
+	}
+	return w, false
+}
+
 // trComparativeParts reads a Turkish comparison into its subject, the comparative
 // relation, and the standard. Turkish has no comparative WORD: "büyük" alone is the
 // positive "big", and the comparative "bigger" is the construction, the standard in

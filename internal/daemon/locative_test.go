@@ -3,7 +3,32 @@ package daemon
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"golem/internal/memory"
 )
+
+// groundBilingual grounds one concept named in both tongues, so a Turkish clause
+// and its English form resolve to the same referents.
+func groundBilingual(t *testing.T, d *Daemon, gloss, en, tr string) *memory.Fragment {
+	t.Helper()
+	now := time.Now()
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: gloss,
+		Template: gloss, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := d.store.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []struct{ w, lang string }{{en, "en"}, {tr, "tr"}} {
+		w, _, err := d.store.WordNode(p.w, p.lang, d.chem.Snapshot(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return c
+}
 
 // A locative relation is learned from its construction: "the leaf is on the tree"
 // lays the place and marks the relation locative, so "where is the leaf" reads the
@@ -53,5 +78,39 @@ func TestSpatialDoesNotBreakIsA(t *testing.T) {
 	say(t, d, "the leaf covered the tree")
 	if got := say(t, d, "where is the leaf").Say; !strings.Contains(got, "on the tree") {
 		t.Errorf("where should read only the locative place, not the covered fact: %q", got)
+	}
+}
+
+// A Turkish locative clause marks place by the case with no relation word, and its
+// English echo unifies onto the same relation, so "where" answers in either tongue.
+func TestTurkishSpatialLocative(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundBilingual(t, d, "leaf", "leaf", "yaprak")
+	groundBilingual(t, d, "tree", "tree", "ağaç")
+	say(t, d, "the leaf is on the tree")
+	sayLang(t, d, "tr", "yaprak ağaçta")
+
+	tr := sayLang(t, d, "tr", "yaprak nerede").Say
+	t.Logf("yaprak nerede -> %q", tr)
+	en := say(t, d, "where is the leaf").Say
+	t.Logf("where is the leaf -> %q", en)
+
+	if tr != "Yaprak ağaçta." {
+		t.Errorf("Turkish where should read the place in the locative case: %q", tr)
+	}
+	if !strings.Contains(en, "on the tree") {
+		t.Errorf("the unified relation should still answer in English: %q", en)
+	}
+}
+
+// Turkish locative comprehension works without an English priming: a bare place
+// clause mints a general Turkish locative and "nerede" reads it back.
+func TestTurkishSpatialStandalone(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundBilingual(t, d, "cat", "cat", "kedi")
+	groundBilingual(t, d, "box", "box", "kutu")
+	sayLang(t, d, "tr", "kedi kutuda")
+	if got := sayLang(t, d, "tr", "kedi nerede").Say; got != "Kedi kutuda." {
+		t.Errorf("a standalone Turkish locative should read back: %q", got)
 	}
 }
