@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"golem/internal/grammar"
+	"golem/internal/memory"
 )
 
 // epistemicOpener marks the auxiliaries that front a "do you know" question. The
@@ -80,23 +81,95 @@ func (d *Daemon) planEpistemicTR(raw string) (string, bool) {
 	if !trKnowParticle[tokens[len(tokens)-1]] || !trKnowVerb[tokens[len(tokens)-2]] {
 		return "", false
 	}
-	obj := strings.Join(tokens[:len(tokens)-2], " ")
-	if obj == "" {
+	obj := tokens[:len(tokens)-2]
+	if len(obj) == 0 {
 		return "Neyi?", true
+	}
+	// A factual nominalization as the object ("köpeğin kediyi kovaladığını") asks
+	// whether GOLEM holds that proposition, not whether it knows a noun in it.
+	if line, ok := d.knowsPropositionTR(obj); ok {
+		return line, true
 	}
 	// The object wears the accusative ("kediyi"); resolve it to the base concept
 	// through the case stems the Turkish morphology yields before grounding it.
+	phrase := strings.Join(obj, " ")
 	known := false
-	for _, base := range d.gram.CaseStems("tr", obj) {
+	for _, base := range d.gram.CaseStems("tr", phrase) {
 		if d.knowsThing(base) {
 			known = true
 			break
 		}
 	}
 	if known {
-		return "Evet, " + obj + " biliyorum.", true
+		return "Evet, " + phrase + " biliyorum.", true
 	}
-	return "Hayır, " + obj + " bilmiyorum.", true
+	return "Hayır, " + phrase + " bilmiyorum.", true
+}
+
+// trNominalVerb recovers a verb stem from a Turkish factual nominalization
+// ("kovaladığını" -> "kovala"): the -DIK nominalizer with a third-person possessive
+// and the accusative fused on, across vowel harmony and the voiced/voiceless start.
+// The nominalization is past-factual, the only embedded tense GOLEM is asked about.
+func trNominalVerb(w string) (string, bool) {
+	for _, suf := range []string{"dığını", "diğini", "duğunu", "düğünü", "tığını", "tiğini", "tuğunu", "tüğünü"} {
+		if strings.HasSuffix(w, suf) && len([]rune(w)) > len([]rune(suf))+1 {
+			return strings.TrimSuffix(w, suf), true
+		}
+	}
+	return "", false
+}
+
+// knowsPropositionTR answers the Turkish "<subject> <object> <nominalized verb>
+// biliyor musun": the genitive subject, accusative object, and -DIK verb name a
+// proposition, settled against the graph the way the English "that" clause is, and
+// the nominalization is echoed back. It returns false when the object is not such a
+// clause, leaving it to be read as a plain concept.
+func (d *Daemon) knowsPropositionTR(tokens []string) (string, bool) {
+	if len(tokens) < 3 {
+		return "", false
+	}
+	stem, ok := trNominalVerb(tokens[len(tokens)-1])
+	if !ok {
+		return "", false
+	}
+	rel := d.resolveRelation(stem)
+	if rel == nil {
+		return "", false
+	}
+	subject := d.resolveGenitiveTR(tokens[0])
+	patient := d.resolveAccusativeTR(strings.Join(tokens[1:len(tokens)-1], " "))
+	if subject == nil || patient == nil {
+		return "", false
+	}
+	echo := strings.Join(tokens, " ")
+	if belief, _, _ := d.assessProposition(subject, rel.Content, patient); belief == beliefObserved {
+		return "Evet, " + echo + " biliyorum.", true
+	}
+	return "Hayır, " + echo + " bilmiyorum.", true
+}
+
+// resolveGenitiveTR resolves a genitive-cased Turkish subject to its concept,
+// trying the stems the genitive yields ("köpeğin" -> "köpek").
+func (d *Daemon) resolveGenitiveTR(w string) *memory.Fragment {
+	if cands, ok := d.gram.GenitiveGround("tr", w); ok {
+		for _, c := range cands {
+			if r := d.resolveConcept(c); r != nil {
+				return r
+			}
+		}
+	}
+	return d.resolveConcept(w)
+}
+
+// resolveAccusativeTR resolves an accusative-cased Turkish object to its concept,
+// trying the case stems ("kediyi" -> "kedi").
+func (d *Daemon) resolveAccusativeTR(phrase string) *memory.Fragment {
+	for _, base := range d.gram.CaseStems("tr", phrase) {
+		if r := d.resolveConcept(base); r != nil {
+			return r
+		}
+	}
+	return d.resolveConcept(phrase)
 }
 
 // planEpistemicLA answers the Latin "scisne X", the enclitic -ne on the
@@ -106,6 +179,13 @@ func (d *Daemon) planEpistemicLA(raw string) (string, bool) {
 	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
 	if len(tokens) < 2 || tokens[0] != "scisne" {
 		return "", false
+	}
+	// "scisne quod <clause>": a proposition as the object of know, the clause read
+	// by the same case-driven comprehension a Latin statement is.
+	if rest := tokens[1:]; len(rest) >= 4 && rest[0] == "quod" {
+		if line, ok := d.knowsPropositionLA(strings.Join(rest[1:], " ")); ok {
+			return line, true
+		}
 	}
 	obj := strings.Join(tokens[1:], " ")
 	known := d.knowsThing(obj)
@@ -120,6 +200,26 @@ func (d *Daemon) planEpistemicLA(raw string) (string, bool) {
 		return "Ita, " + obj + " scio.", true
 	}
 	return "Minime, " + obj + " nescio.", true
+}
+
+// knowsPropositionLA answers the Latin "scisne quod <clause>": the clause is
+// comprehended by case the way a Latin statement is, and GOLEM knows the fact when
+// the graph holds it (beliefObserved), not when it merely guesses. It returns false
+// when the clause is not a full proposition over a known relation.
+func (d *Daemon) knowsPropositionLA(clause string) (string, bool) {
+	m, ok := d.gram.Comprehend("la", clause, d.resolveConcept, nil)
+	if !ok {
+		return "", false
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	rel := d.resolveRelation(m.Relation.Phrase)
+	if agent.Concept == nil || patient.Concept == nil || rel == nil {
+		return "", false
+	}
+	if belief, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); belief == beliefObserved {
+		return "Ita, scio quod " + clause + ".", true
+	}
+	return "Minime, nescio quod " + clause + ".", true
 }
 
 // knowsProposition answers whether GOLEM holds a proposition named as the object

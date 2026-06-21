@@ -141,6 +141,39 @@ func TestEpistemicPropositionHeld(t *testing.T) {
 	}
 }
 
+// The propositional know-question reads in Turkish too: the -DIK nominalization
+// "köpeğin kediyi kovaladığını" names the proposition, settled against the graph.
+func TestEpistemicPropositionTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "köpek", "tr")
+	groundNounLang(t, d, "kedi", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı") // GOLEM is told the fact
+
+	if got := sayLang(t, d, "tr", "köpeğin kediyi kovaladığını biliyor musun").Say; !strings.HasPrefix(got, "Evet") {
+		t.Errorf("a told proposition should be known in Turkish: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "kedinin köpeği kovaladığını biliyor musun").Say; !strings.HasPrefix(got, "Hayır") {
+		t.Errorf("an unheld proposition should not be known in Turkish: %q", got)
+	}
+}
+
+// And in Latin: "scisne quod <clause>" comprehends the clause by case and answers
+// from the same observed-vs-guessed bar.
+func TestEpistemicPropositionLatin(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundLatinPair(t, d, "girl", "girl", "puella")
+	groundLatinPair(t, d, "rose", "rose", "rosa")
+	say(t, d, "the girl loves the rose")
+	sayLang(t, d, "la", "puella rosam amat") // bind amat and tell the fact in Latin
+
+	if got := sayLang(t, d, "la", "scisne quod puella rosam amat").Say; !strings.HasPrefix(got, "Ita") {
+		t.Errorf("a told proposition should be known in Latin: %q", got)
+	}
+	if got := sayLang(t, d, "la", "scisne quod rosa puellam amat").Say; !strings.HasPrefix(got, "Minime") {
+		t.Errorf("an unheld proposition should not be known in Latin: %q", got)
+	}
+}
+
 // "What do you know" is the open self-report: it reads the whole graph and names
 // the kinds GOLEM has formed and the actions it has learned, where "what do you
 // know about X" reads a single concept.
