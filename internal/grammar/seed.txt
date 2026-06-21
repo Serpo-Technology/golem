@@ -62,6 +62,10 @@ fw:en:other	other	en	oth
 fw:en:please	please	en	fn
 fw:en:recall	recall	en	imp
 fw:en:remember	remember	en	imp
+fw:en:recollect	recollect	en	imp
+fw:en:reflect	reflect	en	imp
+fw:tr:hatırla	hatırla	tr	imp
+fw:tr:anımsa	anımsa	tr	imp
 fw:en:retry	retry	en	imp
 fw:en:run	run	en	imp
 fw:en:said	said	en	speech

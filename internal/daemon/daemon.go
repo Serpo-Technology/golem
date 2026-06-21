@@ -224,6 +224,11 @@ type Daemon struct {
 	selfID uint64
 	userID uint64
 	bothID uint64
+	// commandName maps a faculty concept to its canonical name, and
+	// commandTriggers the concepts each faculty concerns, so a reworded or
+	// translated imperative routes to the faculty its verb names or resembles.
+	commandName     map[uint64]string
+	commandTriggers map[string][]uint64
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -598,6 +603,7 @@ func (d *Daemon) ensureParticipants() {
 	d.userID = d.ensureConcept("deixis:user", "the speaker")
 	d.bothID = d.ensureConcept("deixis:both", "us")
 	d.ensureDeicticForms()
+	d.ensureCommands()
 }
 
 // ensureDeicticForms links each seeded deictic pronoun to the participant it
@@ -759,6 +765,16 @@ func (d *Daemon) ensureCategoryRefinements() error {
 func (d *Daemon) isSystemConcept(id uint64) bool {
 	if d.isParticipant(id) {
 		return true
+	}
+	if _, ok := d.commandName[id]; ok {
+		return true
+	}
+	for _, triggers := range d.commandTriggers {
+		for _, t := range triggers {
+			if t == id {
+				return true
+			}
+		}
 	}
 	_, ok := d.refinements[id]
 	return ok

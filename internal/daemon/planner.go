@@ -1468,15 +1468,12 @@ func (d *Daemon) stageProposal(dec Decision) *wire.DecisionInfo {
 func (d *Daemon) planCommand(frame grammar.Frame, raw string) (string, *wire.DecisionInfo) {
 	chem := d.chem.Snapshot()
 	switch frame.Action.Phrase {
-	case "recall":
-		return d.planRecall(frame, chem), nil
-	case "consolidate":
-		outcome, fruitful := d.actConsolidateNow()
-		d.finishAct(actConsolidate, "", outcome, fruitful, "asked")
-		return "I consolidated: " + outcome + ".", nil
-	case "introspect":
-		line := d.introspectLine()
-		d.finishAct(actIntrospect, "", line, d.lastThought != "", "asked")
+	case "recall", "consolidate", "introspect":
+		return d.runBuiltinCommand(frame.Action.Phrase, frame, chem), nil
+	}
+	// A reworded or translated imperative reaches the same faculty by resemblance,
+	// before the grounded-command path tries to read it as a taught command.
+	if line, handled := d.routeBuiltinCommand(frame, raw, chem); handled {
 		return line, nil
 	}
 	dec, err := d.decide(raw)

@@ -227,12 +227,31 @@ func TestDisconnectedSemanticNodesPrune(t *testing.T) {
 	if _, err := s.Sleep(0.10, 0.10); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.CountKind(memory.KindWord); n != 0 {
-		t.Fatalf("an edgeless word should prune, %d held", n)
+	// The innate faculty vocabulary re-seeds each boot and is not counted here, so
+	// the test asserts the orphan and the hollow concept specifically pruned.
+	if held(t, s, memory.KindWord, "orphan") {
+		t.Fatalf("an edgeless word should prune")
 	}
-	if n, _ := s.CountKind(memory.KindConcept); n != 0 {
-		t.Fatalf("a groundless concept should prune, %d held", n)
+	if held(t, s, memory.KindConcept, "hollow") {
+		t.Fatalf("a groundless concept should prune")
 	}
+}
+
+// held reports whether a node of a kind with the given content survives in the
+// store, so a prune test can check a specific node without depending on the count
+// of innate seeded vocabulary.
+func held(t *testing.T, s *memory.Store, kind, content string) bool {
+	t.Helper()
+	frags, err := s.Dump()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range frags {
+		if f.Kind == kind && f.Content == content {
+			return true
+		}
+	}
+	return false
 }
 
 // A grounded concept and a naming word survive the same sleep that kills
@@ -249,11 +268,13 @@ func TestConnectedSemanticNodesSurviveSleep(t *testing.T) {
 	if _, err := s.Sleep(0.10, 0.10); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.CountKind(memory.KindConcept); n != 1 {
-		t.Fatalf("a grounded concept must survive sleep, %d held", n)
+	// Counting non-system concepts skips the innate faculty vocabulary, so the one
+	// grown concept is what must remain.
+	if infos, err := d.conceptInfos(); err != nil || len(infos) != 1 {
+		t.Fatalf("a grounded concept must survive sleep, %d listed", len(infos))
 	}
-	if n, _ := s.CountKind(memory.KindWord); n != 1 {
-		t.Fatalf("a bonded word must survive sleep, %d held", n)
+	if !held(t, s, memory.KindWord, "disk") {
+		t.Fatalf("a bonded word must survive sleep")
 	}
 }
 
