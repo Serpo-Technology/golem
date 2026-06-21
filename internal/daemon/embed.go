@@ -45,6 +45,22 @@ func (d *Daemon) growEmbeddings() {
 	if len(concepts) < 2 {
 		return
 	}
+	// The kind embedding places concepts by their features and categories; the
+	// usage embedding by their relational company. They are separate spaces, so the
+	// usage placement runs even on a brain whose concepts carry no features at all,
+	// where the kind factorization has nothing to work on, which is exactly the case
+	// abstract vocabulary presents.
+	d.growKindEmbeddings(concepts)
+	d.embedConceptsUsage(concepts)
+}
+
+// growKindEmbeddings is the feature-and-category half: LSA over the concept-by-
+// trait matrix, factor it, keep its leading directions, and a concept's
+// coordinates are its row in the left factor. A category column is the likeness
+// feature overlap misses, so every animal shares one strong column. Under two
+// concepts or with no traits it writes nothing, leaving a featureless concept to
+// the usage space.
+func (d *Daemon) growKindEmbeddings(concepts []*memory.Fragment) {
 	ids := make([]uint64, len(concepts))
 	rowOf := make(map[uint64]int, len(concepts))
 	for i, c := range concepts {
@@ -125,6 +141,108 @@ func (d *Daemon) growEmbeddings() {
 		}
 	}
 	d.embedRelationsUsage(concepts, vecByID, k)
+}
+
+// usageSelf is the role under which a concept's own usage vector sits in the usage
+// space, beside the agent and patient centroids the relations keep there.
+const usageSelf = "self"
+
+// embedConceptsUsage places each concept in the usage space by its relational
+// company: which role of which relation it fills. It factors the concept-by-
+// (relation, role) matrix on its own, so a concept with no grounded features -- an
+// abstract word like "model" or "memory" that names no percept -- still gets
+// coordinates from how it is used, where the feature-and-category kind embedding
+// leaves it at the origin. Separate from that kind geometry by construction (it
+// writes only the usage space), so placing concepts by use cannot disturb the
+// feature placement the lion fix rests on. A concept that fills no role is left
+// unplaced.
+func (d *Daemon) embedConceptsUsage(concepts []*memory.Fragment) {
+	rowOf := make(map[uint64]int, len(concepts))
+	for i, c := range concepts {
+		rowOf[c.ID] = i
+	}
+	colOf := map[string]int{}
+	val := map[[2]int]float64{}
+	hasCompany := map[uint64]bool{}
+	put := func(conceptID uint64, trait string) {
+		r, ok := rowOf[conceptID]
+		if !ok {
+			return
+		}
+		c, ok := colOf[trait]
+		if !ok {
+			c = len(colOf)
+			colOf[trait] = c
+		}
+		val[[2]int{r, c}]++
+		hasCompany[conceptID] = true
+	}
+	for _, c := range concepts {
+		if c.Category != "relation" {
+			continue
+		}
+		rel := strconv.FormatUint(c.ID, 10)
+		agents, patients := d.relationRoleFillers(c.ID)
+		for _, a := range agents {
+			put(a, "a:"+rel)
+		}
+		for _, p := range patients {
+			put(p, "p:"+rel)
+		}
+	}
+	if len(colOf) == 0 {
+		return
+	}
+	nC, nF := len(concepts), len(colOf)
+	data := make([]float64, nC*nF)
+	for rc, v := range val {
+		data[rc[0]*nF+rc[1]] = math.Log1p(v) // damp a loud co-occurrence
+	}
+	var svd mat.SVD
+	if !svd.Factorize(mat.NewDense(nC, nF, data), mat.SVDThinU) {
+		fmt.Fprintf(d.out, "usage embedding error: factorization did not converge\n")
+		return
+	}
+	var u mat.Dense
+	svd.UTo(&u)
+	sv := svd.Values(nil)
+	k := embedDim
+	if len(sv) < k {
+		k = len(sv)
+	}
+	if k == 0 {
+		return
+	}
+	for i, c := range concepts {
+		if !hasCompany[c.ID] {
+			continue // no relational role filled; nothing to place by
+		}
+		vec := make([]float32, k)
+		for j := 0; j < k; j++ {
+			vec[j] = float32(u.At(i, j) * math.Sqrt(sv[j]))
+		}
+		if err := d.store.SetUsageVector(c.ID, usageSelf, vec); err != nil {
+			fmt.Fprintf(d.out, "usage embedding error: %v\n", err)
+			return
+		}
+	}
+}
+
+// conceptUsageResemblance is the cosine of two concepts' usage vectors, how alike
+// the relational company they keep is. It is the abstract-word counterpart to
+// feature resemblance: two concepts used the same way, filling the same role of the
+// same relations, read as near even with no features in common. Zero when either
+// has not been placed in the usage space.
+func (d *Daemon) conceptUsageResemblance(a, b uint64) float64 {
+	if a == b {
+		return 1
+	}
+	va, oka := d.store.UsageVector(a, usageSelf)
+	vb, okb := d.store.UsageVector(b, usageSelf)
+	if !oka || !okb {
+		return 0
+	}
+	return memory.Cosine(va, vb)
 }
 
 // embedRelationsUsage places each relation in the usage space by the company it
