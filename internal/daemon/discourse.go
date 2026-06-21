@@ -513,6 +513,9 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 			}
 			continue
 		}
+		if d.factIsComparative(k.rel) {
+			continue // a comparison answers through its own query, not as a verb here
+		}
 		// The focus plays k.role and the co-arguments fill the other. A participant
 		// in the patient role takes its object case ("the dog chased me"), so the
 		// patient-side filler is cased before the clause is built.

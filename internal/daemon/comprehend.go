@@ -992,6 +992,14 @@ func degreeBucket(gap int) string {
 
 // oppositeRelations returns the contents of the relations discovered to be converse
 // poles of the given one, so a comparison query can walk them reversed.
+// factIsComparative reports whether a gathered fact's relation is a gradable
+// comparison, which has an opposite pole and speaks as "X is bigger than Y"
+// through its own query, not as a plain verb ("X biggered Y") in a fact list.
+func (d *Daemon) factIsComparative(relContent string) bool {
+	rel := d.resolveRelation(relContent)
+	return rel != nil && len(d.oppositeRelations(rel.ID)) > 0
+}
+
 func (d *Daemon) oppositeRelations(relID uint64) []string {
 	edges, err := d.store.LinksFromRel([]uint64{relID}, memory.RelOpposite)
 	if err != nil || len(edges) == 0 {
