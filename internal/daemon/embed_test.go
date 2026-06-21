@@ -23,6 +23,24 @@ func TestStatementMintsUnknownNouns(t *testing.T) {
 	}
 }
 
+// A minted abstract concept survives consolidation. It grounds in no percept, so
+// the groundless-concept prune would take it, but it fills a role in a proposition,
+// which is its grounding, so it and the proposition over it stand through a night.
+func TestMintedConceptSurvivesConsolidation(t *testing.T) {
+	d, s := testDaemon(t)
+	say(t, d, "a model predicts a word") // mints model, predict, word
+
+	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
+		t.Fatal(err)
+	}
+	if d.resolveConcept("model") == nil {
+		t.Error("a minted concept that fills a role should survive consolidation")
+	}
+	if got := say(t, d, "did a model predict a word").Say; !strings.Contains(strings.ToLower(got), "yes") {
+		t.Errorf("the proposition over the minted nouns should survive the night: %q", got)
+	}
+}
+
 // Usage resemblance carries an inference between abstract words: the model and the
 // network are used alike (both learn, both read), so when only the model is said to
 // predict an output, the network's predicting follows as a hedged guess. Neither

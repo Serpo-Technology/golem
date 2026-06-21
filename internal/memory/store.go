@@ -279,15 +279,18 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 		return int(pruned), err
 	}
 	// A word that no edge touches names nothing and recalls nothing; a
-	// concept that grounds nothing stands for nothing. Both fade out of
-	// the graph, and the edges that pointed at them follow.
+	// concept that neither grounds in a percept nor stands in a proposition
+	// stands for nothing. An abstract word names no percept but is held by the
+	// company it keeps, so a concept that fills a role survives with no grounding.
+	// What stands for nothing fades, and the edges that pointed at it follow.
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
 		AND id NOT IN (SELECT from_id FROM links)
 		AND id NOT IN (SELECT to_id FROM links)`, KindWord); err != nil {
 		return int(pruned), err
 	}
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
-		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)`, KindConcept, RelGrounds); err != nil {
+		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
+			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)`, KindConcept, RelGrounds, RelAgent, RelPatient); err != nil {
 		return int(pruned), err
 	}
 	// A feature no concept carries describes nothing; it follows its
