@@ -263,45 +263,70 @@ func (d *Daemon) knowsProposition(clause string) (string, bool) {
 // concept; the bare question reads the whole graph. The "about X" form is handled
 // before this, so only the open question reaches here.
 func (d *Daemon) planKnowledgeSummary(raw string) (string, bool) {
-	if strings.ToLower(strings.Trim(strings.TrimSpace(raw), " ?.!")) != "what do you know" {
-		return "", false
+	switch strings.ToLower(strings.Trim(strings.TrimSpace(raw), " ?.!")) {
+	case "what do you know":
+		return d.knowledgeSummary("en"), true
+	case "ne biliyorsun", "neler biliyorsun":
+		return d.knowledgeSummary("tr"), true
+	case "quid scis":
+		return d.knowledgeSummary("la"), true
 	}
-	return d.knowledgeSummary(), true
+	return "", false
 }
 
 // knowledgeSummary reads the concept layer into a short self-report: the kinds are
 // the abstractions GOLEM has formed, the actions its verbal relations. System
 // concepts (the participants, the faculties) are left out, and gradable and
 // placing relations are kept out of the action list so it reads as things done.
-func (d *Daemon) knowledgeSummary() string {
+func (d *Daemon) knowledgeSummary(lang string) string {
 	concepts, err := d.store.Concepts()
 	if err != nil {
-		return "I have not learned much yet."
+		return notLearnedMuch(lang)
 	}
+	prefix := "abs:" + lang + ":"
 	var kinds, actions []string
 	for _, c := range concepts {
 		if d.isSystemConcept(c.ID) {
 			continue
 		}
 		switch {
-		case strings.HasPrefix(c.Template, "abs:en:"):
-			// A kind to report is an English superordinate: an abstraction over
+		case strings.HasPrefix(c.Template, prefix):
+			// A kind to report is a superordinate in this tongue: an abstraction over
 			// several members whose own word heads none of them ("animal" over the
 			// dog and the cat, where a basic-level shadow's word heads its own
 			// percept). The template lemma names it, free of the inherited-member
-			// gloss that can otherwise pollute a category's spoken name; the Turkish
-			// twin is left out so the English report names each kind once.
+			// gloss that can otherwise pollute a category's spoken name; only the
+			// tongue asked is read, so each kind is named once in its own language.
+			// A reported kind generalizes over several members (three or more), which
+			// keeps a real superordinate ("hayvan" over the animals) and leaves out a
+			// two-member collision an abstraction sometimes forms by accident.
 			lemma, _ := abstractionLemma(c.Template)
-			if members := d.categoryMembers(c.ID); len(members) > 0 && !d.headsCorePercept(lemma, members) {
+			if members := d.categoryMembers(c.ID); distinctIDs(members) >= 3 && !d.headsCorePercept(lemma, members) {
 				kinds = append(kinds, lemma)
 			}
 		case c.Category == "relation" && d.verbalRelation(c.ID):
-			actions = append(actions, d.conceptName(c.ID, c.Content, "en"))
+			actions = append(actions, d.relationName(c.Content, lang))
 		}
 	}
-	kinds = capWords(kinds, 5)
-	actions = capWords(actions, 5)
+	return summaryLine(lang, capWords(kinds, 5), capWords(actions, 5))
+}
 
+// summaryLine phrases the kinds and actions GOLEM holds in each tongue. English
+// names both, the kinds and how the things in them act; Turkish and Latin name the
+// kinds, the verb-list phrasing their grammars want left for later.
+func summaryLine(lang string, kinds, actions []string) string {
+	switch lang {
+	case "tr":
+		if len(kinds) == 0 {
+			return notLearnedMuch("tr")
+		}
+		return upperFirst(joinAndLang("tr", kinds) + " gibi türleri biliyorum.")
+	case "la":
+		if len(kinds) == 0 {
+			return notLearnedMuch("la")
+		}
+		return upperFirst(joinAndLang("la", kinds) + " novi.")
+	}
 	var parts []string
 	if len(kinds) > 0 {
 		parts = append(parts, "about kinds like "+grammar.JoinAnd(kinds))
@@ -310,9 +335,51 @@ func (d *Daemon) knowledgeSummary() string {
 		parts = append(parts, "how they "+grammar.JoinAnd(actions))
 	}
 	if len(parts) == 0 {
-		return "I have not learned much yet."
+		return notLearnedMuch("en")
 	}
 	return "I know " + strings.Join(parts, ", and ") + "."
+}
+
+// notLearnedMuch is the honest gap a thin brain gives, spoken in the asked tongue.
+func notLearnedMuch(lang string) string {
+	switch lang {
+	case "tr":
+		return "Henüz pek bir şey bilmiyorum."
+	case "la":
+		return "Parum novi."
+	}
+	return "I have not learned much yet."
+}
+
+// joinAndLang coordinates a list with the tongue's conjunction, "and", "ve", "et".
+func joinAndLang(lang string, items []string) string {
+	and := "and"
+	switch lang {
+	case "tr":
+		and = "ve"
+	case "la":
+		and = "et"
+	}
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	case 2:
+		return items[0] + " " + and + " " + items[1]
+	default:
+		return strings.Join(items[:len(items)-1], ", ") + " " + and + " " + items[len(items)-1]
+	}
+}
+
+// distinctIDs counts the unique ids in a slice, so a category is weighed by how
+// many different things it generalizes, not how many grounding edges it carries.
+func distinctIDs(ids []uint64) int {
+	seen := make(map[uint64]bool, len(ids))
+	for _, id := range ids {
+		seen[id] = true
+	}
+	return len(seen)
 }
 
 // capWords sorts a set of names, drops duplicates, and keeps at most n, so a

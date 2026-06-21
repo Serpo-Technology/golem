@@ -577,13 +577,32 @@ func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
 // then the propositions it stands in (the thread winning over the entrenched
 // graph), or a hedged guess from a near neighbour when nothing is observed. It is
 // the renderer behind "tell me about X" and a recall of the subject in mind.
+// sortalWord names the bare kind a definition predicates, "X is a ___", in the
+// asked tongue: a thing or an action, "bir şey"/"bir eylem" in Turkish, "res"/
+// "actio" in Latin, so a description does not leak the English sortal.
+func sortalWord(lang, kind string) string {
+	switch lang {
+	case "tr":
+		if kind == "action" {
+			return "bir eylem"
+		}
+		return "bir şey"
+	case "la":
+		if kind == "action" {
+			return "actio"
+		}
+		return "res"
+	}
+	return grammar.Indefinite(kind)
+}
+
 func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) string {
 	chem := d.chem.Snapshot()
 	kind := "thing"
 	if focus.Category == "verb" || focus.Category == "relation" {
 		kind = "action"
 	}
-	parts := []string{d.definitionClause(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), grammar.Indefinite(kind), chem)}
+	parts := []string{d.definitionClause(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), sortalWord(frame.Lang, kind), chem)}
 	if facts := d.gatherFacts(focus, "", ""); len(facts) > 0 {
 		if line, ok := d.renderFacts(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), facts, true, true); ok {
 			parts = append(parts, line)

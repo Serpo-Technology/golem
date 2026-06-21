@@ -181,10 +181,11 @@ func TestKnowledgeSummaryReportsKindsAndActions(t *testing.T) {
 	d, _ := testDaemon(t)
 	dog := groundNoun(t, d, "dog")
 	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
 	say(t, d, "a dog chased a cat") // mints the chase relation
 
-	// A true superordinate GOLEM has formed: a kind generalizing over two members,
-	// where a basic noun's own abstraction grounds in just its one percept.
+	// A true superordinate GOLEM has formed: a kind generalizing over several
+	// members, where a basic noun's own abstraction grounds in just its one percept.
 	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
 		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
 	if _, err := d.store.Encode(animal); err != nil {
@@ -197,7 +198,7 @@ func TestKnowledgeSummaryReportsKindsAndActions(t *testing.T) {
 	if err := d.store.SetLinkRel(w.ID, animal.ID, memory.RelNames, 0.9); err != nil {
 		t.Fatal(err)
 	}
-	for _, m := range []*memory.Fragment{dog, cat} {
+	for _, m := range []*memory.Fragment{dog, cat, mouse} {
 		if err := d.store.SetLinkRel(animal.ID, m.ID, memory.RelGrounds, 0.8); err != nil {
 			t.Fatal(err)
 		}
@@ -213,6 +214,61 @@ func TestKnowledgeSummaryReportsKindsAndActions(t *testing.T) {
 	// The open form must not be read as a description of GOLEM itself.
 	if strings.Contains(strings.ToLower(got), "you names") || strings.Contains(got, "GOLEM") {
 		t.Errorf("the open question should summarize knowledge, not describe the self: %q", got)
+	}
+}
+
+// The about-form and the summary reach parity too. Turkish "X hakkında ne
+// biliyorsun" describes the concept, and "ne biliyorsun" reports the kinds GOLEM
+// has formed, both phrased in Turkish.
+func TestKnowledgeAboutAndSummaryTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	kedi := groundNounLang(t, d, "kedi", "tr")
+	kopek := groundNounLang(t, d, "köpek", "tr")
+	fare := groundNounLang(t, d, "fare", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+
+	if got := sayLang(t, d, "tr", "köpek hakkında ne biliyorsun").Say; !strings.Contains(strings.ToLower(got), "köpek") {
+		t.Errorf("the Turkish about-form should describe the concept: %q", got)
+	}
+
+	// A Turkish superordinate GOLEM has formed: a kind the summary names.
+	hayvan := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "hayvan",
+		Template: "abs:tr:hayvan", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(hayvan); err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := d.store.WordNode("hayvan", "tr", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.store.SetLinkRel(w.ID, hayvan.ID, memory.RelNames, 0.9); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []*memory.Fragment{kedi, kopek, fare} {
+		if err := d.store.SetLinkRel(hayvan.ID, m.ID, memory.RelGrounds, 0.8); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := sayLang(t, d, "tr", "ne biliyorsun").Say
+	if !strings.Contains(strings.ToLower(got), "hayvan") || !strings.Contains(got, "biliyorum") {
+		t.Errorf("the Turkish summary should name the kind in Turkish: %q", got)
+	}
+}
+
+// Latin reaches the same surfaces: "quid de X scis" describes X, and "quid scis"
+// summarizes, the empty summary spoken as the Latin gap.
+func TestKnowledgeAboutAndSummaryLatin(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundLatinPair(t, d, "girl", "girl", "puella")
+	groundLatinPair(t, d, "rose", "rose", "rosa")
+	say(t, d, "the girl loves the rose")
+	sayLang(t, d, "la", "puella rosam amat")
+
+	if got := sayLang(t, d, "la", "quid de puella scis").Say; got == "" {
+		t.Error("the Latin about-form should describe the concept")
+	}
+	if got := sayLang(t, d, "la", "quid scis").Say; got != "Parum novi." {
+		t.Errorf("an empty Latin summary should be the Latin gap: %q", got)
 	}
 }
 

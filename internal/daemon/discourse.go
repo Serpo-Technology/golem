@@ -783,6 +783,23 @@ func describeReferent(raw string) (string, bool) {
 			return rest, true
 		}
 	}
+	// Turkish: "X hakkında ne biliyorsun" (what do you know about X), the topic
+	// before the postposition rather than after a lead.
+	for _, tail := range []string{" hakkında ne biliyorsun", " hakkında ne bilirsin"} {
+		if rest, ok := strings.CutSuffix(s, tail); ok {
+			if rest = strings.TrimSpace(rest); rest != "" {
+				return rest, true
+			}
+		}
+	}
+	// Latin: "quid de X scis" (what do you know about X).
+	if mid, ok := strings.CutPrefix(s, "quid de "); ok {
+		if x, ok := strings.CutSuffix(mid, " scis"); ok {
+			if x = strings.TrimSpace(x); x != "" {
+				return x, true
+			}
+		}
+	}
 	return "", false
 }
 
