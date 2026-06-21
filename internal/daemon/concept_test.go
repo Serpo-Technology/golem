@@ -500,3 +500,114 @@ func TestMintKeepsNounWithVerbLikeEnding(t *testing.T) {
 		t.Fatalf("a noun ending in a verb-like suffix should mint whole, got %q", got)
 	}
 }
+
+// A percept-less concept gathers neither stray names nor duplicate nodes from the
+// company it keeps, even in a brain busy with featured concepts. Abstract words used
+// alike -- a model and an llm that both predict and learn -- co-occur heavily, and
+// against a backdrop of featured concepts the naming recount once let each drift onto
+// the other while growAbstractions minted a duplicate beside each. With no percept to
+// tell naming from company, a percept-less concept is named only by the words that
+// introduce or translate it, so the abstract vocabulary stays one clean concept per
+// word across the nights, while the featured concepts keep their own naming.
+func TestPerceptlessConceptStaysCleanlyNamed(t *testing.T) {
+	d, s := testDaemon(t)
+	feat := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	// A backdrop of featured, named concepts: the scale that surfaced the drift.
+	furry, legs, wild := feat("furry"), feat("four-legs"), feat("wild")
+	for _, a := range []struct {
+		name string
+		fs   []*memory.Fragment
+	}{{"dog", []*memory.Fragment{furry, legs}}, {"cat", []*memory.Fragment{furry, legs}}, {"wolf", []*memory.Fragment{furry, legs, wild}}} {
+		c := groundNoun(t, d, a.name)
+		for _, f := range a.fs {
+			s.SetLinkRel(c.ID, f.ID, memory.RelFeature, 1)
+		}
+		groundOccurrences(t, d, c, 3) // grounded in percepts, so they persist as the real animals do
+	}
+	namesOf := func(word string) []string {
+		c := d.resolveConcept(word)
+		if c == nil {
+			return nil
+		}
+		links, _ := s.LinksToRel([]uint64{c.ID}, memory.RelNames)
+		var out []string
+		for _, e := range links {
+			if fr, _ := s.FragmentsByIDs([]uint64{e.From}); len(fr) == 1 {
+				out = append(out, fr[0].Content)
+			}
+		}
+		return out
+	}
+	countNamed := func(name string) int {
+		cs, _ := s.Concepts()
+		n := 0
+		for _, c := range cs {
+			if c.Content == name && c.Category == "noun" {
+				n++
+			}
+		}
+		return n
+	}
+	for i := 0; i < 6; i++ {
+		say(t, d, "a model predicts a word")
+		say(t, d, "an llm predicts a word")
+		say(t, d, "a model learns a rule")
+		say(t, d, "an llm learns a pattern")
+		say(t, d, "a model reads a text")
+		say(t, d, "an llm reads a sentence")
+		d.sleepCycle()
+	}
+	if n := namesOf("model"); len(n) != 1 || n[0] != "model" {
+		t.Errorf("a percept-less concept should be named only by its own word, got %v", n)
+	}
+	for _, w := range []string{"model", "llm", "rule", "pattern", "word", "text"} {
+		if c := countNamed(w); c != 1 {
+			t.Errorf("%q should be one concept after consolidation, got %d", w, c)
+		}
+	}
+	// The featured backdrop keeps its own names intact (the guards never touched it).
+	if n := namesOf("dog"); len(n) != 1 || n[0] != "dog" {
+		t.Errorf("a featured concept should keep its own name, got %v", n)
+	}
+}
+
+// perceptlessSet picks out the concepts that ground in nothing -- the abstract words
+// the naming and abstraction guards scope themselves to -- and leaves alone every
+// concept with a percept beneath it or a feature of its own. This is the line the
+// guards draw, so the abstract vocabulary is held to its direct names while the
+// perceived world keeps cross-situational naming untouched.
+func TestPerceptlessSet(t *testing.T) {
+	d, s := testDaemon(t)
+	say(t, d, "a model predicts a word") // model: an abstract word, grounds in nothing
+	model := d.resolveConcept("model")
+	dog := groundNoun(t, d, "dog") // featured concept
+	furry := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "furry",
+		Template: "furry", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(furry); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, furry.ID, memory.RelFeature, 1)
+	cat := groundNoun(t, d, "cat") // perceptually grounded concept
+	groundOccurrences(t, d, cat, 3)
+
+	set := d.perceptlessSet([]uint64{model.ID, dog.ID, cat.ID})
+	if !set[model.ID] {
+		t.Error("an abstract word grounded only in the propositions that use it is percept-less")
+	}
+	if set[dog.ID] {
+		t.Error("a featured concept is not percept-less")
+	}
+	if set[cat.ID] {
+		t.Error("a perceptually grounded concept is not percept-less")
+	}
+	if d.isPerceptless(dog.ID) || !d.isPerceptless(model.ID) {
+		t.Error("isPerceptless should agree with the set on a single concept")
+	}
+}

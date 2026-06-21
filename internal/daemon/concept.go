@@ -183,6 +183,13 @@ func (d *Daemon) growAbstractions() (born int) {
 			}
 			continue
 		}
+		// A word that already names a percept-less concept abstracts nothing: that
+		// concept, grounded only in the propositions that use it, IS the abstraction,
+		// so minting an abs: node beside it would only duplicate it. Skip, and a
+		// duplicate already grown stops refreshing and decays.
+		if c := d.resolveConcept(w.Content); c != nil && d.isPerceptless(c.ID) {
+			continue
+		}
 		switch {
 		case c == nil:
 			if !healthy || born >= absPerNight {
@@ -445,6 +452,7 @@ func (d *Daemon) growConcepts() (born, named int) {
 		}
 	}
 	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
+	perceptless := d.perceptlessSet(conceptIDs)
 	for _, p := range pairs {
 		// Cross-situational reliability: the share of the word's company
 		// that lands on this concept, blended with the share of the
@@ -467,6 +475,15 @@ func (d *Daemon) growConcepts() (born, named int) {
 		if verbWord[p.Word] && !relConcept[p.Concept] {
 			w = 0
 		}
+		// A percept-less concept gains no NEW name from cross-situational company.
+		// It is named when a telling introduces it and when a word binds to it
+		// across tongues, both direct namings; with no percept to tell naming from
+		// company, a word merely warm beside it must not become its name too. Its
+		// standing names still refresh (down as well as up), so two abstract words
+		// used alike stay two concepts rather than drifting onto each other.
+		if perceptless[p.Concept] && p.Existing == 0 {
+			continue
+		}
 		if p.Existing == 0 && w < namesWriteFloor {
 			continue
 		}
@@ -480,6 +497,42 @@ func (d *Daemon) growConcepts() (born, named int) {
 		}
 	}
 	return born, named
+}
+
+// perceptlessSet returns those of the given concepts that ground in nothing: no
+// percept and no member beneath them (no grounds edge) and no feature. These are
+// the abstract words that name no thing GOLEM can perceive, grounded only in the
+// propositions that use them, so the percept that tells naming from company and a
+// category from its members is absent for them and the consolidation guards that
+// lean on it must scope themselves here.
+func (d *Daemon) perceptlessSet(ids []uint64) map[uint64]bool {
+	out := map[uint64]bool{}
+	if len(ids) == 0 {
+		return out
+	}
+	grounded := map[uint64]bool{}
+	if g, err := d.store.LinksFromRel(ids, memory.RelGrounds); err == nil {
+		for _, e := range g {
+			grounded[e.From] = true
+		}
+	}
+	if f, err := d.store.LinksFromRel(ids, memory.RelFeature); err == nil {
+		for _, e := range f {
+			grounded[e.From] = true
+		}
+	}
+	for _, id := range ids {
+		if !grounded[id] {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// isPerceptless reports whether a single concept grounds in nothing, the abstract
+// word's mark that several consolidation guards scope themselves to.
+func (d *Daemon) isPerceptless(id uint64) bool {
+	return d.perceptlessSet([]uint64{id})[id]
 }
 
 // Attention-grounding: a told word binds to what is attended, not only to
