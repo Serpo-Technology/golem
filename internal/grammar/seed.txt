@@ -144,6 +144,14 @@ fw:tr:beni	beni	tr	deixis
 fw:tr:bir	bir	tr	det
 fw:tr:biz	biz	tr	deixis
 fw:tr:bizi	bizi	tr	deixis
+fw:tr:bil	bil	tr	fn
+fw:tr:bilir	bilir	tr	fn
+fw:tr:bilirsin	bilirsin	tr	fn
+fw:tr:biliyor	biliyor	tr	fn
+fw:tr:biliyorsun	biliyorsun	tr	fn
+fw:la:scis	scis	la	fn
+fw:la:scisne	scisne	la	fn
+fw:la:scio	scio	la	fn
 fw:tr:defa	defa	tr	fn
 fw:tr:değil	değil	tr	neg
 fw:tr:genellikle	genellikle	tr	adv
