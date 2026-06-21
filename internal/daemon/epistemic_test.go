@@ -155,6 +155,15 @@ func TestEpistemicPropositionTurkish(t *testing.T) {
 	if got := sayLang(t, d, "tr", "kedinin köpeği kovaladığını biliyor musun").Say; !strings.HasPrefix(got, "Hayır") {
 		t.Errorf("an unheld proposition should not be known in Turkish: %q", got)
 	}
+
+	// An n-final subject ("aslan" -> "aslanın") must not over-strip the genitive to
+	// "asla"; the proposition still resolves and answers.
+	groundNounLang(t, d, "aslan", "tr")
+	groundNounLang(t, d, "fare", "tr")
+	sayLang(t, d, "tr", "aslan fareyi kovaladı")
+	if got := sayLang(t, d, "tr", "aslanın fareyi kovaladığını biliyor musun").Say; !strings.HasPrefix(got, "Evet") {
+		t.Errorf("an n-final subject's genitive should resolve: %q", got)
+	}
 }
 
 // And in Latin: "scisne quod <clause>" comprehends the clause by case and answers

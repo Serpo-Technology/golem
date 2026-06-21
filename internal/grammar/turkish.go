@@ -414,11 +414,20 @@ func (p *Params) GenitiveGround(lang, w string) ([]string, bool) {
 	if lang != "tr" {
 		return nil, false
 	}
-	stem := stripGenitiveTR(w)
-	if stem == w {
+	// The genitive is -In after a consonant ("aslan" -> "aslanın") and -nIn after a
+	// vowel ("kapı" -> "kapının"); a stem ending in n matches the longer -nIn by
+	// surface alone, so every stripping that fits is offered, the -nIn forms first,
+	// and the caller keeps the one that names a thing ("asla" fails, "aslan" holds).
+	var out []string
+	for _, suf := range []string{"nın", "nin", "nun", "nün", "ın", "in", "un", "ün"} {
+		if strings.HasSuffix(w, suf) && len(w) > len(suf)+1 {
+			out = append(out, caseCandidates(w[:len(w)-len(suf)])...)
+		}
+	}
+	if len(out) == 0 {
 		return nil, false
 	}
-	return caseCandidates(stem), true
+	return out, true
 }
 
 // PossessiveGround lists the nouns a possessive-cased word might name ("yaprağı" ->
