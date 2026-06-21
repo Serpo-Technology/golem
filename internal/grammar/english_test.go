@@ -30,6 +30,8 @@ func TestParseReadsForce(t *testing.T) {
 		{"what usually happens after make test", ForceQuestion},
 		{"run the tests", ForceCommand},
 		{"do it again", ForceCommand},
+		{"do you want the rose", ForceQuestion},
+		{"do i want the rose", ForceQuestion},
 		{"the disk filled up overnight", ForceStatement},
 		{"make deploy follows make test?", ForceQuestion},
 	}

@@ -209,6 +209,19 @@ func (p *Params) category(lang, form string) string {
 	return cat
 }
 
+// doSupportQuestion reports whether the clause opens with do-support inversion:
+// the auxiliary "do" before a deictic subject ("do you want the rose"), which
+// forms a yes/no question rather than the command the bare imperative "do" opens
+// ("do the dishes"). Only "do" is ambiguous this way; "does" and "did" are filler
+// the polar path reads directly. It needs at least an auxiliary, a subject, and a
+// verb, so a bare "do you" is not taken for one.
+func (p *Params) doSupportQuestion(lang string, tokens []string) bool {
+	if len(tokens) < 3 || strings.ToLower(tokens[0]) != "do" {
+		return false
+	}
+	return p.category(lang, tokens[1]) == catDeixis
+}
+
 // relType reads a temporal relator's direction. English relators name their
 // own ("after", "before"); a language whose relator is a different form
 // carries the direction in the seed, "rel:after" for Turkish "sonra", so the

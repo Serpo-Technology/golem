@@ -128,11 +128,18 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	// An imperative opener commands; the wh-opener is read inline below, so a
 	// verb-final language that forms its interrogative mid-clause reads alike.
 	if p.category(lang, tokens[0]) == catImp {
-		f.Force = ForceCommand
-		// A faculty verb opens an intent over GOLEM's own acts; the generic
-		// openers (do, run) leave the whole utterance as the cue.
-		if intent, ok := imperativeIntents[tokens[0]]; ok {
-			f.Action = Term{Phrase: intent}
+		if p.doSupportQuestion(lang, tokens) {
+			// "do" also fronts a yes/no question by do-support: before a subject it
+			// inverts for a question ("do you want the rose"), where the bare
+			// imperative ("do the dishes") commands. The polar path reads the clause.
+			f.Force = ForceQuestion
+		} else {
+			f.Force = ForceCommand
+			// A faculty verb opens an intent over GOLEM's own acts; the generic
+			// openers (do, run) leave the whole utterance as the cue.
+			if intent, ok := imperativeIntents[tokens[0]]; ok {
+				f.Action = Term{Phrase: intent}
+			}
 		}
 	}
 	// A verb-medial clause that opens with a copula is a yes/no question by

@@ -710,9 +710,22 @@ func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
 		return strings.Join(tokens[1:], " "), true, true
 	case "does":
 		return strings.Join(tokens[1:], " "), false, true
+	case "do":
+		// "do" is also the imperative opener ("do the dishes"); it forms a yes/no
+		// question only as do-support, before a subject pronoun ("do you want the
+		// rose"). Stripped, the clause reads as the proposition to check.
+		if subjectPronoun[strings.ToLower(tokens[1])] {
+			return strings.Join(tokens[1:], " "), false, true
+		}
 	}
 	return "", false, false
 }
+
+// subjectPronoun is the closed set of deictic pronouns that stand as a clause's
+// subject, the company that tells do-support ("do you want X", a question) from
+// the bare imperative "do". The third-person pronouns are left out: they ground in
+// no participant here, and "do it" is an imperative, not a question.
+var subjectPronoun = map[string]bool{"i": true, "you": true, "we": true}
 
 // describeReferent reads the focus of an open request to say what is known
 // about something, the noun in "tell me about the dog" or "describe a cat",
