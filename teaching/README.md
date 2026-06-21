@@ -13,6 +13,23 @@ daemon.
 The image carries the curriculum at `/opt/curriculum.zsh`. Watch progress with
 `docker exec golem-brain golem concepts` and `docker exec golem-brain golem status`.
 
+## Building on a snapshot (cumulative milestones)
+
+Each milestone builds on the last. Restore the latest snapshot into the
+container before teaching, so prior knowledge is never lost.
+
+    docker build -t golem:latest .
+    docker run -d --name golem-brain \
+      -v "$(pwd)/teaching/clean-room.json:/root/.golem/config.json:ro" golem:latest
+    CONTAINER=golem-brain ./teaching/snapshot.sh restore ~/.golem/snapshots/<latest>.db
+    docker cp teaching/mind-verbs.zsh golem-brain:/opt/
+    docker exec golem-brain env GOLEM=golem GAP=1 BLOCKGAP=6 zsh /opt/mind-verbs.zsh
+    CONTAINER=golem-brain ./teaching/snapshot.sh save <label>
+
+`snapshot.sh restore` copies a snapshot into the container's `memory.db`, and
+`snapshot.sh save` checkpoints it back out to `~/.golem/snapshots`. Teaching
+into a fresh container would start from an empty brain and lose everything.
+
 ## Against an existing daemon
 
     GOLEM=golem GAP=15 zsh teaching/curriculum.zsh
@@ -30,3 +47,8 @@ The image carries the curriculum at `/opt/curriculum.zsh`. Watch progress with
   floor, so nothing would encode. A warmed predictor over the normal config
   does not need this. Restore the default config for normal operation once a
   brain is taught.
+- `mind-verbs.zsh` the experiential verbs of mind (want, love, watch),
+  bilingual, taught as relations between an experiencer and a thing. Built on
+  an existing world: restore the latest snapshot first.
+- `snapshot.sh` save, restore, and list the brain's snapshots (its fluid
+  weights) under `~/.golem/snapshots`.
