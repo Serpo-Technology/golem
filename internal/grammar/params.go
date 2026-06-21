@@ -41,6 +41,8 @@ type Params struct {
 	verbs      map[string]verbEN              // base -> principal parts (en)
 	verbsTR    map[string]verbTR              // base -> form set (tr)
 	verbFinals map[string]bool                // lang -> the verb closes the clause (sov)
+	caseLangs  map[string]bool                // lang -> roles come from case, not position (free order)
+	cases      map[string]map[string]string   // lang -> case name -> ending (la)
 	suffixes   map[string]string              // name -> recipe (tr)
 	// constructions holds the sentence patterns the planner fills, keyed
 	// language then intent; set by SetConstructions after Compile.
@@ -90,6 +92,8 @@ func Compile(entries []Param, lexMass map[string]float64) *Params {
 		verbs:       map[string]verbEN{},
 		verbsTR:     map[string]verbTR{},
 		verbFinals:  map[string]bool{},
+		caseLangs:   map[string]bool{},
+		cases:       map[string]map[string]string{},
 		suffixes:    map[string]string{},
 		surface:     map[string]map[string]string{},
 		learnedInfl: map[string]inflection{},
@@ -131,6 +135,9 @@ func Compile(entries []Param, lexMass map[string]float64) *Params {
 			}
 		case "order":
 			p.verbFinals[lang] = e.Value == "sov"
+			p.caseLangs[lang] = e.Value == "free"
+		case "case":
+			ensure(p.cases, lang)[name] = e.Value
 		case "suffix":
 			p.suffixes[name] = e.Value
 		case "surface":
@@ -373,6 +380,20 @@ func (p *Params) verbTurkish(base string) verbTR {
 // verb closes the clause (SOV).
 func (p *Params) verbFinal(lang string) bool {
 	return p.verbFinals[lang]
+}
+
+// caseDriven reports whether a language assigns thematic roles by case rather than
+// by position, so word order is free (Latin). Comprehension reads the case endings
+// for the roles instead of the slot layout.
+func (p *Params) caseDriven(lang string) bool {
+	return p.caseLangs[lang]
+}
+
+// caseEnding returns the seeded ending a language marks a case with ("m" for the
+// Latin first-declension accusative), empty when the case is unmarked (nominative)
+// or unseeded.
+func (p *Params) caseEnding(lang, name string) string {
+	return p.cases[lang][name]
 }
 
 // surfaceWord reads a tongue's surface word by name, empty when the tongue

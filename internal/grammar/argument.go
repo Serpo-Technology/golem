@@ -300,6 +300,11 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	if !ok {
 		return Meaning{}, false
 	}
+	// A case-driven language (Latin) reads roles from the case endings, not the slot
+	// order, so any permutation of the words yields the one proposition.
+	if p.caseDriven(lang) {
+		return p.comprehendByCase(lang, spans, resolve)
+	}
 	// Turkish drops a subject the verb's agreement already carries: "kediyi
 	// kovaladım" is "(I) chased the cat", the -m marking first person. Recover it
 	// when the verb (last in a verb-final clause) agrees with a person and no
@@ -351,6 +356,57 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	}
 	p.bestFit(cxn, m, fit)
 	return m, true
+}
+
+// comprehendByCase reads a clause whose roles come from case, not position: the
+// finite verb is the predicate, the nominative noun the agent, the accusative noun
+// the patient, in whatever order they were spoken. So every permutation of "puella
+// rosam amat" yields the one proposition girl-loves-rose. It returns false when no
+// finite verb is present.
+func (p *Params) comprehendByCase(lang string, spans []string, resolve func(string) *memory.Fragment) (Meaning, bool) {
+	m := Meaning{Roles: map[string]Term{}, Lang: lang}
+	var nouns []string
+	for _, span := range spans {
+		if m.Relation.Phrase == "" && p.finiteVerbByCase(lang, span) {
+			lemma := p.verbLemma(lang, span)
+			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
+			m.Past = p.verbPast(lang, span)
+			continue
+		}
+		nouns = append(nouns, span)
+	}
+	if m.Relation.Phrase == "" {
+		return Meaning{}, false
+	}
+	for _, span := range nouns {
+		role, lemma := p.caseRole(lang, span)
+		filler := Term{Concept: resolve(lemma), Phrase: lemma}
+		if filler.Concept == nil && lemma != span {
+			if c := resolve(span); c != nil {
+				filler = Term{Concept: c, Phrase: span}
+			}
+		}
+		m.Roles[role] = filler
+	}
+	return m, true
+}
+
+// caseRole reads the role a case-marked noun fills and the lemma it names: the
+// accusative ending marks the patient, the bare nominative the agent. The endings
+// are the seeded case data, so the rule is a fact about the language, not the parser.
+func (p *Params) caseRole(lang, span string) (role, lemma string) {
+	if acc := p.caseEnding(lang, "accusative"); acc != "" && strings.HasSuffix(span, acc) {
+		return "patient", strings.TrimSuffix(span, acc)
+	}
+	return "agent", span
+}
+
+// finiteVerbByCase reports whether a span is the finite verb of a case-marked clause.
+// Latin's third-person verb ends in -t (amat, videt) while its first-declension nouns
+// end in their case vowels, so the verb is told apart by that ending. A first cut over
+// the present tense; richer person and tense marking will refine it.
+func (p *Params) finiteVerbByCase(lang, span string) bool {
+	return strings.HasSuffix(span, "t")
 }
 
 // bestFit reorders the role assignment by feature fit when one is clearly

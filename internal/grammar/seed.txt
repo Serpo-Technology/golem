@@ -189,9 +189,12 @@ hap:tr:oluyor	oluyor	tr	follow
 verb:tr:follow	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
 verb:tr:happen	olur|olmaz|oldu|olmadı|olabilir|olmuş olabilir	tr	
 verb:tr:precede	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
-order:en	svo	en	
-order:tr	sov	tr	
-suffix:tr:ablative	DAn	tr	
+order:en	svo	en
+order:la	free	la
+order:tr	sov	tr
+case:la:accusative	m	la
+case:la:genitive	e	la
+suffix:tr:ablative	DAn	tr
 suffix:tr:accusative	(y)I	tr
 suffix:tr:copula	DIr	tr
 suffix:tr:genitive	(n)In	tr
