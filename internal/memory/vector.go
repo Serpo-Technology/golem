@@ -99,6 +99,49 @@ func Cosine(a, b []float32) float64 {
 	return dot / (math.Sqrt(na) * math.Sqrt(nb))
 }
 
+// SetUsageVector stores a fragment's place in the usage space for one role, the
+// company it keeps as the filler of that role. A relation carries an "agent" and a
+// "patient" vector, kept apart so a directional relation reads differently from a
+// symmetric one; this space sits beside the feature-and-category vectors and never
+// touches them, so the kind geometry is left as it was.
+func (s *Store) SetUsageVector(fragmentID uint64, role string, vec []float32) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO usage_vectors (fragment_id, role, vec) VALUES (?, ?, ?)`,
+		fragmentID, role, encodeVec(vec))
+	return err
+}
+
+// UsageVector reads a fragment's usage vector for a role; ok is false when it has
+// none.
+func (s *Store) UsageVector(fragmentID uint64, role string) (vec []float32, ok bool) {
+	var blob []byte
+	if err := s.db.QueryRow(`SELECT vec FROM usage_vectors WHERE fragment_id = ? AND role = ?`,
+		fragmentID, role).Scan(&blob); err != nil {
+		return nil, false
+	}
+	return decodeVec(blob), true
+}
+
+// UsageVectorsByRole returns every fragment's usage vector for a role, so a caller
+// can rank all relations against a clause's filler in one pass.
+func (s *Store) UsageVectorsByRole(role string) (map[uint64][]float32, error) {
+	rows, err := s.db.Query(`SELECT fragment_id, vec FROM usage_vectors WHERE role = ?`, role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[uint64][]float32{}
+	for rows.Next() {
+		var id uint64
+		var blob []byte
+		if err := rows.Scan(&id, &blob); err != nil {
+			return nil, err
+		}
+		out[id] = decodeVec(blob)
+	}
+	return out, rows.Err()
+}
+
 func encodeVec(vec []float32) []byte {
 	b := make([]byte, 4*len(vec))
 	for i, f := range vec {

@@ -188,17 +188,14 @@ func (d *Daemon) fallbackRelation(frame grammar.Frame, m grammar.Meaning) bool {
 	}
 	agent := m.Roles["agent"]
 	patient := m.Roles["patient"]
-	var argIDs []uint64
-	if agent.Concept != nil {
-		argIDs = append(argIDs, agent.Concept.ID)
-	}
-	if patient.Concept != nil {
-		argIDs = append(argIDs, patient.Concept.ID)
-	}
-	if len(argIDs) == 0 {
+	if agent.Concept == nil {
 		return false
 	}
-	cand, conf, margin, ok := d.nearestRelationByCompany(argIDs)
+	var patientID uint64
+	if patient.Concept != nil {
+		patientID = patient.Concept.ID
+	}
+	cand, conf, margin, ok := d.nearestRelationByCompany(agent.Concept.ID, patientID)
 	if !ok || conf < resembleAsk {
 		return false // nothing near enough; let the verb mint as something new
 	}
@@ -215,72 +212,65 @@ func (d *Daemon) fallbackRelation(frame grammar.Frame, m grammar.Meaning) bool {
 }
 
 // nearestRelationByCompany proposes the relation a clause's arguments most
-// resemble. A relation sits at the centre of the concepts it has related, so the
-// relation nearest the clause's argument centroid is the one whose company the
-// clause keeps. It returns the relation, the cosine confidence, the margin over
-// the next nearest relation, and false when no argument is embedded or no relation
-// is placed near.
-func (d *Daemon) nearestRelationByCompany(argIDs []uint64) (rel *memory.Fragment, conf, margin float64, ok bool) {
-	var sum []float32
-	n := 0
-	for _, id := range argIDs {
-		v, has := d.store.Vector(id)
-		if !has {
+// resemble, matching role by role: the clause's agent against each relation's
+// agent-centroid and its patient against the patient-centroid, in the usage space.
+// A directional relation is told from a symmetric one this way, where one mixed
+// centroid could not. It returns the relation, the averaged cosine confidence, the
+// margin over the next relation, and false when the agent is unplaced or no
+// relation sits in the usage space.
+func (d *Daemon) nearestRelationByCompany(agentID, patientID uint64) (rel *memory.Fragment, conf, margin float64, ok bool) {
+	agentVec, has := d.store.Vector(agentID)
+	if !has {
+		return nil, 0, 0, false
+	}
+	var patientVec []float32
+	if patientID != 0 {
+		patientVec, _ = d.store.Vector(patientID)
+	}
+	agentCentroids, err := d.store.UsageVectorsByRole(memory.RelAgent)
+	if err != nil || len(agentCentroids) == 0 {
+		return nil, 0, 0, false
+	}
+	patientCentroids, _ := d.store.UsageVectorsByRole(memory.RelPatient)
+
+	type scored struct {
+		id    uint64
+		score float64
+	}
+	var ranked []scored
+	for relID, ac := range agentCentroids {
+		if !d.verbalRelation(relID) {
 			continue
 		}
-		if sum == nil {
-			sum = make([]float32, len(v))
+		score := memory.Cosine(agentVec, ac)
+		roles := 1.0
+		if patientVec != nil {
+			if pc, ok := patientCentroids[relID]; ok {
+				score += memory.Cosine(patientVec, pc)
+				roles = 2
+			}
 		}
-		if len(v) != len(sum) {
-			continue
-		}
-		for i := range v {
-			sum[i] += v[i]
-		}
-		n++
+		ranked = append(ranked, scored{relID, score / roles})
 	}
-	if n == 0 {
+	if len(ranked) == 0 {
 		return nil, 0, 0, false
 	}
-	for i := range sum {
-		sum[i] /= float32(n)
-	}
-	matches, err := d.store.NearestVectors(sum, "", 64, 0)
-	if err != nil || len(matches) == 0 {
-		return nil, 0, 0, false
-	}
-	ids := make([]uint64, len(matches))
-	for i, mch := range matches {
-		ids[i] = mch.ID
-	}
-	frags, err := d.store.FragmentsByIDs(ids)
-	if err != nil {
-		return nil, 0, 0, false
-	}
-	byID := make(map[uint64]*memory.Fragment, len(frags))
-	for _, f := range frags {
-		byID[f.ID] = f
-	}
-	var rels []memory.VectorMatch
-	for _, mch := range matches {
-		f := byID[mch.ID]
-		if f == nil || f.Category != "relation" || !d.verbalRelation(f.ID) {
-			continue
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
 		}
-		rels = append(rels, mch)
-		if len(rels) == 2 {
-			break
-		}
-	}
-	if len(rels) == 0 {
-		return nil, 0, 0, false
-	}
-	conf = rels[0].Score
+		return ranked[i].id < ranked[j].id
+	})
+	conf = ranked[0].score
 	margin = conf
-	if len(rels) == 2 {
-		margin = rels[0].Score - rels[1].Score
+	if len(ranked) >= 2 {
+		margin = ranked[0].score - ranked[1].score
 	}
-	return byID[rels[0].ID], conf, margin, true
+	frs, err := d.store.FragmentsByIDs([]uint64{ranked[0].id})
+	if err != nil || len(frs) != 1 {
+		return nil, 0, 0, false
+	}
+	return frs[0], conf, margin, true
 }
 
 // verbalRelation reports whether a relation can be the reading of a plain

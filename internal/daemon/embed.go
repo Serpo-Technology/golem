@@ -124,71 +124,77 @@ func (d *Daemon) growEmbeddings() {
 			return
 		}
 	}
-	d.embedRelationsByFillers(concepts, vecByID, k)
+	d.embedRelationsUsage(concepts, vecByID, k)
 }
 
-// embedRelationsByFillers places each relation among the concepts it relates. A
-// relation carries no feature and belongs to no category, so the factorization
-// leaves its row at the origin and its embedding is useless. Here it takes the
-// average of its role-fillers' coordinates, the agents and patients of the
-// moments it grounds in, so it lands in the same space as the things it takes as
-// arguments. A clause whose verb names no relation can then propose the relation
-// whose company its arguments most resemble. This runs after the feature-and-
-// category coordinates are set and overwrites only relation vectors, so the
-// geometry the resemblance path already leans on is left exactly as it was.
-func (d *Daemon) embedRelationsByFillers(concepts []*memory.Fragment, vecByID map[uint64][]float32, k int) {
+// embedRelationsUsage places each relation in the usage space by the company it
+// keeps in its propositions, the agents and patients of the moments it grounds in,
+// kept apart by role. The agent vector is the average of the role-fillers' kind
+// coordinates that stood as agent, the patient vector the average of those that
+// stood as patient, so a directional relation (a predator chasing prey) reads
+// differently from a symmetric one whose roles draw the same crowd. This writes to
+// the usage space alone, so the feature-and-category geometry is untouched.
+func (d *Daemon) embedRelationsUsage(concepts []*memory.Fragment, vecByID map[uint64][]float32, k int) {
 	for _, c := range concepts {
 		if c.Category != "relation" {
 			continue
 		}
-		centroid := make([]float64, k)
-		n := 0
-		for _, id := range d.relationFillers(c.ID) {
-			v, ok := vecByID[id]
-			if !ok || len(v) != k {
-				continue
-			}
-			for j := 0; j < k; j++ {
-				centroid[j] += float64(v[j])
-			}
-			n++
-		}
-		if n == 0 {
-			continue // a relation never yet given an embedded argument stays unplaced
-		}
-		vec := make([]float32, k)
-		for j := 0; j < k; j++ {
-			vec[j] = float32(centroid[j] / float64(n))
-		}
-		if err := d.store.SetVector(c.ID, vec); err != nil {
-			fmt.Fprintf(d.out, "embedding error: %v\n", err)
-			return
-		}
+		agents, patients := d.relationRoleFillers(c.ID)
+		d.setRoleCentroid(c.ID, memory.RelAgent, agents, vecByID, k)
+		d.setRoleCentroid(c.ID, memory.RelPatient, patients, vecByID, k)
 	}
 }
 
-// relationFillers returns the concepts that have filled a relation's roles: the
-// agents and patients of the moments the relation grounds in. The same concept
-// recurs once per moment it filled, so a frequent argument weighs more in the
-// centroid, the usage the placement should reflect.
-func (d *Daemon) relationFillers(relID uint64) []uint64 {
+// setRoleCentroid writes the average of a relation's role-fillers' kind vectors as
+// its usage vector for that role. A role no embedded filler ever took is left
+// unplaced, so an intransitive relation carries an agent vector and no patient.
+func (d *Daemon) setRoleCentroid(relID uint64, role string, fillers []uint64, vecByID map[uint64][]float32, k int) {
+	centroid := make([]float64, k)
+	n := 0
+	for _, id := range fillers {
+		v, ok := vecByID[id]
+		if !ok || len(v) != k {
+			continue
+		}
+		for j := 0; j < k; j++ {
+			centroid[j] += float64(v[j])
+		}
+		n++
+	}
+	if n == 0 {
+		return
+	}
+	vec := make([]float32, k)
+	for j := 0; j < k; j++ {
+		vec[j] = float32(centroid[j] / float64(n))
+	}
+	if err := d.store.SetUsageVector(relID, role, vec); err != nil {
+		fmt.Fprintf(d.out, "usage embedding error: %v\n", err)
+	}
+}
+
+// relationRoleFillers returns the concepts that have filled a relation's agent and
+// patient roles, kept apart, by walking the moments it grounds in. The same
+// concept recurs once per moment it filled, so a frequent argument weighs more in
+// the centroid, the usage the placement should reflect.
+func (d *Daemon) relationRoleFillers(relID uint64) (agents, patients []uint64) {
 	moments, err := d.store.LinksFromRel([]uint64{relID}, memory.RelGrounds)
 	if err != nil || len(moments) == 0 {
-		return nil
+		return nil, nil
 	}
 	momIDs := make([]uint64, 0, len(moments))
 	for _, e := range moments {
 		momIDs = append(momIDs, e.To)
 	}
-	var fillers []uint64
-	for _, role := range []string{memory.RelAgent, memory.RelPatient} {
-		edges, err := d.store.LinksFromRel(momIDs, role)
-		if err != nil {
-			continue
-		}
+	if edges, err := d.store.LinksFromRel(momIDs, memory.RelAgent); err == nil {
 		for _, e := range edges {
-			fillers = append(fillers, e.To)
+			agents = append(agents, e.To)
 		}
 	}
-	return fillers
+	if edges, err := d.store.LinksFromRel(momIDs, memory.RelPatient); err == nil {
+		for _, e := range edges {
+			patients = append(patients, e.To)
+		}
+	}
+	return agents, patients
 }
