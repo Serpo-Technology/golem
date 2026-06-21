@@ -65,6 +65,66 @@ func (d *Daemon) mintNounConcept(phrase, lang string) *memory.Fragment {
 	return c
 }
 
+// acquirePatient resolves the object of a told proposition to a concept. An abstract
+// noun names no percept, so the shared-percept path that unifies "dog" and "köpek"
+// across tongues cannot reach it; the relation carries it instead. The relation has
+// already bound across tongues by the time the object is read, so the object of the
+// warm proposition over it, told in the other tongue, is the same thing this clause's
+// object names: the foreign word becomes that concept's name in this tongue rather
+// than minting a parallel concept. With no twin to bind, the object is minted fresh,
+// as an unknown noun always was.
+func (d *Daemon) acquirePatient(phrase, lang string, rel *memory.Fragment) *memory.Fragment {
+	lemma := d.nounLemma(phrase, lang)
+	if lemma == "" || d.gram.IsFunctionWord(lang, lemma) {
+		return nil
+	}
+	if c := d.resolveConcept(lemma); c != nil {
+		return c
+	}
+	if twin := d.crossTonguePatient(rel, lang); twin != nil {
+		d.nameConceptWord(twin.ID, lemma, lang)
+		return twin
+	}
+	return d.mintNounConcept(lemma, lang)
+}
+
+// crossTonguePatient returns the object of the most recent thread proposition over
+// the relation, when that object is a noun this tongue does not yet name: the
+// cross-tongue twin of the object now being read. Speaking the same relation in a new
+// tongue back to back is what keeps the twin warm, so the binding follows the same
+// adjacency the relation's own cross-tongue binding needs.
+func (d *Daemon) crossTonguePatient(rel *memory.Fragment, lang string) *memory.Fragment {
+	if rel == nil {
+		return nil
+	}
+	for _, p := range d.threadProps {
+		if p.rel != rel.Content || p.patient == 0 {
+			continue
+		}
+		frags, err := d.store.FragmentsByIDs([]uint64{p.patient})
+		if err != nil || len(frags) != 1 {
+			continue
+		}
+		if c := frags[0]; c.Category == "noun" && !d.conceptNamedIn(c.ID, lang) {
+			return c
+		}
+	}
+	return nil
+}
+
+// nounLemma reduces a noun phrase to the bare lemma that should name a concept,
+// stripping a Turkish case ending the way the resolver does for a known noun, so an
+// object minted or bound from "deseni" is named "desen", not the accusative it wore.
+func (d *Daemon) nounLemma(phrase, lang string) string {
+	head := nounHead(phrase)
+	if lang == "tr" && head != "" {
+		if stems := d.gram.CaseStems("tr", head); len(stems) > 0 {
+			return stems[0]
+		}
+	}
+	return head
+}
+
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {
 	d.followUp = "" // set only when this telling answers a question left open
 	if momentID == 0 {
@@ -164,9 +224,11 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	var patientGloss string
 	patient := m.Roles["patient"]
 	if patient.Concept == nil && patient.Phrase != "" {
-		// An unknown noun object is minted too, so "a model predicts a word" grounds
-		// the word it predicts as well as the model that predicts it.
-		patient.Concept = d.mintNounConcept(patient.Phrase, frame.Lang)
+		// An unknown noun object is acquired, so "a model predicts a word" grounds the
+		// word it predicts as well as the model that predicts it. Where the relation
+		// has already bound across tongues, the object binds to its cross-tongue twin
+		// rather than minting a parallel concept; otherwise it is minted fresh.
+		patient.Concept = d.acquirePatient(patient.Phrase, frame.Lang, rel)
 	}
 	if patient.Concept != nil {
 		patientID = patient.Concept.ID
@@ -2471,7 +2533,16 @@ func (d *Daemon) warmestRelation() *memory.Fragment {
 // tongue stay two relations, while a tongue with no name for it yet may give it
 // its first.
 func (d *Daemon) relationNamedIn(relID uint64, lang string) bool {
-	namers, err := d.store.LinksToRel([]uint64{relID}, memory.RelNames)
+	return d.conceptNamedIn(relID, lang)
+}
+
+// conceptNamedIn reports whether a word of the given tongue already names the concept,
+// relation or noun alike. It guards cross-tongue binding the same way for both: a
+// tongue that already speaks the concept does not take a second word for it from
+// warmth, so two distinct words of one tongue stay two concepts, while a tongue with
+// no name for it yet may give it its first.
+func (d *Daemon) conceptNamedIn(id uint64, lang string) bool {
+	namers, err := d.store.LinksToRel([]uint64{id}, memory.RelNames)
 	if err != nil || len(namers) == 0 {
 		return false
 	}

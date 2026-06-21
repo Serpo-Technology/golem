@@ -1958,3 +1958,29 @@ func TestPropertyOfUnknownRelationAdmitsGap(t *testing.T) {
 		t.Fatalf("a property of an unknown relation should admit the gap: %q", got)
 	}
 }
+
+// An abstract noun binds across tongues through the relation, not through a shared
+// percept it can never have. "a model learns a pattern" then "model deseni öğrendi"
+// back to back binds öğren to learn and, on that warm relation, desen to the pattern
+// concept, so the object told in one tongue is the same thing in the other rather
+// than a parallel concept, and a fact reads back in either tongue.
+func TestCrossTongueAbstractNounBinds(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "a model learns a pattern")
+	sayLang(t, d, "tr", "model deseni öğrendi") // back to back: the bi_rel adjacency
+	id := func(n string) uint64 {
+		if c := d.resolveConcept(n); c != nil {
+			return c.ID
+		}
+		return 0
+	}
+	if id("pattern") == 0 || id("pattern") != id("desen") {
+		t.Fatalf("desen should bind to the pattern concept, not mint its own: pattern=%d desen=%d", id("pattern"), id("desen"))
+	}
+	if id("learn") == 0 || id("learn") != id("öğren") {
+		t.Fatalf("öğren should bind to the learn relation: learn=%d öğren=%d", id("learn"), id("öğren"))
+	}
+	if got := sayLang(t, d, "tr", "model ne öğrendi").Say; !strings.Contains(got, "desen") {
+		t.Errorf("the TR query should answer with the bound TR noun: %q", got)
+	}
+}
