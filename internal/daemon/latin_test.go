@@ -1,10 +1,34 @@
 package daemon
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"golem/internal/memory"
 )
+
+// groundLatinPair grounds one concept named in both English and Latin, so a clause
+// in either tongue resolves to the same referent.
+func groundLatinPair(t *testing.T, d *Daemon, gloss, en, la string) *memory.Fragment {
+	t.Helper()
+	now := time.Now()
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: gloss,
+		Template: gloss, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := d.store.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []struct{ w, lang string }{{en, "en"}, {la, "la"}} {
+		w, _, err := d.store.WordNode(p.w, p.lang, d.chem.Snapshot(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return c
+}
 
 func hasProp(d *Daemon, agent *memory.Fragment, rel string, patient *memory.Fragment) bool {
 	for _, f := range d.gatherFacts(agent, "agent", "") {
@@ -70,5 +94,29 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 	if got := sayLang(t, d, "la", "amatne rosa puellam?").Say; got != "Minime." {
 		t.Errorf("the case should deny rose-loves-girl, untaught: %q", got)
+	}
+}
+
+// Latin joins the cross-tongue substrate with no new machinery: the bilingual nouns
+// resolve to one concept each, and the Latin verb binds to the warm English relation,
+// so a fact taught only in Latin answers in English and the reverse holds too.
+func TestLatinCrossTongue(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundLatinPair(t, d, "girl", "girl", "puella")
+	groundLatinPair(t, d, "rose", "rose", "rosa")
+	// English establishes the relation; its Latin echo, back to back, binds amat to
+	// the warm love relation so the two tongues share one relation.
+	say(t, d, "the girl loves the rose")
+	sayLang(t, d, "la", "puella rosam amat")
+
+	// A fact taught ONLY in Latin answers in English, through the unified relation
+	// and the bilingual nouns: the strong cross-tongue litmus.
+	sayLang(t, d, "la", "rosa puellam amat") // rose loves girl, never said in English
+	if got := say(t, d, "does the rose love the girl").Say; !strings.HasPrefix(got, "Yes") {
+		t.Errorf("a Latin-only fact should answer in English: %q", got)
+	}
+	// And the English-taught fact answers back in Latin.
+	if got := sayLang(t, d, "la", "amatne puella rosam?").Say; got != "Ita, puella rosam amat." {
+		t.Errorf("the English-taught fact should answer in Latin: %q", got)
 	}
 }
