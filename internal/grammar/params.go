@@ -368,6 +368,13 @@ func (p *Params) isFunctionWordLang(lang, form string) bool {
 	return false
 }
 
+// IsFunctionWord exposes the closed-class test to callers outside the grammar, so
+// the daemon can tell a content word it might mint as a concept from a determiner
+// or particle it must not.
+func (p *Params) IsFunctionWord(lang, form string) bool {
+	return p.get().isFunctionWordLang(lang, form)
+}
+
 // verb returns a verb's principal parts, regular by rule when memory
 // holds no entry.
 func (p *Params) verb(base string) verbEN {

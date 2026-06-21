@@ -224,27 +224,32 @@ func TestComprehendUnknownVerbDegradesGracefully(t *testing.T) {
 	}
 }
 
-// A partial utterance yields a partial meaning and a learning signal: the
-// grounded part is written, and the role whose filler grounds in nothing is
-// held as a goal rather than dropped.
-func TestComprehendPartialHoldsTheGap(t *testing.T) {
+// An unknown noun in a told proposition is acquired, not held as a gap: "a dog
+// chased a wug" mints "wug" and writes the whole proposition, the way it already
+// mints the unknown verb. The acquisition is by usage, so the minted concept has no
+// features and is placed by the company it keeps.
+func TestComprehendAcquiresUnknownArgument(t *testing.T) {
 	d, s := testDaemon(t)
 	dog := groundNoun(t, d, "dog")
-	d.chem.SpikeDopamine(0.6) // curious enough to hold the gap
 
 	resp := say(t, d, "a dog chased a wug")
 	moment := resp.Observe.FragmentID
 
 	chase, _ := s.ConceptByTemplate("rel:en:chase")
 	if chase == nil {
-		t.Fatal("the grounded part of the proposition should still be written")
+		t.Fatal("the relation should be written")
+	}
+	wug := d.resolveConcept("wug")
+	if wug == nil {
+		t.Fatal("the unknown patient should be minted as a concept")
 	}
 	ag, _ := s.LinksFromRel([]uint64{moment}, memory.RelAgent)
 	if !linksTo(ag, dog.ID) {
-		t.Fatal("the dog should be the agent of the partial proposition")
+		t.Fatal("the dog should be the agent")
 	}
-	if d.goal == nil || d.goal.topic != "wug" {
-		t.Fatalf("the unknown patient should be held as a learning goal: %+v", d.goal)
+	pat, _ := s.LinksFromRel([]uint64{moment}, memory.RelPatient)
+	if !linksTo(pat, wug.ID) {
+		t.Fatal("the minted wug should be the patient of the whole proposition")
 	}
 }
 

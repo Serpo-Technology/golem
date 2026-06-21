@@ -5,6 +5,24 @@ import (
 	"testing"
 )
 
+// An abstract word enters the graph through a telling: "a model predicts a word"
+// mints both nouns it could not perceive, the way it already mints the unknown verb,
+// so the proposition holds and the words become concepts the usage space can place.
+func TestStatementMintsUnknownNouns(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "a model predicts a word") // model, predict, word all unknown
+
+	if d.resolveConcept("model") == nil {
+		t.Error("an unknown noun subject should be minted as a concept")
+	}
+	if d.resolveConcept("word") == nil {
+		t.Error("an unknown noun object should be minted as a concept")
+	}
+	if got := say(t, d, "what does the model predict").Say; !strings.Contains(strings.ToLower(got), "word") {
+		t.Errorf("the proposition over the minted nouns should hold: %q", got)
+	}
+}
+
 // Usage resemblance carries an inference between abstract words: the model and the
 // network are used alike (both learn, both read), so when only the model is said to
 // predict an output, the network's predicting follows as a hedged guess. Neither
@@ -12,9 +30,7 @@ import (
 // signal, and the reasoning rides it the way it rides feature resemblance.
 func TestAbstractInferenceRidesUsageResemblance(t *testing.T) {
 	d, _ := testDaemon(t)
-	for _, w := range []string{"model", "network", "pattern", "data", "output"} {
-		groundNoun(t, d, w)
-	}
+	// No grounding: the abstract nouns enter through the tellings themselves.
 	say(t, d, "a model learns a pattern")
 	say(t, d, "a network learns a pattern")
 	say(t, d, "a model reads data")

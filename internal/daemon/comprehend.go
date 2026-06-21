@@ -26,6 +26,45 @@ const comprehendWeight = 0.8
 // left as a gap to ask about. A statement that fits no argument construction,
 // or whose subject grounds in nothing, writes nothing and returns false, so
 // the planner falls back to its older handling.
+// nounHead reads the head of a content span, the last open-class word a minted
+// concept takes its name from ("a big model" -> "model"), lowercased; empty for a
+// span too short to be a noun.
+func nounHead(phrase string) string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(phrase)))
+	if len(fields) == 0 {
+		return ""
+	}
+	head := fields[len(fields)-1]
+	if len([]rune(head)) < 2 {
+		return ""
+	}
+	return head
+}
+
+// mintNounConcept gives an unknown noun argument a concept of its own, the way an
+// unknown verb gets a relation through relationConcept. The concept carries no
+// features, since an abstract word names no percept, so it is the usage space that
+// places it by its relational company, not the feature space. A function word is
+// never minted, so a determiner or particle that slipped into a span is left alone.
+// It returns the existing concept when the noun already names one.
+func (d *Daemon) mintNounConcept(phrase, lang string) *memory.Fragment {
+	head := nounHead(phrase)
+	if head == "" || d.gram.IsFunctionWord(lang, head) {
+		return nil
+	}
+	if c := d.resolveConcept(head); c != nil {
+		return c
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: head,
+		Template: "noun:" + lang + ":" + head, Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "noun mint error: %v\n", err)
+		return nil
+	}
+	d.nameConceptWord(c.ID, head, lang)
+	return c
+}
+
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {
 	d.followUp = "" // set only when this telling answers a question left open
 	if momentID == 0 {
@@ -76,7 +115,21 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	}
 	agent := m.Roles["agent"]
 	if agent.Concept == nil {
-		return false // the subject grounds in nothing; not yet a proposition to write
+		// Only a transitive content proposition acquires a noun ("a model predicts a
+		// word"): a clause with no object is a copula predication ("the gizmo is
+		// broken") or an intransitive, not a proposition to mint a subject from, so
+		// its unknown is left to curiosity, as it was before acquisition reached the
+		// noun side.
+		if m.Roles["patient"].Phrase == "" {
+			return false
+		}
+		// An unknown noun subject is minted as its own concept, the same acquisition
+		// from a telling the unknown verb gets, so an abstract word like "model" that
+		// names no percept enters the graph and the usage space places it. A subject
+		// that is no mintable noun (a stray particle) is still no proposition.
+		if agent.Concept = d.mintNounConcept(agent.Phrase, frame.Lang); agent.Concept == nil {
+			return false
+		}
 	}
 	// A faculty word standing as the subject is a command the grammar misread as a
 	// statement, its verb not being a seeded imperative opener. It is not a
@@ -109,7 +162,13 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	}
 	var patientID uint64
 	var patientGloss string
-	if patient := m.Roles["patient"]; patient.Concept != nil {
+	patient := m.Roles["patient"]
+	if patient.Concept == nil && patient.Phrase != "" {
+		// An unknown noun object is minted too, so "a model predicts a word" grounds
+		// the word it predicts as well as the model that predicts it.
+		patient.Concept = d.mintNounConcept(patient.Phrase, frame.Lang)
+	}
+	if patient.Concept != nil {
 		patientID = patient.Concept.ID
 		patientGloss = patient.Concept.Content
 	}
