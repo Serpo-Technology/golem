@@ -691,6 +691,17 @@ func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
 		}
 		return "", false, false
 	}
+	if lang == "la" {
+		// Latin marks a yes/no question with the enclitic -ne on a word ("amatne
+		// puella rosam"); strip it and the free-order clause reads as the proposition.
+		for i, tok := range tokens {
+			if low := strings.ToLower(tok); strings.HasSuffix(low, "ne") && len([]rune(low)) > 3 {
+				tokens[i] = tok[:len(tok)-len("ne")]
+				return strings.Join(tokens, " "), false, true
+			}
+		}
+		return "", false, false
+	}
 	switch strings.ToLower(tokens[0]) {
 	case "did":
 		return strings.Join(tokens[1:], " "), true, true

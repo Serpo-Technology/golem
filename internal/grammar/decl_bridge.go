@@ -17,12 +17,18 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 	if lang == "" {
 		lang = "en"
 	}
-	g := p.decl[lang]
-	if g == nil {
-		return "", false
-	}
 	verb := m.Relation.Speak()
 	if verb == "" {
+		return "", false
+	}
+	if p.caseDriven(lang) {
+		// A free-word-order tongue (Latin) where the case alone carries the role, so the
+		// clause is assembled in the unmarked order with each noun in its case. This path
+		// assembles the surface directly, so it needs no declarative grammar for the tongue.
+		return p.speakDeclByCase(lang, m, verb)
+	}
+	g := p.decl[lang]
+	if g == nil {
 		return "", false
 	}
 	if p.Article(lang) == "" {
@@ -71,6 +77,31 @@ func (p *Params) SpeakDecl(lang string, m Meaning) (string, bool) {
 		return "", false
 	}
 	return Sentence(surface), true
+}
+
+// speakDeclByCase speaks a clause for a free-word-order, case-driven tongue (Latin):
+// the agent stands as the nominative bare stem, the patient takes the seeded
+// accusative ending, and the verb closes the clause in the unmarked
+// subject-object-verb order. The role lives in the case, so generation needs only to
+// pick one order and case each noun. It declines a carried-over or coordinated
+// argument, each a later stage, so the clause stays one the comprehension round-trips.
+func (p *Params) speakDeclByCase(lang string, m Meaning, verb string) (string, bool) {
+	if m.Negate {
+		return "", false // verbal negation ("non amat") is a later stage; a denial answers bare
+	}
+	agent := m.Roles["agent"]
+	if agent.Empty() || agent.Given || agent.Speak() == "" {
+		return "", false
+	}
+	parts := []string{agent.Speak()}
+	if patient := m.Roles["patient"]; !patient.Empty() {
+		if patient.Given || patient.Speak() == "" || len(patient.With) > 0 {
+			return "", false
+		}
+		parts = append(parts, patient.Speak()+p.caseEnding(lang, "accusative"))
+	}
+	parts = append(parts, verb)
+	return Sentence(strings.Join(parts, " ")), true
 }
 
 // speakDeclCased speaks a clause for a tongue that marks definiteness by case rather than an

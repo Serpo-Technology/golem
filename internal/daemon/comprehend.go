@@ -1917,7 +1917,7 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 			d.conceptName(patient.ID, patient.Content, lang),
 			false, negate, d.chem.Snapshot())
 	} else {
-		clause, ok = d.gram.Speak(lang, grammar.Meaning{
+		meaning := grammar.Meaning{
 			Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
 			Roles: map[string]grammar.Term{
 				"agent":   {Phrase: d.conceptName(agent.ID, agent.Content, lang), Definite: true},
@@ -1925,7 +1925,13 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 			},
 			Past:   past,
 			Negate: negate,
-		})
+		}
+		clause, ok = d.gram.Speak(lang, meaning)
+		if !ok {
+			// A tongue the coded realizer does not cover (Latin) speaks through the
+			// declarative engine instead, which cases the nouns from the graph.
+			clause, ok = d.gram.SpeakDecl(lang, meaning)
+		}
 	}
 	var answer string
 	switch {

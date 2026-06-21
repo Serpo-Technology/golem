@@ -51,3 +51,24 @@ func TestLatinCaseAssignsRoles(t *testing.T) {
 		t.Errorf("the accusative puellam should not be the agent")
 	}
 }
+
+// GOLEM speaks Latin back, casing the nouns and answering a -ne question: the
+// agent in the nominative bare stem, the patient in the accusative, the verb last.
+// A free-order question reaches the same proposition and answers in the unmarked
+// order, and the case decides a denial.
+func TestLatinSpeaksByCase(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "puella", "la")
+	groundNounLang(t, d, "rosa", "la")
+	sayLang(t, d, "la", "puella rosam amat")
+
+	if got := sayLang(t, d, "la", "amatne puella rosam?").Say; got != "Ita, puella rosam amat." {
+		t.Errorf("Latin should affirm in the unmarked order: %q", got)
+	}
+	if got := sayLang(t, d, "la", "rosamne puella amat?").Say; got != "Ita, puella rosam amat." {
+		t.Errorf("a free-order question should answer the same: %q", got)
+	}
+	if got := sayLang(t, d, "la", "amatne rosa puellam?").Say; got != "Minime." {
+		t.Errorf("the case should deny rose-loves-girl, untaught: %q", got)
+	}
+}
