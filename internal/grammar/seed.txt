@@ -188,7 +188,10 @@ hap:tr:olur	olur	tr	follow
 hap:tr:oluyor	oluyor	tr	follow
 verb:tr:follow	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
 verb:tr:happen	olur|olmaz|oldu|olmadı|olabilir|olmuş olabilir	tr	
-verb:tr:precede	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr	
+verb:tr:precede	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr
+verb:tr:ister	ister|istemez|istedi|istemedi|isteyebilir|istemiş olabilir	tr
+verb:tr:sever	sever|sevmez|sevdi|sevmedi|sevebilir|sevmiş olabilir	tr
+verb:tr:izler	izler|izlemez|izledi|izlemedi|izleyebilir|izlemiş olabilir	tr
 order:en	svo	en
 order:la	free	la
 order:tr	sov	tr

@@ -168,3 +168,28 @@ func TestRegularTurkishConjugation(t *testing.T) {
 		}
 	}
 }
+
+// A verb taught in the aorist names its relation by that surface ("ister"), not a
+// bare stem. Its seeded paradigm conjugates it correctly, where the regular floor
+// would re-suffix the surface as if it were a stem ("isterir", "istermez").
+func TestSeededMindVerbConjugation(t *testing.T) {
+	p := Builtin()
+	cases := []struct {
+		base      string
+		past, neg bool
+		want      string
+	}{
+		{"ister", false, false, "ister"},
+		{"ister", false, true, "istemez"},
+		{"ister", true, false, "istedi"},
+		{"sever", false, false, "sever"},
+		{"sever", false, true, "sevmez"},
+		{"izler", false, false, "izler"},
+		{"izler", false, true, "izlemez"},
+	}
+	for _, c := range cases {
+		if got := finiteVerbTR(p, c.base, c.past, c.neg, false, trPerson3sg); got != c.want {
+			t.Errorf("%s past=%v neg=%v: got %q want %q", c.base, c.past, c.neg, got, c.want)
+		}
+	}
+}
