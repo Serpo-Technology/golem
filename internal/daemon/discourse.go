@@ -684,13 +684,31 @@ func (d *Daemon) completeRoleEllipsis(frame grammar.Frame, raw string, thread *r
 func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "?"))
 	tokens := strings.Fields(s)
-	if len(tokens) < 3 {
+	// A pro-drop tongue carries the subject on the verb, so a two-word clause (a
+	// verb and its object) is a whole question. English needs an auxiliary and a
+	// subject besides the verb, so it is guarded again before its switch below.
+	if len(tokens) < 2 {
 		return "", false, false
 	}
 	if lang == "tr" {
-		switch strings.ToLower(tokens[len(tokens)-1]) {
+		last := strings.ToLower(tokens[len(tokens)-1])
+		switch last {
 		case "mı", "mi", "mu", "mü":
 			return strings.Join(tokens[:len(tokens)-1], " "), false, true
+		}
+		// In the aorist the particle fuses with the person ("ister misin" = want +
+		// mi + you), so the suffix carries the subject when it is dropped. The
+		// matching pronoun is restored before the clause is read, unless the clause
+		// already names its subject.
+		if pron, fused := trFusedInterrogative[last]; fused {
+			rest := tokens[:len(tokens)-1]
+			if len(rest) == 0 {
+				return "", false, false
+			}
+			if !trSubjectPronoun[strings.ToLower(rest[0])] {
+				rest = append([]string{pron}, rest...)
+			}
+			return strings.Join(rest, " "), false, true
 		}
 		return "", false, false
 	}
@@ -704,6 +722,9 @@ func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
 			}
 		}
 		return "", false, false
+	}
+	if len(tokens) < 3 {
+		return "", false, false // English needs an auxiliary, a subject, and a verb
 	}
 	switch strings.ToLower(tokens[0]) {
 	case "did":
@@ -726,6 +747,22 @@ func polarClause(lang, raw string) (clause string, pastAux, ok bool) {
 // the bare imperative "do". The third-person pronouns are left out: they ground in
 // no participant here, and "do it" is an imperative, not a question.
 var subjectPronoun = map[string]bool{"i": true, "you": true, "we": true}
+
+// trFusedInterrogative maps a Turkish question particle fused with a person suffix
+// to the subject pronoun that person drops. The aorist asks "ister misin" (want +
+// mi + you) where the bare particle alone would be third person, so the fused
+// suffix carries the dropped subject: misin -> you, miyim -> I, miyiz -> we, each
+// across the four-way vowel harmony.
+var trFusedInterrogative = map[string]string{
+	"mısın": "sen", "misin": "sen", "musun": "sen", "müsün": "sen",
+	"mısınız": "sen", "misiniz": "sen", "musunuz": "sen", "müsünüz": "sen",
+	"mıyım": "ben", "miyim": "ben", "muyum": "ben", "müyüm": "ben",
+	"mıyız": "biz", "miyiz": "biz", "muyuz": "biz", "müyüz": "biz",
+}
+
+// trSubjectPronoun is the deictic subject set, so a fused particle's person is not
+// restored a second time when the clause already names its subject ("sen ... misin").
+var trSubjectPronoun = map[string]bool{"ben": true, "sen": true, "biz": true}
 
 // describeReferent reads the focus of an open request to say what is known
 // about something, the noun in "tell me about the dog" or "describe a cat",
