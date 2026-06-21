@@ -106,18 +106,21 @@ func (p *Params) conjugate(lang, base string, plural, past, negate bool, person 
 	if lang == "tr" {
 		return finiteVerbTR(p, base, past, negate, false, person)
 	}
+	// English marks only the present third-person singular, with -s; first and
+	// second person and the plural take the base form ("I want", "you want").
+	bare := plural || person == trPerson1sg || person == trPerson2sg || person == trPerson1pl
 	if negate {
-		// English denies with do-support: "did not chase", "does not chase".
+		// English denies with do-support: "did not chase", "do/does not chase".
 		switch {
 		case past:
 			return "did not " + base
-		case plural:
+		case bare:
 			return "do not " + base
 		default:
 			return "does not " + base
 		}
 	}
-	return finiteVerb(p, base, false, plural, past)
+	return finiteVerb(p, base, bare, plural, past)
 }
 
 // renderFiller speaks a role's filler from the tongue's data: a referent in

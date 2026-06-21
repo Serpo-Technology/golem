@@ -573,12 +573,16 @@ const (
 // agrees with it: "ben" is first person, "sen" second, "biz" first plural, and
 // anything else the bare third person the engine already speaks.
 func (p *Params) trPersonOf(surface string) trPerson {
-	switch strings.ToLower(strings.TrimSpace(surface)) {
-	case p.surfaceWord("tr", "firstperson"):
+	s := strings.ToLower(strings.TrimSpace(surface))
+	if s == "" {
+		return trPerson3sg
+	}
+	switch s {
+	case p.surfaceWord("tr", "firstperson"), "i", "me", "ego":
 		return trPerson1sg
-	case p.surfaceWord("tr", "addressee"):
+	case p.surfaceWord("tr", "addressee"), "you", "tu":
 		return trPerson2sg
-	case p.surfaceWord("tr", "firstpersonpl"):
+	case p.surfaceWord("tr", "firstpersonpl"), "we", "us", "nos":
 		return trPerson1pl
 	}
 	return trPerson3sg
