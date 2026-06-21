@@ -78,6 +78,13 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if agent.Concept == nil {
 		return false // the subject grounds in nothing; not yet a proposition to write
 	}
+	// A faculty word standing as the subject is a command the grammar misread as a
+	// statement, its verb not being a seeded imperative opener. It is not a
+	// proposition: declining it lets the faculty fallback route the clause and keeps
+	// its object from being minted as a bogus relation.
+	if _, isCommand := d.commandName[agent.Concept.ID]; isCommand {
+		return false
+	}
 	// A verb that names no relation and binds to no warm cross-tongue relation would
 	// mint a fresh one. Before it does, read the clause as the relation its
 	// arguments' company most resembles: taken hedged when the resemblance is clear,

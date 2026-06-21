@@ -89,3 +89,14 @@ func TestBuiltinCommandRailFallsThrough(t *testing.T) {
 		t.Error("a non-faculty imperative should fall through, not route to a faculty")
 	}
 }
+
+// A faculty command the grammar misread as a statement must not teach: its object
+// is not minted as a relation, and nothing is stored.
+func TestBuiltinCommandNoPollution(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "rabbit")
+	say(t, d, "recollect the rabbit") // routes to recall via the fallback
+	if r := d.resolveRelation("rabbit"); r != nil {
+		t.Errorf("a faculty command must not mint its object as a relation: %q", r.Content)
+	}
+}

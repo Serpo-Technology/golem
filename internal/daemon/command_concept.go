@@ -164,6 +164,28 @@ func (d *Daemon) routeBuiltinCommand(frame grammar.Frame, raw string, chem limbi
 	return d.runBuiltinCommand(top.name, frame, chem), true
 }
 
+// routeFacultyFallback routes a clause that failed to comprehend when its opening
+// word names a faculty. It runs only after ordinary statement handling gave up, so
+// it cannot steal a clause that taught; and it matches a faculty by name alone, not
+// by resemblance, so a faculty's trigger word standing as a subject ("memory
+// fades") is never mistaken for a command. This is the path that lets a synonym
+// route without being seeded as an imperative opener.
+func (d *Daemon) routeFacultyFallback(frame grammar.Frame, raw string) (string, bool) {
+	fields := strings.Fields(raw)
+	if len(fields) == 0 {
+		return "", false
+	}
+	c := d.resolveConcept(strings.ToLower(fields[0]))
+	if c == nil {
+		return "", false
+	}
+	name, ok := d.commandName[c.ID]
+	if !ok {
+		return "", false
+	}
+	return d.runBuiltinCommand(name, frame, d.chem.Snapshot()), true
+}
+
 // runBuiltinCommand dispatches a resolved faculty. recall reads its topic from the
 // clause and asks when none is given, the arity check the closed command set
 // affords; the others need no argument.

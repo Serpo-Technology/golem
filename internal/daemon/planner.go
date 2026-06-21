@@ -814,6 +814,14 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 			// in which case GOLEM follows up with the answer it can now give.
 			return d.followUp, nil
 		}
+		// A clause that did not teach, whose opening word names a faculty, is a
+		// command the grammar did not recognize as one: its verb is not a seeded
+		// imperative opener, so it was read as a subject. Route it to the faculty
+		// before the failure is treated as an unknown word. This is what makes a
+		// faculty synonym work the moment it names the faculty, with no seed edit.
+		if line, handled := d.routeFacultyFallback(frame, raw); handled {
+			return line, nil
+		}
 		// A statement teaches; GOLEM only speaks up when curiosity about
 		// an unknown word wins, and an asked question is held as a goal.
 		if len(frame.Unknown) > 0 && d.chem.Snapshot().Dopamine >= curiosityGate {
