@@ -85,14 +85,10 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if _, isCommand := d.commandName[agent.Concept.ID]; isCommand {
 		return false
 	}
-	// A verb that names no relation and binds to no warm cross-tongue relation would
-	// mint a fresh one. Before it does, read the clause as the relation its
-	// arguments' company most resembles: taken hedged when the resemblance is clear,
-	// asked about when it is only moderate, and otherwise left to mint as new, so a
-	// genuinely new verb is still learned.
-	if d.fallbackRelation(frame, m) {
-		return true
-	}
+	// An unknown verb is learned here: relationConcept mints it as a new relation.
+	// Resemblance to a known relation belongs on the question path, where a verb
+	// cannot be learned and a fuzzy match aids retrieval, never on this teaching
+	// path, where it would read a new verb as an old one and block acquisition.
 	rel, err := d.relationConcept(m.Relation, frame.Lang)
 	if err != nil || rel == nil {
 		fmt.Fprintf(d.out, "relation mint error: %v\n", err)
@@ -164,59 +160,14 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	return true
 }
 
-// The resemblance fallback reads a clause whose verb names no relation. Its
-// thresholds are cosine on the argument-company match: at or above resembleAccept
-// with a clear margin the reading is taken, hedged; down to resembleAsk it is only
-// proposed as a question; below that the verb is left to mint as something new.
+// The resemblance thresholds for matching a clause to a relation by its argument
+// company: at or above resembleAccept with a clear margin the match is taken, down
+// to resembleAsk it is only a candidate. The question path is their consumer.
 const (
 	resembleAccept = 0.6
 	resembleAsk    = 0.4
 	resembleMargin = 0.15
 )
-
-// fallbackRelation handles a verb that names no relation by reading the clause as
-// the relation its arguments most resemble. It fires only where the normal path
-// would mint a fresh relation, so a taught phrasing and a pending cross-tongue
-// binding are both left untouched. It returns true when it has handled the turn,
-// either by holding a hedged reading or by asking which relation was meant.
-func (d *Daemon) fallbackRelation(frame grammar.Frame, m grammar.Meaning) bool {
-	if m.Relation.Concept != nil && m.Relation.Concept.Category == "relation" {
-		return false
-	}
-	lemma := m.Relation.Phrase
-	if lemma == "" || d.resolveRelation(lemma) != nil {
-		return false
-	}
-	// A warm relation not yet named in this tongue is a cross-tongue binding the
-	// normal path will make, so the fallback defers to it. A warm relation already
-	// named here does not bind, so the fallback proceeds.
-	if warm := d.warmestRelation(); warm != nil && !d.relationNamedIn(warm.ID, frame.Lang) {
-		return false
-	}
-	agent := m.Roles["agent"]
-	patient := m.Roles["patient"]
-	if agent.Concept == nil {
-		return false
-	}
-	var patientID uint64
-	if patient.Concept != nil {
-		patientID = patient.Concept.ID
-	}
-	cand, conf, margin, ok := d.nearestRelationByCompany(agent.Concept.ID, patientID)
-	if !ok || conf < resembleAsk {
-		return false // nothing near enough; let the verb mint as something new
-	}
-	// Dispose on what the vectors proposed: the reading must be role-coherent and
-	// must not contradict a standing claim. A weak or incoherent proposal is asked
-	// about rather than taken.
-	coheres := d.relationReadingCoheres(cand, agent.Concept, patient.Concept)
-	if !coheres || conf < resembleAccept || margin < resembleMargin {
-		d.followUp = d.clarifyRelationQuestion(frame.Lang, cand)
-		return true
-	}
-	d.acceptResembledReading(frame, m, cand, conf)
-	return true
-}
 
 // nearestRelationByCompany proposes the relation a clause's arguments most
 // resemble, matching role by role: the clause's agent against each relation's
@@ -293,71 +244,6 @@ func (d *Daemon) verbalRelation(relID uint64) bool {
 		}
 	}
 	return true
-}
-
-// relationReadingCoheres disposes on a resembled reading the vectors proposed. The
-// role assignment itself already passed grammar role-fit during comprehension, so
-// the structural veto left here is a standing denial: GOLEM does not assert on a
-// guess what it has already denied. The agent must ground for there to be a
-// proposition at all.
-func (d *Daemon) relationReadingCoheres(cand, agent, patient *memory.Fragment) bool {
-	if agent == nil {
-		return false
-	}
-	if patient != nil {
-		if c := d.recallClaim(cand.Content, agent.ID, patient.ID); c != nil && !c.affirmed {
-			return false
-		}
-	}
-	return true
-}
-
-// acceptResembledReading holds the resembled reading as a hedged belief and a
-// standing claim, then surfaces it so the speaker sees how the unknown verb was
-// read and can correct it. The reading enters as inference, never as an observed
-// fact, so it is hedged everywhere and a later plain telling supersedes it.
-func (d *Daemon) acceptResembledReading(frame grammar.Frame, m grammar.Meaning, cand *memory.Fragment, conf float64) {
-	agent := m.Roles["agent"]
-	patient := m.Roles["patient"]
-	d.noteFocus(agent.Concept)
-	if patient.Concept != nil {
-		d.held.add(heldProp{rel: cand.Content, agent: agent.Concept.ID, patient: patient.Concept.ID,
-			agentGloss: agent.Concept.Content, patientGloss: patient.Concept.Content,
-			status: heldInferred, conf: conf, voiced: true})
-		d.recordClaim(cand.Content, agent.Concept.ID, patient.Concept.ID, true, true)
-	}
-	d.followUp = d.hedgedReadingClause(frame.Lang, cand, agent, patient)
-}
-
-// clarifyRelationQuestion asks which known relation an unknown verb was meant to
-// be, the question a moderate resemblance earns in place of a silent guess.
-func (d *Daemon) clarifyRelationQuestion(lang string, cand *memory.Fragment) string {
-	name := d.conceptName(cand.ID, cand.Content, lang)
-	if lang == "" || lang == "en" {
-		return "Do you mean " + name + "?"
-	}
-	return name + "?"
-}
-
-// hedgedReadingClause renders how an unknown verb was read, led by the tongue's
-// hedge, so a taken reading is offered as a guess: "Probably, the dog chased the
-// cat."
-func (d *Daemon) hedgedReadingClause(lang string, cand *memory.Fragment, agent, patient grammar.Term) string {
-	roles := map[string]grammar.Term{
-		"agent": {Phrase: d.conceptName(agent.Concept.ID, agent.Concept.Content, lang), Definite: true},
-	}
-	if patient.Concept != nil {
-		roles["patient"] = grammar.Term{Phrase: d.conceptName(patient.Concept.ID, patient.Concept.Content, lang), Definite: true}
-	}
-	clause, ok := d.gram.SpeakDecl(lang, grammar.Meaning{Relation: grammar.Term{Phrase: cand.Content}, Roles: roles, Past: true})
-	if !ok {
-		return ""
-	}
-	hedge := d.gram.Word(lang, "probably")
-	if hedge == "" {
-		return clause
-	}
-	return upperFirst(hedge) + ", " + lowerFirst(clause)
 }
 
 // meaningNamesParticipant reports whether a comprehended clause fills a role with
