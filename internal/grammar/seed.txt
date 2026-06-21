@@ -194,6 +194,9 @@ order:la	free	la
 order:tr	sov	tr
 case:la:accusative	m	la
 case:la:genitive	e	la
+fw:la:ego	ego	la	deixis
+fw:la:tu	tu	la	deixis
+fw:la:nos	nos	la	deixis
 suffix:tr:ablative	DAn	tr
 suffix:tr:accusative	(y)I	tr
 suffix:tr:copula	DIr	tr
@@ -292,6 +295,9 @@ surface:tr:no	hayır	tr
 surface:la:yes	ita	la
 surface:la:no	minime	la
 surface:la:not	non	la
+surface:la:firstperson	ego	la
+surface:la:addressee	tu	la
+surface:la:firstpersonpl	nos	la
 surface:en:probably	probably	en
 surface:tr:probably	muhtemelen	tr
 surface:en:ifso	if so	en

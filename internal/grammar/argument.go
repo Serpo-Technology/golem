@@ -366,11 +366,13 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 func (p *Params) comprehendByCase(lang string, spans []string, resolve func(string) *memory.Fragment) (Meaning, bool) {
 	m := Meaning{Roles: map[string]Term{}, Lang: lang}
 	var nouns []string
+	person := ""
 	for _, span := range spans {
 		if m.Relation.Phrase == "" && p.finiteVerbByCase(lang, span) {
 			lemma := p.verbLemma(lang, span)
 			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
 			m.Past = p.verbPast(lang, span)
+			_, person, _ = latinVerb(span)
 			continue
 		}
 		nouns = append(nouns, span)
@@ -388,7 +390,30 @@ func (p *Params) comprehendByCase(lang string, spans []string, resolve func(stri
 		}
 		m.Roles[role] = filler
 	}
+	// Pro-drop: Latin leaves the subject to the verb's person. With no nominative
+	// agent named and a first or second person verb, the agent is the speaker or the
+	// addressee, recovered as the pronoun the resolver maps to the participant.
+	if m.Roles["agent"].Concept == nil {
+		if pron := p.personPronounLatin(person); pron != "" {
+			m.Roles["agent"] = Term{Concept: resolve(pron), Phrase: pron}
+		}
+	}
 	return m, true
+}
+
+// personPronounLatin is the nominative pronoun a pro-dropped Latin subject recovers
+// to, read from the seeded surfaces; the third person carries no participant, so it is
+// left for an explicit subject.
+func (p *Params) personPronounLatin(person string) string {
+	switch person {
+	case "1sg":
+		return p.surfaceWord("la", "firstperson")
+	case "2sg":
+		return p.surfaceWord("la", "addressee")
+	case "1pl":
+		return p.surfaceWord("la", "firstpersonpl")
+	}
+	return ""
 }
 
 // caseRole reads the role a case-marked noun fills and the lemma it names: the
@@ -401,12 +426,33 @@ func (p *Params) caseRole(lang, span string) (role, lemma string) {
 	return "agent", span
 }
 
-// finiteVerbByCase reports whether a span is the finite verb of a case-marked clause.
-// Latin's third-person verb ends in -t (amat, videt) while its first-declension nouns
-// end in their case vowels, so the verb is told apart by that ending. A first cut over
-// the present tense; richer person and tense marking will refine it.
+// latinPresent lists the first-conjugation present-active endings, longest first so
+// the longer plural endings are tried before the short singular ones, each with the
+// person it marks.
+var latinPresent = []struct{ ending, person string }{
+	{"amus", "1pl"}, {"atis", "2pl"}, {"ant", "3pl"},
+	{"as", "2sg"}, {"at", "3sg"}, {"o", "1sg"},
+}
+
+// latinVerb reads a Latin first-conjugation present verb: the lemma normalized to the
+// third-singular form (so every person keys the one relation) and the person it
+// carries. ok is false when the span is no such verb. A first cut over the present of
+// the first conjugation; other conjugations and tenses refine it.
+func latinVerb(span string) (lemma, person string, ok bool) {
+	for _, e := range latinPresent {
+		if strings.HasSuffix(span, e.ending) && len(span) > len(e.ending)+1 {
+			return span[:len(span)-len(e.ending)] + "at", e.person, true
+		}
+	}
+	return "", "", false
+}
+
+// finiteVerbByCase reports whether a span is the finite verb of a case-marked clause,
+// told apart from the case-marked nouns by its conjugation ending (Latin's nouns wear
+// their case vowels, its verbs the person endings).
 func (p *Params) finiteVerbByCase(lang, span string) bool {
-	return strings.HasSuffix(span, "t")
+	_, _, ok := latinVerb(span)
+	return ok
 }
 
 // bestFit reorders the role assignment by feature fit when one is clearly
@@ -585,6 +631,11 @@ func (p *Params) verbLemma(lang, surface string) string {
 	}
 	if lang == "tr" {
 		return turkishVerbStem(surface)
+	}
+	if lang == "la" {
+		if lemma, _, ok := latinVerb(surface); ok {
+			return lemma
+		}
 	}
 	for _, v := range p.verbs {
 		switch surface {

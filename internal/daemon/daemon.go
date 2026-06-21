@@ -610,9 +610,9 @@ func (d *Daemon) ensureDeicticForms() {
 		participant uint64
 		forms       []string
 	}{
-		{d.userID, []string{"i", "me", "ben", "beni"}},
-		{d.selfID, []string{"you", "sen", "seni"}},
-		{d.bothID, []string{"we", "us", "biz", "bizi"}},
+		{d.userID, []string{"i", "me", "ben", "beni", "ego"}},
+		{d.selfID, []string{"you", "sen", "seni", "tu"}},
+		{d.bothID, []string{"we", "us", "biz", "bizi", "nos"}},
 	}
 	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {

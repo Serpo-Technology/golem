@@ -97,6 +97,22 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 }
 
+// Latin conjugates across persons and drops the subject: "rosam amo" (I love the
+// rose) is recognized through the first-person ending and the speaker is recovered as
+// the agent, where before only the third person -t was read.
+func TestLatinConjugationProDrop(t *testing.T) {
+	d, _ := testDaemon(t)
+	rose := groundNounLang(t, d, "rosa", "la")
+	sayLang(t, d, "la", "rosam amo") // (I) love the rose
+	user := d.resolveConcept("ego")
+	if user == nil {
+		t.Fatal("the first-person pronoun should resolve to the speaker")
+	}
+	if !hasProp(d, user, "amat", rose) {
+		t.Errorf("a pro-dropped first-person clause should make the speaker the agent")
+	}
+}
+
 // Latin joins the cross-tongue substrate with no new machinery: the bilingual nouns
 // resolve to one concept each, and the Latin verb binds to the warm English relation,
 // so a fact taught only in Latin answers in English and the reverse holds too.
