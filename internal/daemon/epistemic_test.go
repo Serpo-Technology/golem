@@ -84,6 +84,64 @@ func TestEpistemicSpeakerDeferred(t *testing.T) {
 	}
 }
 
+// "What do you know" is the open self-report: it reads the whole graph and names
+// the kinds GOLEM has formed and the actions it has learned, where "what do you
+// know about X" reads a single concept.
+func TestKnowledgeSummaryReportsKindsAndActions(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat") // mints the chase relation
+
+	// A true superordinate GOLEM has formed: a kind generalizing over two members,
+	// where a basic noun's own abstraction grounds in just its one percept.
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := d.store.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.store.SetLinkRel(w.ID, animal.ID, memory.RelNames, 0.9); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []*memory.Fragment{dog, cat} {
+		if err := d.store.SetLinkRel(animal.ID, m.ID, memory.RelGrounds, 0.8); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := say(t, d, "what do you know").Say
+	if !strings.Contains(got, "animal") {
+		t.Errorf("the summary should name a kind it formed: %q", got)
+	}
+	if !strings.Contains(got, "chase") {
+		t.Errorf("the summary should name an action it learned: %q", got)
+	}
+	// The open form must not be read as a description of GOLEM itself.
+	if strings.Contains(strings.ToLower(got), "you names") || strings.Contains(got, "GOLEM") {
+		t.Errorf("the open question should summarize knowledge, not describe the self: %q", got)
+	}
+}
+
+// "What do you know about X" still reads the single concept, not the whole-graph
+// summary: the open form must not swallow the focused one.
+func TestKnowledgeSummaryLeavesAboutForm(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	got := say(t, d, "what do you know about the dog").Say
+	if !strings.Contains(strings.ToLower(got), "dog") {
+		t.Errorf("the about-form should describe the named concept: %q", got)
+	}
+	if strings.Contains(got, "kinds like") {
+		t.Errorf("the about-form should not give the whole-graph summary: %q", got)
+	}
+}
+
 // The recognizer is specific: an ordinary "does" question, not a "do you know",
 // is left alone, so a real polar still answers from the graph.
 func TestEpistemicLeavesOrdinaryQuestion(t *testing.T) {

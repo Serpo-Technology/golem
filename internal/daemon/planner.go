@@ -730,6 +730,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return line, nil
 	}
 
+	// "What do you know": the open self-report, read from the whole graph. It runs
+	// after the "about X" form above, which reads a single concept, so only the
+	// bare question reaches the summary.
+	if line, ok := d.planKnowledgeSummary(raw); ok {
+		return line, nil
+	}
+
 	// "Before is transitive": a rule predicated of a relation, learned as a
 	// property of it and read back the same way. It runs before the statement path
 	// so the rule is recorded on the relation rather than written as a fact, and
