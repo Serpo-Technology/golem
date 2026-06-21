@@ -81,25 +81,53 @@ func TestSpatialDoesNotBreakIsA(t *testing.T) {
 	}
 }
 
-// A Turkish locative clause marks place by the case with no relation word, and its
-// English echo unifies onto the same relation, so "where" answers in either tongue.
-func TestTurkishSpatialLocative(t *testing.T) {
+// A Turkish spatial postposition names a precise place over the genitive ground
+// ("yaprak ağacın üstünde") and joins the relation its English preposition does, so
+// "where" answers with the postposition in Turkish and the preposition in English.
+func TestTurkishSpatialPostposition(t *testing.T) {
 	d, _ := testDaemon(t)
 	groundBilingual(t, d, "leaf", "leaf", "yaprak")
 	groundBilingual(t, d, "tree", "tree", "ağaç")
 	say(t, d, "the leaf is on the tree")
-	sayLang(t, d, "tr", "yaprak ağaçta")
+	sayLang(t, d, "tr", "yaprak ağacın üstünde")
 
 	tr := sayLang(t, d, "tr", "yaprak nerede").Say
 	t.Logf("yaprak nerede -> %q", tr)
 	en := say(t, d, "where is the leaf").Say
 	t.Logf("where is the leaf -> %q", en)
 
-	if tr != "Yaprak ağaçta." {
-		t.Errorf("Turkish where should read the place in the locative case: %q", tr)
+	if tr != "Yaprak ağacın üstünde." {
+		t.Errorf("Turkish where should read the place as a postposition: %q", tr)
 	}
 	if !strings.Contains(en, "on the tree") {
-		t.Errorf("the unified relation should still answer in English: %q", en)
+		t.Errorf("the unified relation should answer in English: %q", en)
+	}
+}
+
+// The three postpositions map to on/in/under, bidirectionally: a Turkish place taught
+// with a postposition answers the English preposition's query, the in/under cases
+// staying distinct rather than collapsing to the general locative.
+func TestTurkishPostpositionsDistinct(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundBilingual(t, d, "apple", "apple", "elma")
+	groundBilingual(t, d, "cat", "cat", "kedi")
+	groundBilingual(t, d, "tree", "tree", "ağaç")
+	sayLang(t, d, "tr", "elma ağacın içinde")
+	sayLang(t, d, "tr", "kedi ağacın altında")
+
+	if got := sayLang(t, d, "tr", "elma nerede").Say; got != "Elma ağacın içinde." {
+		t.Errorf("in should read as içinde: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "kedi nerede").Say; got != "Kedi ağacın altında." {
+		t.Errorf("under should read as altında: %q", got)
+	}
+	// The Turkish-taught places answer the English preposition's polar question, and
+	// in and under stay distinct (the apple is in, not under).
+	if got := say(t, d, "is the apple in the tree").Say; !strings.HasPrefix(got, "Yes") {
+		t.Errorf("a Turkish-taught 'in' should affirm the English query: %q", got)
+	}
+	if got := say(t, d, "is the apple under the tree").Say; !strings.HasPrefix(got, "No") {
+		t.Errorf("in and under must stay distinct: %q", got)
 	}
 }
 

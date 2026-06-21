@@ -167,6 +167,9 @@ fw:tr:niye	niye	tr	wh
 fw:tr:sen	sen	tr	deixis
 fw:tr:seni	seni	tr	deixis
 fw:tr:sonra	sonra	tr	rel
+fw:tr:altında	altında	tr	postp:under
+fw:tr:içinde	içinde	tr	postp:in
+fw:tr:üstünde	üstünde	tr	postp:on
 fw:tr:var	var	tr	exist
 fw:tr:ve	ve	tr	fn
 fw:tr:zaman	zaman	tr	time

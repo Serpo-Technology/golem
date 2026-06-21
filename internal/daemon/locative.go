@@ -53,14 +53,15 @@ func (d *Daemon) factIsLocative(relContent string) bool {
 // just spoken. It returns false when the engine cannot speak the clause.
 func (d *Daemon) locativeClause(lang, figure, prep, ground string, given, negate bool, chem limbic.State) (string, bool) {
 	if lang == "tr" {
-		// Turkish marks place by the locative case on the ground and carries no
-		// preposition or copula: "yaprak ağaçta". The figure is named (no inflected
-		// pronoun for it here), the ground takes the locative suffix.
-		clause := figure + " " + d.gram.Locative(lang, ground)
-		if negate {
-			if no := d.gram.Word(lang, "notbe"); no != "" {
-				clause += " " + no
-			}
+		// Turkish marks place by case, no preposition or copula. A specific place
+		// takes the postposition over the genitive ground ("yaprak ağacın üstünde");
+		// a general one takes the locative case ("yaprak ağaçta"). The figure is named
+		// (no inflected pronoun for it here).
+		var clause string
+		if post, ok := d.gram.PostpositionFor(lang, prep); ok {
+			clause = figure + " " + d.gram.Genitive(lang, ground) + " " + post
+		} else {
+			clause = figure + " " + d.gram.Locative(lang, ground)
 		}
 		return grammar.Sentence(clause), true
 	}
@@ -135,7 +136,22 @@ func (d *Daemon) planLocativePolar(frame grammar.Frame) (string, bool) {
 // bare locative (no locative case, a referent unresolved, or more than the two
 // nouns), so the ordinary verb-clause path stands.
 func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
-	tokens := d.gram.ContentTokensLang("tr", raw)
+	tokens, _ := grammar.Tokenize(raw)
+	// Postposition form: figure ground-GEN postposition ("yaprak ağacın üstünde"),
+	// the postposition naming the precise place its English preposition does, so it
+	// joins that relation across tongues.
+	if len(tokens) == 3 {
+		if prep, ok := d.gram.Postposition("tr", tokens[2]); ok {
+			figure := d.resolveConcept(tokens[0])
+			ground := d.resolveGround(d.gram.GenitiveGround("tr", tokens[1]))
+			if figure != nil && ground != nil && figure.ID != ground.ID {
+				return d.storeLocativeTR(momentID, figure, ground, d.prepositionRelation(prep))
+			}
+		}
+	}
+	// General locative form: figure ground-LOC ("yaprak ağaçta"). The locative-cased
+	// noun is the ground and the bare noun the figure; the relation is the warm
+	// locative one or a general Turkish locative.
 	if len(tokens) != 2 {
 		return false
 	}
@@ -155,7 +171,13 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 	if figure == nil || figure.ID == ground.ID {
 		return false
 	}
-	rel := d.locativeRelationTR()
+	return d.storeLocativeTR(momentID, figure, ground, d.locativeRelationTR())
+}
+
+// storeLocativeTR writes a Turkish locative proposition (the figure at the ground
+// under the given relation), marks the relation locative, and warms the parts. It
+// returns false when the relation could not be resolved.
+func (d *Daemon) storeLocativeTR(momentID uint64, figure, ground, rel *memory.Fragment) bool {
 	if rel == nil {
 		return false
 	}
@@ -170,6 +192,32 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 	d.ws.exciteRole(figure.ID, exciteSpeech, "agent")
 	d.ws.exciteRole(ground.ID, exciteSpeech, "patient")
 	return true
+}
+
+// prepositionRelation resolves the canonical locative relation a preposition names
+// (on, in, under), the one both tongues' spatial forms join: the relation already
+// named by the preposition if it exists, else one keyed and named by it. The English
+// copula path and the Turkish postposition reach the same concept, so the place is
+// one relation however it was spoken. It is marked locative so a "where" reads it.
+func (d *Daemon) prepositionRelation(prep string) *memory.Fragment {
+	if r := d.resolveRelation(prep); r != nil {
+		d.markLocative(r.ID)
+		return r
+	}
+	tpl := "rel:en:" + prep
+	if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
+		d.markLocative(c.ID)
+		return c
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: prep,
+		Template: tpl, Category: "relation", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "locative relation mint error: %v\n", err)
+		return nil
+	}
+	d.nameRelationInTongue(c, prep, "en")
+	d.markLocative(c.ID)
+	return c
 }
 
 // locativeRelationTR resolves the relation a Turkish locative clause stands in:
@@ -222,7 +270,9 @@ func (d *Daemon) planWhere(frame grammar.Frame, chem limbic.State) (string, bool
 			continue
 		}
 		ground := d.conceptName(f.coID, f.coGloss, frame.Lang)
-		prep := d.relationName(f.rel, frame.Lang)
+		// The relation's content is the canonical preposition (on/in/under/at): English
+		// speaks it, Turkish maps it to a postposition or the locative case.
+		prep := f.rel
 		if clause, ok := d.locativeClause(frame.Lang, figName, prep, ground, len(clauses) > 0, false, chem); ok {
 			clauses = append(clauses, clause)
 		}

@@ -1913,7 +1913,7 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		// "no".
 		clause, ok = d.locativeClause(lang,
 			d.conceptName(agent.ID, agent.Content, lang),
-			d.relationName(rel.Content, lang),
+			rel.Content,
 			d.conceptName(patient.ID, patient.Content, lang),
 			false, negate, d.chem.Snapshot())
 	} else {

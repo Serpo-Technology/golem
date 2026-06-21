@@ -256,6 +256,32 @@ func (p *Params) Existential(lang, form string) bool {
 	return p.categories[lang][form] == "exist"
 }
 
+// Postposition reads the English preposition a Turkish spatial postposition maps to,
+// "üstünde" -> "on" from its seeded "postp:on" category, so the precise place a
+// postposition names joins the same relation its English preposition does. The empty
+// string and false mean the form is no postposition.
+func (p *Params) Postposition(lang, form string) (string, bool) {
+	p = p.get()
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "postp:"); ok {
+		return spec, true
+	}
+	return "", false
+}
+
+// PostpositionFor returns the Turkish postposition that names a preposition's place,
+// "on" -> "üstünde", for generation. The empty string and false mean the tongue has
+// no postposition for it (so the general locative case is used instead).
+func (p *Params) PostpositionFor(lang, prep string) (string, bool) {
+	p = p.get()
+	want := "postp:" + prep
+	for form, cat := range p.categories[lang] {
+		if cat == want {
+			return form, true
+		}
+	}
+	return "", false
+}
+
 // proAnimacy reads a pro-form's animacy preference from its seeded category,
 // "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
 // binding favors the referent it fits. A bare "pro" carries none.

@@ -499,7 +499,7 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 		// ground its patient, so the focus is the figure when it stood as agent and
 		// the ground when it stood as patient; the co-arguments fill the other side.
 		if d.factIsLocative(k.rel) {
-			prep := d.relationName(k.rel, lang)
+			prep := k.rel // the canonical preposition the tongue renders by
 			given := continuation || len(clauses) > 0
 			for _, co := range names {
 				figure, ground := focusName, co
