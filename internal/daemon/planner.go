@@ -738,6 +738,14 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Do you know X": a reflexive question about what GOLEM has grounded, read
+	// from its tokens because "do" opens an imperative and "know" is a function
+	// word, so the clause would otherwise be mis-handled as a command. It runs
+	// before the polar and command paths so that misreading never surfaces.
+	if ans, ok := d.planEpistemic(raw); ok {
+		return ans, nil
+	}
+
 	// A yes/no question is checked, not asserted: "did the dog chase the cat"
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,
