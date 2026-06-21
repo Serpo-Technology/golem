@@ -50,17 +50,36 @@ func (d *Daemon) planEpistemic(raw string) (string, bool) {
 	return "No, I do not know " + thing + ".", true
 }
 
-// knowsThing reports whether GOLEM has grounded the thing a phrase names: the word
-// resolves to a concept and that concept has a positive grounding tally. It is the
-// shared bar behind "do you know X" in every tongue, so each surface phrases the
-// same verdict its own way.
+// knowsThing reports whether GOLEM knows the thing a phrase names, in either of the
+// two ways a thing comes to be known. By acquaintance: the concept has a positive
+// grounding tally, a thing GOLEM has perceived. By description: the concept fills a
+// role in a told proposition, a thing GOLEM was told a fact about. An abstract word
+// like "llm" can never be perceived, so it is known the second way alone, yet it is
+// known, the same facts "what do you know about X" reports back. It is the shared bar
+// behind "do you know X" in every tongue, so each surface phrases the verdict its own
+// way.
 func (d *Daemon) knowsThing(phrase string) bool {
 	c := d.resolveConcept(phrase)
 	if c == nil {
 		return false
 	}
-	tally, err := d.store.GroundingTally()
-	return err == nil && tally[c.ID] > 0
+	if tally, err := d.store.GroundingTally(); err == nil && tally[c.ID] > 0 {
+		return true
+	}
+	return d.participatesInProposition(c.ID)
+}
+
+// participatesInProposition reports whether the concept stands as the agent or
+// patient of a grounded proposition, the edge a told fact lays and consolidation
+// spares from the groundless-concept sweep. This is knowledge by description: even a
+// concept that names no percept is known once a fact has been told of it.
+func (d *Daemon) participatesInProposition(id uint64) bool {
+	for _, role := range []string{memory.RelAgent, memory.RelPatient} {
+		if edges, err := d.store.LinksToRel([]uint64{id}, role); err == nil && len(edges) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // trKnowVerb and trKnowParticle recognize the Turkish "do you know" question: the

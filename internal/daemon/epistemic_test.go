@@ -47,6 +47,18 @@ func TestEpistemicUngroundedNotKnown(t *testing.T) {
 	}
 }
 
+// A thing known only by description is known. An abstract word names no percept, so
+// it never gains a grounding tally, yet once a fact has been told of it GOLEM knows
+// it, by description rather than acquaintance, the same facts it can report back.
+func TestEpistemicKnowsByDescription(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "a model predicts a word") // mints "model"; no percept ever grounds it
+	got := strings.ToLower(say(t, d, "do you know a model").Say)
+	if !strings.HasPrefix(got, "yes") || !strings.Contains(got, "model") {
+		t.Errorf("a thing told of is known by description, even unperceived: %q", got)
+	}
+}
+
 // A thing with no concept at all is not known, and the question is still caught,
 // so the imperative misreading of "do" never surfaces.
 func TestEpistemicUnknownThingCaught(t *testing.T) {
