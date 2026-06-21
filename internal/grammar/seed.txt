@@ -127,8 +127,9 @@ hap:en:think	think	en	think
 hap:en:thinking	thinking	en	think
 hap:en:thought	thought	en	think:past
 verb:en:fail	fail fails failed failed	en	
-verb:en:follow	follow follows followed followed	en	
-verb:en:happen	happen happens happened happened	en	
+verb:en:follow	follow follows followed followed	en
+verb:en:happen	happen happens happened happened	en
+verb:en:have	have has had had	en
 verb:en:know	know knows knew known	en	
 verb:en:name	name names named named	en	
 verb:en:precede	precede precedes preceded preceded	en	
