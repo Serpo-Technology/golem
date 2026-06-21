@@ -65,6 +65,15 @@ func (d *Daemon) locativeClause(lang, figure, prep, ground string, given, negate
 		}
 		return grammar.Sentence(clause), true
 	}
+	if lang == "la" {
+		// Latin places the figure with a preposition over the ground and the copula
+		// est: "rosa in mensa est". The preposition is the Latin form of the relation.
+		prepWord := latinPrepFor[prep]
+		if prepWord == "" {
+			prepWord = prep
+		}
+		return grammar.Sentence(figure + " " + prepWord + " " + ground + " est"), true
+	}
 	subject := definiteForm(lang, figure)
 	if given {
 		if pron := d.gram.Pronoun(lang, "agent"); pron != "" {
@@ -145,7 +154,7 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 			figure := d.resolveConcept(tokens[0])
 			ground := d.resolveGround(d.gram.GenitiveGround("tr", tokens[1]))
 			if figure != nil && ground != nil && figure.ID != ground.ID {
-				return d.storeLocativeTR(momentID, figure, ground, d.prepositionRelation(prep))
+				return d.storeLocative(momentID, figure, ground, d.prepositionRelation(prep))
 			}
 		}
 	}
@@ -171,13 +180,13 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 	if figure == nil || figure.ID == ground.ID {
 		return false
 	}
-	return d.storeLocativeTR(momentID, figure, ground, d.locativeRelationTR())
+	return d.storeLocative(momentID, figure, ground, d.locativeRelationTR())
 }
 
-// storeLocativeTR writes a Turkish locative proposition (the figure at the ground
+// storeLocative writes a locative proposition (the figure at the ground
 // under the given relation), marks the relation locative, and warms the parts. It
 // returns false when the relation could not be resolved.
-func (d *Daemon) storeLocativeTR(momentID uint64, figure, ground, rel *memory.Fragment) bool {
+func (d *Daemon) storeLocative(momentID uint64, figure, ground, rel *memory.Fragment) bool {
 	if rel == nil {
 		return false
 	}

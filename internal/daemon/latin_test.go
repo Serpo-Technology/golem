@@ -97,6 +97,25 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 }
 
+// Latin places the figure with a preposition over the ground ("rosa in mensa est"),
+// and the preposition joins the same locative relation English uses, so "ubi est"
+// reads the place back and a Latin place answers the English query.
+func TestLatinSpatial(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "rosa", "la")
+	groundNounLang(t, d, "mensa", "la")
+	sayLang(t, d, "la", "rosa in mensa est")
+	if got := sayLang(t, d, "la", "rosa ubi est?").Say; got != "Rosa in mensa est." {
+		t.Errorf("ubi should read the figure's place: %q", got)
+	}
+	groundLatinPair(t, d, "book", "book", "liber")
+	groundLatinPair(t, d, "box", "box", "arca")
+	sayLang(t, d, "la", "liber in arca est")
+	if got := say(t, d, "is the book in the box").Say; !strings.HasPrefix(got, "Yes") {
+		t.Errorf("a Latin-taught place should answer the English query: %q", got)
+	}
+}
+
 // A Latin role question carries its interrogative in the case: quis asks the
 // nominative agent, quem and quid the accusative patient. Each reads the asked role
 // from the proposition graph and speaks the whole clause back.

@@ -43,6 +43,12 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Lang == "tr" && d.comprehendLocativeTR(raw, momentID) {
 		return true
 	}
+	// A Latin locative clause places the figure with a preposition ("rosa in mensa
+	// est"); the preposition and copula carry no role the case parser reads, so the
+	// place is comprehended before it.
+	if frame.Lang == "la" && d.comprehendLocativeLA(raw, momentID) {
+		return true
+	}
 	// A Turkish possession clause marks holding by case and the existential "var"
 	// ("ağacın yaprağı var"), no verb, so it too is read before the verb path.
 	if frame.Lang == "tr" && d.comprehendPossessionTR(raw, momentID) {
