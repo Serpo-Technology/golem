@@ -7,6 +7,76 @@ import (
 	"golem/internal/memory"
 )
 
+// latinComparative maps a Latin comparative adjective to the English gradable relation
+// it shares, so "maior" orders on the same scale as "bigger".
+var latinComparative = map[string]string{"maior": "bigger", "minor": "smaller"}
+
+// latinComparison reads a Latin comparison "X maior quam Y" (X is bigger than Y): the
+// comparative adjective names the relation, the noun before it the subject, and the
+// noun after "quam" the standard. The interrogative est and its enclitic, and quam
+// itself, ground in nothing and are skipped. It returns false when no comparative is
+// present.
+func (d *Daemon) latinComparison(raw string) (subj *memory.Fragment, rel, relWord string, std *memory.Fragment, ok bool) {
+	tokens := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
+	compIdx := -1
+	for i, tok := range tokens {
+		if r, has := latinComparative[tok]; has {
+			compIdx, rel, relWord = i, r, tok
+			break
+		}
+	}
+	if compIdx < 0 {
+		return nil, "", "", nil, false
+	}
+	for i := 0; i < compIdx; i++ {
+		if c := d.resolveConcept(tokens[i]); c != nil {
+			subj = c
+			break
+		}
+	}
+	for i := compIdx + 1; i < len(tokens); i++ {
+		if c := d.resolveConcept(tokens[i]); c != nil {
+			std = c
+			break
+		}
+	}
+	return subj, rel, relWord, std, subj != nil && std != nil
+}
+
+// comprehendComparisonLA stores a Latin comparison statement as an ordering on the
+// gradable relation, the shared comparison machinery discovering the converse pole.
+func (d *Daemon) comprehendComparisonLA(raw string, momentID uint64) bool {
+	subj, rel, _, std, ok := d.latinComparison(raw)
+	if !ok {
+		return false
+	}
+	return d.storeComparison(grammar.Frame{Comparative: true, Lang: "la",
+		Agent:  grammar.Term{Concept: subj},
+		Patient: grammar.Term{Concept: std},
+		Action: grammar.Term{Phrase: rel}}, momentID)
+}
+
+// planLatinComparison answers a Latin comparison question ("estne rosa maior quam
+// viola") by walking the told orderings transitively, the same reasoning the English
+// comparison question uses, and speaking the verdict back in Latin.
+func (d *Daemon) planLatinComparison(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "la" || frame.Force != grammar.ForceQuestion {
+		return "", false
+	}
+	subj, _, relWord, std, ok := d.latinComparison(raw)
+	if !ok {
+		return "", false
+	}
+	d.noteFocus(subj)
+	rel := d.resolveRelation(latinComparative[relWord])
+	if rel != nil && subj.ID != std.ID && d.comparesTransitively(rel, subj.ID, std.ID) {
+		clause := d.conceptName(subj.ID, subj.Content, "la") + " " + relWord + " quam " +
+			d.conceptName(std.ID, std.Content, "la")
+		return upperFirst(d.gram.Word("la", "yes")) + ", " + clause + ".", true
+	}
+	return upperFirst(d.gram.Word("la", "no")) + ".", true
+}
+
 // latinPrep maps a Latin spatial preposition to the English preposition whose locative
 // relation it shares, so "in mensa" joins the same place relation as "in the table".
 var latinPrep = map[string]string{"in": "in", "sub": "under", "super": "on"}

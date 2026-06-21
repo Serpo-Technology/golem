@@ -97,6 +97,28 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 }
 
+// Latin compares with a comparative adjective and quam ("rosa maior quam viola", the
+// rose is bigger than the violet), ordered on the shared scale so the told orderings
+// chain transitively the way the English comparison does.
+func TestLatinComparison(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "rosa", "la")
+	groundNounLang(t, d, "viola", "la")
+	groundNounLang(t, d, "lilia", "la")
+	sayLang(t, d, "la", "rosa maior quam viola")
+	sayLang(t, d, "la", "viola maior quam lilia")
+
+	if got := sayLang(t, d, "la", "estne rosa maior quam viola?").Say; got != "Ita, rosa maior quam viola." {
+		t.Errorf("a told comparison should affirm: %q", got)
+	}
+	if got := sayLang(t, d, "la", "estne viola maior quam rosa?").Say; got != "Minime." {
+		t.Errorf("the reverse ordering should be denied: %q", got)
+	}
+	if got := sayLang(t, d, "la", "estne rosa maior quam lilia?").Say; got != "Ita, rosa maior quam lilia." {
+		t.Errorf("the ordering should chain transitively: %q", got)
+	}
+}
+
 // Latin possesses with habere, a transitive verb of the second conjugation ("puella
 // rosam habet", the girl has the rose), which joins the English have relation, so a
 // possession taught only in Latin answers the English question.

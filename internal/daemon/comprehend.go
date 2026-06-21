@@ -49,6 +49,11 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Lang == "la" && d.comprehendLocativeLA(raw, momentID) {
 		return true
 	}
+	// A Latin comparison ("rosa maior quam viola") orders two concepts on a scale
+	// rather than relating them as a clause, so it is read as a comparison first.
+	if frame.Lang == "la" && d.comprehendComparisonLA(raw, momentID) {
+		return true
+	}
 	// A Turkish possession clause marks holding by case and the existential "var"
 	// ("ağacın yaprağı var"), no verb, so it too is read before the verb path.
 	if frame.Lang == "tr" && d.comprehendPossessionTR(raw, momentID) {

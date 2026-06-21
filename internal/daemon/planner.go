@@ -782,6 +782,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planComparative(frame); ok {
 		return ans, nil
 	}
+	// The Latin comparison carries its comparative in a word the English-or-Turkish
+	// frame parser does not read, so it is settled from the raw clause before the
+	// polar path strips its enclitic and reads it as a yes/no.
+	if ans, ok := d.planLatinComparison(frame, raw); ok {
+		return ans, nil
+	}
 
 	if line, ok := d.planPolar(frame, raw); ok {
 		return line, nil
