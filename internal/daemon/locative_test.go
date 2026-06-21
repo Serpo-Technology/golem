@@ -63,6 +63,23 @@ func TestSpatialRelationFromConstruction(t *testing.T) {
 	}
 }
 
+// "What is on/in/under X" names the figures in that place, the preposition filtering
+// the ground's locative relations so several places at one ground stay apart.
+func TestLocativeWhFiltersByPreposition(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "apple")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "tree")
+	say(t, d, "the apple is in the tree")
+	say(t, d, "the cat is under the tree")
+	if got := say(t, d, "what is in the tree").Say; got != "The apple is in the tree." {
+		t.Errorf("what-is-in should name only the in-thing: %q", got)
+	}
+	if got := say(t, d, "what is under the tree").Say; got != "The cat is under the tree." {
+		t.Errorf("what-is-under should name only the under-thing: %q", got)
+	}
+}
+
 // A spatial relation does not collide with the is-a reading: "is a leaf a tree"
 // (no preposition) still settles against the category hierarchy, and a relation
 // is marked locative only by the construction, not by being a plain transitive.

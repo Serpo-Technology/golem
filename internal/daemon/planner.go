@@ -875,6 +875,12 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		return line
 	}
 
+	// "What is on the tree" asks which figures hold a place at the ground: the
+	// preposition filters the locative relations so the answer names the things in
+	// that place, before the role-question and definition paths that would drop it.
+	if line, ok := d.planLocativeWh(frame, chem); ok {
+		return line
+	}
 	// A question about a relation's role is answered from the proposition
 	// graph through the engine: the walk crosses to the co-argument and the
 	// construction speaks the proposition back, not a hardcoded reply.

@@ -245,6 +245,45 @@ func (d *Daemon) locativeRelationTR() *memory.Fragment {
 	return c
 }
 
+// planLocativeWh answers "what is on/in/under X" by naming the figures that hold
+// that place at the ground. The preposition the clause carried filters the ground's
+// locative relations, so the in-things and the under-things stay apart; without it
+// the ground's name alone would read as a definition and any place would answer. It
+// returns false when the clause carries no locative preposition, so an ordinary
+// "what" falls through.
+func (d *Daemon) planLocativeWh(frame grammar.Frame, chem limbic.State) (string, bool) {
+	if frame.LocPrep == "" || (frame.Wh != "what" && frame.Wh != "which") {
+		return "", false
+	}
+	ground := frame.Agent.Concept
+	if ground == nil {
+		ground = frame.Patient.Concept
+	}
+	if ground == nil {
+		name := frame.Agent.Phrase
+		if name == "" {
+			name = frame.Patient.Phrase
+		}
+		ground = d.resolveConcept(name)
+	}
+	if ground == nil {
+		return "", false
+	}
+	d.noteFocus(ground)
+	groundName := d.conceptName(ground.ID, ground.Content, frame.Lang)
+	var clauses []string
+	for _, f := range d.gatherFacts(ground, "patient", frame.LocPrep) {
+		figure := d.conceptName(f.coID, f.coGloss, frame.Lang)
+		if cl, ok := d.locativeClause(frame.Lang, figure, frame.LocPrep, groundName, false, false, chem); ok {
+			clauses = append(clauses, cl)
+		}
+	}
+	if len(clauses) == 0 {
+		return "", false
+	}
+	return strings.Join(clauses, " "), true
+}
+
 // planWhere answers "where is X" from the figure's locative relations: it walks
 // the relations marked locative that X stands in as figure and speaks the place,
 // "The leaf is on the tree." It returns false when X holds no place, so an event
