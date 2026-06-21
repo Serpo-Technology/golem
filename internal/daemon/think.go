@@ -635,7 +635,15 @@ func (d *Daemon) featureSiblings(seed uint64, now time.Time) ([]walkDest, error)
 	// neighbours in the space, so resemblance is geometric where embeddings
 	// exist and shared-token where they do not. With no embeddings learned yet
 	// this adds nothing, so the symbolic resemblance stands unchanged.
-	return d.blendVectorSiblings(seed, out, now), nil
+	out = d.blendVectorSiblings(seed, out, now)
+	// A concept the feature-and-category space cannot place, an abstract word with
+	// no features, finds its likeness in the usage space instead: the company it
+	// keeps in relations. This runs only for such a concept, so a featured one's
+	// resemblance, and the lion fix it rests on, is untouched.
+	if _, hasKind := d.store.Vector(seed); !hasKind {
+		out = d.blendUsageSiblings(seed, out, now)
+	}
+	return out, nil
 }
 
 const (
@@ -697,6 +705,76 @@ func (d *Daemon) blendVectorSiblings(seed uint64, out []walkDest, now time.Time)
 			gloss:   f.Content,
 			kind:    f.Kind,
 			weight:  m.Score,
+			stress:  f.Limbic.Noradrenaline,
+			recency: recencyOf(now, f.Time),
+		})
+	}
+	return out
+}
+
+// blendUsageSiblings adds the seed's nearest neighbours in the usage space, the
+// concepts that keep similar relational company. It is what gives an abstract word
+// resemblance: with no features the seed sits at the origin of the kind space, so
+// the usage vector is the only signal that "network" is like "model". The usage
+// vectors are few relative to the graph, so a linear scan finds the nearest.
+func (d *Daemon) blendUsageSiblings(seed uint64, out []walkDest, now time.Time) []walkDest {
+	vec, ok := d.store.UsageVector(seed, usageSelf)
+	if !ok {
+		return out
+	}
+	all, err := d.store.UsageVectorsByRole(usageSelf)
+	if err != nil {
+		return out
+	}
+	type cand struct {
+		id    uint64
+		score float64
+	}
+	var cands []cand
+	for id, v := range all {
+		if id == seed {
+			continue
+		}
+		if s := memory.Cosine(vec, v); s >= vectorSimFloor {
+			cands = append(cands, cand{id, s})
+		}
+	}
+	sort.Slice(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
+	if len(cands) > vectorSiblingsCap {
+		cands = cands[:vectorSiblingsCap]
+	}
+	at := make(map[uint64]int, len(out))
+	for i, ws := range out {
+		at[ws.id] = i
+	}
+	want := make([]uint64, len(cands))
+	for i, c := range cands {
+		want[i] = c.id
+	}
+	frags, err := d.fragmentsByIDsTiered(want)
+	if err != nil {
+		return out
+	}
+	byID := make(map[uint64]*memory.Fragment, len(frags))
+	for _, f := range frags {
+		byID[f.ID] = f
+	}
+	for _, c := range cands {
+		f := byID[c.id]
+		if f == nil || f.Kind != memory.KindConcept {
+			continue
+		}
+		if i, exists := at[c.id]; exists {
+			if c.score > out[i].weight {
+				out[i].weight = c.score
+			}
+			continue
+		}
+		out = append(out, walkDest{
+			id:      f.ID,
+			gloss:   f.Content,
+			kind:    f.Kind,
+			weight:  c.score,
 			stress:  f.Limbic.Noradrenaline,
 			recency: recencyOf(now, f.Time),
 		})
