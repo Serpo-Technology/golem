@@ -110,6 +110,7 @@ func (d *Daemon) growEmbeddings() {
 	if k == 0 {
 		return
 	}
+	vecByID := make(map[uint64][]float32, len(concepts))
 	for i, c := range concepts {
 		vec := make([]float32, k)
 		for j := 0; j < k; j++ {
@@ -117,9 +118,77 @@ func (d *Daemon) growEmbeddings() {
 			// dominant factors, the standard latent-semantic coordinate.
 			vec[j] = float32(u.At(i, j) * math.Sqrt(sv[j]))
 		}
+		vecByID[c.ID] = vec
 		if err := d.store.SetVector(c.ID, vec); err != nil {
 			fmt.Fprintf(d.out, "embedding error: %v\n", err)
 			return
 		}
 	}
+	d.embedRelationsByFillers(concepts, vecByID, k)
+}
+
+// embedRelationsByFillers places each relation among the concepts it relates. A
+// relation carries no feature and belongs to no category, so the factorization
+// leaves its row at the origin and its embedding is useless. Here it takes the
+// average of its role-fillers' coordinates, the agents and patients of the
+// moments it grounds in, so it lands in the same space as the things it takes as
+// arguments. A clause whose verb names no relation can then propose the relation
+// whose company its arguments most resemble. This runs after the feature-and-
+// category coordinates are set and overwrites only relation vectors, so the
+// geometry the resemblance path already leans on is left exactly as it was.
+func (d *Daemon) embedRelationsByFillers(concepts []*memory.Fragment, vecByID map[uint64][]float32, k int) {
+	for _, c := range concepts {
+		if c.Category != "relation" {
+			continue
+		}
+		centroid := make([]float64, k)
+		n := 0
+		for _, id := range d.relationFillers(c.ID) {
+			v, ok := vecByID[id]
+			if !ok || len(v) != k {
+				continue
+			}
+			for j := 0; j < k; j++ {
+				centroid[j] += float64(v[j])
+			}
+			n++
+		}
+		if n == 0 {
+			continue // a relation never yet given an embedded argument stays unplaced
+		}
+		vec := make([]float32, k)
+		for j := 0; j < k; j++ {
+			vec[j] = float32(centroid[j] / float64(n))
+		}
+		if err := d.store.SetVector(c.ID, vec); err != nil {
+			fmt.Fprintf(d.out, "embedding error: %v\n", err)
+			return
+		}
+	}
+}
+
+// relationFillers returns the concepts that have filled a relation's roles: the
+// agents and patients of the moments the relation grounds in. The same concept
+// recurs once per moment it filled, so a frequent argument weighs more in the
+// centroid, the usage the placement should reflect.
+func (d *Daemon) relationFillers(relID uint64) []uint64 {
+	moments, err := d.store.LinksFromRel([]uint64{relID}, memory.RelGrounds)
+	if err != nil || len(moments) == 0 {
+		return nil
+	}
+	momIDs := make([]uint64, 0, len(moments))
+	for _, e := range moments {
+		momIDs = append(momIDs, e.To)
+	}
+	var fillers []uint64
+	for _, role := range []string{memory.RelAgent, memory.RelPatient} {
+		edges, err := d.store.LinksFromRel(momIDs, role)
+		if err != nil {
+			continue
+		}
+		for _, e := range edges {
+			fillers = append(fillers, e.To)
+		}
+	}
+	return fillers
 }
