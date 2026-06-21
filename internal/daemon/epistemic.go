@@ -36,12 +36,54 @@ func (d *Daemon) planEpistemic(raw string) (string, bool) {
 	if subject == "i" {
 		return "I cannot tell what you know.", true
 	}
+	// A proposition as the object of know ("do you know that the dog chased the
+	// cat") asks whether GOLEM holds that fact, not whether it knows an incidental
+	// noun in it. The optional "that" is dropped; a clause that is not a full
+	// proposition falls through to the concept check below.
+	if line, ok := d.knowsProposition(strings.TrimPrefix(thing, "that ")); ok {
+		return line, true
+	}
 	if c := d.resolveConcept(thing); c != nil {
 		if tally, err := d.store.GroundingTally(); err == nil && tally[c.ID] > 0 {
 			return "Yes, I know " + thing + ".", true
 		}
 	}
 	return "No, I do not know " + thing + ".", true
+}
+
+// knowsProposition answers whether GOLEM holds a proposition named as the object
+// of know. The clause is comprehended with word order authoritative, the way a
+// polar question and a supposition read theirs, so the roles are the ones asked.
+// GOLEM knows the fact when the graph holds it outright or deduces it soundly
+// (beliefObserved); a mere resemblance guess is not knowing. It returns false when
+// the clause is not a full proposition over a known relation, leaving the object to
+// be read as a plain concept.
+func (d *Daemon) knowsProposition(clause string) (string, bool) {
+	m, ok := d.gram.Comprehend("en", clause, d.resolveConcept, nil)
+	if !ok {
+		return "", false
+	}
+	agent, patient := m.Roles["agent"], m.Roles["patient"]
+	rel := d.resolveRelation(m.Relation.Phrase)
+	if agent.Concept == nil || patient.Concept == nil || rel == nil {
+		return "", false
+	}
+	echo := clause
+	if line, spoke := d.gram.Speak("en", grammar.Meaning{
+		Relation: grammar.Term{Phrase: d.relationName(rel.Content, "en")},
+		Roles: map[string]grammar.Term{
+			"agent":   {Phrase: d.conceptName(agent.Concept.ID, agent.Concept.Content, "en"), Definite: true},
+			"patient": {Phrase: d.conceptName(patient.Concept.ID, patient.Concept.Content, "en"), Definite: true},
+		},
+		Past: m.Past,
+	}); spoke {
+		echo = lowerFirst(strings.TrimSuffix(strings.TrimSpace(line), "."))
+	}
+	belief, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	if belief == beliefObserved {
+		return "Yes, I know that " + echo + ".", true
+	}
+	return "No, I do not know that " + echo + ".", true
 }
 
 // planKnowledgeSummary answers the open "what do you know" with a report of what

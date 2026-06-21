@@ -84,6 +84,31 @@ func TestEpistemicSpeakerDeferred(t *testing.T) {
 	}
 }
 
+// A proposition can be the object of know: "do you know that the dog chased the
+// cat" asks whether GOLEM holds that fact, settled against the graph the way a
+// polar question is, not by resolving an incidental noun in it.
+func TestEpistemicPropositionHeld(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "the dog chased the cat") // GOLEM is told the fact
+
+	// The fact it was told, it knows, naming the proposition back.
+	if got := say(t, d, "do you know that the dog chased the cat").Say; !strings.HasPrefix(got, "Yes") || !strings.Contains(got, "dog chased the cat") {
+		t.Errorf("a told proposition should be known: %q", got)
+	}
+	// The reverse, never told, it does not know: word order fixes the roles.
+	if got := say(t, d, "do you know that the cat chased the dog").Say; !strings.HasPrefix(got, "No") {
+		t.Errorf("an unheld proposition should not be known: %q", got)
+	}
+	// "Do you know that dog" is the demonstrative, not a proposition, so it falls
+	// through to the concept check.
+	groundOccurrences(t, d, dog, 2)
+	if got := say(t, d, "do you know that dog").Say; !strings.HasPrefix(got, "Yes") {
+		t.Errorf("the demonstrative should fall through to the concept check: %q", got)
+	}
+}
+
 // "What do you know" is the open self-report: it reads the whole graph and names
 // the kinds GOLEM has formed and the actions it has learned, where "what do you
 // know about X" reads a single concept.
