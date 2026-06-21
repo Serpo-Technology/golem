@@ -160,58 +160,59 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	return true
 }
 
-// The resemblance thresholds for matching a clause to a relation by its argument
-// company: at or above resembleAccept with a clear margin the match is taken, down
-// to resembleAsk it is only a candidate. The question path is their consumer.
-const (
-	resembleAccept = 0.6
-	resembleAsk    = 0.4
-	resembleMargin = 0.15
-)
+// resembleAccept is the floor cosine for a known argument to count as resembling a
+// relation's role-company. Above it the question path treats the relation as a
+// candidate and disambiguates by which one the argument actually has facts for.
+const resembleAccept = 0.6
 
-// nearestRelationByCompany proposes the relation a clause's arguments most
-// resemble, matching role by role: the clause's agent against each relation's
-// agent-centroid and its patient against the patient-centroid, in the usage space.
-// A directional relation is told from a symmetric one this way, where one mixed
-// centroid could not. It returns the relation, the averaged cosine confidence, the
-// margin over the next relation, and false when the agent is unplaced or no
-// relation sits in the usage space.
-func (d *Daemon) nearestRelationByCompany(agentID, patientID uint64) (rel *memory.Fragment, conf, margin float64, ok bool) {
-	agentVec, has := d.store.Vector(agentID)
-	if !has {
-		return nil, 0, 0, false
+// scoredRel is a relation and how much a clause's known argument resembles its
+// role-company.
+type scoredRel struct {
+	id    uint64
+	score float64
+}
+
+// rankRelationsByCompany scores every verbal relation by how much the given
+// arguments resemble its role-centroids in the usage space, the agent against the
+// agent-centroid and the patient against the patient-centroid, strongest first.
+// With one role given (a question's gap leaves the other zero) it ranks on that
+// role alone. The directional, role-aware match tells a predator-chases-prey
+// relation from a symmetric one a mixed centroid could not.
+func (d *Daemon) rankRelationsByCompany(agentID, patientID uint64) []scoredRel {
+	var agentVec, patientVec []float32
+	if agentID != 0 {
+		agentVec, _ = d.store.Vector(agentID)
 	}
-	var patientVec []float32
 	if patientID != 0 {
 		patientVec, _ = d.store.Vector(patientID)
 	}
-	agentCentroids, err := d.store.UsageVectorsByRole(memory.RelAgent)
-	if err != nil || len(agentCentroids) == 0 {
-		return nil, 0, 0, false
+	if agentVec == nil && patientVec == nil {
+		return nil
 	}
+	agentCentroids, _ := d.store.UsageVectorsByRole(memory.RelAgent)
 	patientCentroids, _ := d.store.UsageVectorsByRole(memory.RelPatient)
-
-	type scored struct {
-		id    uint64
-		score float64
-	}
-	var ranked []scored
-	for relID, ac := range agentCentroids {
+	var ranked []scoredRel
+	for relID := range agentCentroids {
 		if !d.verbalRelation(relID) {
 			continue
 		}
-		score := memory.Cosine(agentVec, ac)
-		roles := 1.0
-		if patientVec != nil {
-			if pc, ok := patientCentroids[relID]; ok {
-				score += memory.Cosine(patientVec, pc)
-				roles = 2
+		var sum, roles float64
+		if agentVec != nil {
+			if ac, ok := agentCentroids[relID]; ok {
+				sum += memory.Cosine(agentVec, ac)
+				roles++
 			}
 		}
-		ranked = append(ranked, scored{relID, score / roles})
-	}
-	if len(ranked) == 0 {
-		return nil, 0, 0, false
+		if patientVec != nil {
+			if pc, ok := patientCentroids[relID]; ok {
+				sum += memory.Cosine(patientVec, pc)
+				roles++
+			}
+		}
+		if roles == 0 {
+			continue
+		}
+		ranked = append(ranked, scoredRel{relID, sum / roles})
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].score != ranked[j].score {
@@ -219,16 +220,7 @@ func (d *Daemon) nearestRelationByCompany(agentID, patientID uint64) (rel *memor
 		}
 		return ranked[i].id < ranked[j].id
 	})
-	conf = ranked[0].score
-	margin = conf
-	if len(ranked) >= 2 {
-		margin = ranked[0].score - ranked[1].score
-	}
-	frs, err := d.store.FragmentsByIDs([]uint64{ranked[0].id})
-	if err != nil || len(frs) != 1 {
-		return nil, 0, 0, false
-	}
-	return frs[0], conf, margin, true
+	return ranked
 }
 
 // verbalRelation reports whether a relation can be the reading of a plain
@@ -311,10 +303,96 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 		return "", false
 	}
 	rel, known, knownRole, verb := d.analyzeRoleQuestion(frame.Lang, raw)
-	if rel == nil || known == nil {
+	if rel != nil && known != nil {
+		return d.answerRole(frame, rel, known, knownRole, verb)
+	}
+	// The verb names no relation. Read the question through the relation its known
+	// argument's company most resembles, and answer hedged. Resemblance lives here,
+	// on the question path: a query verb cannot be learned, so a fuzzy match aids
+	// retrieval, where on the teaching path it would read a new verb as an old one.
+	if cand, k, kRole, ok := d.resembleRoleQuestion(frame, raw); ok {
+		return d.answerRoleResembled(frame, cand, k, kRole)
+	}
+	return "", false
+}
+
+// resembleRoleQuestion reads a role question whose verb names no relation: it finds
+// the known argument and the relation whose company that argument most resembles,
+// so a paraphrased or unknown verb can still retrieve. The role comes from
+// position, as on the exact path: the known argument before the verb is the agent
+// and the wh-word the patient, the verb before it reverses them.
+func (d *Daemon) resembleRoleQuestion(frame grammar.Frame, raw string) (rel, known *memory.Fragment, knownRole string, ok bool) {
+	tokens, _ := grammar.Tokenize(raw)
+	var content []string
+	for _, t := range tokens {
+		if d.gram.IsContentWord(frame.Lang, t) || d.gram.IsDeictic(frame.Lang, t) {
+			content = append(content, t)
+		}
+	}
+	knownIdx, verbIdx := -1, -1
+	for i, t := range content {
+		if known == nil {
+			if c := d.resolveConcept(t); c != nil && c.Category == "noun" {
+				known, knownIdx = c, i
+				continue
+			}
+		}
+		if verbIdx < 0 && d.resolveConcept(t) == nil {
+			verbIdx = i // an unknown word standing in the verb slot
+		}
+	}
+	if known == nil || verbIdx < 0 {
+		return nil, nil, "", false
+	}
+	knownRole = "agent"
+	if verbIdx < knownIdx {
+		knownRole = "patient"
+	}
+	var agentID, patientID uint64
+	if knownRole == "agent" {
+		agentID = known.ID
+	} else {
+		patientID = known.ID
+	}
+	// Among the relations the known argument resembles, answer from the strongest
+	// one it actually has a fact for: retrieval needs the fact, and a fact the
+	// argument genuinely stands in disambiguates better than a thin company margin,
+	// where a question gives only one role and the other relations crowd it.
+	for _, r := range d.rankRelationsByCompany(agentID, patientID) {
+		if r.score < resembleAccept {
+			break
+		}
+		frs, err := d.store.FragmentsByIDs([]uint64{r.id})
+		if err != nil || len(frs) != 1 {
+			continue
+		}
+		if len(d.gatherFacts(known, knownRole, frs[0].Content)) > 0 {
+			return frs[0], known, knownRole, true
+		}
+	}
+	return nil, nil, "", false
+}
+
+// answerRoleResembled answers a role question from a relation the verb only
+// resembled, hedged, so the retrieval is offered as a guess: "Probably, the wolf
+// chased the rabbit." It declines when the resembling relation holds no fact for
+// the known argument, so the ordinary gap admission stands.
+func (d *Daemon) answerRoleResembled(frame grammar.Frame, rel, known *memory.Fragment, knownRole string) (string, bool) {
+	d.noteFocus(known)
+	facts := d.gatherFacts(known, knownRole, rel.Content)
+	if len(facts) == 0 {
 		return "", false
 	}
-	return d.answerRole(frame, rel, known, knownRole, verb)
+	name := d.conceptName(known.ID, known.Content, frame.Lang)
+	line, ok := d.renderFacts(frame.Lang, name, facts, frame.Past, false)
+	if !ok {
+		return "", false
+	}
+	hedge := d.gram.Word(frame.Lang, "probably")
+	if hedge == "" {
+		return line, true
+	}
+	return upperFirst(hedge) + ", " + lowerFirst(line), true
 }
 
 // answerRole walks a relation from the named argument to the questioned role and
