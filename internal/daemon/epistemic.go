@@ -43,12 +43,83 @@ func (d *Daemon) planEpistemic(raw string) (string, bool) {
 	if line, ok := d.knowsProposition(strings.TrimPrefix(thing, "that ")); ok {
 		return line, true
 	}
-	if c := d.resolveConcept(thing); c != nil {
-		if tally, err := d.store.GroundingTally(); err == nil && tally[c.ID] > 0 {
-			return "Yes, I know " + thing + ".", true
-		}
+	if d.knowsThing(thing) {
+		return "Yes, I know " + thing + ".", true
 	}
 	return "No, I do not know " + thing + ".", true
+}
+
+// knowsThing reports whether GOLEM has grounded the thing a phrase names: the word
+// resolves to a concept and that concept has a positive grounding tally. It is the
+// shared bar behind "do you know X" in every tongue, so each surface phrases the
+// same verdict its own way.
+func (d *Daemon) knowsThing(phrase string) bool {
+	c := d.resolveConcept(phrase)
+	if c == nil {
+		return false
+	}
+	tally, err := d.store.GroundingTally()
+	return err == nil && tally[c.ID] > 0
+}
+
+// trKnowVerb and trKnowParticle recognize the Turkish "do you know" question: the
+// verb of knowing ("biliyor"/"bilir", the progressive and aorist of bilmek) before
+// a second-person question particle ("biliyor musun", "bilir misin"). The first
+// person ("biliyor muyum") asks of the speaker and is left out, as "do I know" is.
+var trKnowVerb = map[string]bool{"biliyor": true, "bilir": true}
+var trKnowParticle = map[string]bool{"musun": true, "müsün": true, "mısın": true, "misin": true}
+
+// planEpistemicTR answers the Turkish "X biliyor musun" the way planEpistemic
+// answers the English "do you know X": a thing GOLEM has grounded it knows, named
+// back with the accusative the question carried, otherwise it does not.
+func (d *Daemon) planEpistemicTR(raw string) (string, bool) {
+	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
+	if len(tokens) < 3 {
+		return "", false
+	}
+	if !trKnowParticle[tokens[len(tokens)-1]] || !trKnowVerb[tokens[len(tokens)-2]] {
+		return "", false
+	}
+	obj := strings.Join(tokens[:len(tokens)-2], " ")
+	if obj == "" {
+		return "Neyi?", true
+	}
+	// The object wears the accusative ("kediyi"); resolve it to the base concept
+	// through the case stems the Turkish morphology yields before grounding it.
+	known := false
+	for _, base := range d.gram.CaseStems("tr", obj) {
+		if d.knowsThing(base) {
+			known = true
+			break
+		}
+	}
+	if known {
+		return "Evet, " + obj + " biliyorum.", true
+	}
+	return "Hayır, " + obj + " bilmiyorum.", true
+}
+
+// planEpistemicLA answers the Latin "scisne X", the enclitic -ne on the
+// second-person scis (you know) asking whether GOLEM knows X, settled against the
+// same grounding the other tongues read.
+func (d *Daemon) planEpistemicLA(raw string) (string, bool) {
+	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
+	if len(tokens) < 2 || tokens[0] != "scisne" {
+		return "", false
+	}
+	obj := strings.Join(tokens[1:], " ")
+	known := d.knowsThing(obj)
+	if !known {
+		// The object of scio is accusative ("scisne puellam"); resolve its
+		// nominative when the cased form names nothing directly.
+		if base := strings.TrimSuffix(obj, "m"); base != obj {
+			known = d.knowsThing(base)
+		}
+	}
+	if known {
+		return "Ita, " + obj + " scio.", true
+	}
+	return "Minime, " + obj + " nescio.", true
 }
 
 // knowsProposition answers whether GOLEM holds a proposition named as the object

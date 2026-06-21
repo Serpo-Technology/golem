@@ -76,6 +76,13 @@ func (p *Params) caseStems(lang, span string) []string {
 	return out
 }
 
+// CaseStems exposes caseStems to callers outside the grammar that must resolve a
+// case-marked word to its base concept, the daemon's reflexive know-question among
+// them: "kediyi biliyor musun" reduces "kediyi" to "kedi" before grounding it.
+func (p *Params) CaseStems(lang, span string) []string {
+	return p.get().caseStems(lang, span)
+}
+
 // stripCaseAccTR removes the accusative a definite object wears, as well as
 // the ablative and locative an anchor may carry, so "kediyi" resolves to
 // "kedi". The accusative is the high vowel, with the buffer y after a vowel

@@ -84,6 +84,38 @@ func TestEpistemicSpeakerDeferred(t *testing.T) {
 	}
 }
 
+// The reflexive know-question answers from the same grounding in Turkish: "X
+// biliyor musun" affirms a grounded thing and denies an ungrounded one.
+func TestEpistemicConceptTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	kedi := groundNounLang(t, d, "kedi", "tr")
+	groundOccurrences(t, d, kedi, 3)
+	groundNounLang(t, d, "köpek", "tr") // named, never grounded
+
+	if got := sayLang(t, d, "tr", "kediyi biliyor musun").Say; !strings.HasPrefix(got, "Evet") || !strings.Contains(got, "biliyorum") {
+		t.Errorf("a grounded thing should be known in Turkish: %q", got)
+	}
+	if got := sayLang(t, d, "tr", "köpeği biliyor musun").Say; !strings.HasPrefix(got, "Hayır") {
+		t.Errorf("an ungrounded thing should not be known in Turkish: %q", got)
+	}
+}
+
+// And in Latin: "scisne X" reads the accusative object and answers from the same
+// grounding, ita for a thing known and minime for one not.
+func TestEpistemicConceptLatin(t *testing.T) {
+	d, _ := testDaemon(t)
+	puella := groundLatinPair(t, d, "girl", "girl", "puella")
+	groundOccurrences(t, d, puella, 3)
+	groundLatinPair(t, d, "rose", "rose", "rosa") // named, never grounded
+
+	if got := sayLang(t, d, "la", "scisne puellam").Say; !strings.HasPrefix(got, "Ita") || !strings.Contains(got, "scio") {
+		t.Errorf("a grounded thing should be known in Latin: %q", got)
+	}
+	if got := sayLang(t, d, "la", "scisne rosam").Say; !strings.HasPrefix(got, "Minime") {
+		t.Errorf("an ungrounded thing should not be known in Latin: %q", got)
+	}
+}
+
 // A proposition can be the object of know: "do you know that the dog chased the
 // cat" asks whether GOLEM holds that fact, settled against the graph the way a
 // polar question is, not by resolving an incidental noun in it.

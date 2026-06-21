@@ -752,6 +752,14 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planEpistemic(raw); ok {
 		return ans, nil
 	}
+	// The same reflexive know-question in the other tongues: Turkish "X biliyor
+	// musun", Latin "scisne X", each routed to the shared grounding check.
+	if ans, ok := d.planEpistemicTR(raw); ok {
+		return ans, nil
+	}
+	if ans, ok := d.planEpistemicLA(raw); ok {
+		return ans, nil
+	}
 
 	// A yes/no question is checked, not asserted: "did the dog chase the cat"
 	// reads whether the graph holds the proposition and answers yes or no. It
