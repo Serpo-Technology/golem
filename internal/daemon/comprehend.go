@@ -43,6 +43,11 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Lang == "tr" && d.comprehendLocativeTR(raw, momentID) {
 		return true
 	}
+	// A Turkish possession clause marks holding by case and the existential "var"
+	// ("ağacın yaprağı var"), no verb, so it too is read before the verb path.
+	if frame.Lang == "tr" && d.comprehendPossessionTR(raw, momentID) {
+		return true
+	}
 	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
 	if !ok {
 		return false
@@ -74,6 +79,11 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// verb. The mark is idempotent, refreshed each time the construction is used.
 	if d.gram.LocativePrep(frame.Lang, m.Relation.Phrase) {
 		d.markLocative(rel.ID)
+	}
+	// An English possession verb ("the tree has a leaf") marks its relation
+	// possessive, so a Turkish "var" clause unifies onto it and renders by the case.
+	if possessionVerb(m.Relation.Phrase) {
+		d.markPossessive(rel.ID)
 	}
 	var patientID uint64
 	var patientGloss string

@@ -65,6 +65,12 @@ const (
 	// character is a fact about the relation in the graph, not baked into a
 	// construction.
 	RelLocative = "locative"
+	// RelPossessive marks a relation concept as possessive: a self-edge recording
+	// that the relation holds one thing as another's ("the tree has a leaf"). It lets
+	// a Turkish possession ("ağacın yaprağı var"), which marks possession by case and
+	// the existential "var" rather than a verb, render and unify across tongues with
+	// the English "have"/"own" the same property names.
+	RelPossessive = "possessive"
 	// RelMarks links a closed-class word to a concept it marks, so a grammatical
 	// category the engine reads is derived from the graph rather than a seeded
 	// string. A speech-act verb marks the discourse move it carries (clarify,

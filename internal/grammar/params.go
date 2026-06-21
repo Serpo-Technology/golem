@@ -248,6 +248,14 @@ func (p *Params) LocativePrep(lang, form string) bool {
 	return false
 }
 
+// Existential reports whether a form is the seeded existential that closes a
+// Turkish location or possession clause ("var"), the word that stands in for the
+// copula English would use ("there is", "X has").
+func (p *Params) Existential(lang, form string) bool {
+	p = p.get()
+	return p.categories[lang][form] == "exist"
+}
+
 // proAnimacy reads a pro-form's animacy preference from its seeded category,
 // "pro:inanimate" for "it" and "pro:animate" for "she", so a pronoun's
 // binding favors the referent it fits. A bare "pro" carries none.

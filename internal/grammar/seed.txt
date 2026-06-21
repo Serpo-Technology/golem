@@ -167,6 +167,7 @@ fw:tr:niye	niye	tr	wh
 fw:tr:sen	sen	tr	deixis
 fw:tr:seni	seni	tr	deixis
 fw:tr:sonra	sonra	tr	rel
+fw:tr:var	var	tr	exist
 fw:tr:ve	ve	tr	fn
 fw:tr:zaman	zaman	tr	time
 fw:tr:önce	önce	tr	rel
@@ -188,9 +189,11 @@ verb:tr:precede	gelir|gelmez|geldi|gelmedi|gelebilir|gelmiş olabilir	tr
 order:en	svo	en	
 order:tr	sov	tr	
 suffix:tr:ablative	DAn	tr	
-suffix:tr:accusative	(y)I	tr	
-suffix:tr:copula	DIr	tr	
-suffix:tr:locative	DA	tr	
+suffix:tr:accusative	(y)I	tr
+suffix:tr:copula	DIr	tr
+suffix:tr:genitive	(n)In	tr
+suffix:tr:locative	DA	tr
+suffix:tr:possessive	(s)I	tr
 syn:en:s	subj vp | num:subj>vp | vp	en	
 syn:en:vp	v | | v	en	
 syn:en:np	det n | | n	en	

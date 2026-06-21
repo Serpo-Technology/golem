@@ -742,6 +742,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,
 	// whether it carried a question mark or not.
+	// "Ağacın yaprağı var mı": a Turkish possession question, answered from the
+	// stored proposition before the verb-clause paths, which have no "var" reading.
+	if ans, ok := d.planPossessionPolarTR(frame, raw); ok {
+		return ans, nil
+	}
 	// "Is the leaf on the tree": a copula question carrying a place, answered from
 	// the placed proposition before the is-a reading, which the preposition rules out.
 	if ans, ok := d.planLocativePolar(frame); ok {

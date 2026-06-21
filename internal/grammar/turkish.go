@@ -282,11 +282,13 @@ func dOrT(w string) string {
 func applySuffixTR(w, recipe string) string {
 	var b strings.Builder
 	rest := recipe
-	if cut, ok := strings.CutPrefix(rest, "(y)"); ok {
+	// A leading "(X)" is a buffer consonant inserted only after a vowel-final stem:
+	// the y of the accusative, the n of the genitive, the s of the 3rd possessive.
+	if len(rest) >= 3 && rest[0] == '(' && rest[2] == ')' {
 		if endsVowelTR(w) {
-			b.WriteString("y")
+			b.WriteByte(rest[1])
 		}
-		rest = cut
+		rest = rest[3:]
 	}
 	for _, r := range rest {
 		switch r {
@@ -351,6 +353,90 @@ func (p *Params) LocativeGround(lang, w string) (string, bool) {
 		return stem, true
 	}
 	return w, false
+}
+
+// Genitive forms a common noun's genitive ("ağaç" -> "ağacın"), the case Turkish
+// marks a possessor with. The final stop softens before the suffix's vowel
+// (ağaç -> ağac). Identity outside Turkish.
+func (p *Params) Genitive(lang, w string) string {
+	if lang != "tr" || w == "" {
+		return w
+	}
+	s := softenFinalTR(w)
+	return s + applySuffixTR(s, p.get().suffix("genitive", "(n)In"))
+}
+
+// Possessive forms a noun's third-person possessive ("yaprak" -> "yaprağı"), the
+// case the possessed thing wears in a Turkish possession. The final stop softens
+// before the suffix's vowel (yaprak -> yaprağ). Identity outside Turkish.
+func (p *Params) Possessive(lang, w string) string {
+	if lang != "tr" || w == "" {
+		return w
+	}
+	s := softenFinalTR(w)
+	return s + applySuffixTR(s, p.get().suffix("possessive", "(s)I"))
+}
+
+// stripGenitiveTR removes a genitive ending (-nın/.../-ın/...) from a Turkish word,
+// leaving a stem of at least two letters.
+func stripGenitiveTR(w string) string {
+	for _, suf := range []string{"nın", "nin", "nun", "nün", "ın", "in", "un", "ün"} {
+		if strings.HasSuffix(w, suf) && len(w) > len(suf)+1 {
+			return w[:len(w)-len(suf)]
+		}
+	}
+	return w
+}
+
+// stripPossessiveTR removes a third-person possessive ending (-sı/.../-ı/...) from a
+// Turkish word, leaving a stem of at least two letters.
+func stripPossessiveTR(w string) string {
+	for _, suf := range []string{"sı", "si", "su", "sü", "ı", "i", "u", "ü"} {
+		if strings.HasSuffix(w, suf) && len(w) > len(suf)+1 {
+			return w[:len(w)-len(suf)]
+		}
+	}
+	return w
+}
+
+// GenitiveGround lists the nouns a genitive-cased Turkish word might name ("ağacın"
+// -> "ağac", "ağaç"), the literal stem and its hardened form, and whether the word
+// carried the genitive. The caller resolves each, keeping the first that names a
+// concept. Identity (nil, false) outside Turkish or for an uncased word.
+func (p *Params) GenitiveGround(lang, w string) ([]string, bool) {
+	if lang != "tr" {
+		return nil, false
+	}
+	stem := stripGenitiveTR(w)
+	if stem == w {
+		return nil, false
+	}
+	return caseCandidates(stem), true
+}
+
+// PossessiveGround lists the nouns a possessive-cased word might name ("yaprağı" ->
+// "yaprağ", "yaprak") and whether the word carried the possessive, the possession's
+// possessed thing read back. Identity (nil, false) outside Turkish or uncased.
+func (p *Params) PossessiveGround(lang, w string) ([]string, bool) {
+	if lang != "tr" {
+		return nil, false
+	}
+	stem := stripPossessiveTR(w)
+	if stem == w {
+		return nil, false
+	}
+	return caseCandidates(stem), true
+}
+
+// caseCandidates returns a case-stripped stem and, when its final consonant was
+// softened by the suffix, the hardened form too, so the caller can resolve whichever
+// the lexicon holds.
+func caseCandidates(stem string) []string {
+	out := []string{stem}
+	if h := unsoftenFinalTR(stem); h != stem {
+		out = append(out, h)
+	}
+	return out
 }
 
 // trComparativeParts reads a Turkish comparison into its subject, the comparative
