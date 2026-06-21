@@ -3,6 +3,9 @@ package daemon
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"golem/internal/memory"
 )
 
 // An abstract word enters the graph through a telling: "a model predicts a word"
@@ -60,6 +63,56 @@ func TestAbstractInferenceRidesUsageResemblance(t *testing.T) {
 	got := strings.ToLower(say(t, d, "does the network predict the output").Say)
 	if !strings.Contains(got, "probab") {
 		t.Errorf("the model's predicting should carry to the like-used network: %q", got)
+	}
+}
+
+// The abstract usage inference must survive a brain that also holds featured
+// concepts. The kind embedding runs only once some concept carries a feature, and
+// it once stamped every concept, a featureless abstract word included, with an
+// empty kind vector. That empty vector marked the word as kind-placed and shut it
+// out of the usage space, so the inference fired on a bare brain yet went silent
+// the moment any animal stood beside the abstract words. With both present, the
+// model's predicting must still carry to the like-used llm.
+func TestAbstractInferenceSurvivesFeaturedConcepts(t *testing.T) {
+	d, s := testDaemon(t)
+	// A featured concept makes the kind factorization run, the condition that hid the
+	// abstract words from the usage space. It need not relate to them; it only exists.
+	feature := func(name string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	dog := groundNoun(t, d, "dog")
+	furry, fourLegs := feature("furry"), feature("four-legs")
+	s.SetLinkRel(dog.ID, furry.ID, memory.RelFeature, 1)
+	s.SetLinkRel(dog.ID, fourLegs.ID, memory.RelFeature, 1)
+
+	// The abstract words enter featureless through tellings, used alike: both learn,
+	// both read, only the model predicts.
+	say(t, d, "a model learns a pattern")
+	say(t, d, "an llm learns a pattern")
+	say(t, d, "a model reads data")
+	say(t, d, "an llm reads data")
+	say(t, d, "a model predicts an output")
+
+	d.growEmbeddings()
+
+	// The featured concept is placed in the kind space; the abstract words are not,
+	// so usage is their only placement and the gate must leave it open to them.
+	if _, ok := s.Vector(dog.ID); !ok {
+		t.Error("a featured concept should keep its kind vector")
+	}
+	if llm := d.resolveConcept("llm"); llm != nil {
+		if _, ok := s.Vector(llm.ID); ok {
+			t.Error("a featureless concept must not gain an empty kind vector, which would shut it out of the usage space")
+		}
+	}
+	got := strings.ToLower(say(t, d, "does the llm predict the output").Say)
+	if !strings.Contains(got, "probab") {
+		t.Errorf("with featured concepts present, the abstract usage inference must still fire: %q", got)
 	}
 }
 

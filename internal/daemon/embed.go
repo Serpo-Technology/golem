@@ -69,12 +69,14 @@ func (d *Daemon) growKindEmbeddings(concepts []*memory.Fragment) {
 	}
 
 	colOf := map[string]int{}
-	val := map[[2]int]float64{} // (row, col) -> final matrix value, strongest wins
+	val := map[[2]int]float64{}   // (row, col) -> final matrix value, strongest wins
+	hasTrait := map[uint64]bool{} // a concept that contributed at least one trait
 	put := func(conceptID uint64, trait string, v float64) {
 		r, ok := rowOf[conceptID]
 		if !ok || v <= 0 {
 			return
 		}
+		hasTrait[conceptID] = true
 		c, ok := colOf[trait]
 		if !ok {
 			c = len(colOf)
@@ -135,6 +137,15 @@ func (d *Daemon) growKindEmbeddings(concepts []*memory.Fragment) {
 			vec[j] = float32(u.At(i, j) * math.Sqrt(sv[j]))
 		}
 		vecByID[c.ID] = vec
+		// A concept that carried no feature or category has a zero row, so its
+		// coordinates are the origin: the kind space cannot place it. Writing that
+		// empty vector would still mark the concept as kind-placed and shut it out of
+		// the usage space, where its relational company is the only signal that can
+		// place it. Leave it unwritten so the abstract-word path stays open. It still
+		// enters the relation centroids below through vecByID, as it always has.
+		if !hasTrait[c.ID] {
+			continue
+		}
 		if err := d.store.SetVector(c.ID, vec); err != nil {
 			fmt.Fprintf(d.out, "embedding error: %v\n", err)
 			return
