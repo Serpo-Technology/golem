@@ -263,11 +263,13 @@ func (d *Daemon) nearestRelationByCompany(argIDs []uint64) (rel *memory.Fragment
 	}
 	var rels []memory.VectorMatch
 	for _, mch := range matches {
-		if f := byID[mch.ID]; f != nil && f.Category == "relation" {
-			rels = append(rels, mch)
-			if len(rels) == 2 {
-				break
-			}
+		f := byID[mch.ID]
+		if f == nil || f.Category != "relation" || !d.verbalRelation(f.ID) {
+			continue
+		}
+		rels = append(rels, mch)
+		if len(rels) == 2 {
+			break
 		}
 	}
 	if len(rels) == 0 {
@@ -279,6 +281,21 @@ func (d *Daemon) nearestRelationByCompany(argIDs []uint64) (rel *memory.Fragment
 		margin = rels[0].Score - rels[1].Score
 	}
 	return byID[rels[0].ID], conf, margin, true
+}
+
+// verbalRelation reports whether a relation can be the reading of a plain
+// subject-verb-object clause, the only construction the resemblance fallback
+// covers. A relation that carries its own construction is excluded: a gradable
+// comparison (it has an opposite pole), a locative, or a possession. This keeps a
+// verb from being read as "bigger" or "on" just because its arguments keep the
+// same company those relations do.
+func (d *Daemon) verbalRelation(relID uint64) bool {
+	for _, mark := range []string{memory.RelOpposite, memory.RelLocative, memory.RelPossessive} {
+		if e, err := d.store.LinksFromRel([]uint64{relID}, mark); err == nil && len(e) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // relationReadingCoheres disposes on a resembled reading the vectors proposed. The
