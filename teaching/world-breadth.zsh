@@ -52,6 +52,13 @@ narrate_tr() { log "narrate(tr): $1"; saytr "$1"; sleep $GAP }
 # consolidation pass clearing the workspace, after which the Turkish verb mints a
 # parallel relation instead of joining the English one.
 bi_rel() { log "rel: $1 / $2"; sayw "$1"; saytr "$2"; sleep $GAP }
+# Re-ground an animal already known, shown on its own percept in its own block so
+# its name stays the firmest. A relation names no noun, but the cross-situational
+# naming recount still reads the company each word kept, so an animal mentioned
+# only inside relation clauses (never shown) drifts toward the percepts it was
+# warmed beside. Showing it again, blocked and napped like a first teaching, keeps
+# its own percept the strongest company its name has.
+review() { local cap=$1 en=$2 tr=$3 i; log "review: $en / $tr"; for i in 1 2 3 4; do obs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done; nap }
 
 $GOLEM status >/dev/null 2>&1 || { log "daemon unreachable at $GOLEM"; exit 1 }
 log "########## world breadth begins ##########"
@@ -104,5 +111,22 @@ bi_rel "a bear ate a honey"    "ayı balı yedi"
 narrate "a horse ate a grass"
 narrate "a deer ate a leaf"
 nap
+
+# --- Re-ground the animal cast --------------------------------------------------
+# The weight and eat relations name the animals without showing them, so each
+# animal's name kept company with the others it was warmed beside. A grounding pass
+# on every animal restores its own percept as the firmest company its name has,
+# before the final consolidation reads the naming from that company.
+log "=== re-ground the animal cast ==="
+review "a small gray mouse"  mouse  fare
+review "a small brown dog"   dog    köpek
+review "a small black cat"   cat    kedi
+review "a large brown horse" horse  at
+review "a gray rabbit"       rabbit tavşan
+review "a large black bear"  bear   ayı
+review "a spotted deer"      deer   geyik
+review "a golden lion"       lion   aslan
+review "a gray wolf"         wolf   kurt
+review "a tiny gray snail"   snail  salyangoz
 
 log "########## world breadth complete ##########"
