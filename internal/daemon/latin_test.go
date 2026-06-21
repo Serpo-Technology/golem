@@ -97,6 +97,22 @@ func TestLatinSpeaksByCase(t *testing.T) {
 	}
 }
 
+// Latin possesses with habere, a transitive verb of the second conjugation ("puella
+// rosam habet", the girl has the rose), which joins the English have relation, so a
+// possession taught only in Latin answers the English question.
+func TestLatinPossession(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundLatinPair(t, d, "girl", "girl", "puella")
+	groundLatinPair(t, d, "rose", "rose", "rosa")
+	groundLatinPair(t, d, "water", "water", "aqua")
+	say(t, d, "the girl has the rose")
+	sayLang(t, d, "la", "puella rosam habet") // unify habet with have
+	sayLang(t, d, "la", "puella aquam habet") // a possession said only in Latin
+	if got := say(t, d, "does the girl have the water").Say; !strings.HasPrefix(got, "Yes") {
+		t.Errorf("a Latin-taught possession should answer in English: %q", got)
+	}
+}
+
 // Latin places the figure with a preposition over the ground ("rosa in mensa est"),
 // and the preposition joins the same locative relation English uses, so "ubi est"
 // reads the place back and a Latin place answers the English query.

@@ -426,22 +426,25 @@ func (p *Params) caseRole(lang, span string) (role, lemma string) {
 	return "agent", span
 }
 
-// latinPresent lists the first-conjugation present-active endings, longest first so
-// the longer plural endings are tried before the short singular ones, each with the
-// person it marks.
-var latinPresent = []struct{ ending, person string }{
-	{"amus", "1pl"}, {"atis", "2pl"}, {"ant", "3pl"},
-	{"as", "2sg"}, {"at", "3sg"}, {"o", "1sg"},
+// latinPresent lists the present-active endings of the first conjugation (the a-stem)
+// and the second (the e-stem), longest first so a plural ending is tried before the
+// short singular it contains. Each carries the person it marks and the third-singular
+// ending the lemma normalizes to, so every person of a verb keys the one relation.
+var latinPresent = []struct{ ending, person, lemma string }{
+	{"emus", "1pl", "et"}, {"etis", "2pl", "et"}, {"ent", "3pl", "et"},
+	{"eo", "1sg", "et"}, {"es", "2sg", "et"}, {"et", "3sg", "et"},
+	{"amus", "1pl", "at"}, {"atis", "2pl", "at"}, {"ant", "3pl", "at"},
+	{"as", "2sg", "at"}, {"at", "3sg", "at"}, {"o", "1sg", "at"},
 }
 
-// latinVerb reads a Latin first-conjugation present verb: the lemma normalized to the
+// latinVerb reads a Latin present-active verb: the lemma normalized to the
 // third-singular form (so every person keys the one relation) and the person it
-// carries. ok is false when the span is no such verb. A first cut over the present of
-// the first conjugation; other conjugations and tenses refine it.
+// carries. ok is false when the span is no such verb. The present of the first two
+// conjugations; further conjugations and tenses refine it.
 func latinVerb(span string) (lemma, person string, ok bool) {
 	for _, e := range latinPresent {
 		if strings.HasSuffix(span, e.ending) && len(span) > len(e.ending)+1 {
-			return span[:len(span)-len(e.ending)] + "at", e.person, true
+			return span[:len(span)-len(e.ending)] + e.lemma, e.person, true
 		}
 	}
 	return "", "", false
