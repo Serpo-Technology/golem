@@ -234,6 +234,12 @@ type Daemon struct {
 	// substitute for the code engine's English word map: a computation word resolves
 	// to its concept, and the concept yields the operation the engine runs.
 	opConcept map[uint64]code.OpRef
+	// cmpConcept maps a comparison concept to its operator symbol (">", "<", "==").
+	// Comparisons are grounded operations a conditional's test names ("above" -> gt),
+	// kept apart from opConcept so a comparison word never reads as a call head;
+	// cmpDefault is the bare copula's comparison, equality.
+	cmpConcept map[uint64]string
+	cmpDefault string
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -776,6 +782,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.opConcept[id]; ok {
+		return true
+	}
+	if _, ok := d.cmpConcept[id]; ok {
 		return true
 	}
 	for _, triggers := range d.commandTriggers {

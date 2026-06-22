@@ -143,6 +143,10 @@ func (d *Daemon) recompileGrammar() error {
 	// are seeded by ensureOperations, called where the chemistry is ready (with the
 	// participants, and after a function is learned), so this stays free of it.
 	d.code.SetResolver(d.resolveOperation)
+	// The body of a taught function is read through the grammar too, the daemon's
+	// grounded reading cross-checked against the engine's own; re-set here since the
+	// engine is rebuilt above.
+	d.code.SetBodyParser(d.parseBodyGrammar)
 	return nil
 }
 

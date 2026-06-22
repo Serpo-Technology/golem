@@ -142,6 +142,134 @@ func TestParseApplicationListOfCalls(t *testing.T) {
 	}
 }
 
+// bodyHead resolves the operations a body names, the function being defined among
+// them ("factorial") so a self-call reads as a call. bodyCmp resolves the
+// comparison relators, the empty relator the bare copula's equality.
+func bodyHead(word string) (string, int, bool) {
+	switch word {
+	case "product":
+		return "multiply", 2, true
+	case "difference":
+		return "subtract", 2, true
+	case "sum":
+		return "add", 2, true
+	case "factorial":
+		return "factorial", 1, true
+	}
+	return "", 0, false
+}
+
+func bodyCmp(relator string) (string, bool) {
+	switch relator {
+	case "above":
+		return ">", true
+	case "below":
+		return "<", true
+	case "":
+		return "==", true
+	}
+	return "", false
+}
+
+func TestParseBodyConditional(t *testing.T) {
+	app, ok := Builtin().ParseBody("en",
+		"the number if the number is above the count else the count",
+		[]string{"number", "count"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("a conditional body should parse")
+	}
+	want := Application{Cond: &Conditional{
+		Cmp:  ">",
+		Left: Application{Var: "number"}, Right: Application{Var: "count"},
+		Then: Application{Var: "number"}, Else: Application{Var: "count"},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBody = %+v, want %+v", app, want)
+	}
+}
+
+// The bare copula with no ordering relator is equality.
+func TestParseBodyEquality(t *testing.T) {
+	app, ok := Builtin().ParseBody("en", "1 if the number is 0 else the number",
+		[]string{"number"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("an equality conditional should parse")
+	}
+	want := Application{Cond: &Conditional{
+		Cmp:  "==",
+		Left: Application{Var: "number"}, Right: Application{Lit: "0"},
+		Then: Application{Lit: "1"}, Else: Application{Var: "number"},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBody = %+v, want %+v", app, want)
+	}
+}
+
+// A comma before "else" is shed by tokenization, so the conditional reads the same.
+func TestParseBodyToleratesComma(t *testing.T) {
+	with, ok := Builtin().ParseBody("en",
+		"the number if the number is above the count, else the count",
+		[]string{"number", "count"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("a conditional with a comma before else should parse")
+	}
+	without, _ := Builtin().ParseBody("en",
+		"the number if the number is above the count else the count",
+		[]string{"number", "count"}, bodyHead, bodyCmp)
+	if !reflect.DeepEqual(with, without) {
+		t.Fatalf("the comma should not change the parse: %+v vs %+v", with, without)
+	}
+}
+
+// A self-call inside the body reads as an ordinary call, the recursion that lets a
+// body name the function being defined before it is in the inventory.
+func TestParseBodyRecursion(t *testing.T) {
+	app, ok := Builtin().ParseBody("en",
+		"the product of the number and the factorial of the difference of the number and 1",
+		[]string{"number"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("a body with a self-call should parse")
+	}
+	want := Application{Head: "multiply", Args: []Application{
+		{Var: "number"},
+		{Head: "factorial", Args: []Application{
+			{Head: "subtract", Args: []Application{{Var: "number"}, {Lit: "1"}}},
+		}},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBody = %+v, want %+v", app, want)
+	}
+}
+
+// A plain body with no conditional is a single operand: a parameter reference, or a
+// call over the parameters.
+func TestParseBodyPlain(t *testing.T) {
+	app, ok := Builtin().ParseBody("en", "the product of the number and 2",
+		[]string{"number"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("a plain arithmetic body should parse")
+	}
+	want := Application{Head: "multiply", Args: []Application{{Var: "number"}, {Lit: "2"}}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBody = %+v, want %+v", app, want)
+	}
+}
+
+// All-or-nothing: a leading "if", an "else" with no consequent, and an unconsumed
+// tail each fail rather than half-parsing.
+func TestParseBodyRejections(t *testing.T) {
+	cases := []string{
+		"if the number is above the count else the count", // a leading if, no then
+		"the number if the number is above the count else", // an else with no branch
+		"the number extra",                                 // an unconsumed tail
+	}
+	for _, s := range cases {
+		if _, ok := Builtin().ParseBody("en", s, []string{"number", "count"}, bodyHead, bodyCmp); ok {
+			t.Errorf("%q should not parse as a body", s)
+		}
+	}
+}
+
 func TestParseBareCallUnary(t *testing.T) {
 	app, ok := Builtin().ParseBareCall("en", "double 4", stubHead)
 	if !ok {

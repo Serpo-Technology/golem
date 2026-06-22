@@ -26,11 +26,27 @@ var operationWords = map[string]map[string][]string{
 	"divide":   {"en": {"over", "divide"}, "tr": {"böl"}, "la": {"divide"}},
 }
 
+// comparisonOps are the comparisons a conditional's test names, grounded operations
+// like the arithmetic primitives but kept off the call-head resolver: a relator word
+// names one ("above" -> gt) and its operator symbol drives the branch, never a
+// value-producing call. eq carries no relator word; it is the bare copula's default
+// comparison, equality.
+var comparisonOps = []struct {
+	name, symbol string
+	words        map[string][]string
+}{
+	{"gt", ">", map[string][]string{"en": {"above"}}},
+	{"lt", "<", map[string][]string{"en": {"below"}}},
+	{"eq", "==", nil},
+}
+
 // ensureOperations seeds each operation the engine carries as a concept and loads the
 // resolver index. Idempotent like the participants and commands: the concept and its
 // naming edges are reused when present, re-minted after a consolidation prunes them.
 func (d *Daemon) ensureOperations() {
 	d.opConcept = map[uint64]code.OpRef{}
+	d.cmpConcept = map[uint64]string{}
+	d.cmpDefault = ""
 	if d.code == nil {
 		return
 	}
@@ -44,6 +60,24 @@ func (d *Daemon) ensureOperations() {
 			d.nameConceptWord(id, op.Word, "en")
 		}
 		for lang, words := range operationWords[op.Name] {
+			for _, w := range words {
+				d.nameConceptWord(id, w, lang)
+			}
+		}
+	}
+	// The comparisons are grounded the same way but recorded apart, in cmpConcept, so
+	// a relator word resolves only in a conditional's test and never reads as a call
+	// head. They do not depend on the engine's op set, so they are seeded outright.
+	for _, cmp := range comparisonOps {
+		id := d.ensureOperationConcept("op:"+cmp.name, cmp.name)
+		if id == 0 {
+			continue
+		}
+		d.cmpConcept[id] = cmp.symbol
+		if cmp.name == "eq" {
+			d.cmpDefault = cmp.symbol
+		}
+		for lang, words := range cmp.words {
 			for _, w := range words {
 				d.nameConceptWord(id, w, lang)
 			}
@@ -86,7 +120,8 @@ func (d *Daemon) resolveOperation(word string) (code.OpRef, bool) {
 // name the call carries and the arity that bounds its operands, both read off the
 // operation's concept. It is resolveOperation in the shape the parser takes, so
 // which operation a word names stays grounded and cross-tongue while the grammar
-// holds only the form.
+// holds only the form. A comparison word does not resolve here (comparisons live
+// in cmpConcept), so a relator never reads as a call head.
 func (d *Daemon) opHead(word string) (name string, arity int, ok bool) {
 	ref, ok := d.resolveOperation(word)
 	if !ok {
@@ -95,12 +130,64 @@ func (d *Daemon) opHead(word string) (name string, arity int, ok bool) {
 	return ref.Name, ref.Arity, true
 }
 
+// cmpRelator resolves a comparison relator word to the operator symbol it names,
+// the empty word the bare copula's default comparison (equality). It is the
+// grounded substitute for a word-to-operator table, reading the comparison concept
+// a relator names; ok is false for a word that names no comparison, so the grammar
+// reads the test another way.
+func (d *Daemon) cmpRelator(relator string) (string, bool) {
+	if relator == "" {
+		return d.cmpDefault, d.cmpDefault != ""
+	}
+	c := d.resolveConcept(relator)
+	if c == nil {
+		return "", false
+	}
+	sym, ok := d.cmpConcept[c.ID]
+	return sym, ok
+}
+
+// parseBodyGrammar reads a function body through the grammar, the daemon's grounded
+// reading the code engine consults instead of its own English body scan. The head
+// resolver also names the function being defined, so a self-call reads as a call
+// before the function is in the inventory (recursion); the comparison resolver
+// names a conditional's relator. The body is read in English, the tongue the
+// definition surface takes. It returns false for a surface the grammar does not yet
+// read, so the engine's own reader serves.
+func (d *Daemon) parseBodyGrammar(body string, params []string, selfName string, selfArity int) (code.Computation, bool) {
+	if d.gram == nil {
+		return code.Computation{}, false
+	}
+	head := func(word string) (string, int, bool) {
+		if selfName != "" && word == selfName {
+			return selfName, selfArity, true
+		}
+		return d.opHead(word)
+	}
+	app, ok := d.gram.ParseBody("en", body, params, head, d.cmpRelator)
+	if !ok {
+		return code.Computation{}, false
+	}
+	return applicationToComputation(app), true
+}
+
 // applicationToComputation walks the application the grammar parsed into the
 // computation it means, a structural copy: a node is an operation over its
 // operands, a leaf a literal value. Arity was enforced as the call parsed, so the
 // walk cannot fail on it.
 func applicationToComputation(a grammar.Application) code.Computation {
-	if a.Head == "" && !a.List {
+	switch {
+	case a.Var != "":
+		return code.Computation{Var: a.Var}
+	case a.Cond != nil:
+		return code.Computation{Cond: &code.Conditional{
+			Cmp:   a.Cond.Cmp,
+			Left:  applicationToComputation(a.Cond.Left),
+			Right: applicationToComputation(a.Cond.Right),
+			Then:  applicationToComputation(a.Cond.Then),
+			Else:  applicationToComputation(a.Cond.Else),
+		}}
+	case a.Head == "" && !a.List:
 		return code.Computation{Lit: a.Lit}
 	}
 	args := make([]code.Computation, len(a.Args))

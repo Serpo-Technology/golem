@@ -22,6 +22,7 @@ package code
 import (
 	"go/ast"
 	"go/parser"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -147,15 +148,24 @@ type OpRef struct {
 // computation standalone.
 type Resolver func(word string) (OpRef, bool)
 
+// BodyParser reads a function body into the computation it means with the
+// parameters in scope, the grounded substitute for the engine's own English body
+// scan. The daemon supplies one that parses the body through the grammar; with
+// none the engine reads the body itself, so a standalone engine still learns a
+// told function. It returns false for a surface it does not read, so the engine's
+// own reader serves as the fallback.
+type BodyParser func(body string, params []string, selfName string, selfArity int) (Computation, bool)
+
 // Engine carries the code constructions and runs them both ways. It is built from
 // the seeded primitives and the functions learned since, indexed by name and by
 // operator symbol; which word names an operation is the resolver's, not a map kept
 // here.
 type Engine struct {
-	words    map[string]OpRef // the operations' own words, the resolver's default
-	resolve  Resolver         // word -> operation; the daemon's grounded resolver supersedes the default
-	bySymbol map[string]Op
-	byName   map[string]Op
+	words     map[string]OpRef // the operations' own words, the resolver's default
+	resolve   Resolver         // word -> operation; the daemon's grounded resolver supersedes the default
+	bodyParse BodyParser       // body -> computation; the daemon's grammar reader supersedes the engine's own
+	bySymbol  map[string]Op
+	byName    map[string]Op
 }
 
 // NewEngine indexes the primitive constructions, then the defined ones, whose
@@ -211,6 +221,33 @@ func (e *Engine) index(o Op) {
 // concept reaches the operation with no change here.
 func (e *Engine) SetResolver(r Resolver) { e.resolve = r }
 
+// SetBodyParser installs the body parser the definition path consults, the
+// daemon's grounded reading of a function body through the grammar. It is
+// cross-checked against the engine's own reader so the move cannot regress what
+// parsed before, and the engine's reader still serves when the grammar declines a
+// surface it does not yet read.
+func (e *Engine) SetBodyParser(b BodyParser) { e.bodyParse = b }
+
+// bodyOf reads a function body into its computation through the grounded parser
+// when one is installed, cross-checked against the engine's own reader: the
+// grounded reading is served when the two agree, the engine's when they differ or
+// when the grounded parser declines (a surface it does not yet read, like a map),
+// so the dissolution cannot regress what parsed before. With no parser installed
+// the engine reads the body alone.
+func (e *Engine) bodyOf(toks, params []string, selfName string, selfArity int) (Computation, bool) {
+	own, ownOK := e.parseBody(toks, params, selfName, selfArity)
+	if e.bodyParse == nil {
+		return own, ownOK
+	}
+	if parsed, ok := e.bodyParse(strings.Join(toks, " "), params, selfName, selfArity); ok {
+		if !ownOK || sameComputation(parsed, own) {
+			return parsed, true
+		}
+		return own, true // the readers disagree; keep the engine's, the conservative floor
+	}
+	return own, ownOK
+}
+
 // opRef resolves a word to the operation it names, through the installed resolver
 // when there is one, else the engine's own operation words.
 func (e *Engine) opRef(word string) (OpRef, bool) {
@@ -220,6 +257,10 @@ func (e *Engine) opRef(word string) (OpRef, bool) {
 	ref, ok := e.words[word]
 	return ref, ok
 }
+
+// sameComputation reports whether two computations are structurally identical, the
+// agreement test between the grounded body parse and the engine's own reading.
+func sameComputation(a, b Computation) bool { return reflect.DeepEqual(a, b) }
 
 // rawDefPrefix marks a stored body as the Go statements of a synthesized
 // imperative function, the return type following the marker ahead of the body.
@@ -500,11 +541,14 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			return Op{}, false
 		}
 		seen[p] = true
+		if p == listWord || p == eachWord {
+			return Op{}, false // a parameter may not shadow a surface marker the body reads
+		}
 		if _, taken := e.opRef(p); taken {
 			return Op{}, false
 		}
 	}
-	body, ok := e.parseBody(toks[bodyStart:], params, name, len(params))
+	body, ok := e.bodyOf(toks[bodyStart:], params, name, len(params))
 	if !ok {
 		return Op{}, false
 	}
