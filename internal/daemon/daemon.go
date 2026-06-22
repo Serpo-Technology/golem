@@ -212,10 +212,11 @@ type Daemon struct {
 	// sleep. followUp carries a resolution back to the planner: when a told
 	// proposition answers an open question, GOLEM speaks the answer on that turn
 	// rather than staying silent.
-	openQuestions []openQuestion
-	followUp      string
-	proposedKinds map[string]bool // un-named kinds already offered this session, so each is proposed once
-	pendingKind   []uint64        // the members of the kind last proposed and not yet named; the speaker's naming grounds them
+	openQuestions  []openQuestion
+	followUp       string
+	proposedKinds  map[string]bool     // un-named kinds already offered this session, so each is proposed once
+	pendingKind    []uint64            // the members of the kind last proposed and not yet named; the speaker's naming grounds them
+	pendingCompute *pendingComputation // a computation GOLEM was asked for but does not know, awaiting an example or a definition to learn it by
 
 	// selfID, userID, and bothID are the conversation's participants as concepts:
 	// GOLEM, the one it speaks with, and the two together. The deictic pronouns
@@ -1573,6 +1574,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.followUp = ""
 	d.proposedKinds = nil
 	d.pendingKind = nil
+	d.pendingCompute = nil
 	// The night may have pruned a participant that nothing grounded it through;
 	// re-establish the trio so the cached ids point at live concepts for the new
 	// day. One spoken of in a stored fact kept its grounding and its id with it.
@@ -1854,6 +1856,12 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			// has not learned, or is otherwise ill-formed, has its gap admitted
 			// here; only a genuine raw program falls through to the compiler.
 			if name, ok := d.code.UnknownOp(src); ok {
+				// An unknown operation is an invitation to be taught, not only a gap:
+				// for a plain call GOLEM holds what was asked and asks to be shown, so
+				// the example that follows learns it. A richer surface still admits the gap.
+				if say, asked := d.requestComputation(src, name); asked {
+					return wire.Response{OK: true, Say: say}, false, false
+				}
 				return wire.Response{OK: true, Say: "I do not know how to compute the " + name + "."}, false, false
 			}
 			if d.code.IsComputationSurface(src) {
@@ -1874,12 +1882,18 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// 2" mints the operation GOLEM can then call and write. Only a genuine
 		// definition matches, so an ordinary utterance falls through to grounding.
 		if d.code != nil {
+			// A computation GOLEM asked to be shown takes the turn first: an example
+			// pair of the awaited operation accumulates toward learning it, so a rule
+			// can be gathered one example at a time across the exchange.
+			if say, handled := d.advancePendingCompute(req.Content); handled {
+				return wire.Response{OK: true, Say: say}, false, false
+			}
 			if op, ok := d.code.ComprehendDefinition(req.Content); ok {
 				line, err := d.learnFunction(op)
 				if err != nil {
 					return wire.Response{Error: err.Error()}, false, false
 				}
-				return wire.Response{OK: true, Say: line}, false, false
+				return wire.Response{OK: true, Say: line + d.closeComputeLoop(op.Name)}, false, false
 			}
 			// A function can also be shown rather than told: "the double of 3 is
 			// 6 and the double of 5 is 10" has its rule worked out from the pairs
@@ -1893,7 +1907,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				if err != nil {
 					return wire.Response{Error: err.Error()}, false, false
 				}
-				return wire.Response{OK: true, Say: line}, false, false
+				return wire.Response{OK: true, Say: line + d.closeComputeLoop(op.Name)}, false, false
 			}
 			// A function over a list can also be shown by example: from lists and their
 			// results the faculty assembles and grounds a loop, the structure emerging

@@ -13,6 +13,21 @@ import (
 // each candidate by running it, so the rule it lands on is decided by what the
 // code does, the same standard the other surfaces meet.
 
+// ComprehendExamplePair reads one example pair, "the triple of 2 is 6", the single-
+// pair form a dialogue gathers one at a time toward a synthesis. It is the clause
+// ComprehendExamples reads several of; on its own a pair is too few to fix a rule, so
+// the caller accumulates pairs until the search has enough to run.
+func (e *Engine) ComprehendExamplePair(text string) (name, in, out string, ok bool) {
+	toks := strings.Fields(text)
+	if len(toks) != 6 || toks[0] != "the" || toks[2] != "of" || toks[4] != "is" {
+		return "", "", "", false
+	}
+	if !isNumber(toks[3]) || !isNumber(toks[5]) {
+		return "", "", "", false
+	}
+	return toks[1], toks[3], toks[5], true
+}
+
 // ComprehendExamples reads a function taught by example, "the double of 3 is 6
 // and the double of 5 is 10", into the name and the input/output pairs it shows.
 // Every clause must name the same function and give numbers, and there must be
