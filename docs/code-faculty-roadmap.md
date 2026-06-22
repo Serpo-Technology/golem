@@ -36,9 +36,11 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > `byWord` map is gone), and the grammar reads the whole call and body surface: the
 > operation-application call `the <op> of <args>`, the bare imperative `double 4`,
 > the list literal `the list of A and B and C`, and the definition body including
-> conditionals, recursion, and comparisons grounded as the operations gt/lt/eq. Only
-> the map `each` body still rides the code reader. Recognition is grounded
-> resolution where it was English-string-matching.
+> conditionals, recursion, comparisons grounded as the operations gt/lt/eq, and the
+> map element `the double of each number`. No call or body surface rides the code
+> reader for recognition now; the engine's own reader stays only as the cross-check
+> that the grammar reads what it read before. Recognition is grounded resolution
+> where it was English-string-matching.
 >
 > The intent-to-procedure bridge (slice 7) has begun: the synthesis search composes
 > the acquired vocabulary, not the arithmetic primitives alone; a synthesized
@@ -47,9 +49,9 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > inverse of a known operation (`the halving is the inverse of the double` yields
 > `number / 2`, the procedure discovered, not shown). Still open: the non-equational
 > property family (largest/smallest, abs/sign), the general property entry over two
-> computation sides, dissolving the `code.Computation` IR toward
-> generation-by-graph-traversal, and the map body as a grammar construction. The
-> floor (Go parser, primitives, grounding-by-running) is unchanged throughout.
+> computation sides, and dissolving the `code.Computation` IR toward
+> generation-by-graph-traversal. The floor (Go parser, primitives,
+> grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
 `source.go`):
