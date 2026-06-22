@@ -13,19 +13,57 @@ import (
 // each candidate by running it, so the rule it lands on is decided by what the
 // code does, the same standard the other surfaces meet.
 
-// ComprehendExamplePair reads one example pair, "the triple of 2 is 6", the single-
-// pair form a dialogue gathers one at a time toward a synthesis. It is the clause
-// ComprehendExamples reads several of; on its own a pair is too few to fix a rule, so
-// the caller accumulates pairs until the search has enough to run.
-func (e *Engine) ComprehendExamplePair(text string) (name, in, out string, ok bool) {
+// ComprehendComputeExamplePair reports whether the text is a single well-formed
+// example of a computation and returns the operation it names: "the triple of 2 is 6"
+// (a number to a number), "the tally of the list of 1 and 2 and 3 is 6" (a list to a
+// number), or "the doubled of the list of 1 and 2 is the list of 2 and 4" (a list to a
+// list). The three shapes are the ones the synthesis floor assembles. It is how a
+// dialogue recognizes a turn as an example of the operation it is waiting to learn, one
+// at a time, before the gathered examples are fed to the search together.
+func (e *Engine) ComprehendComputeExamplePair(text string) (name string, ok bool) {
 	toks := strings.Fields(text)
-	if len(toks) != 6 || toks[0] != "the" || toks[2] != "of" || toks[4] != "is" {
-		return "", "", "", false
+	if len(toks) < 2 || toks[0] != "the" {
+		return "", false
 	}
-	if !isNumber(toks[3]) || !isNumber(toks[5]) {
-		return "", "", "", false
+	name = toks[1]
+	rest, okc := strings.CutPrefix(text, "the "+name+" of ")
+	if !okc {
+		return "", false
 	}
-	return toks[1], toks[3], toks[5], true
+	isAt := strings.Index(rest, " is ")
+	if isAt < 0 {
+		return "", false
+	}
+	if !e.isOperand(strings.TrimSpace(rest[:isAt])) || !e.isOperand(strings.TrimSpace(rest[isAt+len(" is "):])) {
+		return "", false
+	}
+	return name, true
+}
+
+// LearnableCallArg reports whether the text is a plain call "the <op> of <arg>" whose
+// argument is a number or a list of numbers, the surface a dialogue can gather a rule
+// for one example at a time, and returns the argument. A nested or many-operand call is
+// not learnable by that loop and is left to admit the gap.
+func (e *Engine) LearnableCallArg(text, op string) (arg string, ok bool) {
+	rest, okc := strings.CutPrefix(text, "the "+op+" of ")
+	if !okc {
+		return "", false
+	}
+	rest = strings.TrimSpace(rest)
+	if e.isOperand(rest) {
+		return rest, true
+	}
+	return "", false
+}
+
+// isOperand reports whether the text is a single number or a list of numbers, the
+// operands a learnable call and its examples carry.
+func (e *Engine) isOperand(text string) bool {
+	if isNumber(text) {
+		return true
+	}
+	_, ok := e.listLiteralNums(text)
+	return ok
 }
 
 // ComprehendExamples reads a function taught by example, "the double of 3 is 6

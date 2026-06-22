@@ -2,59 +2,62 @@ package daemon
 
 import (
 	"strings"
+
+	"golem/internal/code"
 )
 
 // pendingComputation is a computation GOLEM was asked for but does not know. Rather
-// than admit the gap and stop, it holds the operation and the argument it was asked
-// about and invites the speaker to teach it, by a definition or one example at a
-// time. When enough examples accumulate, the synthesis floor assembles the rule by
-// running, and the original question is answered on the same turn it is learned.
+// than admit the gap and stop, it holds the operation and the call it was asked, and
+// invites the speaker to teach it, by a definition or one example at a time. When
+// enough examples accumulate, the synthesis floor assembles the rule by running, and
+// the call that began the exchange is answered on the turn it is learned.
 type pendingComputation struct {
-	op       string      // the unknown operation, "triple"
-	arg      string      // the argument the question asked about, "4", to answer once learned
-	examples [][2]string // input/output pairs gathered so far, toward a synthesis
+	op       string   // the unknown operation, "spread"
+	surface  string   // the call asked, "the spread of the list of 2 and 5 and 9", re-run to answer once learned
+	examples []string // the example surfaces gathered so far, fed to the search together
 }
 
-// maxComputeExamples caps how many examples a learning loop gathers before giving
-// up, so a rule the synthesis cannot reach does not invite examples without end.
+// maxComputeExamples caps how many examples a learning loop gathers before giving up,
+// so a rule the synthesis cannot reach does not invite examples without end.
 const maxComputeExamples = 6
 
-// requestComputation turns an unknown computation into a request to be taught it,
-// for a plain unary call ("the triple of 4") whose argument is a number the synthesis
-// floor works over. It records what was asked so the answer can follow the learning,
-// and returns the invitation. A richer surface (a binary call, a nested one) is left
-// to the caller to admit as a gap, since the one-example loop does not yet assemble it.
+// requestComputation turns an unknown computation into a request to be taught it, for a
+// plain call "the <op> of <arg>" whose argument is a number or a list of numbers, the
+// surface the example loop gathers a rule for. It records the call so the answer can
+// follow the learning, and returns the invitation with its hint shaped to the argument.
+// A richer surface (a nested call, several operands) is left for the caller to admit as
+// a gap, since the one-at-a-time loop does not yet assemble it.
 func (d *Daemon) requestComputation(src, op string) (string, bool) {
-	toks := strings.Fields(src)
-	if len(toks) != 4 || toks[0] != "the" || toks[1] != op || toks[2] != "of" || !isNumeric(toks[3]) {
+	arg, ok := d.code.LearnableCallArg(src, op)
+	if !ok {
 		return "", false
 	}
-	d.pendingCompute = &pendingComputation{op: op, arg: toks[3]}
-	return "I do not know the " + op + " yet. Tell me what it is, or show me, like: the " + op + " of 2 is 6.", true
+	d.pendingCompute = &pendingComputation{op: op, surface: src}
+	hint := "the " + op + " of 2 is 6"
+	if strings.HasPrefix(arg, "the list of") {
+		hint = "the " + op + " of the list of 2 and 5 and 9 is 7"
+	}
+	return "I do not know the " + op + " yet. Tell me what it is, or show me, like: " + hint + ".", true
 }
 
 // advancePendingCompute takes a turn while a computation is awaited and reads it as an
-// example of that operation. Each example accumulates; once two stand, the synthesis
-// floor is run, and as soon as it assembles a rule the operation is learned and the
-// awaited question answered. A turn that is no example of the awaited operation is not
-// consumed here, so an ordinary statement or a definition falls through to its own path.
+// example of that operation. Each example accumulates; once two stand, they are fed to
+// the synthesis floor together, and as soon as it assembles a rule the operation is
+// learned and the awaited call answered. A turn that is no example of the awaited
+// operation is not consumed here, so an ordinary statement or a definition falls
+// through to its own path.
 func (d *Daemon) advancePendingCompute(content string) (string, bool) {
 	if d.pendingCompute == nil {
 		return "", false
 	}
-	name, in, out, ok := d.code.ComprehendExamplePair(content)
+	name, ok := d.code.ComprehendComputeExamplePair(content)
 	if !ok || name != d.pendingCompute.op {
 		return "", false
 	}
-	d.pendingCompute.examples = append(d.pendingCompute.examples, [2]string{in, out})
+	d.pendingCompute.examples = append(d.pendingCompute.examples, content)
 	ex := d.pendingCompute.examples
 	if len(ex) >= 2 {
-		ins := make([]string, len(ex))
-		outs := make([]string, len(ex))
-		for i, p := range ex {
-			ins[i], outs[i] = p[0], p[1]
-		}
-		if op, found := d.induceFunction(name, ins, outs); found {
+		if op, found := d.synthesizeFromExamples(name, strings.Join(ex, " and ")); found {
 			line, err := d.learnFunction(op)
 			if err != nil {
 				d.pendingCompute = nil
@@ -70,29 +73,47 @@ func (d *Daemon) advancePendingCompute(content string) (string, bool) {
 	return "Show me one more example of the " + name + ".", true
 }
 
-// closeComputeLoop answers the question that began a learning loop, now that the
-// operation it asked about is known: it runs the original call and speaks the result,
-// so the turn that learns "triple" also reports the triple of 4. It clears the pending
-// computation, whether or not the answer comes out, so the loop closes once.
+// synthesizeFromExamples assembles the operation the gathered examples show, dispatched
+// by their shape: a number to a number is searched as an expression, a list to a number
+// as a fold, a list to a list as a transform, each grounded by running. The examples are
+// joined as the by-example tellings are written, so the same parsers and searches those
+// surfaces use serve the gathered ones here.
+func (d *Daemon) synthesizeFromExamples(name, joined string) (code.Op, bool) {
+	if nm, ins, outs, ok := d.code.ComprehendExamples(joined); ok && nm == name {
+		return d.induceFunction(nm, ins, outs)
+	}
+	if nm, lists, outs, ok := d.code.ComprehendListExamples(joined); ok && nm == name {
+		return d.synthesizeFold(nm, lists, outs)
+	}
+	if nm, ins, outs, ok := d.code.ComprehendListReturnExamples(joined); ok && nm == name {
+		return d.synthesizeListReturn(nm, ins, outs)
+	}
+	return code.Op{}, false
+}
+
+// closeComputeLoop answers the call that began a learning loop, now that the operation
+// it asked about is known: it runs the original call and speaks the result, so the turn
+// that learns "spread" also reports the spread of the list it was asked. It clears the
+// pending computation, whether or not the answer comes out, so the loop closes once.
 func (d *Daemon) closeComputeLoop(op string) string {
 	if d.pendingCompute == nil || d.pendingCompute.op != op {
 		return ""
 	}
-	arg := d.pendingCompute.arg
+	surface := d.pendingCompute.surface
 	d.pendingCompute = nil
-	if arg == "" {
+	if surface == "" {
 		return ""
 	}
-	val, ok := d.computeSay("the " + op + " of " + arg)
+	val, ok := d.computeSay(surface)
 	if !ok || val == "" {
 		return ""
 	}
-	return " So the " + op + " of " + arg + " is " + val + "."
+	return " So " + surface + " is " + val + "."
 }
 
 // computeSay runs a comprehended computation and returns its result, the same path the
-// runcode command takes, so a call learned this turn is answered exactly as it would
-// be if asked fresh. It returns false when the surface does not comprehend or does not
+// runcode command takes, so a call learned this turn is answered exactly as it would be
+// if asked fresh. It returns false when the surface does not comprehend or does not
 // type-check, so a still-unknown or ill-formed call closes the loop silently.
 func (d *Daemon) computeSay(src string) (string, bool) {
 	if d.code == nil {
@@ -112,18 +133,4 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 		out = generated
 	}
 	return runSummary(d.runProgram(out)), true
-}
-
-// isNumeric reports whether a token is a plain non-negative integer, the argument a
-// unary call over numbers carries.
-func isNumeric(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
