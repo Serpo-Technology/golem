@@ -230,6 +230,10 @@ type Daemon struct {
 	// translated imperative routes to the faculty its verb names or resembles.
 	commandName     map[uint64]string
 	commandTriggers map[string][]uint64
+	// opConcept maps an operation concept to the operation it names, the grounded
+	// substitute for the code engine's English word map: a computation word resolves
+	// to its concept, and the concept yields the operation the engine runs.
+	opConcept map[uint64]code.OpRef
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -605,6 +609,7 @@ func (d *Daemon) ensureParticipants() {
 	d.bothID = d.ensureConcept("deixis:both", "us")
 	d.ensureDeicticForms()
 	d.ensureCommands()
+	d.ensureOperations()
 }
 
 // ensureDeicticForms links each seeded deictic pronoun to the participant it
@@ -768,6 +773,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.commandName[id]; ok {
+		return true
+	}
+	if _, ok := d.opConcept[id]; ok {
 		return true
 	}
 	for _, triggers := range d.commandTriggers {

@@ -28,7 +28,7 @@ func TestMapToFunc(t *testing.T) {
 	if !ok {
 		t.Fatal("bumped should comprehend")
 	}
-	e.byWord[op.Word], e.byName[op.Name] = op, op
+	e.index(op)
 	want := "func bumped(numbers []int) []int { return (func() []int { out := []int{}; for _, number := range numbers { out = append(out, number + 10) }; return out }()) }"
 	if src, ok := e.ToFunc("bumped"); !ok || src != want {
 		t.Fatalf("bumped should write a slice-returning map:\n got %q\nwant %q", src, want)
@@ -43,7 +43,7 @@ func TestMapComposesUnderReduction(t *testing.T) {
 	if !ok {
 		t.Fatal("bumped should comprehend")
 	}
-	e.byWord[op.Word], e.byName[op.Name] = op, op
+	e.index(op)
 	c, ok := e.Comprehend("the total of the bumped of the list of 1 and 2 and 3")
 	if !ok || !e.TypeCheck(c) {
 		t.Fatalf("a reduction over a map should type-check: ok %v", ok)

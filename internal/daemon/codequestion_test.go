@@ -64,18 +64,24 @@ func TestFollowUpAsksWordsNotNumerals(t *testing.T) {
 	}
 }
 
-// stripAsk bares the computation surface for the code faculty, dropping the
-// question lead-in and a trailing mark.
-func TestStripAsk(t *testing.T) {
+// computationSpan finds where a computation begins in a question by comprehension:
+// the conversational lead-in falls away because it is no computation the faculty
+// reads, not by a strip list. The bare computation and the operator-word form are
+// found unchanged, and a question that is no computation yields no span.
+func TestComputationSpan(t *testing.T) {
+	d, _ := testDaemon(t)
 	cases := map[string]string{
-		"what is the sum of 6 and 7":    "the sum of 6 and 7",
-		"what is 6 + 7?":                "6 + 7",
-		"What's the product of 3 and 4": "the product of 3 and 4",
-		"6 + 7":                         "6 + 7",
+		"what is the sum of 6 and 7":         "the sum of 6 and 7",
+		"what is 6 + 7?":                     "6 + 7",
+		"how much is the product of 3 and 4": "the product of 3 and 4",
+		"6 + 7":                              "6 + 7",
 	}
 	for in, want := range cases {
-		if got := stripAsk(in); got != want {
-			t.Fatalf("stripAsk(%q) = %q, want %q", in, got, want)
+		if got, ok := d.computationSpan(in); !ok || got != want {
+			t.Fatalf("computationSpan(%q) = %q (ok=%v), want %q", in, got, ok, want)
 		}
+	}
+	if got, ok := d.computationSpan("what is a lion"); ok {
+		t.Errorf("a non-computation question should yield no span, got %q", got)
 	}
 }

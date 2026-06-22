@@ -723,6 +723,17 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// A computation posed as a question routes to the faculty before the concept
+	// answers: now that an operation is a grounded concept, "what is the total of the
+	// doubled of the list of 1 and 2 and 3" would otherwise read as an is-a between the
+	// operation concepts. Its digit and operation-span guards keep it off an ordinary
+	// question, so only a real computation is taken here.
+	if frame.Force == grammar.ForceQuestion {
+		if line, ok := d.planComputation(frame, raw); ok {
+			return line, nil
+		}
+	}
+
 	// "Tell me about X" is the open request: say what the focus is and what it
 	// has been part of, the same walk and renderer the focused questions are
 	// filters of, here with no filter.
@@ -1101,10 +1112,13 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if d.code == nil {
 		return "", false
 	}
-	phrase := stripAsk(raw)
 	// A computation grounds on number literals; without a digit the words are
 	// a definition question and the runtime is never spun.
-	if phrase == "" || !strings.ContainsAny(phrase, "0123456789") {
+	if !strings.ContainsAny(raw, "0123456789") {
+		return "", false
+	}
+	phrase, ok := d.computationSpan(raw)
+	if !ok {
 		return "", false
 	}
 	comp, ok := d.code.Comprehend(phrase)
@@ -1129,19 +1143,24 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	return upperFirst(phrase) + " " + connective + " " + res.Value + ".", true
 }
 
-// stripAsk removes a leading question lead-in so the computation surface is left
-// bare for the code faculty: "what is the sum of 6 and 7" becomes "the sum of 6
-// and 7", and "what is 6 + 7" becomes "6 + 7". A trailing question mark is
-// dropped with it.
-func stripAsk(raw string) string {
+// computationSpan finds the computation a question wraps by dropping leading words
+// until what remains comprehends as one. The conversational lead-in ("what is", "how
+// much is") falls away because it is not part of a computation the faculty reads, not
+// because a hardcoded list stripped it: the engine's own comprehension decides where
+// the computation begins. A trailing question mark is dropped first.
+func (d *Daemon) computationSpan(raw string) (string, bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "?"))
-	low := strings.ToLower(s)
-	for _, lead := range []string{"what is the value of ", "what is ", "what's ", "what are ", "whats ", "how much is ", "how many is "} {
-		if strings.HasPrefix(low, lead) {
-			return strings.TrimSpace(s[len(lead):])
+	toks := strings.Fields(s)
+	for i := range toks {
+		phrase := strings.Join(toks[i:], " ")
+		// The span must name an operation, not merely comprehend: the Go parser reads a
+		// bare word as an identifier and a bare number as a literal, so requiring an
+		// operation keeps "what is a lion" from reading "lion" as a computation.
+		if comp, ok := d.code.Comprehend(phrase); ok && comp.Op != "" {
+			return phrase, true
 		}
 	}
-	return s
+	return "", false
 }
 
 // upperFirst capitalizes a phrase's leading letter so the spoken answer opens

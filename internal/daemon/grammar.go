@@ -137,6 +137,12 @@ func (d *Daemon) recompileGrammar() error {
 		SetDecl(gparams).
 		SetArgConstructions(cparams)
 	d.code = code.NewEngine(codeOps(cparams))
+	// Which word names an operation is resolved through the grounded concept graph,
+	// not the engine's own English word map: the engine consults this resolver, which
+	// reads the operation concepts (cross-tongue, teachable). The concepts themselves
+	// are seeded by ensureOperations, called where the chemistry is ready (with the
+	// participants, and after a function is learned), so this stays free of it.
+	d.code.SetResolver(d.resolveOperation)
 	return nil
 }
 

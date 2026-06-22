@@ -79,6 +79,10 @@ type Op struct {
 	Ret        string       // an imperative function's return type ("int" or "list"), parallel to Raw
 }
 
+// Arity is how many operands the operation takes, exported so the daemon can record
+// it on the operation's concept for the resolver to return.
+func (o Op) Arity() int { return o.arity() }
+
 // arity is how many operands the operation takes: an imperative or defined
 // operation as many as it has parameters, a primitive is binary.
 func (o Op) arity() int {
@@ -121,11 +125,30 @@ const (
 	eachWord = "each" // the element of a map, "the double of each number"
 )
 
-// Engine carries the code constructions and runs them both ways. It is built
-// from the seeded primitives and the functions learned since, indexed by each
-// face so a surface in any of them reaches the one computation.
+// OpRef identifies the operation a word names: its internal name, its operator
+// symbol (empty for a defined op), and its arity. It is the operation's identity
+// without its body, what a resolver returns, which the engine then looks up by name
+// for the body.
+type OpRef struct {
+	Name   string
+	Symbol string
+	Arity  int
+}
+
+// Resolver maps a surface word to the operation it names. The engine takes one so
+// which-operation is decided outside it, by the daemon's grounded concept graph
+// (cross-tongue, teachable), rather than a private English map. With none set, the
+// engine resolves against the words its own operations carry, so it still reads a
+// computation standalone.
+type Resolver func(word string) (OpRef, bool)
+
+// Engine carries the code constructions and runs them both ways. It is built from
+// the seeded primitives and the functions learned since, indexed by name and by
+// operator symbol; which word names an operation is the resolver's, not a map kept
+// here.
 type Engine struct {
-	byWord   map[string]Op
+	words    map[string]OpRef // the operations' own words, the resolver's default
+	resolve  Resolver         // word -> operation; the daemon's grounded resolver supersedes the default
 	bySymbol map[string]Op
 	byName   map[string]Op
 }
@@ -135,34 +158,62 @@ type Engine struct {
 // them comprehends. A definition whose body does not comprehend is dropped
 // rather than indexed half-formed.
 func NewEngine(prims []Op, defs []Def) *Engine {
-	e := &Engine{byWord: map[string]Op{}, bySymbol: map[string]Op{}, byName: map[string]Op{}}
-	index := func(o Op) {
-		e.byWord[o.Word] = o
-		e.bySymbol[o.Symbol] = o
-		e.byName[o.Name] = o
-	}
+	e := &Engine{words: map[string]OpRef{}, bySymbol: map[string]Op{}, byName: map[string]Op{}}
 	for _, o := range prims {
-		index(o)
+		e.index(o)
+	}
+	// The operator words are the pseudocode register of the arithmetic primitives.
+	// The default resolver knows them so a standalone engine reads "6 plus 7"; the
+	// daemon's grounded resolver carries them as cross-tongue naming edges instead.
+	for word, sym := range map[string]string{"plus": "+", "minus": "-", "times": "*", "over": "/"} {
+		if o, ok := e.bySymbol[sym]; ok {
+			e.words[word] = OpRef{Name: o.Name, Symbol: o.Symbol, Arity: o.arity()}
+		}
 	}
 	for _, d := range defs {
 		// A synthesized imperative function is stored as its Go statements behind a
 		// "raw:<ret> " marker; it reloads as the raw op it is rather than through the
 		// expression reader.
 		if ret, raw, ok := rawDef(d.Body); ok {
-			op := Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Ret: ret, Raw: raw}
-			e.byWord[op.Word] = op
-			e.byName[op.Name] = op
+			e.index(Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Ret: ret, Raw: raw})
 			continue
 		}
 		body, ok := e.bodyFromSource(d.Body)
 		if !ok {
 			continue
 		}
-		op := Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Body: &body}
-		e.byWord[op.Word] = op
-		e.byName[op.Name] = op
+		e.index(Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Body: &body})
 	}
 	return e
+}
+
+// index records an operation in the engine's lookups: by name always, by operator
+// symbol when it has one (a primitive), and by the words its surface carries (the
+// resolver's default, used when no grounded resolver is set).
+func (e *Engine) index(o Op) {
+	if o.Word != "" {
+		e.words[o.Word] = OpRef{Name: o.Name, Symbol: o.Symbol, Arity: o.arity()}
+	}
+	if o.Symbol != "" {
+		e.bySymbol[o.Symbol] = o
+	}
+	e.byName[o.Name] = o
+}
+
+// SetResolver installs the operation resolver the comprehension path consults, the
+// daemon's grounded word-to-operation lookup over the concept graph. It supersedes
+// the engine's own word index, so a tongue or a synonym named on an operation
+// concept reaches the operation with no change here.
+func (e *Engine) SetResolver(r Resolver) { e.resolve = r }
+
+// opRef resolves a word to the operation it names, through the installed resolver
+// when there is one, else the engine's own operation words.
+func (e *Engine) opRef(word string) (OpRef, bool) {
+	if e.resolve != nil {
+		return e.resolve(word)
+	}
+	ref, ok := e.words[word]
+	return ref, ok
 }
 
 // rawDefPrefix marks a stored body as the Go statements of a synthesized
@@ -222,7 +273,7 @@ func (e *Engine) UnknownOp(text string) (string, bool) {
 		if toks[i] != "the" || toks[i+2] != "of" {
 			continue
 		}
-		if _, ok := e.byWord[toks[i+1]]; !ok {
+		if _, ok := e.opRef(toks[i+1]); !ok {
 			return toks[i+1], true
 		}
 	}
@@ -239,7 +290,7 @@ func (e *Engine) UnknownOp(text string) (string, bool) {
 func (e *Engine) IsComputationSurface(text string) bool {
 	toks := strings.Fields(text)
 	for _, t := range toks {
-		if _, ok := spokenOps[strings.ToLower(t)]; ok {
+		if ref, ok := e.opRef(strings.ToLower(t)); ok && ref.Symbol != "" {
 			return true
 		}
 	}
@@ -253,21 +304,17 @@ func (e *Engine) IsComputationSurface(text string) bool {
 	return false
 }
 
-// spokenOps maps the words a person says an operator with to the symbol that
-// runs it, the pseudocode register of the same operations: "6 plus 7" is read
-// as "6 + 7" and "3 times 4" as "3 * 4".
-var spokenOps = map[string]string{"plus": "+", "minus": "-", "times": "*", "over": "/"}
-
-// comprehendSpoken reads the operator words into their symbols and lets the Go
-// parser take it from there, so a computation spoken in words carries the same
-// precedence and grouping the symbols would. With no operator word present it
-// declines, so the code path reads a plain expression unchanged.
+// comprehendSpoken reads an operator word into its symbol and lets the Go parser
+// take it from there, so a computation spoken in words carries the same precedence
+// and grouping the symbols would. A word names an operator when it resolves to an
+// operation that has a symbol; with none present it declines, so the code path
+// reads a plain expression unchanged.
 func (e *Engine) comprehendSpoken(text string) (Computation, bool) {
 	toks := strings.Fields(text)
 	replaced := false
 	for i, t := range toks {
-		if sym, ok := spokenOps[strings.ToLower(t)]; ok {
-			toks[i] = sym
+		if ref, ok := e.opRef(strings.ToLower(t)); ok && ref.Symbol != "" {
+			toks[i] = ref.Symbol
 			replaced = true
 		}
 	}
@@ -357,8 +404,8 @@ func (e *Engine) literalOperand(toks, params []string, selfName string, selfArit
 	opName, arity := "", 0
 	if selfName != "" && toks[1] == selfName {
 		opName, arity = selfName, selfArity
-	} else if op, ok := e.byWord[toks[1]]; ok && op.arity() >= 1 {
-		opName, arity = op.Name, op.arity()
+	} else if ref, ok := e.opRef(toks[1]); ok && ref.Arity >= 1 {
+		opName, arity = ref.Name, ref.Arity
 	} else {
 		return Computation{}, 0, false
 	}
@@ -437,7 +484,7 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 	if op, taken := e.byName[name]; taken && op.Body == nil {
 		return Op{}, false
 	}
-	if op, taken := e.byWord[name]; taken && op.Body == nil {
+	if e.Primitive(name) {
 		return Op{}, false
 	}
 	// Each parameter must be distinct, not the name, and not an operation word the
@@ -448,7 +495,7 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			return Op{}, false
 		}
 		seen[p] = true
-		if _, taken := e.byWord[p]; taken {
+		if _, taken := e.opRef(p); taken {
 			return Op{}, false
 		}
 	}

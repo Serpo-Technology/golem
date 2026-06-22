@@ -346,8 +346,10 @@ func (e *Engine) Primitive(word string) bool {
 	if op, ok := e.byName[word]; ok && op.Body == nil {
 		return true
 	}
-	if op, ok := e.byWord[word]; ok && op.Body == nil {
-		return true
+	if ref, ok := e.opRef(word); ok {
+		if op, ok := e.byName[ref.Name]; ok && op.Body == nil {
+			return true
+		}
 	}
 	return false
 }

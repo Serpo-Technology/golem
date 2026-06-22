@@ -193,6 +193,9 @@ func (d *Daemon) learnFunction(op code.Op) (string, error) {
 	if err := d.recompileGrammar(); err != nil {
 		return "", err
 	}
+	// The learned operation becomes a grounded concept now, not at the next
+	// consolidation, so it resolves and computes on the very turn it is taught.
+	d.ensureOperations()
 	if src, ok := d.code.ToFunc(op.Name); ok {
 		return "I learned " + op.Name + ". I write it as " + src, nil
 	}

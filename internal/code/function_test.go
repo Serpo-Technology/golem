@@ -106,8 +106,7 @@ func TestDefinedFunctionComposes(t *testing.T) {
 	if !ok {
 		t.Fatal("quadruple should comprehend in terms of double")
 	}
-	e.byWord[op.Word] = op
-	e.byName[op.Name] = op
+	e.index(op)
 	call, _ := e.Comprehend("the quadruple of 3")
 	if src, ok := e.ToCode(call); !ok || src != "(3 * 2) * 2" {
 		t.Fatalf("quadruple should inline through double: %q ok %v", src, ok)

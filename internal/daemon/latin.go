@@ -51,9 +51,9 @@ func (d *Daemon) comprehendComparisonLA(raw string, momentID uint64) bool {
 		return false
 	}
 	return d.storeComparison(grammar.Frame{Comparative: true, Lang: "la",
-		Agent:  grammar.Term{Concept: subj},
+		Agent:   grammar.Term{Concept: subj},
 		Patient: grammar.Term{Concept: std},
-		Action: grammar.Term{Phrase: rel}}, momentID)
+		Action:  grammar.Term{Phrase: rel}}, momentID)
 }
 
 // planLatinComparison answers a Latin comparison question ("estne rosa maior quam

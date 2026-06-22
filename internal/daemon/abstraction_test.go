@@ -117,9 +117,9 @@ func TestAbstractionInheritsGroundingNamesAcrossTongues(t *testing.T) {
 		}
 		return w.ID
 	}
-	en := name("rabbit", "en", 0.8)  // the anchor, the firmest namer of the percept
-	tr := name("tavşan", "tr", 0.6)  // a second tongue that named the percept ostensively
-	noise := name("cat", "en", 0.1)  // a faint co-namer that must not inherit
+	en := name("rabbit", "en", 0.8) // the anchor, the firmest namer of the percept
+	tr := name("tavşan", "tr", 0.6) // a second tongue that named the percept ostensively
+	noise := name("cat", "en", 0.1) // a faint co-namer that must not inherit
 	// The anchor already names the abstraction directly, as growAbstractions sets it.
 	if err := s.SetLinkRel(en, abs.ID, memory.RelNames, absNameWeight); err != nil {
 		t.Fatal(err)

@@ -51,7 +51,7 @@ func TestListFunctionToFunc(t *testing.T) {
 	if !ok {
 		t.Fatal("average should comprehend")
 	}
-	e.byWord[op.Word], e.byName[op.Name] = op, op
+	e.index(op)
 	want := "func average(numbers []int) int { return (func(numbers []int) int { a := 0; for _, x := range numbers { a = a + x }; return a })(numbers) / (func(numbers []int) int { return len(numbers) })(numbers) }"
 	if src, ok := e.ToFunc("average"); !ok || src != want {
 		t.Fatalf("average should write a slice-taking function:\n got %q\nwant %q", src, want)

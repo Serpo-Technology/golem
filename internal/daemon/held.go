@@ -49,7 +49,7 @@ const (
 	heldDecayKeep = 0.99 // per homeostasis tick: a held thought fades, slower than a turn, gone by sleep
 	heldFloor     = 0.1  // below this activation a held proposition leaves mind
 	heldBudget    = 32   // propositions held at once; the coldest is evicted past it
-	heldMaxDepth  = 3     // derivation hops a chain may stand from observation before it is too thin to draw
+	heldMaxDepth  = 3    // derivation hops a chain may stand from observation before it is too thin to draw
 	heldStepKeep  = 0.85 // confidence kept per derivation step, so a chain grows less sure with length
 
 	promoteReinforce = 2 // times a conclusion must be re-drawn before a night keeps it in long-term memory
