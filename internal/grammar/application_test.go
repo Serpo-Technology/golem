@@ -187,6 +187,8 @@ func bodyHead(word string) (string, int, bool) {
 		return "add", 2, true
 	case "factorial":
 		return "factorial", 1, true
+	case "double":
+		return "double", 1, true
 	}
 	return "", 0, false
 }
@@ -282,6 +284,21 @@ func TestParseBodyPlain(t *testing.T) {
 		t.Fatal("a plain arithmetic body should parse")
 	}
 	want := Application{Head: "multiply", Args: []Application{{Var: "number"}, {Lit: "2"}}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBody = %+v, want %+v", app, want)
+	}
+}
+
+// A body naming "each <element>" reads the element as a map reference, the form
+// the caller lifts into a map over the list parameter. The element name is taken
+// as it stands, so it need not be one of the parameters in scope.
+func TestParseBodyMapEach(t *testing.T) {
+	app, ok := Builtin().ParseBody("en", "the double of each number",
+		[]string{"numbers"}, bodyHead, bodyCmp)
+	if !ok {
+		t.Fatal("a map body naming an element should parse")
+	}
+	want := Application{Head: "double", Args: []Application{{Var: "number", Each: true}}}
 	if !reflect.DeepEqual(app, want) {
 		t.Fatalf("ParseBody = %+v, want %+v", app, want)
 	}

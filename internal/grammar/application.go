@@ -14,16 +14,19 @@ package grammar
 // Application is one node of an operation-application call: Head is the operation's
 // canonical name as the resolver names it, Args its operands in order. A leaf
 // carries no Head and a bare Lit, a value sitting where an operand does. A Var
-// node is a reference to a parameter inside a function body ("the number"). A List
-// node is the list literal "the list of A and B and C", its elements in Args,
-// variadic where an operation is fixed-arity. A Cond node is a conditional, a
-// choice between two branches on a comparison. It is the neutral structure the
-// call and body parsers yield, which the caller walks into the computation it
-// means, so the grammar produces the form while the code faculty owns the meaning.
+// node is a reference to a parameter inside a function body ("the number"); the
+// same node with Each set is the element of a map ("each number"), the per-element
+// reference the caller lifts into a map over the list parameter. A List node is
+// the list literal "the list of A and B and C", its elements in Args, variadic
+// where an operation is fixed-arity. A Cond node is a conditional, a choice
+// between two branches on a comparison. It is the neutral structure the call and
+// body parsers yield, which the caller walks into the computation it means, so the
+// grammar produces the form while the code faculty owns the meaning.
 type Application struct {
 	Head string        // the operation's canonical name; empty for a literal, a var, or a list
 	Lit  string        // the literal value, when Head, Var, List, and Cond are all empty
-	Var  string        // a parameter reference inside a body, "the number"
+	Var  string        // a parameter reference inside a body, "the number", or a map element with Each
+	Each bool          // the Var is the element of a map, "each number", before it is lifted into a map
 	List bool          // the operands are a list literal's elements, not an operation's arguments
 	Cond *Conditional  // a choice between two branches on a comparison, when set
 	Args []Application // the operands, as many as the head's arity, or the list's elements
@@ -93,9 +96,9 @@ func (p *Params) ParseApplication(lang, utterance string, head HeadFunc) (Applic
 // a function body, empty for a bare call; head resolves an operation word to its
 // name and arity.
 type parseCtx struct {
-	det, linker, coord, listMarker string
-	params                         []string
-	head                           HeadFunc
+	det, linker, coord, listMarker, eachMarker string
+	params                                     []string
+	head                                       HeadFunc
 }
 
 // callCtx builds the operand-parse context from a tongue's seeded call-surface
@@ -109,7 +112,8 @@ func (p *Params) callCtx(lang string, params []string, head HeadFunc) *parseCtx 
 		return nil
 	}
 	return &parseCtx{det: det, linker: linker, coord: coord,
-		listMarker: p.surfaceWord(lang, "list"), params: params, head: head}
+		listMarker: p.surfaceWord(lang, "list"), eachMarker: p.surfaceWord(lang, "each"),
+		params: params, head: head}
 }
 
 // ParseBareCall reads the bare operation call "double 4" or "add 6 and 7", the
@@ -158,6 +162,12 @@ func (p *Params) ParseBareCall(lang, utterance string, head HeadFunc) (Applicati
 func (c *parseCtx) operand(toks []string) (Application, int, bool) {
 	if len(toks) == 0 {
 		return Application{}, 0, false
+	}
+	// "each <element>" is the element of a map, "the double of each number"; it is a
+	// reference the caller lifts into a map over the list parameter once the body is
+	// read, so the element name is taken as it stands and need not be a parameter.
+	if c.eachMarker != "" && toks[0] == c.eachMarker && len(toks) >= 2 {
+		return Application{Var: toks[1], Each: true}, 2, true
 	}
 	// A token that does not open a call is a literal operand, a value sitting where
 	// an operand does.

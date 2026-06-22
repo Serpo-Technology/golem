@@ -173,12 +173,13 @@ func (d *Daemon) parseBodyGrammar(body string, params []string, selfName string,
 
 // applicationToComputation walks the application the grammar parsed into the
 // computation it means, a structural copy: a node is an operation over its
-// operands, a leaf a literal value. Arity was enforced as the call parsed, so the
-// walk cannot fail on it.
+// operands, a leaf a literal value, a Var a parameter reference, and a Var marked
+// Each the element of a map the definition path then lifts. Arity was enforced as
+// the call parsed, so the walk cannot fail on it.
 func applicationToComputation(a grammar.Application) code.Computation {
 	switch {
 	case a.Var != "":
-		return code.Computation{Var: a.Var}
+		return code.Computation{Var: a.Var, Each: a.Each}
 	case a.Cond != nil:
 		return code.Computation{Cond: &code.Conditional{
 			Cmp:   a.Cond.Cmp,
