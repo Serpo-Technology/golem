@@ -178,6 +178,28 @@ func TestLearnsAndCallsAConditional(t *testing.T) {
 	}
 }
 
+// A function may take a parameter whose word names a learned operation. Once
+// "double" is a known operation, "the chooser of a double and a low ..." still
+// learns: the body reads "the double" as the parameter, so the definition is not
+// refused and silently grounded as a statement (the bug this guards). Without a
+// rich enough operation inventory the collision never arises, so it is the loaded
+// brain that needs the guarantee.
+func TestDefinitionParameterShadowsLearnedOperation(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	if r := say(t, d, "the double of a number is the product of the number and 2"); !strings.Contains(r.Say, "double") {
+		t.Fatalf("double should be learned first: %q", r.Say)
+	}
+	resp := say(t, d, "the chooser of a double and a low is the double if the double is above the low else the low")
+	if !strings.Contains(resp.Say, "I learned chooser") {
+		t.Fatalf("a parameter named like a learned operation should still learn, not ground: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the chooser of 8 and 3"); !strings.Contains(r.Say, "8") {
+		t.Fatalf("chooser(8, 3) should choose 8: %q", r.Say)
+	}
+}
+
 // A recursive function is taught, calls itself to a base case, runs, and survives
 // a recompile. The body refers to factorial before it is in the inventory, and a
 // call runs as a self-referential local function in the interpreter.

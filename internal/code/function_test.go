@@ -126,6 +126,26 @@ func TestDefinitionRejectsConstantAndShadow(t *testing.T) {
 	}
 }
 
+// A parameter may share its word with an operation: "sum" names the add
+// primitive, yet a function may still take a parameter named "sum", because the
+// body reads "the sum" as the parameter (a parameter reference is read before an
+// operation). Refusing it would lose ordinary parameter nouns once a brain has
+// learned enough operations to collide with them.
+func TestDefinitionParameterMayShadowOperation(t *testing.T) {
+	e := testEngine() // "sum" names the add primitive here
+	op, ok := e.ComprehendDefinition("the addtwice of a sum is the product of the sum and 2")
+	if !ok {
+		t.Fatal("a parameter sharing a word with an operation should be allowed")
+	}
+	if op.Name != "addtwice" || len(op.Params) != 1 || op.Params[0] != "sum" {
+		t.Fatalf("the operation should be addtwice(sum): %+v", op)
+	}
+	// The body reads "the sum" as the parameter, not as the add operation.
+	if op.Body == nil || op.Body.Op != "multiply" || op.Body.Args[0].Var != "sum" {
+		t.Fatalf("the body should multiply the parameter by 2: %+v", op.Body)
+	}
+}
+
 // A binary function taught in language comprehends to an operation over two
 // parameters, the n-ary generalization of the unary definition.
 func TestComprehendBinaryDefinition(t *testing.T) {

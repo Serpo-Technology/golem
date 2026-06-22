@@ -540,8 +540,12 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 	if e.Primitive(name) {
 		return Op{}, false
 	}
-	// Each parameter must be distinct, not the name, and not an operation word the
-	// body would misread.
+	// Each parameter must be distinct and not the name. A parameter may share a
+	// word with an operation (a "count", a "first"): inside the body a parameter
+	// reference is read before an operation, so "the count" is the parameter and is
+	// never misread as the operation it happens to name, and the definition need not
+	// be refused for it. Refusing would lose ordinary parameter nouns on a brain
+	// rich enough that they collide with a learned operation.
 	seen := map[string]bool{}
 	for _, p := range params {
 		if p == "" || p == name || seen[p] {
@@ -550,9 +554,6 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 		seen[p] = true
 		if p == listWord || p == eachWord {
 			return Op{}, false // a parameter may not shadow a surface marker the body reads
-		}
-		if _, taken := e.opRef(p); taken {
-			return Op{}, false
 		}
 	}
 	body, ok := e.bodyOf(toks[bodyStart:], params, name, len(params))
