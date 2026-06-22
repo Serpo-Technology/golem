@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"golem/internal/code"
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
 
@@ -78,4 +79,51 @@ func (d *Daemon) resolveOperation(word string) (code.OpRef, bool) {
 	}
 	ref, ok := d.opConcept[c.ID]
 	return ref, ok
+}
+
+// opHead resolves an operation word for the grammar's call parser: the canonical
+// name the call carries and the arity that bounds its operands, both read off the
+// operation's concept. It is resolveOperation in the shape the parser takes, so
+// which operation a word names stays grounded and cross-tongue while the grammar
+// holds only the form.
+func (d *Daemon) opHead(word string) (name string, arity int, ok bool) {
+	ref, ok := d.resolveOperation(word)
+	if !ok {
+		return "", 0, false
+	}
+	return ref.Name, ref.Arity, true
+}
+
+// applicationToComputation walks the application the grammar parsed into the
+// computation it means, a structural copy: a node is an operation over its
+// operands, a leaf a literal value. Arity was enforced as the call parsed, so the
+// walk cannot fail on it.
+func applicationToComputation(a grammar.Application) code.Computation {
+	if a.Head == "" {
+		return code.Computation{Lit: a.Lit}
+	}
+	args := make([]code.Computation, len(a.Args))
+	for i, arg := range a.Args {
+		args[i] = applicationToComputation(arg)
+	}
+	return code.Computation{Op: a.Head, Args: args}
+}
+
+// comprehendCall reads a computation call into its meaning, the grammar reading
+// the operation-application surface ("the sum of 6 and 7") and the code engine
+// the rest: an expression in operator words ("6 plus 7"), raw Go ("6 + 7"), or a
+// list literal. The grammar parse is tried first and its application walked into a
+// computation; when the surface opens no operation call the code engine reads it.
+// So the operation a call names resolves through the concept graph, cross-tongue,
+// while every surface the engine read still comprehends. This is the single point
+// the daemon's computation paths comprehend a call, so the live answer and the
+// learning-loop close never part on two parsers.
+func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, bool) {
+	if d.code == nil {
+		return code.Computation{}, false
+	}
+	if app, ok := d.gram.ParseApplication(lang, phrase, d.opHead); ok {
+		return applicationToComputation(app), true
+	}
+	return d.code.Comprehend(phrase)
 }

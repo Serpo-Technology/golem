@@ -1117,11 +1117,11 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if !strings.ContainsAny(raw, "0123456789") {
 		return "", false
 	}
-	phrase, ok := d.computationSpan(raw)
+	phrase, ok := d.computationSpan(frame.Lang, raw)
 	if !ok {
 		return "", false
 	}
-	comp, ok := d.code.Comprehend(phrase)
+	comp, ok := d.comprehendCall(frame.Lang, phrase)
 	if !ok {
 		return "", false
 	}
@@ -1148,7 +1148,7 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 // much is") falls away because it is not part of a computation the faculty reads, not
 // because a hardcoded list stripped it: the engine's own comprehension decides where
 // the computation begins. A trailing question mark is dropped first.
-func (d *Daemon) computationSpan(raw string) (string, bool) {
+func (d *Daemon) computationSpan(lang, raw string) (string, bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(raw), "?"))
 	toks := strings.Fields(s)
 	for i := range toks {
@@ -1156,7 +1156,7 @@ func (d *Daemon) computationSpan(raw string) (string, bool) {
 		// The span must name an operation, not merely comprehend: the Go parser reads a
 		// bare word as an identifier and a bare number as a literal, so requiring an
 		// operation keeps "what is a lion" from reading "lion" as a computation.
-		if comp, ok := d.code.Comprehend(phrase); ok && comp.Op != "" {
+		if comp, ok := d.comprehendCall(lang, phrase); ok && comp.Op != "" {
 			return phrase, true
 		}
 	}

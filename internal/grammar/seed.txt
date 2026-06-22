@@ -290,6 +290,7 @@ code:divide	/ quotient	en
 # than carrying any answer surface in its code.
 surface:en:article	the	en
 surface:en:coord	and	en
+surface:en:genitive	of	en
 surface:en:pronoun	it	en
 surface:en:proverb	do does	en
 surface:tr:coord	ve	tr

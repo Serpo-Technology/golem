@@ -77,11 +77,11 @@ func TestComputationSpan(t *testing.T) {
 		"6 + 7":                              "6 + 7",
 	}
 	for in, want := range cases {
-		if got, ok := d.computationSpan(in); !ok || got != want {
+		if got, ok := d.computationSpan("en", in); !ok || got != want {
 			t.Fatalf("computationSpan(%q) = %q (ok=%v), want %q", in, got, ok, want)
 		}
 	}
-	if got, ok := d.computationSpan("what is a lion"); ok {
+	if got, ok := d.computationSpan("en", "what is a lion"); ok {
 		t.Errorf("a non-computation question should yield no span, got %q", got)
 	}
 }

@@ -119,7 +119,7 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 	if d.code == nil {
 		return "", false
 	}
-	comp, ok := d.code.Comprehend(src)
+	comp, ok := d.comprehendCall("en", src)
 	if !ok || !d.code.TypeCheck(comp) {
 		return "", false
 	}
