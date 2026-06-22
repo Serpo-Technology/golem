@@ -2,7 +2,10 @@ package daemon
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+
+	"golem/wire"
 )
 
 // comprehendCall is the one point the daemon comprehends a computation call: the
@@ -45,6 +48,28 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 		want, wok := d.code.Comprehend(s)
 		if gok != wok || !reflect.DeepEqual(got, want) {
 			t.Fatalf("comprehendCall(%q) = %+v (ok=%v), engine = %+v (ok=%v)", s, got, gok, want, wok)
+		}
+	}
+}
+
+// The bare imperative "double 4" / "add 6 and 7" names the operation with its
+// leading word and applies it to the operands that follow, the call without the
+// genitive scaffolding. A primitive answers by its verb, a learned function by its
+// name, and a phrase that merely opens with an operation word does not compute.
+func TestBareImperativeComputes(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the double of a number is the product of the number and 2")
+
+	for _, c := range []struct{ in, want string }{
+		{"sum 6 and 7", "13"},      // a primitive by its teaching word
+		{"add 6 and 7", "13"},      // the same primitive by its verb
+		{"multiply 3 and 4", "12"}, // a verb naming arity two
+		{"double 9", "18"},         // a learned function by its name
+	} {
+		r, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: c.in}, nil)
+		if !strings.Contains(r.Say, c.want) {
+			t.Errorf("compute %q should run to %s: %q", c.in, c.want, r.Say)
 		}
 	}
 }

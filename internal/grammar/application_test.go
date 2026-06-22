@@ -96,3 +96,58 @@ func TestParseApplicationUnseededTongue(t *testing.T) {
 		t.Fatal("a tongue with no seeded call surface should not parse a call")
 	}
 }
+
+func TestParseBareCallUnary(t *testing.T) {
+	app, ok := Builtin().ParseBareCall("en", "double 4", stubHead)
+	if !ok {
+		t.Fatal("a bare unary call should parse")
+	}
+	want := Application{Head: "double", Args: []Application{{Lit: "4"}}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBareCall = %+v, want %+v", app, want)
+	}
+}
+
+func TestParseBareCallNAry(t *testing.T) {
+	app, ok := Builtin().ParseBareCall("en", "sum 6 and 7", stubHead)
+	if !ok {
+		t.Fatal("a bare binary call should parse")
+	}
+	want := Application{Head: "add", Args: []Application{{Lit: "6"}, {Lit: "7"}}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBareCall = %+v, want %+v", app, want)
+	}
+}
+
+// A bare call takes a genitive operand where a value would sit, so the two call
+// surfaces compose.
+func TestParseBareCallNestedGenitiveArg(t *testing.T) {
+	app, ok := Builtin().ParseBareCall("en", "sum the double of 4 and 5", stubHead)
+	if !ok {
+		t.Fatal("a bare call with a genitive operand should parse")
+	}
+	want := Application{Head: "add", Args: []Application{
+		{Head: "double", Args: []Application{{Lit: "4"}}},
+		{Lit: "5"},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseBareCall = %+v, want %+v", app, want)
+	}
+}
+
+// All-or-nothing: a lone operation word, a missing coordinator, a missing operand,
+// a trailing word, and an unknown leading word each fail, so an ordinary phrase that
+// merely opens with an operation word is not read as a call.
+func TestParseBareCallRejections(t *testing.T) {
+	for _, s := range []string{
+		"double",         // no operand
+		"sum 6 7",        // binary call missing the coordinator
+		"double 4 and",   // missing operand after the coordinator
+		"double 4 more",  // a trailing word the call cannot place
+		"lion 4",         // the leading word names no operation
+	} {
+		if _, ok := Builtin().ParseBareCall("en", s, stubHead); ok {
+			t.Fatalf("%q should not parse as a bare call", s)
+		}
+	}
+}

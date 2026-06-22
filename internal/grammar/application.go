@@ -62,6 +62,61 @@ func (p *Params) ParseApplication(lang, utterance string, head HeadFunc) (Applic
 	return app, true
 }
 
+// ParseBareCall reads the bare operation call "double 4" or "add 6 and 7", the
+// operation word applied straight to its arguments with none of the genitive
+// scaffolding the of-construction carries: the leading word names the operation,
+// resolved cross-tongue by the head callback, and its arity many operands follow,
+// joined by the coordinator and each read as the of-construction reads one, so a
+// nested "the double of 4" still sits where a number would. It is all-or-nothing
+// like ParseApplication: the leading word must name an operation and every token
+// must be consumed, so an ordinary phrase that merely opens with an operation word
+// is not mistaken for a call.
+func (p *Params) ParseBareCall(lang, utterance string, head HeadFunc) (Application, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	if head == nil {
+		return Application{}, false
+	}
+	det := p.Article(lang)
+	linker := p.surfaceWord(lang, "genitive")
+	coord := p.Coordinator(lang)
+	toks, _ := Tokenize(utterance)
+	// A bare call is the operation word and at least one operand; a lone word is no
+	// call.
+	if len(toks) < 2 {
+		return Application{}, false
+	}
+	name, arity, ok := head(toks[0])
+	if !ok || arity < 1 {
+		return Application{}, false
+	}
+	rest := toks[1:]
+	consumed := 1
+	args := make([]Application, 0, arity)
+	for i := 0; i < arity; i++ {
+		if i > 0 {
+			if len(rest) == 0 || rest[0] != coord {
+				return Application{}, false
+			}
+			rest = rest[1:]
+			consumed++
+		}
+		arg, n, ok := parseOperand(rest, det, linker, coord, head)
+		if !ok {
+			return Application{}, false
+		}
+		args = append(args, arg)
+		rest = rest[n:]
+		consumed += n
+	}
+	if consumed != len(toks) {
+		return Application{}, false
+	}
+	return Application{Head: name, Args: args}, true
+}
+
 // parseOperand reads one operand from the front of the tokens and reports how many
 // it spanned: a bare token is a literal, and "the <head> of <A> and <B> and ..."
 // is the operation its word names over as many operands as its arity, each read

@@ -15,14 +15,15 @@ import (
 // engine, the same way a faculty's verb resolves to its command concept.
 
 // operationWords names each arithmetic primitive beyond the "the <word> of" teaching
-// surface its concept already carries: the operator-register word, and a word in each
-// other tongue, so a computation reads cross-tongue and the operator register is a
+// surface its concept already carries: the operator-register word, the verb a bare
+// imperative names the operation by ("add 6 and 7"), and a word in each other
+// tongue, so a computation reads cross-tongue and the operator register is a
 // grounded naming edge rather than a hardcoded table.
 var operationWords = map[string]map[string][]string{
-	"add":      {"en": {"plus"}, "tr": {"topla", "artı"}, "la": {"adde"}},
-	"subtract": {"en": {"minus"}, "tr": {"çıkar", "eksi"}, "la": {"deme"}},
-	"multiply": {"en": {"times"}, "tr": {"çarp"}, "la": {"multiplica"}},
-	"divide":   {"en": {"over"}, "tr": {"böl"}, "la": {"divide"}},
+	"add":      {"en": {"plus", "add"}, "tr": {"topla", "artı"}, "la": {"adde"}},
+	"subtract": {"en": {"minus", "subtract"}, "tr": {"çıkar", "eksi"}, "la": {"deme"}},
+	"multiply": {"en": {"times", "multiply"}, "tr": {"çarp"}, "la": {"multiplica"}},
+	"divide":   {"en": {"over", "divide"}, "tr": {"böl"}, "la": {"divide"}},
 }
 
 // ensureOperations seeds each operation the engine carries as a concept and loads the
@@ -123,6 +124,12 @@ func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, bool) {
 		return code.Computation{}, false
 	}
 	if app, ok := d.gram.ParseApplication(lang, phrase, d.opHead); ok {
+		return applicationToComputation(app), true
+	}
+	// The bare imperative "double 4" / "add 6 and 7" names the operation with the
+	// leading word and applies it to the operands that follow, the same call without
+	// the genitive scaffolding.
+	if app, ok := d.gram.ParseBareCall(lang, phrase, d.opHead); ok {
 		return applicationToComputation(app), true
 	}
 	return d.code.Comprehend(phrase)
