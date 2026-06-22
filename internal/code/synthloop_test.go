@@ -25,10 +25,10 @@ func TestGenExprsReachesFoldUpdates(t *testing.T) {
 func TestFoldInterpretsAndRenders(t *testing.T) {
 	e := listEngine()
 	sum := foldUpdate{expr: Computation{Op: "add", Args: []Computation{{Var: "a"}, {Var: "x"}}}}
-	if !foldInterprets(sum, "a", foldInit{lit: "0"}, [][]int{{1, 2, 3}, {2, 4}}, []int{6, 6}) {
+	if !e.foldInterprets(sum, "a", foldInit{lit: "0"}, [][]int{{1, 2, 3}, {2, 4}}, []int{6, 6}) {
 		t.Fatal("a + x should fold to the total")
 	}
-	if foldInterprets(sum, "a", foldInit{lit: "1"}, [][]int{{1, 2, 3}}, []int{6}) {
+	if e.foldInterprets(sum, "a", foldInit{lit: "1"}, [][]int{{1, 2, 3}}, []int{6}) {
 		t.Fatal("the wrong init should not fold to the total")
 	}
 	body, ok := e.foldBody("numbers", "a", foldInit{lit: "0"}, sum)
@@ -44,7 +44,7 @@ func TestFoldInterpretsAndRenders(t *testing.T) {
 func TestFoldFindsFirstAndMax(t *testing.T) {
 	e := listEngine()
 	max := foldUpdate{expr: Computation{Var: "x"}, guard: ">"}
-	if !foldInterprets(max, "a", foldInit{first: true}, [][]int{{1, 5, 2}, {4, 1}}, []int{5, 4}) {
+	if !e.foldInterprets(max, "a", foldInit{first: true}, [][]int{{1, 5, 2}, {4, 1}}, []int{5, 4}) {
 		t.Fatal("a guarded update from the first element should fold to the max")
 	}
 	body, ok := e.foldBody("numbers", "a", foldInit{first: true}, max)
@@ -53,7 +53,7 @@ func TestFoldFindsFirstAndMax(t *testing.T) {
 		t.Fatalf("the max fold should render its guarded loop:\n got %q\nwant %q", body, wantMax)
 	}
 	first := foldUpdate{expr: Computation{Var: "a"}}
-	if !foldInterprets(first, "a", foldInit{first: true}, [][]int{{1, 2, 3}, {4, 5}}, []int{1, 4}) {
+	if !e.foldInterprets(first, "a", foldInit{first: true}, [][]int{{1, 2, 3}, {4, 5}}, []int{1, 4}) {
 		t.Fatal("an unchanging accumulator from the first element should fold to the first")
 	}
 	body, ok = e.foldBody("numbers", "a", foldInit{first: true}, first)
@@ -68,7 +68,7 @@ func TestFoldFindsFirstAndMax(t *testing.T) {
 func TestListReturnInterpretsAndRenders(t *testing.T) {
 	e := listEngine()
 	dbl := Computation{Op: "add", Args: []Computation{{Var: "x"}, {Var: "x"}}}
-	if !mapInterprets(dbl, [][]int{{1, 2, 3}}, [][]int{{2, 4, 6}}) {
+	if !e.mapInterprets(dbl, [][]int{{1, 2, 3}}, [][]int{{2, 4, 6}}) {
 		t.Fatal("x + x should map to the doubles")
 	}
 	body, ok := e.mapBody("numbers", dbl)

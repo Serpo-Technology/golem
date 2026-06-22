@@ -224,7 +224,7 @@ func (e *Engine) InduceRecursive(name, param string, ins, outs []string, run fun
 				if !usesVar(combine, recVar) {
 					continue // a combine that ignores the predecessor's result is no recursion
 				}
-				if !recFits(combine, threshold, base, param, inN, outN) {
+				if !e.recFits(combine, threshold, base, param, inN, outN) {
 					continue
 				}
 				body := Computation{Cond: &Conditional{
@@ -252,9 +252,9 @@ const recDepthCap = 10000
 
 // recFits reports whether the recursive rule maps every input to its output when
 // interpreted, the quick check before the candidate is grounded by running.
-func recFits(combine Computation, threshold, base int, param string, ins, outs []int) bool {
+func (e *Engine) recFits(combine Computation, threshold, base int, param string, ins, outs []int) bool {
 	for i, n := range ins {
-		v, ok := recEval(combine, threshold, base, param, n, 0)
+		v, ok := e.recEval(combine, threshold, base, param, n, 0)
 		if !ok || v != outs[i] {
 			return false
 		}
@@ -265,18 +265,18 @@ func recFits(combine Computation, threshold, base int, param string, ins, outs [
 // recEval evaluates a recursive candidate at n: the base below the threshold, else
 // the combine over the input and the predecessor's result, descending toward the
 // base and guarded against running away.
-func recEval(combine Computation, threshold, base int, param string, n, depth int) (int, bool) {
+func (e *Engine) recEval(combine Computation, threshold, base int, param string, n, depth int) (int, bool) {
 	if depth > recDepthCap {
 		return 0, false
 	}
 	if n < threshold {
 		return base, true
 	}
-	prev, ok := recEval(combine, threshold, base, param, n-1, depth+1)
+	prev, ok := e.recEval(combine, threshold, base, param, n-1, depth+1)
 	if !ok {
 		return 0, false
 	}
-	return evalExpr(combine, map[string]int{param: n, recVar: prev})
+	return e.evalExpr(combine, map[string]int{param: n, recVar: prev})
 }
 
 // numberPairs parses example input/output strings into integers.
@@ -327,17 +327,46 @@ func (e *Engine) bodyFits(body Computation, param string, ins, outs []string, ru
 	return true
 }
 
-// primitives lists the seeded operations, sorted, the building blocks induction
-// composes from. Learned functions are left out so the search stays over the
-// arithmetic floor and cannot lean on a name taught moments earlier.
-func (e *Engine) primitives() []Op {
-	var prims []Op
+// searchOps are the operations the synthesis search composes: the arithmetic
+// primitives, and the defined integer functions acquired since, so a procedure is
+// assembled from learned vocabulary and not arithmetic alone. A composed function
+// must be one the search can both interpret (by inlining) and ground: every
+// parameter and the result an integer, arity one or two, and not recursive, so the
+// inline terminates. Raw loop operations (list-typed) and recursive ones are left
+// out. The count of learned operations is bounded so a brain of many functions does
+// not swamp the search before a match is found.
+func (e *Engine) searchOps() []Op {
+	var ops []Op
+	learned := 0
 	for _, o := range e.Ops() {
-		if o.Body == nil {
-			prims = append(prims, o)
+		switch {
+		case o.Symbol != "":
+			ops = append(ops, o) // an arithmetic primitive
+		case learned < searchOpCap && o.Body != nil && !e.recursive(o) && e.intOp(o):
+			if a := o.arity(); a == 1 || a == 2 {
+				ops = append(ops, o)
+				learned++
+			}
 		}
 	}
-	return prims
+	return ops
+}
+
+// searchOpCap bounds how many learned operations enter the synthesis search, a
+// ceiling on the building blocks so a large inventory does not swamp it.
+const searchOpCap = 32
+
+// intOp reports whether a defined operation is a plain integer function, every
+// parameter and the result an integer, the shape the expression search composes
+// and interprets.
+func (e *Engine) intOp(o Op) bool {
+	for i := range o.Params {
+		if o.paramType(i) != typeInt {
+			return false
+		}
+	}
+	ret, ok := e.retType(o)
+	return ok && ret == typeInt
 }
 
 // Primitive reports whether a word names a seeded operation, so induction and

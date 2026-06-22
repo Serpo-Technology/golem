@@ -63,7 +63,7 @@ func (e *Engine) SynthesizeExpr(param string, ins, outs []string, run func(strin
 	var found Computation
 	got := false
 	e.buildExprs(leaves, synthMaxOps, synthPoolCap, func(c Computation, ops int) (bool, bool) {
-		key, ok := behaviourKey(c, envs)
+		key, ok := e.behaviourKey(c, envs)
 		if !ok || seen[key] {
 			return false, false
 		}
@@ -102,16 +102,37 @@ func (e *Engine) buildExprs(leaves []Computation, maxOps, cap int, visit func(Co
 			return
 		}
 	}
-	prims := e.primitives()
+	ops := e.searchOps()
 	for grew := true; grew && len(pool) < cap; {
 		grew = false
 		snapshot := append([]cand(nil), pool...)
 		for _, a := range snapshot {
+			// A unary operation wraps one candidate; a binary one combines a pair. With
+			// no vocabulary learned searchOps is just the arithmetic primitives in the
+			// order they were tried before, so a purely arithmetic search is unchanged.
+			for _, op := range ops {
+				if op.arity() != 1 || a.ops+1 > maxOps {
+					continue
+				}
+				before := len(pool)
+				if consider(Computation{Op: op.Name, Args: []Computation{a.c}}, a.ops+1) {
+					return
+				}
+				if len(pool) > before {
+					grew = true
+				}
+				if len(pool) >= cap {
+					return
+				}
+			}
 			for _, b := range snapshot {
 				if a.ops+b.ops+1 > maxOps {
 					continue
 				}
-				for _, op := range prims {
+				for _, op := range ops {
+					if op.arity() != 2 {
+						continue
+					}
 					before := len(pool)
 					if consider(Computation{Op: op.Name, Args: []Computation{a.c, b.c}}, a.ops+b.ops+1) {
 						return
@@ -131,10 +152,10 @@ func (e *Engine) buildExprs(leaves []Computation, maxOps, cap int, visit func(Co
 // behaviourKey is an expression's results on the example inputs, the signature
 // observational equivalence groups by. It fails when the expression cannot be
 // evaluated on some input (a division by zero), so such a candidate is dropped.
-func behaviourKey(c Computation, envs []map[string]int) (string, bool) {
+func (e *Engine) behaviourKey(c Computation, envs []map[string]int) (string, bool) {
 	var b strings.Builder
 	for _, env := range envs {
-		v, ok := evalExpr(c, env)
+		v, ok := e.evalExpr(c, env)
 		if !ok {
 			return "", false
 		}
@@ -144,41 +165,56 @@ func behaviourKey(c Computation, envs []map[string]int) (string, bool) {
 	return b.String(), true
 }
 
-// evalExpr evaluates an assembled arithmetic expression over the integer
-// environment, the quick filter the search prunes by before the expression it
-// keeps is grounded by running. It fails on a division by zero, the one case
-// running would refuse too.
-func evalExpr(c Computation, env map[string]int) (int, bool) {
-	switch {
-	case c.Var != "":
+// evalExpr evaluates an assembled expression over the integer environment, the
+// quick filter the search prunes by before the expression it keeps is grounded by
+// running. The arithmetic primitives compute directly; a learned operation
+// evaluates by inlining its body over the arguments, so a candidate composed from
+// acquired vocabulary is interpreted rather than silently dropped. It fails on a
+// division by zero, the one case running would refuse too.
+func (e *Engine) evalExpr(c Computation, env map[string]int) (int, bool) {
+	if c.Var != "" {
 		v, ok := env[c.Var]
 		return v, ok
-	case c.Op == "":
+	}
+	if c.Op == "" {
 		n, err := strconv.Atoi(c.Lit)
 		return n, err == nil
 	}
-	if len(c.Args) != 2 {
-		return 0, false
-	}
-	a, aok := evalExpr(c.Args[0], env)
-	b, bok := evalExpr(c.Args[1], env)
-	if !aok || !bok {
-		return 0, false
-	}
 	switch c.Op {
-	case "add":
-		return a + b, true
-	case "subtract":
-		return a - b, true
-	case "multiply":
-		return a * b, true
-	case "divide":
-		if b == 0 {
+	case "add", "subtract", "multiply", "divide":
+		if len(c.Args) != 2 {
 			return 0, false
 		}
-		return a / b, true
+		a, aok := e.evalExpr(c.Args[0], env)
+		b, bok := e.evalExpr(c.Args[1], env)
+		if !aok || !bok {
+			return 0, false
+		}
+		switch c.Op {
+		case "add":
+			return a + b, true
+		case "subtract":
+			return a - b, true
+		case "multiply":
+			return a * b, true
+		default: // divide
+			if b == 0 {
+				return 0, false
+			}
+			return a / b, true
+		}
 	}
-	return 0, false
+	// A learned defined operation: inline its body over the arguments and evaluate.
+	// searchOps admits only non-recursive integer functions, so the inline ends.
+	op, ok := e.byName[c.Op]
+	if !ok || op.Body == nil {
+		return 0, false
+	}
+	inlined, ok := e.inline(op, c.Args)
+	if !ok {
+		return 0, false
+	}
+	return e.evalExpr(inlined, env)
 }
 
 // synthConstants are the leaf literals the search starts from: zero, one, two, and

@@ -67,7 +67,7 @@ func (e *Engine) SynthesizeFold(param string, lists [][]int, outs []int, run fun
 	exprs := e.genExprs([]string{acc, "x"}, []string{"0", "1", "2"}, loopMaxOps)
 	for _, up := range foldUpdates(exprs, acc) {
 		for _, init := range foldInits() {
-			if !foldInterprets(up, acc, init, lists, outs) {
+			if !e.foldInterprets(up, acc, init, lists, outs) {
 				continue
 			}
 			body, ok := e.foldBody(param, acc, init, up)
@@ -124,7 +124,7 @@ func foldUpdates(exprs []Computation, acc string) []foldUpdate {
 // starts where the init says, the update applies each step (a guarded one only
 // when the element compares to the accumulator), and an empty list with a
 // first-element start cannot fold.
-func foldInterprets(up foldUpdate, acc string, init foldInit, lists [][]int, outs []int) bool {
+func (e *Engine) foldInterprets(up foldUpdate, acc string, init foldInit, lists [][]int, outs []int) bool {
 	for i, list := range lists {
 		a, ok := foldStart(init, list)
 		if !ok {
@@ -134,7 +134,7 @@ func foldInterprets(up foldUpdate, acc string, init foldInit, lists [][]int, out
 			if up.guard != "" && !compareInt(up.guard, x, a) {
 				continue
 			}
-			v, vok := evalExpr(up.expr, map[string]int{acc: a, "x": x})
+			v, vok := e.evalExpr(up.expr, map[string]int{acc: a, "x": x})
 			if !vok {
 				return false
 			}
@@ -223,7 +223,7 @@ func (e *Engine) SynthesizeListReturn(param string, ins, outs [][]int, run func(
 		if !usesVar(t, "x") {
 			continue // a transform that ignores the element is no map
 		}
-		if mapInterprets(t, ins, outs) {
+		if e.mapInterprets(t, ins, outs) {
 			if body, ok := e.mapBody(param, t); ok && e.listGrounds(param, body, ins, outs, run) {
 				return body, true
 			}
@@ -244,13 +244,13 @@ func (e *Engine) SynthesizeListReturn(param string, ins, outs [][]int, run func(
 
 // mapInterprets reports whether transforming each element by the candidate yields
 // the output list, for every example.
-func mapInterprets(t Computation, ins, outs [][]int) bool {
+func (e *Engine) mapInterprets(t Computation, ins, outs [][]int) bool {
 	for i, list := range ins {
 		if len(list) != len(outs[i]) {
 			return false
 		}
 		for j, x := range list {
-			v, ok := evalExpr(t, map[string]int{"x": x})
+			v, ok := e.evalExpr(t, map[string]int{"x": x})
 			if !ok || v != outs[i][j] {
 				return false
 			}
