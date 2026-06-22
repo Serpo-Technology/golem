@@ -80,11 +80,10 @@ func TestComprehendInverseDiscoversAFunction(t *testing.T) {
 	}
 }
 
-// Re-teaching a function GOLEM already learned does not redefine it as a call to
-// itself: it sits in the synthesis search inventory now, so a non-recursive search
-// would find the trivial self-fit, but that is refused and the function is left
-// computing as it did.
-func TestReteachDoesNotSelfDefine(t *testing.T) {
+// Re-teaching a function GOLEM already learned re-finds its rule rather than the
+// trivial call to itself: it sits in the synthesis search inventory now, but it is
+// left out of its own search, so the re-synthesis lands on the rule again.
+func TestReteachRefindsRule(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
 	say(t, d, "the triple of 2 is 6 and the triple of 5 is 15")
@@ -92,7 +91,10 @@ func TestReteachDoesNotSelfDefine(t *testing.T) {
 	if !strings.Contains(first.Say, "12") {
 		t.Fatalf("triple of 4 should be 12: %q", first.Say)
 	}
-	say(t, d, "the triple of 2 is 6 and the triple of 5 is 15") // re-teach
+	reteach := say(t, d, "the triple of 2 is 6 and the triple of 5 is 15")
+	if !strings.Contains(reteach.Say, "triple") {
+		t.Fatalf("re-teaching should re-learn the triple, not decline: %q", reteach.Say)
+	}
 	again, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the triple of 4"}, nil)
 	if !strings.Contains(again.Say, "12") {
 		t.Fatalf("triple should still be 12 after a re-teach, not self-defined: %q", again.Say)

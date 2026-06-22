@@ -164,6 +164,7 @@ type Engine struct {
 	words     map[string]OpRef // the operations' own words, the resolver's default
 	resolve   Resolver         // word -> operation; the daemon's grounded resolver supersedes the default
 	bodyParse BodyParser       // body -> computation; the daemon's grammar reader supersedes the engine's own
+	synthSelf string           // the function being synthesized, left out of its own search so it is not defined as itself
 	bySymbol  map[string]Op
 	byName    map[string]Op
 }
@@ -220,6 +221,12 @@ func (e *Engine) index(o Op) {
 // the engine's own word index, so a tongue or a synonym named on an operation
 // concept reaches the operation with no change here.
 func (e *Engine) SetResolver(r Resolver) { e.resolve = r }
+
+// SetSynthSelf names the function currently being synthesized, which the search
+// then leaves out of its own building blocks, so an already-learned operation is not
+// re-defined as a trivial call to itself. The caller sets it around a synthesis and
+// clears it after; the empty string is the unset state.
+func (e *Engine) SetSynthSelf(name string) { e.synthSelf = name }
 
 // SetBodyParser installs the body parser the definition path consults, the
 // daemon's grounded reading of a function body through the grammar. It is
@@ -673,11 +680,6 @@ func usesVar(c Computation, name string) bool {
 	}
 	return false
 }
-
-// References reports whether a computation calls the operation named, so a caller
-// can refuse a non-recursive synthesis that would define a function as itself (the
-// trivial self-fit a learned operation in its own re-synthesis would produce).
-func References(c Computation, name string) bool { return references(c, name) }
 
 // references reports whether a computation calls the operation named, descending
 // through arguments and a conditional. It is how a self-call is found, the mark

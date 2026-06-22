@@ -51,6 +51,49 @@ func TestSynthesizeInverseDeclinesNonInvertible(t *testing.T) {
 	}
 }
 
+// The function being synthesized is left out of its own search, so a re-synthesis of
+// an already-learned operation re-finds its rule rather than the trivial call to
+// itself it would otherwise compose from the inventory.
+func TestSearchOpsExcludesSynthSelf(t *testing.T) {
+	e := composingEngine()
+	hasSquare := func() bool {
+		for _, o := range e.searchOps() {
+			if o.Name == "square" {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasSquare() {
+		t.Fatal("square should be a search op when nothing is excluded")
+	}
+	e.SetSynthSelf("square")
+	if hasSquare() {
+		t.Fatal("the function being synthesized should be left out of its own search")
+	}
+	e.SetSynthSelf("")
+	if !hasSquare() {
+		t.Fatal("clearing the exclusion restores the search op")
+	}
+
+	// With octic in the inventory but excluded, re-synthesizing it finds the
+	// composition again, never octic(number).
+	body, ok := e.SynthesizeExpr("number", []string{"1", "2", "3"}, []string{"1", "256", "6561"}, arith)
+	if !ok {
+		t.Fatal("octic should synthesize")
+	}
+	e.index(Op{Name: "octic", Word: "octic", Params: []string{"number"}, Body: &body})
+	e.SetSynthSelf("octic")
+	again, ok := e.SynthesizeExpr("number", []string{"1", "2", "3"}, []string{"1", "256", "6561"}, arith)
+	e.SetSynthSelf("")
+	if !ok {
+		t.Fatal("octic should re-synthesize with itself excluded")
+	}
+	if references(again, "octic") {
+		t.Fatalf("a re-synthesis must not define a function as itself: %+v", again)
+	}
+}
+
 // A function that composes learned vocabulary is written and stored in those terms,
 // not flattened to arithmetic, and reloads as the composition while still running
 // to the right value (the runnable form inlines it).

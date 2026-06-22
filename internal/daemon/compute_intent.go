@@ -55,9 +55,13 @@ func (d *Daemon) comprehendInverse(content string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	// The inverse being defined is left out of its own search, so it is not found as
+	// the trivial call to itself.
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
 	body, ok := d.code.SynthesizeInverse(inducedParam, op, d.evalCode)
-	if !ok || code.References(body, name) {
-		return "I could not work out the " + name + ".", true // no self-referential inverse
+	if !ok {
+		return "I could not work out the " + name + ".", true
 	}
 	line, err := d.learnFunction(code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body})
 	if err != nil {

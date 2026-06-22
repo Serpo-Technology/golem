@@ -25,14 +25,16 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 	if name == "" || name == inducedParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
+	// The function being defined is left out of its own search, so an already-learned
+	// operation is re-synthesized to its rule, not the trivial call to itself it would
+	// otherwise find sitting in the inventory.
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
 	// The rule is searched for, not fitted to a template: the engine assembles
 	// expressions over the parameter and runs them, keeping the smallest whose
 	// effect is the examples. The procedure emerges from composing the Go floor and
 	// is grounded by running.
-	// A non-recursive expression may not be the function itself: re-synthesizing an
-	// already-learned operation would otherwise find the trivial self-fit (it sits in
-	// the search inventory now), defining it as a call to itself.
-	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok && !code.References(body, name) {
+	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok {
 		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
 	}
 	// A rule that is no single expression, like factorial, is a base case and a
@@ -65,6 +67,8 @@ func (d *Daemon) synthesizeFold(name string, lists [][]string, outs []string) (c
 	if name == "" || name == listParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
 	ilists, ok := toIntLists(lists)
 	iouts, iok := toInts(outs)
 	if !ok || !iok {
@@ -88,6 +92,8 @@ func (d *Daemon) synthesizeListReturn(name string, ins, outs [][]string) (code.O
 	if name == "" || name == listParam || d.code.Primitive(name) {
 		return code.Op{}, false
 	}
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
 	ilists, iok := toIntLists(ins)
 	olists, ook := toIntLists(outs)
 	if !iok || !ook {

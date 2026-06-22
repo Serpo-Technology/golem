@@ -339,6 +339,9 @@ func (e *Engine) searchOps() []Op {
 	var ops []Op
 	learned := 0
 	for _, o := range e.Ops() {
+		if o.Name == e.synthSelf {
+			continue // the function being defined is not a building block of itself
+		}
 		switch {
 		case o.Symbol != "":
 			ops = append(ops, o) // an arithmetic primitive
