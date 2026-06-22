@@ -611,3 +611,48 @@ func TestPerceptlessSet(t *testing.T) {
 		t.Error("isPerceptless should agree with the set on a single concept")
 	}
 }
+
+// The hygiene audit surfaces the two shapes consolidation pollution takes and passes
+// the graph's legitimate structure by. A clean brain reports neither shape. A second
+// node under one gloss is a duplicate; a word that strays onto a percept-less concept
+// past the one it names is a loose word; a category word sitting weakly beside its
+// grounded members is neither, so it is not flagged.
+func TestHygieneReport(t *testing.T) {
+	d, s := testDaemon(t)
+	say(t, d, "a model predicts a word") // model, word: percept-less abstract concepts
+	model := d.resolveConcept("model")
+	cat := groundNoun(t, d, "cat") // a grounded concept the audit must leave alone
+	groundOccurrences(t, d, cat, 3)
+
+	if h, _ := d.hygieneReport(); len(h.Duplicates) != 0 || len(h.Promiscuous) != 0 {
+		t.Fatalf("a clean brain reports neither shape: dups=%v loose=%v", h.Duplicates, h.Promiscuous)
+	}
+
+	// A stray: the "cat" word, which names the grounded cat firmly, also bonds to the
+	// percept-less model. That is the cross-naming, and only that should flag.
+	catWord, _, err := s.WordNode("cat", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(catWord.ID, model.ID, memory.RelNames, 0.2)
+	// A duplicate: a second concept node under the gloss "cat".
+	dup := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "cat",
+		Template: "noun:en:cat-shadow", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(dup); err != nil {
+		t.Fatal(err)
+	}
+
+	h, _ := d.hygieneReport()
+	if len(h.Duplicates) != 1 || h.Duplicates[0].Gloss != "cat" {
+		t.Errorf("the second cat node should be flagged a duplicate: %+v", h.Duplicates)
+	}
+	flagged := false
+	for _, lw := range h.Promiscuous {
+		if lw.Word == "cat" {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Errorf("the cat word straying onto a percept-less concept should be flagged: %+v", h.Promiscuous)
+	}
+}

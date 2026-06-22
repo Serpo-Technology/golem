@@ -62,6 +62,10 @@ Usage:
                                   until runtime_enabled is set in config.json
   golem concepts                  list what GOLEM has abstracted: each
                                   concept, its words, and its grounding
+  golem health                    audit the naming graph for consolidation
+                                  pollution: concepts split across nodes and
+                                  words that name more than one concept;
+                                  exits non-zero when any is found
   golem teach <cue> <command>     ground a cue to a command by hand; repeat
                                   to strengthen toward graduation
   golem teach --mind <word> <relation> <signal>
@@ -349,6 +353,40 @@ func main() {
 				fmt.Printf("     signature: %s\n", strings.Join(c.Features, ", "))
 			}
 		}
+
+	case "health":
+		resp := call(home, wire.Request{Cmd: "health"})
+		h := resp.Health
+		if h == nil {
+			fmt.Println("no health report.")
+			return
+		}
+		if len(h.Duplicates) == 0 && len(h.Promiscuous) == 0 {
+			fmt.Printf("clean: %d concepts, no duplicate nodes, no word naming more than one concept.\n", h.Concepts)
+			return
+		}
+		fmt.Printf("examined %d concepts\n", h.Concepts)
+		if len(h.Duplicates) > 0 {
+			fmt.Println("\nduplicate nodes (one meaning split across concepts):")
+			for _, dp := range h.Duplicates {
+				marks := make([]string, len(dp.IDs))
+				for i, id := range dp.IDs {
+					marks[i] = fmt.Sprintf("#%d", id)
+				}
+				fmt.Printf("  [%s] %q -> %s\n", dp.Category, dp.Gloss, strings.Join(marks, ", "))
+			}
+		}
+		if len(h.Promiscuous) > 0 {
+			fmt.Println("\nwords naming more than one concept (a weak target is a strayed name):")
+			for _, lw := range h.Promiscuous {
+				parts := make([]string, len(lw.Targets))
+				for i, t := range lw.Targets {
+					parts[i] = fmt.Sprintf("%s %.2f", t.Gloss, t.Weight)
+				}
+				fmt.Printf("  %s(%s) -> %s\n", lw.Word, lw.Lang, strings.Join(parts, ", "))
+			}
+		}
+		os.Exit(1)
 
 	case "habits":
 		resp := call(home, wire.Request{Cmd: "habits"})

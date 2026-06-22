@@ -67,6 +67,7 @@ type Response struct {
 	Audit     []*AuditInfo    `json:"audit,omitempty"`
 	Concepts  []*ConceptInfo  `json:"concepts,omitempty"`
 	Cognition *CognitionInfo  `json:"cognition,omitempty"`
+	Health    *Health         `json:"health,omitempty"`
 	Say       string          `json:"say,omitempty"` // a sentence GOLEM built in reply
 	Voice     *VoiceInfo      `json:"voice,omitempty"`
 }
@@ -91,6 +92,39 @@ type ConceptInfo struct {
 	Grounded int      `json:"grounded"`
 	Heat     float64  `json:"heat,omitempty"`
 	Features []string `json:"features,omitempty"`
+}
+
+// Health is the wire form of a naming-graph audit: the two shapes consolidation
+// pollution takes, surfaced so a teaching pass can be checked before it is kept.
+// A clean brain reports neither. It reads the graph and changes nothing.
+type Health struct {
+	Concepts    int           `json:"concepts"`              // grown concepts examined
+	Duplicates  []*DupConcept `json:"duplicates,omitempty"`  // one meaning split across nodes
+	Promiscuous []*LooseWord  `json:"promiscuous,omitempty"` // one word naming several concepts
+}
+
+// DupConcept is several concept nodes that share one gloss and category, the
+// duplication a percept-less concept once gathered when an abstraction was minted
+// beside it.
+type DupConcept struct {
+	Gloss    string   `json:"gloss"`
+	Category string   `json:"category"`
+	IDs      []uint64 `json:"ids"`
+}
+
+// LooseWord is a word that names more than one concept, the cross-naming a word
+// gathers when it bonds to whatever it merely kept company with. The targets carry
+// their bond weight so a strong true name reads apart from a weak strayed one.
+type LooseWord struct {
+	Word    string       `json:"word"`
+	Lang    string       `json:"lang"`
+	Targets []*NameTarget `json:"targets"`
+}
+
+// NameTarget is one concept a word names and how strongly.
+type NameTarget struct {
+	Gloss  string  `json:"gloss"`
+	Weight float64 `json:"weight"`
 }
 
 // CognitionInfo is the wire form of GOLEM's reasoning state: how richly its

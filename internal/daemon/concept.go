@@ -1007,6 +1007,114 @@ func (d *Daemon) conceptInfos() ([]*wire.ConceptInfo, error) {
 	return infos, nil
 }
 
+// hygieneReport audits the naming graph for the two shapes consolidation pollution
+// takes, so a teaching pass can be checked before it is kept rather than read as
+// clean from rendered output that picks the best name. A DUPLICATE is one gloss and
+// category split across nodes, the shape a percept-less concept gathered when an
+// abstraction was minted beside it. A PROMISCUOUS word names more than one concept,
+// the cross-naming a word gathers when it bonds to what it merely kept company with;
+// the targets carry their weight so a strong true name reads apart from a weak
+// strayed one. Only grown concepts are audited; the innate scaffolding is no part of
+// what teaching writes. It reads and changes nothing.
+func (d *Daemon) hygieneReport() (*wire.Health, error) {
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return nil, err
+	}
+	glossByID := make(map[uint64]string, len(concepts))
+	grownSet := make(map[uint64]bool, len(concepts))
+	ids := make([]uint64, 0, len(concepts))
+	type dupKey struct{ gloss, cat string }
+	byKey := map[dupKey][]uint64{}
+	grown := 0
+	for _, c := range concepts {
+		if d.isSystemConcept(c.ID) {
+			continue
+		}
+		grown++
+		glossByID[c.ID] = c.Content
+		grownSet[c.ID] = true
+		ids = append(ids, c.ID)
+		k := dupKey{strings.ToLower(c.Content), c.Category}
+		byKey[k] = append(byKey[k], c.ID)
+	}
+	var dups []*wire.DupConcept
+	for k, dupIDs := range byKey {
+		if len(dupIDs) <= 1 {
+			continue
+		}
+		sort.Slice(dupIDs, func(i, j int) bool { return dupIDs[i] < dupIDs[j] })
+		dups = append(dups, &wire.DupConcept{Gloss: k.gloss, Category: k.cat, IDs: dupIDs})
+	}
+	sort.Slice(dups, func(i, j int) bool { return dups[i].Gloss < dups[j].Gloss })
+
+	names, err := d.store.LinksToRel(ids, memory.RelNames)
+	if err != nil {
+		return nil, err
+	}
+	// A category word names its grounded members in passing, which is the graph's
+	// own structure rather than a stray: "animal" sits weakly beside the dog and cat
+	// it spans. The pollution is sharper than that. It is a word naming a PERCEPT-LESS
+	// concept that is not the one word it primarily names, an abstract concept drifting
+	// onto a word whose real referent lies elsewhere. Scoping the flag to a stray onto
+	// a percept-less concept passes the legitimate category company by.
+	perceptless := d.perceptlessSet(ids)
+	type target struct {
+		concept uint64
+		weight  float64
+	}
+	byWord := map[uint64][]target{}
+	for _, e := range names {
+		if grownSet[e.To] {
+			byWord[e.From] = append(byWord[e.From], target{e.To, e.Weight})
+		}
+	}
+	loomIDs := make([]uint64, 0)
+	for wid, ts := range byWord {
+		if len(ts) > 1 {
+			loomIDs = append(loomIDs, wid)
+		}
+	}
+	wordFrags, err := d.store.FragmentsByIDs(loomIDs)
+	if err != nil {
+		return nil, err
+	}
+	wordByID := make(map[uint64]*memory.Fragment, len(wordFrags))
+	for _, w := range wordFrags {
+		wordByID[w.ID] = w
+	}
+	var loose []*wire.LooseWord
+	for _, wid := range loomIDs {
+		w := wordByID[wid]
+		if w == nil {
+			continue
+		}
+		ts := byWord[wid]
+		sort.Slice(ts, func(i, j int) bool { return ts[i].weight > ts[j].weight })
+		// A percept-less target past the strongest bond is a strayed name: the word
+		// already names something more firmly, so an abstract concept hanging weaker
+		// off it is the drift, where a single percept-less target IS the word's own
+		// abstract referent and stands.
+		stray := false
+		for i, t := range ts {
+			if i > 0 && perceptless[t.concept] {
+				stray = true
+				break
+			}
+		}
+		if !stray {
+			continue
+		}
+		targets := make([]*wire.NameTarget, 0, len(ts))
+		for _, t := range ts {
+			targets = append(targets, &wire.NameTarget{Gloss: glossByID[t.concept], Weight: t.weight})
+		}
+		loose = append(loose, &wire.LooseWord{Word: w.Content, Lang: w.Lang, Targets: targets})
+	}
+	sort.Slice(loose, func(i, j int) bool { return loose[i].Word < loose[j].Word })
+	return &wire.Health{Concepts: grown, Duplicates: dups, Promiscuous: loose}, nil
+}
+
 // warmInfos resolves the workspace's hottest concepts into glosses, for
 // status display.
 func (d *Daemon) warmInfos(n int) []*wire.WarmInfo {

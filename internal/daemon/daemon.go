@@ -1780,6 +1780,13 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return wire.Response{OK: true, Concepts: infos}, false, false
 
+	case "health":
+		report, err := d.hygieneReport()
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Health: report}, false, false
+
 	case "cognition":
 		info, err := d.cognitionInfo()
 		if err != nil {
