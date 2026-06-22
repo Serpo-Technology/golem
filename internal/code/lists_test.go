@@ -44,7 +44,9 @@ func TestComprehendListParameter(t *testing.T) {
 	}
 }
 
-// A list function writes the Go that takes a slice and reduces it.
+// A list function writes the Go that takes a slice and reduces it, keeping the
+// operations it composes as calls so the written form reads in the acquired
+// vocabulary rather than the loops inlined.
 func TestListFunctionToFunc(t *testing.T) {
 	e := listEngine()
 	op, ok := e.ComprehendDefinition(avgDef)
@@ -52,7 +54,7 @@ func TestListFunctionToFunc(t *testing.T) {
 		t.Fatal("average should comprehend")
 	}
 	e.index(op)
-	want := "func average(numbers []int) int { return (func(numbers []int) int { a := 0; for _, x := range numbers { a = a + x }; return a })(numbers) / (func(numbers []int) int { return len(numbers) })(numbers) }"
+	want := "func average(numbers []int) int { return total(numbers) / length(numbers) }"
 	if src, ok := e.ToFunc("average"); !ok || src != want {
 		t.Fatalf("average should write a slice-taking function:\n got %q\nwant %q", src, want)
 	}

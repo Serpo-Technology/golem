@@ -80,6 +80,25 @@ func TestComprehendInverseDiscoversAFunction(t *testing.T) {
 	}
 }
 
+// Re-teaching a function GOLEM already learned does not redefine it as a call to
+// itself: it sits in the synthesis search inventory now, so a non-recursive search
+// would find the trivial self-fit, but that is refused and the function is left
+// computing as it did.
+func TestReteachDoesNotSelfDefine(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the triple of 2 is 6 and the triple of 5 is 15")
+	first, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the triple of 4"}, nil)
+	if !strings.Contains(first.Say, "12") {
+		t.Fatalf("triple of 4 should be 12: %q", first.Say)
+	}
+	say(t, d, "the triple of 2 is 6 and the triple of 5 is 15") // re-teach
+	again, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the triple of 4"}, nil)
+	if !strings.Contains(again.Say, "12") {
+		t.Fatalf("triple should still be 12 after a re-teach, not self-defined: %q", again.Say)
+	}
+}
+
 func TestBareImperativeComputes(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true

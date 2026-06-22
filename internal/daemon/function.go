@@ -29,7 +29,10 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 	// expressions over the parameter and runs them, keeping the smallest whose
 	// effect is the examples. The procedure emerges from composing the Go floor and
 	// is grounded by running.
-	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok {
+	// A non-recursive expression may not be the function itself: re-synthesizing an
+	// already-learned operation would otherwise find the trivial self-fit (it sits in
+	// the search inventory now), defining it as a call to itself.
+	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok && !code.References(body, name) {
 		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
 	}
 	// A rule that is no single expression, like factorial, is a base case and a

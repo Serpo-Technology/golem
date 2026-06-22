@@ -1,6 +1,9 @@
 package code
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // composingEngine carries the arithmetic primitives and two learned functions, so
 // the synthesis search can compose acquired vocabulary, not arithmetic alone.
@@ -45,6 +48,41 @@ func TestSynthesizeInverseDeclinesNonInvertible(t *testing.T) {
 	e := composingEngine()
 	if _, ok := e.SynthesizeInverse("number", "square", arith); ok {
 		t.Fatal("square has no bounded integer inverse and should decline")
+	}
+}
+
+// A function that composes learned vocabulary is written and stored in those terms,
+// not flattened to arithmetic, and reloads as the composition while still running
+// to the right value (the runnable form inlines it).
+func TestComposedFunctionPreservesVocabulary(t *testing.T) {
+	e := composingEngine()
+	body, ok := e.SynthesizeExpr("number", []string{"1", "2", "3"}, []string{"1", "256", "6561"}, arith)
+	if !ok {
+		t.Fatal("the eighth power should synthesize by composing square")
+	}
+	op := Op{Name: "octic", Word: "octic", Params: []string{"number"}, Body: &body}
+	e.index(op)
+	src, ok := e.ToFunc("octic")
+	if !ok || !strings.Contains(src, "square(") {
+		t.Fatalf("octic should be written in terms of square: %q", src)
+	}
+	_, stored, ok := e.DefSource(op)
+	if !ok || !strings.Contains(stored, "square(") {
+		t.Fatalf("octic should store as a composition of square: %q", stored)
+	}
+	// The stored composition reloads and still runs to the right value.
+	reloaded := NewEngine([]Op{{Name: "multiply", Symbol: "*", Word: "product"}},
+		[]Def{
+			{Name: "square", Params: []string{"number"}, Body: "number * number"},
+			{Name: "octic", Params: []string{"number"}, Body: stored},
+		})
+	call, _ := reloaded.Comprehend("the octic of 2")
+	got, ok := reloaded.ToCode(call)
+	if !ok {
+		t.Fatal("the reloaded octic should render to runnable code")
+	}
+	if v, vok := arith(got); !vok || v != "256" {
+		t.Fatalf("the reloaded octic of 2 should be 256: %q -> %q", got, v)
 	}
 }
 

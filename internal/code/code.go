@@ -674,6 +674,11 @@ func usesVar(c Computation, name string) bool {
 	return false
 }
 
+// References reports whether a computation calls the operation named, so a caller
+// can refuse a non-recursive synthesis that would define a function as itself (the
+// trivial self-fit a learned operation in its own re-synthesis would produce).
+func References(c Computation, name string) bool { return references(c, name) }
+
 // references reports whether a computation calls the operation named, descending
 // through arguments and a conditional. It is how a self-call is found, the mark
 // that a definition is recursive.
@@ -1044,6 +1049,18 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return e.genRecursiveCall(op, c.Args, self)
 	}
 	if op.Body != nil {
+		// The written form keeps a defined operation as a call, so a function
+		// synthesized by composing acquired vocabulary is stored and shown in those
+		// terms ("square(square(number))") rather than flattened to arithmetic. The
+		// runnable form inlines it instead, since the runtime carries no declaration
+		// to call.
+		if flat {
+			args, ok := e.renderArgs(c.Args, self, flat)
+			if !ok {
+				return "", false
+			}
+			return c.Op + "(" + args + ")", true
+		}
 		inlined, ok := e.inline(op, c.Args)
 		if !ok {
 			return "", false
@@ -1141,7 +1158,7 @@ func (e *Engine) genRecursiveCall(op Op, args []Computation, outerSelf string) (
 	if len(args) != len(op.Params) {
 		return "", false
 	}
-	stmts, sok := e.bodyStmts(op)
+	stmts, sok := e.bodyStmts(op, false) // the runnable form inlines the operations it composes
 	argCode, aok := e.renderArgs(args, outerSelf, false)
 	ret, rok := e.retType(op)
 	if !sok || !aok || !rok {
@@ -1196,18 +1213,18 @@ func (op Op) funcType(ret string) string {
 // bodyStmts writes the statements inside a function's braces, the function's own
 // name in scope so a self-call is a plain call: a conditional becomes the branch
 // form "if test { return then }; return else", any other body a single return.
-func (e *Engine) bodyStmts(op Op) (string, bool) {
+func (e *Engine) bodyStmts(op Op, flat bool) (string, bool) {
 	if op.Body.Cond != nil {
 		c := op.Body.Cond
 		test, tok := e.genTest(c, op.Name)
-		then, thok := e.render(c.Then, op.Name, false)
-		els, eok := e.render(c.Else, op.Name, false)
+		then, thok := e.render(c.Then, op.Name, flat)
+		els, eok := e.render(c.Else, op.Name, flat)
 		if !tok || !thok || !eok {
 			return "", false
 		}
 		return "if " + test + " { return " + then + " }; return " + els, true
 	}
-	body, ok := e.render(*op.Body, op.Name, false)
+	body, ok := e.render(*op.Body, op.Name, flat)
 	if !ok {
 		return "", false
 	}
@@ -1279,7 +1296,12 @@ func (e *Engine) ToFunc(name string) (string, bool) {
 	if op.Body == nil {
 		return "", false
 	}
-	stmts, ok := e.bodyStmts(op)
+	// The written form keeps the operations a body composes as calls; a map has no
+	// such call form (it is stored structurally), so its runnable form is written.
+	stmts, ok := e.bodyStmts(op, true)
+	if !ok {
+		stmts, ok = e.bodyStmts(op, false)
+	}
 	ret, rok := e.retType(op)
 	if !ok || !rok {
 		return "", false

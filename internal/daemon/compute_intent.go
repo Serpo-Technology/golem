@@ -56,8 +56,8 @@ func (d *Daemon) comprehendInverse(content string) (string, bool) {
 		return "", false
 	}
 	body, ok := d.code.SynthesizeInverse(inducedParam, op, d.evalCode)
-	if !ok {
-		return "I could not work out the " + name + ".", true
+	if !ok || code.References(body, name) {
+		return "I could not work out the " + name + ".", true // no self-referential inverse
 	}
 	line, err := d.learnFunction(code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body})
 	if err != nil {
