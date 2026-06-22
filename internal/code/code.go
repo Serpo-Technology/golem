@@ -484,29 +484,22 @@ func (e *Engine) literalOperand(toks, params []string, selfName string, selfArit
 	return Computation{Op: opName, Args: args}, consumed, true
 }
 
-// ComprehendDefinition reads a function taught in language into the operation it
-// defines. A unary "the double of a number is the product of the number and 2"
-// and an n-ary "the blend of a number and a factor is the product of the number
-// and the factor" both parse: the name is the word after "the", the parameters
-// are the nouns each introduced by "a" and joined by "and" up to "is", and the
-// body is the computation after "is", read with the parameters in scope so "the
-// number" is a reference to one. The body must comprehend, must consume every
-// word after "is", and must use every parameter, so a half-formed or constant
-// "function", or one with a dead parameter, fails rather than being half-learned.
-func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
-	toks := strings.Fields(text)
+// defHeader reads the structural shape of a function definition, "the <name> of
+// <params> is", into the name, the parameters with their types, and the index the
+// body begins at. A parameter is a noun introduced by "a" or "an", "a <noun>" a
+// number and "a list of <noun>" a list, the declarations joined by "and" up to
+// "is". It recognizes the shape and nothing more, so the definition reader and the
+// failed-attempt check read the same surface; whether the definition is sound (its
+// name free, its parameters used, its body well-typed) is the caller's to judge.
+func (e *Engine) defHeader(toks []string) (name string, params, paramTypes []string, bodyStart int, ok bool) {
 	if len(toks) < 7 || toks[0] != "the" || toks[2] != "of" {
-		return Op{}, false
+		return "", nil, nil, 0, false
 	}
-	name := toks[1]
-	// Read the parameters: one or more declarations joined by "and", up to "is",
-	// which opens the body. "a <noun>" is a number; "a list of <noun>" is a list,
-	// referred to in the body by the noun ("the numbers").
-	var params, paramTypes []string
+	name = toks[1]
 	i := 3
 	for {
 		if i+1 >= len(toks) || (toks[i] != "a" && toks[i] != "an") {
-			return Op{}, false
+			return "", nil, nil, 0, false
 		}
 		if toks[i+1] == listWord && i+3 < len(toks) && toks[i+2] == "of" {
 			params = append(params, toks[i+3])
@@ -518,19 +511,67 @@ func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
 			i += 2
 		}
 		if i >= len(toks) {
-			return Op{}, false
+			return "", nil, nil, 0, false
 		}
 		if toks[i] == "is" {
 			i++
 			break
 		}
 		if toks[i] != "and" {
-			return Op{}, false
+			return "", nil, nil, 0, false
 		}
 		i++
 	}
-	bodyStart := i
-	if name == "" || len(params) == 0 || bodyStart >= len(toks) {
+	if name == "" || len(params) == 0 || i >= len(toks) {
+		return "", nil, nil, 0, false
+	}
+	return name, params, paramTypes, i, true
+}
+
+// IsDefinitionAttempt reports whether a turn is shaped like a function definition
+// whose body computes over its parameters, the mark of a definition the caller
+// admits a gap for rather than grounds as a world fact once the definition reader
+// has declined it on a soundness check (a name that shadows a primitive, a type
+// error). It runs the same shape recognizer and the same body reader the definition
+// path runs, then requires the body to use a parameter. A generic fact ("the friend
+// of a man is a dog", "the color of a rose is red") has a predicate that names no
+// parameter (it fails the body read, or reads as a bare constant), so it is not
+// taken for a definition and keeps grounding. It returns the name so the caller can
+// admit the gap by it.
+func (e *Engine) IsDefinitionAttempt(text string) (string, bool) {
+	toks := strings.Fields(text)
+	name, params, _, bodyStart, ok := e.defHeader(toks)
+	if !ok {
+		return "", false
+	}
+	body, ok := e.bodyOf(toks[bodyStart:], params, name, len(params))
+	if !ok {
+		return "", false
+	}
+	// A definition computes over its inputs, so the body must use a parameter. This
+	// is what separates a failed definition from a constant predicate ("is red"),
+	// which a brain reads as a fact, not a function it could not work out.
+	for _, p := range params {
+		if usesVar(body, p) {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// ComprehendDefinition reads a function taught in language into the operation it
+// defines. A unary "the double of a number is the product of the number and 2"
+// and an n-ary "the blend of a number and a factor is the product of the number
+// and the factor" both parse: the name is the word after "the", the parameters
+// are the nouns each introduced by "a" and joined by "and" up to "is", and the
+// body is the computation after "is", read with the parameters in scope so "the
+// number" is a reference to one. The body must comprehend, must consume every
+// word after "is", and must use every parameter, so a half-formed or constant
+// "function", or one with a dead parameter, fails rather than being half-learned.
+func (e *Engine) ComprehendDefinition(text string) (Op, bool) {
+	toks := strings.Fields(text)
+	name, params, paramTypes, bodyStart, ok := e.defHeader(toks)
+	if !ok {
 		return Op{}, false
 	}
 	// A name may not shadow a seeded primitive, by its name or its word.

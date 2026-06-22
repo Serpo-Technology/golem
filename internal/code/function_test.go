@@ -146,6 +146,45 @@ func TestDefinitionParameterMayShadowOperation(t *testing.T) {
 	}
 }
 
+// IsDefinitionAttempt recognizes a turn shaped like a function definition whose
+// body computes over its parameters, so the daemon can admit an honest gap when
+// the definition path declines it on a soundness check rather than ground it as a
+// world fact. It accepts a real definition and a failed attempt that still computes
+// over a parameter (a name shadowing a primitive), and rejects a generic fact whose
+// predicate names no parameter.
+func TestIsDefinitionAttempt(t *testing.T) {
+	e := testEngine() // "sum"/"product" name the add/multiply primitives here
+	for _, a := range []struct{ text, name string }{
+		{"the double of a number is the product of the number and 2", "double"}, // a real definition (the superset)
+		{"the sum of a number is the product of the number and 2", "sum"},       // shadows a primitive, still computes over the number
+	} {
+		if name, ok := e.IsDefinitionAttempt(a.text); !ok || name != a.name {
+			t.Errorf("IsDefinitionAttempt(%q) = (%q, %v), want (%q, true)", a.text, name, ok, a.name)
+		}
+	}
+	for _, s := range []string{
+		"the friend of a man is a dog",                    // a generic fact, predicate is not a computation
+		"the color of a rose is red",                      // a constant predicate that names no parameter
+		"the weird of a number is the product of 6 and 7", // a constant body, names no parameter
+		"a cat is an animal",                              // not the definition shape
+	} {
+		if name, ok := e.IsDefinitionAttempt(s); ok {
+			t.Errorf("IsDefinitionAttempt(%q) = (%q, true), want false", s, name)
+		}
+	}
+}
+
+// A type error is a failed definition the daemon admits a gap for: the body
+// computes over the parameter but does not type-check (add over a list), so
+// IsDefinitionAttempt recognizes it. The type check is the definition reader's,
+// run after this.
+func TestIsDefinitionAttemptTypeError(t *testing.T) {
+	e := listEngine()
+	if name, ok := e.IsDefinitionAttempt("the bad of a list of numbers is the sum of the numbers and 1"); !ok || name != "bad" {
+		t.Fatalf("a type-broken body that uses the parameter should be a definition attempt: (%q, %v)", name, ok)
+	}
+}
+
 // A binary function taught in language comprehends to an operation over two
 // parameters, the n-ary generalization of the unary definition.
 func TestComprehendBinaryDefinition(t *testing.T) {

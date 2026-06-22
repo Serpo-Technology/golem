@@ -1912,6 +1912,13 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				return wire.Response{OK: true, Say: line + d.closeComputeLoop(op.Name)}, false, false
 			}
+			// A turn shaped like a definition whose body is a computation, which the
+			// definition path declined on a soundness check, is a failed attempt rather
+			// than a world fact: admit the gap by name instead of grounding "the larger
+			// of a number ... is ..." as a statement about a thing named larger.
+			if name, ok := d.code.IsDefinitionAttempt(req.Content); ok {
+				return wire.Response{OK: true, Say: "I could not work out the " + name + "."}, false, false
+			}
 			// A function stated as the inverse of a known operation is discovered by
 			// synthesis: the body whose output the operation returns to the input.
 			if say, ok := d.comprehendInverse(req.Content); ok {

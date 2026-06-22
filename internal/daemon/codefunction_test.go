@@ -178,6 +178,40 @@ func TestLearnsAndCallsAConditional(t *testing.T) {
 	}
 }
 
+// A turn shaped like a definition whose body computes over its parameters, but
+// which the definition path declines on a soundness check, is admitted as an honest
+// gap rather than grounded as a fabricated world fact. "the sum of a number is the
+// product of the number and 2" shadows the add primitive, so it cannot be learned;
+// the daemon says so by name and does not ground it.
+func TestFailedDefinitionAdmitsGap(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the sum of a number is the product of the number and 2")
+	if resp.Say != "I could not work out the sum." {
+		t.Fatalf("a failed definition should admit a gap by name: %q", resp.Say)
+	}
+	if resp.Observe != nil {
+		t.Fatalf("a failed definition must not ground as a world fact")
+	}
+}
+
+// A generic fact that shares the genitive shape but whose predicate is not a
+// computation over the parameter still grounds as a fact; it is not mistaken for a
+// failed definition and admitted as a gap.
+func TestGenericFactStillGrounds(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the friend of a man is a dog")
+	if strings.HasPrefix(resp.Say, "I could not work out the") {
+		t.Fatalf("a generic fact must not be admitted as a failed definition: %q", resp.Say)
+	}
+	if resp.Observe == nil {
+		t.Fatalf("a generic fact should ground as an observation")
+	}
+}
+
 // A function may take a parameter whose word names a learned operation. Once
 // "double" is a known operation, "the chooser of a double and a low ..." still
 // learns: the body reads "the double" as the parameter, so the definition is not
