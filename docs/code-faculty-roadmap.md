@@ -19,25 +19,37 @@ representation they compile to, and connect both to what GOLEM knows, never to
 
 ## Current state
 
-> **Note (2026-06-21).** The baseline below is the original starting point. The
+> **Note (2026-06-22).** The baseline below is the original starting point. The
 > faculty has since grown well past it, and the per-session record of what is
 > built lives in the training log rather than here. In short, beyond this
-> baseline: the rule is now found by a reasoning-driven SYNTHESIS FLOOR that
-> assembles and runs candidate programs rather than fitting templates
+> baseline: the rule is found by a reasoning-driven SYNTHESIS FLOOR that assembles
+> and runs candidate programs rather than fitting templates
 > (`internal/code/synth.go`, `synthloop.go`: expressions, value-fold loops,
-> map/filter list loops); recursion synthesizes from examples; conditionals,
-> typed lists, and the reductions (total/length/first/largest, now LEARNED not
-> floor) are built; and a dialogue loop learns an unknown computation by eliciting
-> examples or a definition (`internal/daemon/compute_intent.go`). Most recently,
-> the faculty's English surface recognition is being DISSOLVED into the grammar +
-> grounded concepts: each operation is now a grounded concept (`op:<name>`,
-> resolved through a `Resolver` callback over the concept graph, cross-tongue and
-> teachable; the engine's English `byWord` map is gone). Still open: the grammar
-> parsing the `the <op> of <args>` call surface itself, and dissolving the
-> `code.Computation` IR type toward generation-by-graph-traversal. The two-line
-> takeaway: the floor (Go parser, primitives, grounding-by-running) is unchanged;
-> what was English-string-matching for recognition is becoming grounded
-> resolution.
+> map/filter list loops); recursion synthesizes from examples; conditionals, typed
+> lists, and the reductions (total/length/first/largest, now LEARNED not floor) are
+> built; and a dialogue loop learns an unknown computation by eliciting examples or
+> a definition (`internal/daemon/compute_intent.go`).
+>
+> The faculty's English surface recognition has now been DISSOLVED into the grammar
+> + grounded concepts. Each operation is a grounded concept (`op:<name>`, resolved
+> through a callback over the concept graph, cross-tongue and teachable; the English
+> `byWord` map is gone), and the grammar reads the whole call and body surface: the
+> operation-application call `the <op> of <args>`, the bare imperative `double 4`,
+> the list literal `the list of A and B and C`, and the definition body including
+> conditionals, recursion, and comparisons grounded as the operations gt/lt/eq. Only
+> the map `each` body still rides the code reader. Recognition is grounded
+> resolution where it was English-string-matching.
+>
+> The intent-to-procedure bridge (slice 7) has begun: the synthesis search composes
+> the acquired vocabulary, not the arithmetic primitives alone; a synthesized
+> function is written in that vocabulary and left out of its own search; and a
+> function is DISCOVERED from a property verified by running, the first being the
+> inverse of a known operation (`the halving is the inverse of the double` yields
+> `number / 2`, the procedure discovered, not shown). Still open: the non-equational
+> property family (largest/smallest, abs/sign), the general property entry over two
+> computation sides, dissolving the `code.Computation` IR toward
+> generation-by-graph-traversal, and the map body as a grammar construction. The
+> floor (Go parser, primitives, grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
 `source.go`):
