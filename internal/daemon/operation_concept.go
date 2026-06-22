@@ -100,12 +100,15 @@ func (d *Daemon) opHead(word string) (name string, arity int, ok bool) {
 // operands, a leaf a literal value. Arity was enforced as the call parsed, so the
 // walk cannot fail on it.
 func applicationToComputation(a grammar.Application) code.Computation {
-	if a.Head == "" {
+	if a.Head == "" && !a.List {
 		return code.Computation{Lit: a.Lit}
 	}
 	args := make([]code.Computation, len(a.Args))
 	for i, arg := range a.Args {
 		args[i] = applicationToComputation(arg)
+	}
+	if a.List {
+		return code.Computation{Op: code.ListWord, Args: args}
 	}
 	return code.Computation{Op: a.Head, Args: args}
 }

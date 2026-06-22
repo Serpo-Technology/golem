@@ -15,6 +15,8 @@ func stubHead(word string) (string, int, bool) {
 		return "double", 1, true
 	case "sum":
 		return "add", 2, true
+	case "total":
+		return "total", 1, true // a unary list reducer, for list-argument cases
 	}
 	return "", 0, false
 }
@@ -65,10 +67,10 @@ func TestParseApplicationRejectsTrailingOperand(t *testing.T) {
 	}
 }
 
-// An unresolvable head (a list literal, an unlearned operation) fails the parse, so
-// the deferred and the unknown surfaces fall through to the code engine intact.
+// An unresolvable head (an unlearned operation) fails the parse, so the unknown
+// surface falls through to the code engine intact.
 func TestParseApplicationRejectsUnknownHead(t *testing.T) {
-	if _, ok := Builtin().ParseApplication("en", "the list of 1 and 2", stubHead); ok {
+	if _, ok := Builtin().ParseApplication("en", "the wibble of 1 and 2", stubHead); ok {
 		t.Fatal("a non-operation head should not parse as a call")
 	}
 }
@@ -94,6 +96,49 @@ func TestParseApplicationRejectsBareLiteral(t *testing.T) {
 func TestParseApplicationUnseededTongue(t *testing.T) {
 	if _, ok := Builtin().ParseApplication("tr", "the double of 4", stubHead); ok {
 		t.Fatal("a tongue with no seeded call surface should not parse a call")
+	}
+}
+
+// A list literal "the list of A and B and C" is a variadic constructor: it reads
+// elements until the coordinator runs out, where an operation is fixed-arity.
+func TestParseApplicationListLiteral(t *testing.T) {
+	app, ok := Builtin().ParseApplication("en", "the list of 1 and 2 and 3", stubHead)
+	if !ok {
+		t.Fatal("a list literal should parse")
+	}
+	want := Application{List: true, Args: []Application{{Lit: "1"}, {Lit: "2"}, {Lit: "3"}}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseApplication = %+v, want %+v", app, want)
+	}
+}
+
+// A list literal sits where an operand does, so a reducer over a list parses as the
+// operation applied to the list constructor.
+func TestParseApplicationListArgument(t *testing.T) {
+	app, ok := Builtin().ParseApplication("en", "the total of the list of 1 and 2 and 3", stubHead)
+	if !ok {
+		t.Fatal("a reducer over a list literal should parse")
+	}
+	want := Application{Head: "total", Args: []Application{
+		{List: true, Args: []Application{{Lit: "1"}, {Lit: "2"}, {Lit: "3"}}},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseApplication = %+v, want %+v", app, want)
+	}
+}
+
+// A list element is itself an operand, so a call sits inside a list.
+func TestParseApplicationListOfCalls(t *testing.T) {
+	app, ok := Builtin().ParseApplication("en", "the list of the double of 4 and 5", stubHead)
+	if !ok {
+		t.Fatal("a list of a call and a literal should parse")
+	}
+	want := Application{List: true, Args: []Application{
+		{Head: "double", Args: []Application{{Lit: "4"}}},
+		{Lit: "5"},
+	}}
+	if !reflect.DeepEqual(app, want) {
+		t.Fatalf("ParseApplication = %+v, want %+v", app, want)
 	}
 }
 

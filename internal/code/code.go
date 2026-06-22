@@ -125,6 +125,11 @@ const (
 	eachWord = "each" // the element of a map, "the double of each number"
 )
 
+// ListWord is the list constructor's operation name, exported so a caller that
+// builds a list computation from a surface the grammar parsed names it without a
+// literal of its own.
+const ListWord = listWord
+
 // OpRef identifies the operation a word names: its internal name, its operator
 // symbol (empty for a defined op), and its arity. It is the operation's identity
 // without its body, what a resolver returns, which the engine then looks up by name

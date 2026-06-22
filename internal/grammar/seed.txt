@@ -291,6 +291,7 @@ code:divide	/ quotient	en
 surface:en:article	the	en
 surface:en:coord	and	en
 surface:en:genitive	of	en
+surface:en:list	list	en
 surface:en:pronoun	it	en
 surface:en:proverb	do does	en
 surface:tr:coord	ve	tr

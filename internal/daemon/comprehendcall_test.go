@@ -23,6 +23,7 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 		"the sum of 6 and 7",
 		"the product of 3 and 4",
 		"the sum of the product of 3 and 4 and 5",
+		"the list of 1 and 2 and 3", // a list literal is a call the grammar reads too
 	}
 	for _, s := range opCalls {
 		if _, ok := d.gram.ParseApplication("en", s, d.opHead); !ok {
@@ -36,9 +37,8 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 	}
 
 	fallbacks := []string{
-		"6 plus 7",                    // an operator-word expression
-		"6 + 7",                       // raw Go
-		"the list of 1 and 2 and 3",   // a list literal, deferred to the engine
+		"6 plus 7", // an operator-word expression
+		"6 + 7",    // raw Go
 	}
 	for _, s := range fallbacks {
 		if _, ok := d.gram.ParseApplication("en", s, d.opHead); ok {
