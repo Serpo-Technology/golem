@@ -325,3 +325,70 @@ func (p *Params) bodyComparison(lang string, toks []string, c *parseCtx, cmp Cmp
 	}
 	return &Conditional{Cmp: sym, Left: left, Right: right}, true
 }
+
+// ParseInverse reads a goal that names a new function as the inverse of a known
+// one, "the halving is the inverse of the double": the copula joins the two sides
+// (read from the closed class, not a literal "is"), the inverse relator and the
+// genitive linker are seeded surface words, and the operation inverted is resolved
+// through head. It returns the new function's name and the canonical name of the
+// unary operation it inverts. The form is grounded, not matched: the operation must
+// resolve and be unary, and the new name must NOT resolve (it is the function the
+// goal asks to be discovered), so an ordinary copula statement and a goal naming no
+// known operation both decline.
+func (p *Params) ParseInverse(lang, utterance string, head HeadFunc) (newName, op string, ok bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	inv := p.surfaceWord(lang, "inverse")
+	linker := p.surfaceWord(lang, "genitive")
+	if inv == "" || linker == "" || head == nil {
+		return "", "", false
+	}
+	toks, _ := Tokenize(utterance)
+	cop := -1
+	for i, t := range toks {
+		if p.category(lang, t) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 1 || cop+1 >= len(toks) {
+		return "", "", false
+	}
+	// The new function is the content word just before the copula; a function word
+	// there is no name.
+	newName = toks[cop-1]
+	if p.isFunctionWordLang(lang, newName) {
+		return "", "", false
+	}
+	// The right side names the inverse of an operation: the inverse relator, then the
+	// genitive linker, then the operation as the final word.
+	rhs := toks[cop+1:]
+	invAt, linkAt := -1, -1
+	for i, t := range rhs {
+		if t == inv && invAt < 0 {
+			invAt = i
+		} else if t == linker && invAt >= 0 {
+			linkAt = i
+			break
+		}
+	}
+	if linkAt < 0 || linkAt+1 >= len(rhs) {
+		return "", "", false
+	}
+	opWord := rhs[len(rhs)-1]
+	if newName == opWord {
+		return "", "", false
+	}
+	// The operation inverted must resolve and be unary; the new name must not resolve,
+	// since it is the function the goal asks to be discovered.
+	canonical, arity, resolved := head(opWord)
+	if !resolved || arity != 1 {
+		return "", "", false
+	}
+	if _, _, taken := head(newName); taken {
+		return "", "", false
+	}
+	return newName, canonical, true
+}

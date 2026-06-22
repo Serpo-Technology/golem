@@ -56,6 +56,30 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 // leading word and applies it to the operands that follow, the call without the
 // genitive scaffolding. A primitive answers by its verb, a learned function by its
 // name, and a phrase that merely opens with an operation word does not compute.
+// A function stated as the inverse of a known operation is discovered by synthesis,
+// not shown: taught increment, GOLEM learns the decrement from "the decrement is the
+// inverse of the increment" and computes it; an inverse of an operation it does not
+// know is not learned.
+func TestComprehendInverseDiscoversAFunction(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the increment of a number is the sum of the number and 1")
+
+	r := say(t, d, "the decrement is the inverse of the increment")
+	if !strings.Contains(r.Say, "decrement") {
+		t.Fatalf("the inverse goal should learn the decrement: %q", r.Say)
+	}
+	out, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the decrement of 5"}, nil)
+	if !strings.Contains(out.Say, "4") {
+		t.Errorf("the discovered decrement of 5 should be 4: %q", out.Say)
+	}
+
+	r2 := say(t, d, "the unthing is the inverse of the thing")
+	if strings.Contains(r2.Say, "I learned unthing") {
+		t.Errorf("an inverse of an operation GOLEM does not know should not be learned: %q", r2.Say)
+	}
+}
+
 func TestBareImperativeComputes(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true

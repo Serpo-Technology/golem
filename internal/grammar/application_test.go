@@ -21,6 +21,38 @@ func stubHead(word string) (string, int, bool) {
 	return "", 0, false
 }
 
+// An inverse goal names a new function as the inverse of a known unary operation.
+func TestParseInverse(t *testing.T) {
+	name, op, ok := Builtin().ParseInverse("en", "the halving is the inverse of the double", stubHead)
+	if !ok || name != "halving" || op != "double" {
+		t.Fatalf("ParseInverse = (%q, %q, %v), want (halving, double, true)", name, op, ok)
+	}
+}
+
+// The form is grounded, so an ordinary copula statement, an inverse of a
+// non-operation, an inverse of a binary operation, and a copula clause with no
+// inverse marker all decline.
+func TestParseInverseRejections(t *testing.T) {
+	b := Builtin()
+	for _, s := range []string{
+		"the dog is an animal",                       // no inverse marker, no operation
+		"the halving is the inverse of the cat",      // the inverted word names no operation
+		"the unsum is the inverse of the sum",        // the inverted operation is binary
+		"the halving is the double of the number",    // no inverse marker
+	} {
+		if name, op, ok := b.ParseInverse("en", s, stubHead); ok {
+			t.Errorf("%q should not parse as an inverse goal, got (%q, %q)", s, name, op)
+		}
+	}
+}
+
+// The inverse marker is a seeded surface word, so a tongue without it declines.
+func TestParseInverseUnseededTongue(t *testing.T) {
+	if _, _, ok := Builtin().ParseInverse("tr", "the halving is the inverse of the double", stubHead); ok {
+		t.Fatal("a tongue with no seeded inverse marker should decline")
+	}
+}
+
 func TestParseApplicationFlat(t *testing.T) {
 	app, ok := Builtin().ParseApplication("en", "the double of 4", stubHead)
 	if !ok {

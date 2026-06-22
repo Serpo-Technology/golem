@@ -40,6 +40,32 @@ func (d *Daemon) requestComputation(src, op string) (string, bool) {
 	return "I do not know the " + op + " yet. Tell me what it is, or show me, like: " + hint + ".", true
 }
 
+// comprehendInverse learns a function stated as the inverse of a known operation,
+// "the halving is the inverse of the double": the grammar reads the goal, the
+// synthesis floor discovers the body whose output the operation returns to the
+// input, grounded by running, and the discovered function is kept. It returns false
+// when the turn is no inverse goal, so the other paths read it; when the goal is
+// understood but no inverse is found, it admits the gap rather than learning a wrong
+// rule.
+func (d *Daemon) comprehendInverse(content string) (string, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return "", false
+	}
+	name, op, ok := d.gram.ParseInverse("en", content, d.opHead)
+	if !ok {
+		return "", false
+	}
+	body, ok := d.code.SynthesizeInverse(inducedParam, op, d.evalCode)
+	if !ok {
+		return "I could not work out the " + name + ".", true
+	}
+	line, err := d.learnFunction(code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body})
+	if err != nil {
+		return "I could not keep the " + name + ".", true
+	}
+	return line, true
+}
+
 // advancePendingCompute takes a turn while a computation is awaited and reads it as an
 // example of that operation. Each example accumulates; once two stand, they are fed to
 // the synthesis floor together, and as soon as it assembles a rule the operation is

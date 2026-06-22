@@ -291,6 +291,7 @@ code:divide	/ quotient	en
 surface:en:article	the	en
 surface:en:coord	and	en
 surface:en:genitive	of	en
+surface:en:inverse	inverse	en
 surface:en:list	list	en
 surface:en:if	if	en
 surface:en:else	else	en

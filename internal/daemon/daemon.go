@@ -1912,6 +1912,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				return wire.Response{OK: true, Say: line + d.closeComputeLoop(op.Name)}, false, false
 			}
+			// A function stated as the inverse of a known operation is discovered by
+			// synthesis: the body whose output the operation returns to the input.
+			if say, ok := d.comprehendInverse(req.Content); ok {
+				return wire.Response{OK: true, Say: say}, false, false
+			}
 			// A function can also be shown rather than told: "the double of 3 is
 			// 6 and the double of 5 is 10" has its rule worked out from the pairs
 			// and kept the same way a told one is.

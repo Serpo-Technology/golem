@@ -13,7 +13,39 @@ func composingEngine() *Engine {
 	}, []Def{
 		{Name: "square", Params: []string{"number"}, Body: "number * number"},
 		{Name: "increment", Params: []string{"number"}, Body: "number + 1"},
+		{Name: "double", Params: []string{"number"}, Body: "number * 2"},
 	})
+}
+
+// The inverse of a known operation is discovered from the property that the
+// operation returns its output to the input, not from examples: the decrement is
+// the inverse of increment, and halving the inverse of double, the latter's test
+// inputs sampled as doubles so the integer inverse stays exact.
+func TestSynthesizeInverse(t *testing.T) {
+	e := composingEngine()
+	dec, ok := e.SynthesizeInverse("number", "increment", arith)
+	if !ok {
+		t.Fatal("the inverse of increment should be discovered")
+	}
+	if got := evalBody(t, e, dec, "5"); got != "4" {
+		t.Fatalf("the inverse of increment at 5 should be 4, got %s", got)
+	}
+	half, ok := e.SynthesizeInverse("number", "double", arith)
+	if !ok {
+		t.Fatal("the inverse of double should be discovered")
+	}
+	if got := evalBody(t, e, half, "8"); got != "4" {
+		t.Fatalf("the inverse of double at 8 should be 4, got %s", got)
+	}
+}
+
+// An operation with no bounded integer inverse declines rather than forcing a wrong
+// rule: the square root is no arithmetic expression over the parameter.
+func TestSynthesizeInverseDeclinesNonInvertible(t *testing.T) {
+	e := composingEngine()
+	if _, ok := e.SynthesizeInverse("number", "square", arith); ok {
+		t.Fatal("square has no bounded integer inverse and should decline")
+	}
 }
 
 // The search composes a learned operation to reach a rule beyond the primitive
