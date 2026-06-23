@@ -88,22 +88,24 @@ func (d *Daemon) participatesInProposition(id uint64) bool {
 	return false
 }
 
-// trKnowVerb and trKnowParticle recognize the Turkish "do you know" question: the
-// verb of knowing ("biliyor"/"bilir", the progressive and aorist of bilmek) before
-// a second-person question particle ("biliyor musun", "bilir misin"). The first
-// person ("biliyor muyum") asks of the speaker and is left out, as "do I know" is.
-var trKnowVerb = map[string]bool{"biliyor": true, "bilir": true}
+// trKnowParticle is the second-person question particle that fuses onto the aorist or
+// progressive of bilmek ("biliyor musun", "bilir misin"). It marks the reflexive question and
+// asks of GOLEM; the first person ("biliyor muyum") asks of the speaker and is left out, as
+// "do I know" is. The know verb itself is recognized as a speech move off the frame, not a
+// list here.
 var trKnowParticle = map[string]bool{"musun": true, "müsün": true, "mısın": true, "misin": true}
 
-// planEpistemicTR answers the Turkish "X biliyor musun" the way planEpistemic
-// answers the English "do you know X": a thing GOLEM has grounded it knows, named
-// back with the accusative the question carried, otherwise it does not.
-func (d *Daemon) planEpistemicTR(raw string) (string, bool) {
-	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
-	if len(tokens) < 3 {
+// planEpistemicTR answers the Turkish "X biliyor musun" the way planEpistemic answers the
+// English "do you know X". The know verb is a closed-class speech move, so the clause carries
+// frame.Speech == "know"; the second-person particle marks it a question. A thing GOLEM has
+// grounded it knows, named back with the accusative the question carried, otherwise it does
+// not.
+func (d *Daemon) planEpistemicTR(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "tr" || frame.Speech != "know" {
 		return "", false
 	}
-	if !trKnowParticle[tokens[len(tokens)-1]] || !trKnowVerb[tokens[len(tokens)-2]] {
+	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
+	if len(tokens) < 3 || !trKnowParticle[tokens[len(tokens)-1]] {
 		return "", false
 	}
 	obj := tokens[:len(tokens)-2]
@@ -197,12 +199,16 @@ func (d *Daemon) resolveAccusativeTR(phrase string) *memory.Fragment {
 	return d.resolveConcept(phrase)
 }
 
-// planEpistemicLA answers the Latin "scisne X", the enclitic -ne on the
-// second-person scis (you know) asking whether GOLEM knows X, settled against the
-// same grounding the other tongues read.
-func (d *Daemon) planEpistemicLA(raw string) (string, bool) {
+// planEpistemicLA answers the Latin "scisne X". The know verb is a closed-class speech move,
+// so the clause carries frame.Speech == "know"; the enclitic -ne on the fronted second-person
+// scis (you know) marks the question. It is settled against the same grounding the other
+// tongues read.
+func (d *Daemon) planEpistemicLA(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "la" || frame.Speech != "know" {
+		return "", false
+	}
 	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
-	if len(tokens) < 2 || tokens[0] != "scisne" {
+	if len(tokens) < 2 || !strings.HasSuffix(tokens[0], "ne") {
 		return "", false
 	}
 	// "scisne quod <clause>": a proposition as the object of know, the clause read

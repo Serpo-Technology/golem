@@ -103,6 +103,14 @@ func TestEpistemicRoutesOffKnowVerb(t *testing.T) {
 	if f := d.gram.ParseHint("what do you know about the lion", "en", d.resolveConcept); f.Speech != "know" || f.Wh == "" {
 		t.Fatalf("what do you know about X should carry a wh word: speech %q wh %q", f.Speech, f.Wh)
 	}
+	// The Turkish and Latin know verbs derive the same move, so the clause carries the
+	// epistemic frame in those tongues too; the recognition is one concept, not three lists.
+	if mv := d.gram.ParseHint("köpeği biliyor musun", "tr", d.resolveConcept).Speech; mv != "know" {
+		t.Fatalf("the Turkish know verb should derive the know move: %q", mv)
+	}
+	if mv := d.gram.ParseHint("scisne leonem", "la", d.resolveConcept).Speech; mv != "know" {
+		t.Fatalf("the Latin know verb should derive the know move: %q", mv)
+	}
 	// End to end, the polar question answers yes from grounding, off the frame.
 	if got := strings.ToLower(say(t, d, "do you know the lion").Say); !strings.Contains(got, "yes") {
 		t.Fatalf("a grounded thing should be known: %q", got)

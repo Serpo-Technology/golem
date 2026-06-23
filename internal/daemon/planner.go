@@ -763,12 +763,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planEpistemic(frame, raw); ok {
 		return ans, nil
 	}
-	// The same reflexive know-question in the other tongues: Turkish "X biliyor
-	// musun", Latin "scisne X", each routed to the shared grounding check.
-	if ans, ok := d.planEpistemicTR(raw); ok {
+	// The same reflexive know-question in the other tongues: Turkish "X biliyor musun", Latin
+	// "scisne X", recognized off the same frame the know verb marks, each routed to the shared
+	// grounding check.
+	if ans, ok := d.planEpistemicTR(frame, raw); ok {
 		return ans, nil
 	}
-	if ans, ok := d.planEpistemicLA(raw); ok {
+	if ans, ok := d.planEpistemicLA(frame, raw); ok {
 		return ans, nil
 	}
 
