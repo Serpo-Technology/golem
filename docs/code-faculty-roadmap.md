@@ -54,11 +54,19 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > extremal of a list (`the peak is the greatest` yields a running-maximum fold, found
 > by reusing the fold search and accepting the candidate whose output is in the list
 > with nothing beyond it; `the trough is the smallest` the minimum). Both are
-> discovered, not shown. Still open: the conditional property family (abs/sign, which
-> needs expression-level conditional synthesis), the general property entry over two
-> computation sides, and dissolving the `code.Computation` IR toward
-> generation-by-graph-traversal. The floor (Go parser, primitives,
-> grounding-by-running) is unchanged throughout.
+> discovered, not shown. Still open on the bridge: the conditional property family
+> (abs/sign by property discovery, distinct from the by-example conditional above) and
+> the general property entry over two computation sides.
+>
+> Separately, code GENERATION now runs by GRAPH TRAVERSAL: the production path
+> materializes a comprehended computation into a subgraph and walks it for the Go,
+> sharing the one traverser that renders language. Every shape it produces (operation,
+> conditional, list, call, recursion, told map, value-fold, synthesized map/filter)
+> materializes, with the typed `code.ToCode` render kept as the cross-check and no
+> longer reached on a successful walk. Remaining there: retire that fallback dispatch
+> (the code-gen `code.Computation` dissolution's landing), then move comprehension onto
+> the graph (the live path still produces a `Computation` first). The floor (Go parser,
+> primitives, grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
 `source.go`):
@@ -200,7 +208,7 @@ confidence.
 | 4 | Recursion | a function decl with a self-call + base case | done |
 | 5 | Data and types | typed values, sequences | done |
 | 6 | Sequencing and iteration | a map over a list (fold and recursion already cover the rest); filter is a follow-on | done |
-| 7 | Intent to procedure | a spec, decomposition, verification | first cut: recursion synthesized from examples |
+| 7 | Intent to procedure | a spec, decomposition, verification | in progress: a function discovered from a property verified by running (the inverse of an operation, the extremal of a list); synthesis composes acquired vocabulary and writes results in it; a conditional (abs/relu) synthesized from examples. Open: property discovery for the conditional family (abs/sign) and the general two-sided property |
 
 ### Slice 1: binary and n-ary user functions
 
