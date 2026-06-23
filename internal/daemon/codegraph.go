@@ -57,6 +57,17 @@ const (
 	mapListRel = "mapList"
 	mapBodyRel = "mapBody"
 
+	// A value-fold reduces a list to a value through an accumulator: named roles, the
+	// accumulator name, the list param ranged over, the start (a const leaf, or
+	// foldFirst marking the first element), the per-element step expression over the
+	// accumulator and x, and the guard the step applies under (absent when plain).
+	foldAccRel   = "foldAcc"
+	foldParamRel = "foldParam"
+	foldInitRel  = "foldInit"
+	foldFirstRel = "foldFirst"
+	foldStepRel  = "foldStep"
+	foldGuardRel = "foldGuard"
+
 	// Ordered children bind each child to its position through a slot node, so order
 	// is meaning and a value can repeat: root --elem--> slot, slot --rank--> ordinal,
 	// slot --holds--> value. A list literal uses them; an n-ary call will reuse them.
@@ -108,6 +119,10 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg, se
 	if firstDest(g, nodeID, mapBodyRel) != 0 {
 		s, ok := d.genMap(g, nodeID, env, self)
 		return s, false, ok // a map renders as a parenthesized IIFE, a primary
+	}
+	if firstDest(g, nodeID, foldStepRel) != 0 {
+		s, ok := d.genFold(g, nodeID, env, self)
+		return s, false, ok // a fold renders as the loop statements its call wrapper holds
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
 		return d.genOrderedNode(g, nodeID, env, self)
@@ -186,6 +201,48 @@ func (d *Daemon) genMap(g codeGraph, nodeID uint64, env map[string]boundArg, sel
 		" { out = append(out, " + body + ") }; return out }())", true
 }
 
+// genFold renders a value-fold node -- a reduction of a list to a value through an
+// accumulator -- as the loop statements the synthesizer's foldBody emits, regenerated
+// from the structure so the walked source matches the stored Raw byte for byte. The
+// step is rendered bare (it reads the accumulator and x as free variables); an
+// unchanging accumulator from the first element collapses to a plain return.
+func (d *Daemon) genFold(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool) {
+	acc := g.content(firstDest(g, nodeID, foldAccRel))
+	param := g.content(firstDest(g, nodeID, foldParamRel))
+	guard := g.content(firstDest(g, nodeID, foldGuardRel))
+	step, _, sok := d.genCode(g, firstDest(g, nodeID, foldStepRel), env, self)
+	if acc == "" || param == "" || !sok {
+		return "", false
+	}
+	start := g.content(firstDest(g, nodeID, foldInitRel))
+	if firstDest(g, nodeID, foldFirstRel) != 0 {
+		start = param + "[0]"
+	}
+	return foldSource(acc, param, start, guard, step), true
+}
+
+// foldSource writes a value-fold's loop statements, the one place the foldBody shape
+// is regenerated so the graph walk and the typed render agree to the character: an
+// unchanging accumulator from the start is just a return; a guarded step assigns only
+// when x compares to the accumulator; otherwise the step assigns each pass.
+func foldSource(acc, param, start, guard, step string) string {
+	if guard == "" && step == acc {
+		return "return " + start
+	}
+	assign := acc + " = " + step
+	if guard != "" {
+		assign = "if x " + guard + " " + acc + " { " + assign + " }"
+	}
+	return acc + " := " + start + "; for _, x := range " + param + " { " + assign + " }; return " + acc
+}
+
+// rawCallSource wraps an imperative function's body statements in the func literal
+// applied to its arguments, the form the typed render gives a Raw call so the
+// statements run and yield their value.
+func rawCallSource(op code.Op, body, args string) string {
+	return "(func(" + sigParams(op) + ") " + goCodeType(op.Ret) + " { " + body + " })(" + args + ")"
+}
+
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
 // call -- told apart by what it grounds in. The list concept gives a composite
 // literal (a primary); a function concept (one carrying a body subgraph) gives a call.
@@ -221,6 +278,19 @@ func (d *Daemon) genCall(g codeGraph, nodeID, fn uint64, env map[string]boundArg
 			return "", false, false
 		}
 		return g.content(fn) + "(" + joinSrc(args) + ")", false, true
+	}
+	// An imperative function (a synthesized loop) cannot inline; its body statements
+	// are wrapped in the func literal applied to the arguments, the form the typed
+	// render gives a Raw call. The body reads its parameter and accumulator as free
+	// names, so it is walked with no binding.
+	if op, ok := d.opByName(g.content(fn)); ok && op.Raw != "" {
+		body := firstDest(g, fn, bodyRel)
+		stmts, _, sok := d.genCode(g, body, nil, 0)
+		args, aok := d.orderedChildren(g, nodeID, elemRel, env, self)
+		if body == 0 || !sok || !aok {
+			return "", false, false
+		}
+		return rawCallSource(op, stmts, joinSrc(args)), false, true
 	}
 	if d.isRecursive(g, fn) {
 		if self != 0 {
@@ -375,7 +445,7 @@ func (d *Daemon) reaches(g codeGraph, nodeID, target uint64, seen map[uint64]boo
 	if firstDest(g, nodeID, memory.RelGrounds) == target {
 		return true
 	}
-	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, mapListRel, mapBodyRel, elemRel, holdsRel} {
+	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, mapListRel, mapBodyRel, foldStepRel, elemRel, holdsRel} {
 		for _, dest := range g.dests(nodeID, rel) {
 			if d.reaches(g, dest, target, seen) {
 				return true

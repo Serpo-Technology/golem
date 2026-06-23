@@ -3,6 +3,7 @@ package daemon
 import (
 	"strings"
 
+	"golem/internal/code"
 	"golem/internal/grammar"
 	"golem/internal/memory"
 )
@@ -148,6 +149,25 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 			},
 		}, true
 	}
+	if firstDest(g, node, foldStepRel) != 0 {
+		acc := g.content(firstDest(g, node, foldAccRel))
+		param := g.content(firstDest(g, node, foldParamRel))
+		guard := g.content(firstDest(g, node, foldGuardRel))
+		step := firstDest(g, node, foldStepRel)
+		if acc == "" || param == "" || step == 0 {
+			return construction{}, false
+		}
+		start := g.content(firstDest(g, node, foldInitRel))
+		if firstDest(g, node, foldFirstRel) != 0 {
+			start = param + "[0]"
+		}
+		return construction{
+			slots: []slot{{child: step, ctx: ctx}},
+			assemble: func(parts []rendered) (rendered, bool) {
+				return rendered{src: foldSource(acc, param, start, guard, parts[0].src)}, true
+			},
+		}, true
+	}
 	left := firstDest(g, node, operand0Rel)
 	right := firstDest(g, node, operand1Rel)
 	if left == 0 && right == 0 {
@@ -180,6 +200,9 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 // under that binding, so a body leaf that names a parameter emits its argument.
 func (d *Daemon) goCall(g codeGraph, node, fn uint64, ctx any) (construction, bool) {
 	cc := asCodeCtx(ctx)
+	if op, ok := d.opByName(g.content(fn)); ok && op.Raw != "" {
+		return d.goRawCall(g, node, fn, op, ctx)
+	}
 	if d.isRecursive(g, fn) {
 		return construction{assemble: func([]rendered) (rendered, bool) {
 			src, compound, ok := d.genRecursive(g, node, fn, cc.env)
@@ -202,6 +225,26 @@ func (d *Daemon) goCall(g codeGraph, node, fn uint64, ctx any) (construction, bo
 			binding[name] = boundArg{src: parts[i].src, compound: parts[i].compound}
 		}
 		return d.traverse(goSurface{}, g, body, codeCtx{env: binding, self: cc.self})
+	}}, true
+}
+
+// goRawCall renders a call to an imperative function (a synthesized loop), which
+// cannot inline: its body statements are wrapped in the func literal applied to the
+// arguments, the form the typed render gives a Raw call. The arguments render in the
+// caller's context; the body reads its parameter and accumulator as free names, so it
+// is walked with none.
+func (d *Daemon) goRawCall(g codeGraph, node, fn uint64, op code.Op, ctx any) (construction, bool) {
+	body := firstDest(g, fn, bodyRel)
+	args, aok := d.orderedSlots(g, node, elemRel)
+	if body == 0 || !aok {
+		return construction{}, false
+	}
+	return construction{slots: childSlots(args, ctx), assemble: func(parts []rendered) (rendered, bool) {
+		r, rok := d.traverse(goSurface{}, g, body, nil)
+		if !rok {
+			return rendered{}, false
+		}
+		return rendered{src: rawCallSource(op, r.src, joinRendered(parts))}, true
 	}}, true
 }
 

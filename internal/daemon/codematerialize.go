@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"strings"
+
 	"golem/internal/code"
 	"golem/internal/memory"
 )
@@ -99,7 +101,15 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 		return 0, false // mutual recursion is out of scope
 	}
 	op, ok := d.opByName(c.Op)
-	if !ok || op.Body == nil || op.Raw != "" || len(op.Params) != len(c.Args) {
+	if !ok || len(op.Params) != len(c.Args) {
+		return 0, false
+	}
+	// An imperative function (a synthesized loop) is materialized from its parsed
+	// structure, not its body Computation; a value-fold becomes a fold subgraph.
+	if op.Raw != "" {
+		return d.materializeRawCall(g, c, op, selfName, fnNodes)
+	}
+	if op.Body == nil {
 		return 0, false
 	}
 	fn := g.add(c.Op)
@@ -118,6 +128,106 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 		return 0, false
 	}
 	return call, true
+}
+
+// materializeRawCall builds the subgraph for a call to an imperative value-fold (a
+// synthesized reduction: total, count, largest, smallest, first). The fold's
+// structure is recovered from its Raw statements by parseFold and written as a fold
+// node (the accumulator, the list param, the start, the step expression, the guard);
+// the function node carries it as its body, and the call grounds in it with the
+// arguments, which the traverser wraps in the applied func literal the typed render
+// gives a Raw call. It refuses a shape parseFold does not recognize so the dispatch
+// falls back to the typed render rather than mis-building.
+func (d *Daemon) materializeRawCall(g *scratchGraph, c code.Computation, op code.Op, selfName string, fnNodes map[string]uint64) (uint64, bool) {
+	if op.Ret != "int" || len(op.Params) != 1 {
+		return 0, false // value-folds over one list here; list-returning loops are a later slice
+	}
+	param := op.Params[0]
+	acc, first, initLit, step, guard, pok := d.parseFold(op.Raw, param)
+	if !pok {
+		return 0, false
+	}
+	fold := g.add("")
+	g.link(fold, g.add("fold"), memory.RelGrounds)
+	g.link(fold, g.add(acc), foldAccRel)
+	g.link(fold, g.add(param), foldParamRel)
+	if first {
+		g.link(fold, g.add(""), foldFirstRel)
+	} else {
+		g.link(fold, g.add(initLit), foldInitRel)
+	}
+	if guard != "" {
+		g.link(fold, g.add(guard), foldGuardRel)
+	}
+	if !d.materializeInto(g, fold, foldStepRel, step, "", fnNodes) {
+		return 0, false
+	}
+	fn := g.add(c.Op)
+	g.attachSlot(fn, paramRel, 0, g.add(param))
+	g.link(fn, fold, bodyRel)
+	call := g.add("")
+	g.link(call, fn, memory.RelGrounds)
+	if !d.materializeSlots(g, call, elemRel, c.Args, selfName, fnNodes) {
+		return 0, false
+	}
+	return call, true
+}
+
+// parseFold recovers a value-fold from the synthesizer's Raw statements, the inverse
+// of the engine's foldBody: the accumulator name, whether the start is the first
+// element, the constant start otherwise, the per-element step expression (read by the
+// engine's own reader), and the guard the step applies under. It reads only the closed
+// set of shapes foldBody emits -- a bare "return <param>[0]" for the unchanging
+// first-element fold, or "<acc> := <start>; for _, x := range <param> { <assign> };
+// return <acc>" with a plain or guarded assign -- and returns false for anything else,
+// so an unrecognized loop declines to the typed render rather than being misread.
+func (d *Daemon) parseFold(raw, param string) (acc string, first bool, initLit string, step code.Computation, guard string, ok bool) {
+	if !strings.Contains(raw, "; for _, x := range ") {
+		if rest, found := strings.CutPrefix(raw, "return "); found && rest == param+"[0]" {
+			return "a", true, "", code.Computation{Var: "a"}, "", true
+		}
+		return "", false, "", code.Computation{}, "", false
+	}
+	head, rest, found := strings.Cut(raw, "; for _, x := range "+param+" { ")
+	if !found {
+		return "", false, "", code.Computation{}, "", false
+	}
+	acc, start, found := strings.Cut(head, " := ")
+	if !found || acc == "" {
+		return "", false, "", code.Computation{}, "", false
+	}
+	assign, found := strings.CutSuffix(rest, " }; return "+acc)
+	if !found {
+		return "", false, "", code.Computation{}, "", false
+	}
+	if start == param+"[0]" {
+		first = true
+	} else {
+		initLit = start
+	}
+	stepStr := ""
+	if inner, isGuarded := strings.CutPrefix(assign, "if x "); isGuarded {
+		g, body, gok := strings.Cut(inner, " "+acc+" { ")
+		if !gok {
+			return "", false, "", code.Computation{}, "", false
+		}
+		guard = g
+		body, found = strings.CutSuffix(body, " }")
+		if !found {
+			return "", false, "", code.Computation{}, "", false
+		}
+		stepStr, found = strings.CutPrefix(body, acc+" = ")
+	} else {
+		stepStr, found = strings.CutPrefix(assign, acc+" = ")
+	}
+	if !found {
+		return "", false, "", code.Computation{}, "", false
+	}
+	step, ok = d.code.Comprehend(stepStr)
+	if !ok {
+		return "", false, "", code.Computation{}, "", false
+	}
+	return acc, first, initLit, step, guard, true
 }
 
 // materializeInto materializes c and links it from parent under rel, false on failure.
@@ -152,8 +262,8 @@ func (d *Daemon) isCall(c code.Computation) bool {
 // materializes the computation as a transient subgraph and walks it through the shared
 // traverser's Go surface for the source. This is the production generator on the runcode
 // path, so the one traverser that renders language renders code here too. ok is false
-// when the shape is not one the materializer builds yet (a Raw synthesized loop), so the
-// caller falls back to the typed render.
+// when the shape is not one the materializer builds yet (a list-returning synthesized
+// loop, a Raw map or filter), so the caller falls back to the typed render.
 func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	g := newScratchGraph()
 	root, ok := d.materializeCode(g, comp, "", map[string]uint64{})

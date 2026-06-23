@@ -485,6 +485,62 @@ func TestCodeGraphShadowsMap(t *testing.T) {
 	}
 }
 
+// A synthesized value-fold generates through the traversal, no longer falling back to
+// the typed render: its Raw loop is parsed into a fold subgraph and walked back to the
+// applied func literal the render emits, running to the reduced value. Covers a plain
+// fold (total), a guarded fold from the first element (largest), and the collapsed
+// first-element fold (first).
+func TestCodeGraphShadowsFold(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "total", "first", "largest")
+
+	for _, tc := range []struct{ utterance, want string }{
+		{"the total of the list of 1 and 2 and 3", "6"},
+		{"the first of the list of 7 and 8 and 9", "7"},
+		{"the largest of the list of 4 and 9 and 1", "9"},
+	} {
+		comp, ok := d.code.Comprehend(tc.utterance)
+		if !ok {
+			t.Fatalf("the engine should comprehend %q", tc.utterance)
+		}
+		walked, wok := d.traverseCode(comp)
+		typed, tok := d.code.ToCode(comp)
+		if !wok || !tok || walked != typed {
+			t.Fatalf("%q: the fold should walk to the render: %q vs %q (walked ok %v)", tc.utterance, walked, typed, wok)
+		}
+		if v, vok := d.evalCode(walked); !vok || v != tc.want {
+			t.Fatalf("%q: the walked fold should run to %s: %q (ok %v)", tc.utterance, tc.want, v, vok)
+		}
+		// The shared driver and the genCode oracle agree on the fold subgraph.
+		g := newScratchGraph()
+		root, mok := d.materializeCode(g, comp, "", map[string]uint64{})
+		r, rok := d.traverse(goSurface{}, g, root, nil)
+		gen, _, gok := d.genCode(g, root, nil, 0)
+		if !mok || !rok || !gok || r.src != gen {
+			t.Fatalf("%q: goSurface and genCode should agree on the fold: %q vs %q", tc.utterance, r.src, gen)
+		}
+	}
+}
+
+// parseFold reads the synthesizer's own fold shapes and declines anything else, so an
+// unrecognized Raw loop falls back to the typed render rather than being misread.
+func TestParseFoldDeclinesUnrecognized(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, raw := range []string{
+		"weird statements",
+		"a := 0; for _, y := range numbers { a = a + y }; return a", // a different loop variable
+		"return numbers",                                            // not the first element
+	} {
+		if _, _, _, _, _, ok := d.parseFold(raw, "numbers"); ok {
+			t.Errorf("parseFold should decline %q", raw)
+		}
+	}
+	if _, _, _, _, _, ok := d.parseFold("a := 0; for _, x := range numbers { a = a + x }; return a", "numbers"); !ok {
+		t.Error("parseFold should read a plain fold")
+	}
+}
+
 // With operand parenthesizing in the walk, a call composes anywhere: a compound argument
 // is parenthesized where the body uses its parameter as an operand, and a call in an
 // operand position is parenthesized as the operation it inlines to. The walked source
