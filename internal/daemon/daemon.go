@@ -790,15 +790,17 @@ func (d *Daemon) ensureCategoryRefinements() error {
 // has its category by the time anything reads it.
 func (d *Daemon) ensureCategoryClasses() error {
 	d.categoryClasses = map[uint64]string{}
-	// The bare grammatical classes: a broad-function tag with no subtype, unlike the
-	// colon-refined classes whose base stays in the seed and gain only a graph refinement.
-	// Each closed-class word is linked to the class its seed category names, so membership
-	// comes from the seed (the floor) and a taught word joins a class by the same link. The
-	// deictic pronouns are left to the participant resolution they already ride, and the
-	// refined classes (speech, rel, wh, pro, property) keep their base.
-	bare := map[string]bool{
+	// The broad grammatical classes whose membership is a graph link rather than a seed
+	// string: the bare classes (a determiner, a copula, ...) and the bases of the refined
+	// classes (a speech verb, a relator, ...), whose colon refinement composes on top
+	// through the derive order. Each closed-class word is linked to the class its seed
+	// category names, so membership comes from the seed (the floor) and a taught word joins
+	// a class by the same link. The deictic pronouns are left to the participant resolution
+	// they already ride.
+	broad := map[string]bool{
 		"det": true, "cop": true, "neg": true, "imp": true, "adv": true, "cnt": true,
 		"than": true, "again": true, "oth": true, "time": true, "exist": true, "fn": true,
+		"speech": true, "rel": true, "wh": true, "pro": true, "property": true,
 	}
 	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {
@@ -806,7 +808,7 @@ func (d *Daemon) ensureCategoryClasses() error {
 	}
 	classID := make(map[string]uint64)
 	for _, n := range gnodes {
-		if !strings.HasPrefix(n.Template, "fw:") || !bare[n.Category] {
+		if !strings.HasPrefix(n.Template, "fw:") || !broad[n.Category] {
 			continue
 		}
 		id, ok := classID[n.Category]

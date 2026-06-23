@@ -19,10 +19,10 @@ import (
 func TestBareClassesDerivedFromGraph(t *testing.T) {
 	d, s := testDaemon(t)
 
-	// Every bare class is a system concept, kept out of the grown layer; all twelve the
-	// seed carries are present.
-	if len(d.categoryClasses) != 12 {
-		t.Fatalf("the twelve bare classes should each be a graph concept, got %d", len(d.categoryClasses))
+	// Every class is a system concept, kept out of the grown layer; all seventeen the seed
+	// carries are present (the twelve bare classes and the five refined-class bases).
+	if len(d.categoryClasses) != 17 {
+		t.Fatalf("each broad grammatical class should be a graph concept, got %d", len(d.categoryClasses))
 	}
 	for id := range d.categoryClasses {
 		if !d.isSystemConcept(id) {
@@ -31,15 +31,22 @@ func TestBareClassesDerivedFromGraph(t *testing.T) {
 	}
 
 	// Closed-class detection is unchanged: a representative word of each class still reads
-	// as closed class, its category derived from the link.
+	// as closed class, its category derived from the link, including the refined-class bases.
 	for _, tc := range []struct{ lang, form string }{
 		{"en", "the"}, {"en", "is"}, {"en", "not"}, {"en", "of"}, {"en", "always"},
 		{"en", "do"}, {"en", "than"}, {"en", "again"}, {"en", "other"}, {"en", "many"},
 		{"tr", "bir"}, {"tr", "var"},
+		{"en", "say"}, {"en", "after"}, {"en", "what"}, {"en", "he"}, {"en", "transitive"},
 	} {
 		if !d.gram.IsFunctionWord(tc.lang, tc.form) {
 			t.Errorf("%q (%s) should read as closed class from the graph", tc.form, tc.lang)
 		}
+	}
+
+	// A refined class composes: its base comes from the class link and its colon refinement
+	// appends on top, so a speech verb still derives its discourse move.
+	if mv := d.gram.ParseHint("explain", "en", d.resolveConcept).Speech; mv != "clarify" {
+		t.Errorf("the refined speech base should still take its refinement, got move %q", mv)
 	}
 
 	// A determiner sentence parses with the articles dropped from the content.
