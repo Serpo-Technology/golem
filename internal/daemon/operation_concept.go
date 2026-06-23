@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"time"
 
 	"golem/internal/code"
@@ -276,13 +277,99 @@ func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, bool) {
 		return code.Computation{}, false
 	}
 	if app, ok := d.gram.ParseApplication(lang, phrase, d.opHead); ok {
-		return applicationToComputation(app), true
+		comp := applicationToComputation(app)
+		d.shadowComprehension(app, comp)
+		return comp, true
 	}
 	// The bare imperative "double 4" / "add 6 and 7" names the operation with the
 	// leading word and applies it to the operands that follow, the same call without
 	// the genitive scaffolding.
 	if app, ok := d.gram.ParseBareCall(lang, phrase, d.opHead); ok {
-		return applicationToComputation(app), true
+		comp := applicationToComputation(app)
+		d.shadowComprehension(app, comp)
+		return comp, true
 	}
 	return d.code.Comprehend(phrase)
+}
+
+// applicationToGraph builds the code-meaning subgraph a comprehended call denotes directly
+// from the grounded grammar application, so comprehension lands in the substrate graph
+// without the Computation type, the inverse of how generation walks a graph to a surface.
+// It mirrors the node and edge vocabulary materializeCode writes, for the shapes it covers
+// (a literal leaf, a binary primitive operation, and a list literal, nested), and declines
+// the rest (a conditional, a parameter or map element, a defined-function or non-binary
+// head), which the shadow then skips, the way the materializer began on arithmetic alone.
+func (d *Daemon) applicationToGraph(app grammar.Application) (*scratchGraph, uint64, bool) {
+	g := newScratchGraph()
+	root, ok := d.buildAppGraph(g, app)
+	if !ok {
+		return nil, 0, false
+	}
+	return g, root, true
+}
+
+// buildAppGraph writes one application node into the scratch graph and returns it,
+// recursing on the operands. The head is already the canonical operation, resolved through
+// the concept graph as the call parsed, so the build reads structure alone and matches no
+// surface word.
+func (d *Daemon) buildAppGraph(g *scratchGraph, a grammar.Application) (uint64, bool) {
+	// A conditional, a parameter, or a map element belongs to a definition body, not a
+	// computed call; it is left to a later slice and declined here.
+	if a.Cond != nil || a.Var != "" {
+		return 0, false
+	}
+	// A literal leaf carries its value as content.
+	if a.Head == "" && !a.List {
+		if a.Lit == "" {
+			return 0, false
+		}
+		return g.add(a.Lit), true
+	}
+	// A list literal: a root grounding in the list concept, its elements held in ordered
+	// slots, so one value may repeat across positions without colliding.
+	if a.List {
+		root := g.add("")
+		g.link(root, g.add(code.ListWord), memory.RelGrounds)
+		for i, el := range a.Args {
+			child, ok := d.buildAppGraph(g, el)
+			if !ok {
+				return 0, false
+			}
+			g.attachSlot(root, elemRel, i, child)
+		}
+		return root, true
+	}
+	// A binary primitive operation: a root grounding in the operation concept with its two
+	// operands. A defined function or a non-binary head declines to the later slice.
+	if len(a.Args) == 2 && d.opSymbol(a.Head) != "" {
+		left, lok := d.buildAppGraph(g, a.Args[0])
+		right, rok := d.buildAppGraph(g, a.Args[1])
+		if !lok || !rok {
+			return 0, false
+		}
+		root := g.add("")
+		g.link(root, g.add(a.Head), memory.RelGrounds)
+		g.link(root, left, operand0Rel)
+		g.link(root, right, operand1Rel)
+		return root, true
+	}
+	return 0, false
+}
+
+// shadowComprehension proves comprehension can build the substrate graph straight from the
+// grounded grammar application, the way generation walks a graph rather than the typed
+// form. It renders the graph built from the application and the graph the IR route would
+// build, and logs when they differ; it changes nothing and never runs code, comparing
+// generated source alone. A shape the grammar-built graph does not cover yet is skipped, as
+// the generation shadow skips one the materializer does not build.
+func (d *Daemon) shadowComprehension(app grammar.Application, comp code.Computation) {
+	g, root, ok := d.applicationToGraph(app)
+	if !ok {
+		return
+	}
+	walked, wok := d.traverse(goSurface{}, g, root, nil)
+	ir, iok := d.traverseCode(comp)
+	if wok && iok && walked.src != ir {
+		fmt.Fprintf(d.out, "comprehension graph mismatch: grammar %q vs ir %q\n", walked.src, ir)
+	}
 }
