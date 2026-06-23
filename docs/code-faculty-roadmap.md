@@ -220,7 +220,7 @@ confidence.
 | 4 | Recursion | a function decl with a self-call + base case | done |
 | 5 | Data and types | typed values, sequences | done |
 | 6 | Sequencing and iteration | a map over a list (fold and recursion already cover the rest); filter is a follow-on | done |
-| 7 | Intent to procedure | a spec, decomposition, verification | in progress: a function discovered from a property verified by running (the inverse of an operation, the extremal of a list); synthesis composes acquired vocabulary and writes results in it; a conditional (abs/relu) synthesized from examples. Open: property discovery for the conditional family (abs/sign) and the general two-sided property |
+| 7 | Intent to procedure | a spec, decomposition, verification | in progress: a function discovered from a property verified by running (the inverse of an operation, the extremal of a list, and a general two-sided `SynthesizeFromProperty` over a conjunction of relations between two computations -- abs from "the abs is the magnitude", the sign conditional emerging from the search); synthesis composes acquired vocabulary and writes results in it; a conditional (abs/relu) also synthesized from examples. Open: sign (a three-way split) and a stated-prose property surface (the unknown embedded in a computation) |
 
 ### Slice 1: binary and n-ary user functions
 
