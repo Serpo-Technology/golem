@@ -104,19 +104,48 @@ func (f Frame) FirstQual() (string, Term) {
 // Tokenize lowercases an utterance and splits it into word tokens,
 // trimming punctuation off both ends of each token so "Deploy," and
 // "deploy" are one form. Word-internal marks survive, which keeps
-// shapes like "go.mod" whole. A question mark anywhere is reported
-// separately because it carries force, not content.
+// shapes like "go.mod" whole, and a leading minus on a number survives
+// so a negative literal ("-8") reads as itself rather than its
+// magnitude. A question mark anywhere is reported separately because it
+// carries force, not content.
 func Tokenize(s string) (tokens []string, question bool) {
 	question = strings.Contains(s, "?")
 	for field := range strings.FieldsSeq(strings.ToLower(s)) {
-		tok := strings.TrimFunc(field, func(r rune) bool {
-			return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127)
-		})
-		if tok != "" {
+		if tok := cleanToken(field); tok != "" {
 			tokens = append(tokens, tok)
 		}
 	}
 	return tokens, question
+}
+
+// cleanToken strips the surrounding punctuation off a field down to its content,
+// keeping a leading minus on a negative number so "-8" is not read as 8. The
+// general trim drops both ends, so the sign is restored when the field is a minus
+// then digits after any surrounding punctuation.
+func cleanToken(field string) string {
+	content := func(r rune) bool {
+		return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127
+	}
+	tok := strings.TrimFunc(field, func(r rune) bool { return !content(r) })
+	if isDigits(tok) {
+		if inner := strings.TrimFunc(field, func(r rune) bool { return r != '-' && !content(r) }); inner == "-"+tok {
+			return inner
+		}
+	}
+	return tok
+}
+
+// isDigits reports whether s is a non-empty run of decimal digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ContentTokens returns the distinct open-class words of an utterance

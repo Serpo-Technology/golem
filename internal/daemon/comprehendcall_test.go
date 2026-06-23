@@ -113,6 +113,19 @@ func TestComprehendExtremalDiscoversAFunction(t *testing.T) {
 	}
 }
 
+// A list literal keeps its negative numbers, so a reduction over an all-negative
+// list computes over the values, not their magnitudes. Before, the tokenizer
+// dropped the signs and the largest of -5, -2, -8 came out 8.
+func TestNegativeListLiteralComputes(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "largest")
+	out, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the largest of the list of -5 and -2 and -8"}, nil)
+	if !strings.Contains(out.Say, "-2") {
+		t.Errorf("the largest of an all-negative list should be -2: %q", out.Say)
+	}
+}
+
 // The discovered extremal and a largest reduction taught by example coexist: the
 // extremal marker "greatest" and a taught "largest" live in separate concept
 // namespaces, so each computes without interfering with the other.
