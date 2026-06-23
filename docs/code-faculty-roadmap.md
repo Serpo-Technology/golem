@@ -45,10 +45,13 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > The intent-to-procedure bridge (slice 7) has begun: the synthesis search composes
 > the acquired vocabulary, not the arithmetic primitives alone; a synthesized
 > function is written in that vocabulary and left out of its own search; and a
-> function is DISCOVERED from a property verified by running, the first being the
-> inverse of a known operation (`the halving is the inverse of the double` yields
-> `number / 2`, the procedure discovered, not shown). Still open: the non-equational
-> property family (largest/smallest, abs/sign), the general property entry over two
+> function is DISCOVERED from a property verified by running: the inverse of a known
+> operation (`the halving is the inverse of the double` yields `number / 2`), and the
+> extremal of a list (`the peak is the greatest` yields a running-maximum fold, found
+> by reusing the fold search and accepting the candidate whose output is in the list
+> with nothing beyond it; `the trough is the smallest` the minimum). Both are
+> discovered, not shown. Still open: the conditional property family (abs/sign, which
+> needs expression-level conditional synthesis), the general property entry over two
 > computation sides, and dissolving the `code.Computation` IR toward
 > generation-by-graph-traversal. The floor (Go parser, primitives,
 > grounding-by-running) is unchanged throughout.
