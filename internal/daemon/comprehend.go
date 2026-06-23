@@ -682,16 +682,56 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 // filters of. It returns false when the turn is not such a request or the focus
 // names nothing GOLEM knows.
 func (d *Daemon) planDescribe(frame grammar.Frame, raw string) (string, bool) {
-	ref, ok := describeReferent(raw)
-	if !ok {
-		return "", false
-	}
-	focus := d.resolveConcept(ref)
+	// A describe move is named by its verb ("describe the dog", "köpeği anlat"). Its subject is
+	// the clause's patient, read off the frame the way a clarify reads its own, so it fires in
+	// any tongue the verb is seeded in. The "tell me about" and "know about" phrasings still
+	// read the raw surface until they route off the recall and know verbs.
+	focus := d.describeFocus(frame)
 	if focus == nil {
-		return "", false
+		ref, ok := describeReferent(raw)
+		if !ok {
+			return "", false
+		}
+		if focus = d.resolveConcept(ref); focus == nil {
+			return "", false
+		}
 	}
-	d.turnFocus = focus.ID // "tell me about X" makes X the subject, resolved apart from the frame
+	d.turnFocus = focus.ID
 	return d.describeConcept(frame, focus), true
+}
+
+// describeFocus is the concept a describe move points at: the patient of a clause whose verb
+// is a describe speech act ("describe the dog"), resolved from the parsed concept or its
+// phrase. A participant patient ("describe yourself") is not a describe target here. The
+// recall verb pointed at a thing ("tell me about X") still reads the surface, deferred.
+func (d *Daemon) describeFocus(frame grammar.Frame) *memory.Fragment {
+	if frame.Speech != "describe" {
+		return nil
+	}
+	focus := frame.Patient.Concept
+	if focus == nil && frame.Patient.Phrase != "" {
+		focus = d.resolveCased(frame.Patient.Phrase, frame.Lang)
+	}
+	if focus == nil || d.isParticipant(focus.ID) {
+		return nil
+	}
+	return focus
+}
+
+// resolveCased resolves a phrase to its concept, falling back to the case stems of the
+// clause's tongue so a cased object ("köpeği", "puellam") names the same concept its bare
+// form does. A patient read off a clause keeps its surface case, which the bare resolve does
+// not see through.
+func (d *Daemon) resolveCased(phrase, lang string) *memory.Fragment {
+	if r := d.resolveConcept(phrase); r != nil {
+		return r
+	}
+	for _, base := range d.gram.CaseStems(lang, phrase) {
+		if r := d.resolveConcept(base); r != nil {
+			return r
+		}
+	}
+	return nil
 }
 
 // describeConcept says what a concept is and what it has been part of: its kind,

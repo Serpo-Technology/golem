@@ -22,6 +22,9 @@ fw:en:at	at	en	fn
 fw:en:before	before	en	rel
 fw:en:cannot	cannot	en	neg
 fw:en:consolidate	consolidate	en	imp
+fw:en:describe	describe	en	speech
+fw:en:described	described	en	speech
+fw:en:describes	describes	en	speech
 fw:en:did	did	en	fn
 fw:en:do	do	en	imp
 fw:en:does	does	en	fn
@@ -138,6 +141,7 @@ verb:en:eat	eat eats ate eaten	en
 verb:en:read	read reads read read	en
 verb:en:run	run runs ran run	en
 verb:en:see	see sees saw seen	en	
+fw:tr:anlat	anlat	tr	speech
 fw:tr:asla	asla	tr	neg
 fw:tr:bazen	bazen	tr	adv
 fw:tr:ben	ben	tr	deixis
@@ -150,6 +154,7 @@ fw:tr:bilir	bilir	tr	fn
 fw:tr:bilirsin	bilirsin	tr	fn
 fw:tr:biliyor	biliyor	tr	fn
 fw:tr:biliyorsun	biliyorsun	tr	fn
+fw:la:narra	narra	la	speech
 fw:la:scis	scis	la	fn
 fw:la:scisne	scisne	la	fn
 fw:la:scio	scio	la	fn

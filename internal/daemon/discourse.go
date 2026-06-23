@@ -764,13 +764,13 @@ var trFusedInterrogative = map[string]string{
 // restored a second time when the clause already names its subject ("sen ... misin").
 var trSubjectPronoun = map[string]bool{"ben": true, "sen": true, "biz": true}
 
-// describeReferent reads the focus of an open request to say what is known
-// about something, the noun in "tell me about the dog" or "describe a cat",
-// with any article dropped. It returns false when the turn is not such a
-// request.
+// describeReferent reads the focus of an open request to say what is known about something.
+// The "describe X" phrasing routes off the describe speech-act verb now (the subject the
+// parsed patient); the "tell me about" and "know about" phrasings still read the surface
+// until they route off the recall and know verbs.
 func describeReferent(raw string) (string, bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	for _, lead := range []string{"tell me about ", "tell me of ", "describe ", "what can you tell me about ", "what do you know about "} {
+	for _, lead := range []string{"tell me about ", "tell me of ", "what can you tell me about ", "what do you know about "} {
 		rest, ok := strings.CutPrefix(s, lead)
 		if !ok {
 			continue

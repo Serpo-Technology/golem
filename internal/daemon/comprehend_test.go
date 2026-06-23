@@ -1672,10 +1672,44 @@ func TestRepairCorrectsReferent(t *testing.T) {
 	}
 }
 
-// The discourse move a speech-act verb carries is derived from the graph, not a
-// seeded category string: a seeded verb reads its move from its link to a move
-// concept, and a fresh speech word linked to a move derives that move after a
-// recompile. This is the proof the speech colon-class lives in the graph.
+// The describe move is recognized off the speech-act verb rather than from a phrase list.
+// "describe" derives the move and reports its patient's activity; the subject is read off the
+// frame the way a clarify reads its own. The Turkish describe verb derives the same move with
+// a case-marked object, so the move fires cross-tongue. It is the first dialogue move that does.
+func TestDescribeRoutesOffSpeechActVerb(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+
+	// The describe verb produces the describe move end to end. The subject is the parsed
+	// patient; no phrase matcher is consulted. "tell me about X" is exercised end to end by
+	// TestDescribeFocusReportsIdentityAndFacts.
+	if got := say(t, d, "describe the dog").Say; !strings.Contains(got, "chased") || !strings.Contains(got, "cat") {
+		t.Fatalf("describe the dog should report the chase: %q", got)
+	}
+	// The move is recognized off the verb, in any tongue it is seeded in.
+	if mv := d.gram.ParseHint("describe", "en", d.resolveConcept).Speech; mv != "describe" {
+		t.Fatalf("the describe verb should derive the describe move: %q", mv)
+	}
+	if mv := d.gram.ParseHint("anlat", "tr", d.resolveConcept).Speech; mv != "describe" {
+		t.Fatalf("the Turkish describe verb should derive the describe move: %q", mv)
+	}
+
+	// Cross-tongue: the Turkish describe verb with a case-marked object ("köpeği anlat")
+	// describes the dog. The accusative is resolved to the bare concept off the frame. The
+	// assertion is that the move fires (a non-empty identity line); the fact wording rides the
+	// Turkish generation path tested elsewhere.
+	for _, n := range []string{"köpek", "kedi"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "köpek kediyi kovaladı")
+	if got := say(t, d, "köpeği anlat").Say; !strings.Contains(got, "Köpek") {
+		t.Fatalf("köpeği anlat should describe the dog in Turkish: %q", got)
+	}
+}
+
 func TestSpeechMoveDerivedFromGraph(t *testing.T) {
 	d, s := testDaemon(t)
 	if f := d.gram.ParseHint("explain", "en", d.resolveConcept); f.Speech != "clarify" {
