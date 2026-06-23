@@ -50,6 +50,13 @@ const (
 	condThenRel  = "condThen"
 	condElseRel  = "condElse"
 
+	// A map transforms a list into a list element by element: named roles like a
+	// conditional's, the element variable, the list ranged over, and the per-element
+	// body that reads the element as a free variable.
+	mapVarRel  = "mapVar"
+	mapListRel = "mapList"
+	mapBodyRel = "mapBody"
+
 	// Ordered children bind each child to its position through a slot node, so order
 	// is meaning and a value can repeat: root --elem--> slot, slot --rank--> ordinal,
 	// slot --holds--> value. A list literal uses them; an n-ary call will reuse them.
@@ -97,6 +104,10 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg, se
 	if firstDest(g, nodeID, condThenRel) != 0 {
 		s, ok := d.genConditional(g, nodeID, env, self)
 		return s, false, ok // a conditional renders as a parenthesized literal, a primary
+	}
+	if firstDest(g, nodeID, mapBodyRel) != 0 {
+		s, ok := d.genMap(g, nodeID, env, self)
+		return s, false, ok // a map renders as a parenthesized IIFE, a primary
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
 		return d.genOrderedNode(g, nodeID, env, self)
@@ -157,6 +168,22 @@ func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]bound
 	}
 	return "(func() int { if " + left + " " + cmp + " " + right +
 		" { return " + then + " }; return " + els + " }())", true
+}
+
+// genMap renders a map node -- a transform of a list into a list element by element
+// -- as the function literal the typed render uses, so it composes as an expression
+// and runs. The element variable is the loop variable, the list and the body render
+// bare (the body reads the element as a free variable), the same shape the typed
+// render takes.
+func (d *Daemon) genMap(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool) {
+	elem := g.content(firstDest(g, nodeID, mapVarRel))
+	list, _, lok := d.genCode(g, firstDest(g, nodeID, mapListRel), env, self)
+	body, _, bok := d.genCode(g, firstDest(g, nodeID, mapBodyRel), env, self)
+	if elem == "" || !lok || !bok {
+		return "", false
+	}
+	return "(func() []int { out := []int{}; for _, " + elem + " := range " + list +
+		" { out = append(out, " + body + ") }; return out }())", true
 }
 
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
@@ -348,7 +375,7 @@ func (d *Daemon) reaches(g codeGraph, nodeID, target uint64, seen map[uint64]boo
 	if firstDest(g, nodeID, memory.RelGrounds) == target {
 		return true
 	}
-	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, elemRel, holdsRel} {
+	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, mapListRel, mapBodyRel, elemRel, holdsRel} {
 		for _, dest := range g.dests(nodeID, rel) {
 			if d.reaches(g, dest, target, seen) {
 				return true
@@ -366,6 +393,9 @@ func (d *Daemon) reaches(g codeGraph, nodeID, target uint64, seen map[uint64]boo
 func (d *Daemon) inferType(g codeGraph, nodeID uint64, paramTypes map[string]string) string {
 	if then := firstDest(g, nodeID, condThenRel); then != 0 {
 		return d.inferType(g, then, paramTypes)
+	}
+	if firstDest(g, nodeID, mapBodyRel) != 0 {
+		return "list" // a map transforms a list into a list
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
 		if g.content(firstDest(g, nodeID, memory.RelGrounds)) == "list" {

@@ -451,6 +451,40 @@ func TestCodeGraphShadowsCalls(t *testing.T) {
 	}
 }
 
+// A told map function generates through the traversal, no longer falling back to the
+// typed render: the call materializes, its map body walks to the function-literal the
+// render emits, and the source runs to the transformed list. The shared driver and the
+// genCode oracle agree on the map subgraph.
+func TestCodeGraphShadowsMap(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	say(t, d, "the bumped of a list of numbers is the sum of each number and 10")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	comp, ok := d.code.Comprehend("the bumped of the list of 1 and 2 and 3")
+	if !ok {
+		t.Fatal("the engine should comprehend the map call")
+	}
+	walked, wok := d.traverseCode(comp)
+	typed, tok := d.code.ToCode(comp)
+	if !wok || !tok || walked != typed {
+		t.Fatalf("the materialized map should walk to the render: %q vs %q (walked ok %v)", walked, typed, wok)
+	}
+	if v, vok := d.evalCode(walked); !vok || v != "[11 12 13]" {
+		t.Fatalf("the walked map should run to [11 12 13]: %q (ok %v)", v, vok)
+	}
+	// The shared driver and the genCode oracle agree on the map subgraph.
+	g := newScratchGraph()
+	root, mok := d.materializeCode(g, comp, "", map[string]uint64{})
+	r, rok := d.traverse(goSurface{}, g, root, nil)
+	gen, _, gok := d.genCode(g, root, nil, 0)
+	if !mok || !rok || !gok || r.src != gen {
+		t.Fatalf("goSurface and genCode should agree on the map: %q vs %q", r.src, gen)
+	}
+}
+
 // With operand parenthesizing in the walk, a call composes anywhere: a compound argument
 // is parenthesized where the body uses its parameter as an operand, and a call in an
 // operand position is parenthesized as the operation it inlines to. The walked source

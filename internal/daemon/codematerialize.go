@@ -7,9 +7,9 @@ import (
 
 // materializeCode writes a comprehended computation into the scratch graph as the
 // subgraph the traverser reads, the inverse of genCode. It mirrors the read shapes: a
-// literal or variable leaf, a binary primitive operation, a conditional, a list literal,
-// and a call of a defined function (materialized as a graph: the function's ordered
-// parameters and its body). The traverser parenthesizes a compound operand faithfully,
+// literal or variable leaf, a binary primitive operation, a conditional, a map, a list
+// literal, and a call of a defined function (materialized as a graph: the function's
+// ordered parameters and its body). The traverser parenthesizes a compound operand faithfully,
 // so a call may sit in any position and its arguments may be compound. selfName is the
 // function whose body is being written, fnNodes the functions open above it: a call to
 // selfName grounds in its own node (a recursive self-reference the traverser writes as a
@@ -35,6 +35,19 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, selfName s
 			d.materializeInto(g, root, condRightRel, c.Cond.Right, selfName, fnNodes) &&
 			d.materializeInto(g, root, condThenRel, c.Cond.Then, selfName, fnNodes) &&
 			d.materializeInto(g, root, condElseRel, c.Cond.Else, selfName, fnNodes) {
+			return root, true
+		}
+		return 0, false
+	}
+	// A map: a root grounding in the map concept, with the element name, the list ranged
+	// over, and the per-element body as named edges. The body reads the element as a free
+	// leaf (the loop variable), materialized in the same scope.
+	if c.Map != nil {
+		root := g.add("")
+		g.link(root, g.add("map"), memory.RelGrounds)
+		g.link(root, g.add(c.Map.Var), mapVarRel)
+		if d.materializeInto(g, root, mapListRel, c.Map.List, selfName, fnNodes) &&
+			d.materializeInto(g, root, mapBodyRel, c.Map.Body, selfName, fnNodes) {
 			return root, true
 		}
 		return 0, false
@@ -139,8 +152,8 @@ func (d *Daemon) isCall(c code.Computation) bool {
 // materializes the computation as a transient subgraph and walks it through the shared
 // traverser's Go surface for the source. This is the production generator on the runcode
 // path, so the one traverser that renders language renders code here too. ok is false
-// when the shape is not one the materializer builds yet (a map), so the caller falls back
-// to the typed render.
+// when the shape is not one the materializer builds yet (a Raw synthesized loop), so the
+// caller falls back to the typed render.
 func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	g := newScratchGraph()
 	root, ok := d.materializeCode(g, comp, "", map[string]uint64{})

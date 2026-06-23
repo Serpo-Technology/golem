@@ -132,6 +132,22 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 		}
 		return construction{}, false
 	}
+	if firstDest(g, node, mapBodyRel) != 0 {
+		elem := g.content(firstDest(g, node, mapVarRel))
+		list := firstDest(g, node, mapListRel)
+		body := firstDest(g, node, mapBodyRel)
+		if elem == "" || list == 0 || body == 0 {
+			return construction{}, false
+		}
+		return construction{
+			slots: []slot{{child: list, ctx: ctx}, {child: body, ctx: ctx}},
+			assemble: func(parts []rendered) (rendered, bool) {
+				return rendered{src: "(func() []int { out := []int{}; for _, " + elem +
+					" := range " + parts[0].src + " { out = append(out, " + parts[1].src +
+					") }; return out }())"}, true
+			},
+		}, true
+	}
 	left := firstDest(g, node, operand0Rel)
 	right := firstDest(g, node, operand1Rel)
 	if left == 0 && right == 0 {
