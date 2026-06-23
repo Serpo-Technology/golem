@@ -87,9 +87,8 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, selfName s
 // materializeCall builds a call subgraph. A call to the function whose body is being
 // written (selfName) grounds in that same function node, the recursive self-reference;
 // a call back to a different open function is mutual recursion, out of scope, refused.
-// Otherwise the function is built as a graph (its ordered parameter names and its body,
-// the body written with the function itself as the current self) and the call grounds in
-// it with its ordered arguments, which stay in the caller's scope.
+// Otherwise the function is built as a graph (materializeFnNode) and the call grounds in it
+// with its ordered arguments, which stay in the caller's scope.
 func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName string, fnNodes map[string]uint64) (uint64, bool) {
 	if c.Op == selfName {
 		call := g.add("")
@@ -106,22 +105,8 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 	if !ok || len(op.Params) != len(c.Args) {
 		return 0, false
 	}
-	// An imperative function (a synthesized loop) is materialized from its parsed
-	// structure, not its body Computation; a value-fold becomes a fold subgraph.
-	if op.Raw != "" {
-		return d.materializeRawCall(g, c, op, selfName, fnNodes)
-	}
-	if op.Body == nil {
-		return 0, false
-	}
-	fn := g.add(c.Op)
-	fnNodes[c.Op] = fn
-	defer delete(fnNodes, c.Op)
-
-	for i, p := range op.Params {
-		g.attachSlot(fn, paramRel, i, g.add(p))
-	}
-	if !d.materializeInto(g, fn, bodyRel, *op.Body, c.Op, fnNodes) {
+	fn, ok := d.materializeFnNode(g, op, fnNodes)
+	if !ok {
 		return 0, false
 	}
 	call := g.add("")
@@ -132,15 +117,39 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 	return call, true
 }
 
-// materializeRawCall builds the subgraph for a call to an imperative value-fold (a
-// synthesized reduction: total, count, largest, smallest, first). The fold's
-// structure is recovered from its Raw statements by parseFold and written as a fold
-// node (the accumulator, the list param, the start, the step expression, the guard);
-// the function node carries it as its body, and the call grounds in it with the
-// arguments, which the traverser wraps in the applied func literal the typed render
-// gives a Raw call. It refuses a shape parseFold does not recognize so the dispatch
-// falls back to the typed render rather than mis-building.
-func (d *Daemon) materializeRawCall(g *scratchGraph, c code.Computation, op code.Op, selfName string, fnNodes map[string]uint64) (uint64, bool) {
+// materializeFnNode builds a defined function as a graph and returns the node a call
+// grounds in: its ordered parameter names and its body, the body written with the function
+// as the current self so a self-call inside it becomes the recursive self-reference. An
+// imperative function (a synthesized loop) is built from its parsed Raw structure instead.
+// The function is the same however the call reached it, so this is shared by a comprehended
+// call (from a Computation) and a comprehension graph built straight from the grammar.
+func (d *Daemon) materializeFnNode(g *scratchGraph, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
+	if op.Raw != "" {
+		return d.materializeRawFnNode(g, op, fnNodes)
+	}
+	if op.Body == nil {
+		return 0, false
+	}
+	fn := g.add(op.Name)
+	fnNodes[op.Name] = fn
+	defer delete(fnNodes, op.Name)
+	for i, p := range op.Params {
+		g.attachSlot(fn, paramRel, i, g.add(p))
+	}
+	if !d.materializeInto(g, fn, bodyRel, *op.Body, op.Name, fnNodes) {
+		return 0, false
+	}
+	return fn, true
+}
+
+// materializeRawFnNode builds the function node for an imperative function (a synthesized
+// reduction or list loop): its single list parameter and a body recovered from the Raw
+// statements, a value-fold (the accumulator, the start, the step, the guard) by parseFold
+// or a list loop (a map's transform, a filter's comparison and constant) by parseListLoop.
+// The traverser wraps a call to it in the applied func literal the typed render gives a Raw
+// call. It refuses a shape the parsers do not recognize, so the call dispatch falls back to
+// the typed render rather than mis-building.
+func (d *Daemon) materializeRawFnNode(g *scratchGraph, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
 	if len(op.Params) != 1 {
 		return 0, false
 	}
@@ -156,15 +165,10 @@ func (d *Daemon) materializeRawCall(g *scratchGraph, c code.Computation, op code
 	if !bok {
 		return 0, false
 	}
-	fn := g.add(c.Op)
+	fn := g.add(op.Name)
 	g.attachSlot(fn, paramRel, 0, g.add(param))
 	g.link(fn, body, bodyRel)
-	call := g.add("")
-	g.link(call, fn, memory.RelGrounds)
-	if !d.materializeSlots(g, call, elemRel, c.Args, selfName, fnNodes) {
-		return 0, false
-	}
-	return call, true
+	return fn, true
 }
 
 // materializeFold builds a value-fold body node from the synthesizer's Raw statements:

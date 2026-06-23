@@ -296,9 +296,9 @@ func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, bool) {
 // from the grounded grammar application, so comprehension lands in the substrate graph
 // without the Computation type, the inverse of how generation walks a graph to a surface.
 // It mirrors the node and edge vocabulary materializeCode writes, for the shapes it covers
-// (a literal leaf, a binary primitive operation, and a list literal, nested), and declines
-// the rest (a conditional, a parameter or map element, a defined-function or non-binary
-// head), which the shadow then skips, the way the materializer began on arithmetic alone.
+// (a literal leaf, a binary primitive operation, a list literal, and a defined-function
+// call, nested), and declines the rest (a conditional, a parameter or map element), which
+// the shadow then skips, the way the materializer skipped its own unbuilt shapes early on.
 func (d *Daemon) applicationToGraph(app grammar.Application) (*scratchGraph, uint64, bool) {
 	g := newScratchGraph()
 	root, ok := d.buildAppGraph(g, app)
@@ -340,7 +340,7 @@ func (d *Daemon) buildAppGraph(g *scratchGraph, a grammar.Application) (uint64, 
 		return root, true
 	}
 	// A binary primitive operation: a root grounding in the operation concept with its two
-	// operands. A defined function or a non-binary head declines to the later slice.
+	// operands. A defined function falls to the call case below.
 	if len(a.Args) == 2 && d.opSymbol(a.Head) != "" {
 		left, lok := d.buildAppGraph(g, a.Args[0])
 		right, rok := d.buildAppGraph(g, a.Args[1])
@@ -353,7 +353,29 @@ func (d *Daemon) buildAppGraph(g *scratchGraph, a grammar.Application) (uint64, 
 		g.link(root, right, operand1Rel)
 		return root, true
 	}
-	return 0, false
+	// A defined-function call: the function comes from the stored op, the surface carrying
+	// only the head and the arguments, so the function is built as a graph and the call
+	// grounds in it with its arguments. The body's own conditionals, recursion, and folds
+	// ride through the shared function materializer, so a call to any defined function is
+	// covered without the call surface naming those shapes.
+	op, ok := d.opByName(a.Head)
+	if !ok || len(op.Params) != len(a.Args) {
+		return 0, false
+	}
+	fn, fok := d.materializeFnNode(g, op, map[string]uint64{})
+	if !fok {
+		return 0, false
+	}
+	call := g.add("")
+	g.link(call, fn, memory.RelGrounds)
+	for i, arg := range a.Args {
+		child, cok := d.buildAppGraph(g, arg)
+		if !cok {
+			return 0, false
+		}
+		g.attachSlot(call, elemRel, i, child)
+	}
+	return call, true
 }
 
 // shadowComprehension proves comprehension can build the substrate graph straight from the
