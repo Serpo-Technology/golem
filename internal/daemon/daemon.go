@@ -240,6 +240,11 @@ type Daemon struct {
 	// cmpDefault is the bare copula's comparison, equality.
 	cmpConcept map[uint64]string
 	cmpDefault string
+	// extremalConcept maps an extremal concept to the comparison symbol its reduction
+	// turns on (max -> ">", min -> "<"). Extremals are grounded reductions a property
+	// goal names ("greatest" -> max), kept apart from opConcept and cmpConcept so an
+	// extremal word never reads as a call head or a conditional relator.
+	extremalConcept map[uint64]string
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -785,6 +790,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.cmpConcept[id]; ok {
+		return true
+	}
+	if _, ok := d.extremalConcept[id]; ok {
 		return true
 	}
 	for _, triggers := range d.commandTriggers {
@@ -1922,6 +1930,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			// A function stated as the inverse of a known operation is discovered by
 			// synthesis: the body whose output the operation returns to the input.
 			if say, ok := d.comprehendInverse(req.Content); ok {
+				return wire.Response{OK: true, Say: say}, false, false
+			}
+			// A list function stated by an extremal property is discovered the same
+			// way: the running-fold whose output is the list's maximum or minimum.
+			if say, ok := d.comprehendExtremal(req.Content); ok {
 				return wire.Response{OK: true, Say: say}, false, false
 			}
 			// A function can also be shown rather than told: "the double of 3 is

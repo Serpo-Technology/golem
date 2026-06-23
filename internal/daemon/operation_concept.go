@@ -40,12 +40,28 @@ var comparisonOps = []struct {
 	{"eq", "==", nil},
 }
 
+// extremalOps are the extremal reductions a property goal names, the maximum and
+// the minimum of a list. Like the comparisons they are grounded concepts, but kept
+// in extremalConcept apart from both opConcept and cmpConcept, so an extremal word
+// ("greatest") never reads as a call head or a conditional relator. Each carries
+// the comparison it extremizes by, by name; the symbol is read from that grounded
+// comparison concept, not written here. "largest"/"least" are left out so they do
+// not collide with a largest reduction taught by example.
+var extremalOps = []struct {
+	name, cmp string
+	words     map[string][]string
+}{
+	{"max", "gt", map[string][]string{"en": {"greatest", "maximum", "highest"}}},
+	{"min", "lt", map[string][]string{"en": {"smallest", "minimum", "lowest"}}},
+}
+
 // ensureOperations seeds each operation the engine carries as a concept and loads the
 // resolver index. Idempotent like the participants and commands: the concept and its
 // naming edges are reused when present, re-minted after a consolidation prunes them.
 func (d *Daemon) ensureOperations() {
 	d.opConcept = map[uint64]code.OpRef{}
 	d.cmpConcept = map[uint64]string{}
+	d.extremalConcept = map[uint64]string{}
 	d.cmpDefault = ""
 	if d.code == nil {
 		return
@@ -83,6 +99,37 @@ func (d *Daemon) ensureOperations() {
 			}
 		}
 	}
+	// The extremal reductions are grounded the same way, recorded apart in
+	// extremalConcept, after the comparisons so each can read its comparison's symbol
+	// from the grounded concept rather than carry a literal.
+	for _, ex := range extremalOps {
+		sym, ok := d.cmpSymbolByName(ex.cmp)
+		if !ok {
+			continue
+		}
+		id := d.ensureOperationConcept("op:"+ex.name, ex.name)
+		if id == 0 {
+			continue
+		}
+		d.extremalConcept[id] = sym
+		for lang, words := range ex.words {
+			for _, w := range words {
+				d.nameConceptWord(id, w, lang)
+			}
+		}
+	}
+}
+
+// cmpSymbolByName reads the operator symbol of a comparison concept by its name,
+// "gt" -> ">", from the grounded comparison concept rather than a literal, so an
+// extremal that turns on a comparison carries the same symbol the comparison does.
+func (d *Daemon) cmpSymbolByName(name string) (string, bool) {
+	c, err := d.store.ConceptByTemplate("op:" + name)
+	if err != nil || c == nil {
+		return "", false
+	}
+	sym, ok := d.cmpConcept[c.ID]
+	return sym, ok
 }
 
 // ensureOperationConcept mints an operation concept, distinct in category so a word
@@ -144,6 +191,20 @@ func (d *Daemon) cmpRelator(relator string) (string, bool) {
 		return "", false
 	}
 	sym, ok := d.cmpConcept[c.ID]
+	return sym, ok
+}
+
+// extremalRelator resolves an extremal word to the comparison symbol the reduction
+// it names turns on, reading the extremal concept the word names. It is a namespace
+// apart from opHead and cmpRelator, consulted only by ParseExtremal, so an extremal
+// word never reads as a call head or a conditional relator. ok is false for a word
+// that names no extremal.
+func (d *Daemon) extremalRelator(word string) (string, bool) {
+	c := d.resolveConcept(word)
+	if c == nil {
+		return "", false
+	}
+	sym, ok := d.extremalConcept[c.ID]
 	return sym, ok
 }
 

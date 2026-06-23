@@ -70,6 +70,36 @@ func (d *Daemon) comprehendInverse(content string) (string, bool) {
 	return line, true
 }
 
+// comprehendExtremal learns a list function stated by an extremal property, "the
+// peak is the greatest": the grammar reads the goal, the synthesis floor discovers
+// the running-fold whose output is the list's maximum (or minimum) verified by
+// running, and the discovered function is kept. It returns false when the turn is
+// no extremal goal, so the other paths read it; when the goal is understood but no
+// fold is found, it admits the gap rather than learning a wrong rule.
+func (d *Daemon) comprehendExtremal(content string) (string, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return "", false
+	}
+	name, sym, ok := d.gram.ParseExtremal("en", content, d.opHead, d.extremalRelator)
+	if !ok {
+		return "", false
+	}
+	// The function being defined is left out of its own search, so it is not found as
+	// the trivial call to itself.
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
+	body, ok := d.code.SynthesizeExtremal(listParam, sym, d.evalCode)
+	if !ok {
+		return "I could not work out the " + name + ".", true
+	}
+	op := code.Op{Name: name, Word: name, Params: []string{listParam}, ParamTypes: []string{"list"}, Ret: "int", Raw: body}
+	line, err := d.learnFunction(op)
+	if err != nil {
+		return "I could not keep the " + name + ".", true
+	}
+	return line, true
+}
+
 // advancePendingCompute takes a turn while a computation is awaited and reads it as an
 // example of that operation. Each example accumulates; once two stand, they are fed to
 // the synthesis floor together, and as soon as it assembles a rule the operation is

@@ -30,6 +30,41 @@ func TestOperationsAreGroundedConcepts(t *testing.T) {
 	}
 }
 
+// An extremal is a grounded concept like a comparison, kept in its own namespace:
+// op:max/op:min are system concepts, "greatest" resolves to the maximum turning on
+// the same symbol the gt comparison carries, and it reads as neither a call head nor
+// a conditional relator.
+func TestExtremalsAreGroundedConcepts(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, tpl := range []string{"op:max", "op:min"} {
+		c, err := d.store.ConceptByTemplate(tpl)
+		if err != nil || c == nil {
+			t.Fatalf("%s should be a concept: %v", tpl, err)
+		}
+		if !d.isSystemConcept(c.ID) {
+			t.Errorf("%s should be a system concept, out of the grown listing", tpl)
+		}
+	}
+	gt, _ := d.cmpSymbolByName("gt")
+	if sym, ok := d.extremalRelator("greatest"); !ok || sym != gt {
+		t.Errorf("greatest should turn on the gt symbol %q, got %q ok=%v", gt, sym, ok)
+	}
+	lt, _ := d.cmpSymbolByName("lt")
+	if sym, ok := d.extremalRelator("smallest"); !ok || sym != lt {
+		t.Errorf("smallest should turn on the lt symbol %q, got %q ok=%v", lt, sym, ok)
+	}
+	if _, ok := d.extremalRelator("dog"); ok {
+		t.Error("a non-extremal word should not resolve to an extremal")
+	}
+	// No cross: an extremal word reads as neither a call head nor a conditional relator.
+	if _, _, ok := d.opHead("greatest"); ok {
+		t.Error("greatest must not read as a call head")
+	}
+	if _, ok := d.cmpRelator("greatest"); ok {
+		t.Error("greatest must not read as a conditional relator")
+	}
+}
+
 // A learned function becomes an operation concept the moment it is taught, so it
 // resolves and survives a reload, closing the gap where the operation lived only in
 // the engine's word map with no concept.

@@ -21,6 +21,46 @@ func stubHead(word string) (string, int, bool) {
 	return "", 0, false
 }
 
+func stubExt(word string) (string, bool) {
+	switch word {
+	case "greatest", "maximum":
+		return ">", true
+	case "smallest", "minimum":
+		return "<", true
+	}
+	return "", false
+}
+
+// An extremal goal names a new function by the extreme of a list, the comparison
+// the reduction turns on read from the extremal word.
+func TestParseExtremal(t *testing.T) {
+	name, sym, ok := Builtin().ParseExtremal("en", "the peak is the greatest", stubHead, stubExt)
+	if !ok || name != "peak" || sym != ">" {
+		t.Fatalf("ParseExtremal = (%q, %q, %v), want (peak, >, true)", name, sym, ok)
+	}
+	name, sym, ok = Builtin().ParseExtremal("en", "the trough is the smallest", stubHead, stubExt)
+	if !ok || name != "trough" || sym != "<" {
+		t.Fatalf("the smallest should be the minimum: (%q, %q, %v)", name, sym, ok)
+	}
+}
+
+// The form is grounded, so a copula statement with no extremal, a new name that
+// already names an operation or an extremal, and a longer predicate all decline.
+func TestParseExtremalRejections(t *testing.T) {
+	b := Builtin()
+	for _, s := range []string{
+		"the dog is an animal",         // no extremal word on the right
+		"the peak is the double",       // the right side names an operation, not an extremal
+		"the double is the greatest",   // the new name already names an operation
+		"the greatest is the peak",     // the new name is itself an extremal
+		"the peak is the greatest one", // a longer predicate, not a bare extremal
+	} {
+		if name, sym, ok := b.ParseExtremal("en", s, stubHead, stubExt); ok {
+			t.Errorf("%q should not parse as an extremal goal, got (%q, %q)", s, name, sym)
+		}
+	}
+}
+
 // An inverse goal names a new function as the inverse of a known unary operation.
 func TestParseInverse(t *testing.T) {
 	name, op, ok := Builtin().ParseInverse("en", "the halving is the inverse of the double", stubHead)

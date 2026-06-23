@@ -62,6 +62,72 @@ func TestFoldFindsFirstAndMax(t *testing.T) {
 	}
 }
 
+// isExtremum decides the property the extremal search verifies: the value is an
+// element of the list and nothing stands cmp to it.
+func TestIsExtremum(t *testing.T) {
+	if !isExtremum(">", 9, []int{3, 9, 5}) {
+		t.Fatal("9 is the greatest of 3 9 5")
+	}
+	if isExtremum(">", 3, []int{3, 9, 5}) {
+		t.Fatal("3 is not the greatest, 9 is above it")
+	}
+	if isExtremum(">", 0, []int{-5, -2, -9}) {
+		t.Fatal("0 is not even in an all-negative list")
+	}
+	if !isExtremum("<", -9, []int{-5, -2, -9}) {
+		t.Fatal("-9 is the smallest")
+	}
+	if !isExtremum(">", 6, []int{6, 6, 1}) {
+		t.Fatal("a duplicate greatest still holds the property")
+	}
+}
+
+// The extremal search discovers the running maximum and minimum from the property,
+// the same guarded folds the by-example search finds, returned in the one form they
+// store and write. The grounding runs against a stub here, since the interpreted
+// prefilter is the filter that rejects impostors; the real runtime grounds it in
+// the daemon.
+func TestSynthesizeExtremalFindsMaxAndMin(t *testing.T) {
+	e := listEngine()
+	pass := func(string) (string, bool) { return "true", true }
+	max, ok := e.SynthesizeExtremal("numbers", ">", pass)
+	wantMax := "a := numbers[0]; for _, x := range numbers { if x > a { a = x } }; return a"
+	if !ok || max != wantMax {
+		t.Fatalf("the greatest should be the running max:\n got %q\nwant %q", max, wantMax)
+	}
+	min, ok := e.SynthesizeExtremal("numbers", "<", pass)
+	wantMin := "a := numbers[0]; for _, x := range numbers { if x < a { a = x } }; return a"
+	if !ok || min != wantMin {
+		t.Fatalf("the smallest should be the running min:\n got %q\nwant %q", min, wantMin)
+	}
+}
+
+// The probe lists reject the impostors the enumeration reaches before the true
+// extremal: a running maximum started at zero gives zero on the all-negative list,
+// which is not in it, and returning the first element is not the maximum when it is
+// interior. So neither passes the prefilter, and the all-negative probe is what
+// rejects the zero start.
+func TestSynthesizeExtremalRejectsImpostors(t *testing.T) {
+	e := listEngine()
+	zeroStart := foldUpdate{expr: Computation{Var: "x"}, guard: ">"}
+	if e.extremalInterprets(zeroStart, "a", foldInit{lit: "0"}, ">", [][]int{{-5, -2, -9}}) {
+		t.Fatal("a maximum started at zero must fail on an all-negative list")
+	}
+	first := foldUpdate{expr: Computation{Var: "a"}}
+	if e.extremalInterprets(first, "a", foldInit{first: true}, ">", extremalProbeLists()) {
+		t.Fatal("returning the first element is not the maximum across the probes")
+	}
+}
+
+// An order the comparison does not name is declined rather than searched.
+func TestSynthesizeExtremalRejectsBadComparison(t *testing.T) {
+	e := listEngine()
+	fail := func(string) (string, bool) { t.Fatal("a bad comparison should not run a candidate"); return "", false }
+	if _, ok := e.SynthesizeExtremal("numbers", ">=", fail); ok {
+		t.Fatal("an unsupported comparison should decline")
+	}
+}
+
 // A list-returning candidate interpreted over the examples carries them, and the
 // loop it means writes the Go a runtime would run: a map builds the transform of
 // each element, a filter keeps the elements a comparison holds for.

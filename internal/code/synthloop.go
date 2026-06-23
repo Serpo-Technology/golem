@@ -79,6 +79,124 @@ func (e *Engine) SynthesizeFold(param string, lists [][]int, outs []int, run fun
 	return "", false
 }
 
+// SynthesizeExtremal discovers the running-fold whose output is a list's extreme
+// by a comparison, the procedure found from a property rather than shown by
+// examples: for ">" the maximum, for "<" the minimum. It reuses the fold search
+// but swaps the acceptance: instead of matching given outputs, a candidate is kept
+// when, on every probe list, its output is an element of the list and no element
+// stands cmp to it, checked by interpreting to prune and by running to ground. The
+// probe lists it tries are its own, an all-negative one among them so a start at
+// zero cannot pass for the maximum. It returns the loop body as Go and false when
+// cmp is not an order or nothing within the bound fits.
+func (e *Engine) SynthesizeExtremal(param, cmp string, run func(string) (string, bool)) (string, bool) {
+	if cmp != ">" && cmp != "<" {
+		return "", false
+	}
+	const acc = "a"
+	lists := extremalProbeLists()
+	exprs := e.genExprs([]string{acc, "x"}, []string{"0", "1", "2"}, loopMaxOps)
+	for _, up := range foldUpdates(exprs, acc) {
+		for _, init := range foldInits() {
+			if !e.extremalInterprets(up, acc, init, cmp, lists) {
+				continue
+			}
+			body, ok := e.foldBody(param, acc, init, up)
+			if ok && e.extremalGrounds(param, body, cmp, lists, run) {
+				return body, true
+			}
+		}
+	}
+	return "", false
+}
+
+// extremalProbeLists are the lists the extremal search tries a candidate on, no
+// outputs given since the property decides. They are varied so an impostor is
+// caught: the extreme is interior in some and at an end in others (so first and
+// last are not it), there are duplicates, a singleton, and an all-negative list so
+// a start at zero or one cannot pass for the maximum.
+func extremalProbeLists() [][]int {
+	return [][]int{
+		{3, 9, 5}, {8, 2, 6}, {4, 1, 7}, {-5, -2, -9}, {6, 6, 1}, {5},
+	}
+}
+
+// extremalInterprets reports whether the candidate fold's output is the extreme of
+// every probe list when interpreted, the fast prefilter before grounding: the
+// output is in the list and no element stands cmp to it.
+func (e *Engine) extremalInterprets(up foldUpdate, acc string, init foldInit, cmp string, lists [][]int) bool {
+	for _, list := range lists {
+		out, ok := e.foldOutput(up, acc, init, list)
+		if !ok || !isExtremum(cmp, out, list) {
+			return false
+		}
+	}
+	return true
+}
+
+// foldOutput interprets the fold on one list and returns the accumulator it ends
+// with, the value the property is then checked against. It is foldInterprets
+// without the output comparison, so the two share the one interpretation. It fails
+// on a first-element start over an empty list or an expression that cannot evaluate.
+func (e *Engine) foldOutput(up foldUpdate, acc string, init foldInit, list []int) (int, bool) {
+	a, ok := foldStart(init, list)
+	if !ok {
+		return 0, false
+	}
+	for _, x := range list {
+		if up.guard != "" && !compareInt(up.guard, x, a) {
+			continue
+		}
+		v, vok := e.evalExpr(up.expr, map[string]int{acc: a, "x": x})
+		if !vok {
+			return 0, false
+		}
+		a = v
+	}
+	return a, true
+}
+
+// isExtremum reports whether v is the extreme of the list by the comparison: an
+// element of the list with no element standing cmp to it (nothing greater for ">",
+// nothing smaller for "<").
+func isExtremum(cmp string, v int, list []int) bool {
+	inList := false
+	for _, y := range list {
+		if y == v {
+			inList = true
+		}
+		if compareInt(cmp, y, v) {
+			return false
+		}
+	}
+	return inList
+}
+
+// extremalGrounds runs the synthesized fold over each probe list inside a program
+// that also checks the extremal property, and keeps the candidate only when every
+// run holds it, the grounding that decides the discovered procedure. The property
+// is verified in the Go that will be stored, not against a precomputed answer.
+func (e *Engine) extremalGrounds(param, body, cmp string, lists [][]int, run func(string) (string, bool)) bool {
+	for _, list := range lists {
+		val, ok := run(extremalCheckSrc(param, body, cmp, list))
+		if !ok || val != "true" {
+			return false
+		}
+	}
+	return true
+}
+
+// extremalCheckSrc writes a program that runs the fold to its output, then reports
+// whether that output is the extreme of the list: an element of it with no element
+// standing cmp to it. The fold is wrapped in a function literal applied to the
+// list, the same way foldGrounds runs it, so it runs as the Go it is.
+func extremalCheckSrc(param, body, cmp string, list []int) string {
+	fold := "(func(" + param + " []int) int { " + body + " })(" + param + ")"
+	return "(func(" + param + " []int) bool { out := " + fold +
+		"; in := false; for _, y := range " + param +
+		" { if y == out { in = true }; if y " + cmp + " out { return false } }; return in })(" +
+		intList(list) + ")"
+}
+
 // foldInit is a fold's starting accumulator: a constant, or the list's first
 // element, the start a running maximum or the first element itself needs.
 type foldInit struct {

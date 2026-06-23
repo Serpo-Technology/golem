@@ -60,6 +60,14 @@ type HeadFunc func(word string) (name string, arity int, ok bool)
 // false for a word that names no comparison.
 type CmpFunc func(relator string) (symbol string, ok bool)
 
+// ExtremalFunc resolves an extremal word to the comparison symbol the reduction it
+// names turns on ("greatest" -> ">", "smallest" -> "<"). It is a namespace apart
+// from HeadFunc and CmpFunc so an extremal word never reads as a call head or a
+// conditional relator, and so the symbol stays grounded in the extremal concept
+// rather than a word-to-symbol table in the grammar. ok is false for a word that
+// names no extremal.
+type ExtremalFunc func(word string) (symbol string, ok bool)
+
 // ParseApplication reads the operation-application call "the <operation> of <arg>
 // and <arg>..." into the application it means, the of-construction run form to
 // meaning. The determiner, the genitive linker, and the coordinator are the
@@ -401,4 +409,61 @@ func (p *Params) ParseInverse(lang, utterance string, head HeadFunc) (newName, o
 		return "", "", false
 	}
 	return newName, canonical, true
+}
+
+// ParseExtremal reads a goal that names a new function by an extremal property of a
+// list, "the peak is the greatest": the copula joins the two sides (read from the
+// closed class, not a literal "is"), the new function's name is the content word
+// before the copula, and the right side names an extremal, the determiner then a
+// word the ext callback resolves to the comparison the reduction turns on. It
+// returns the new function's name and that comparison symbol (">", the maximum;
+// "<", the minimum). The list parameter is the caller's to supply, unspoken here as
+// the inverse's parameter is. The form is grounded, not matched: the new name must
+// not already name an operation or an extremal (it is the function to be
+// discovered), and the right side's word must resolve through ext, so an ordinary
+// copula statement declines.
+func (p *Params) ParseExtremal(lang, utterance string, head HeadFunc, ext ExtremalFunc) (newName, symbol string, ok bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	det := p.Article(lang)
+	if det == "" || head == nil || ext == nil {
+		return "", "", false
+	}
+	toks, _ := Tokenize(utterance)
+	cop := -1
+	for i, t := range toks {
+		if p.category(lang, t) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 1 || cop+1 >= len(toks) {
+		return "", "", false
+	}
+	// The new function is the content word just before the copula; a function word
+	// there is no name, and a name that already resolves as an operation or an
+	// extremal is not one to discover.
+	newName = toks[cop-1]
+	if p.isFunctionWordLang(lang, newName) {
+		return "", "", false
+	}
+	if _, _, taken := head(newName); taken {
+		return "", "", false
+	}
+	if _, taken := ext(newName); taken {
+		return "", "", false
+	}
+	// The right side is the determiner then an extremal word the ext callback names,
+	// and nothing more, so a longer predicate is not read as a bare extremal.
+	rhs := toks[cop+1:]
+	if len(rhs) != 2 || rhs[0] != det {
+		return "", "", false
+	}
+	sym, resolved := ext(rhs[1])
+	if !resolved {
+		return "", "", false
+	}
+	return newName, sym, true
 }

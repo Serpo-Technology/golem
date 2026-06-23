@@ -80,6 +80,58 @@ func TestComprehendInverseDiscoversAFunction(t *testing.T) {
 	}
 }
 
+// A list function stated by an extremal property is discovered by synthesis, not
+// shown: GOLEM learns the peak from "the peak is the greatest" and computes the
+// list's maximum whether it is interior or at the end (so the fold is a running
+// maximum, not "return the first"); the smallest yields the minimum. The
+// all-negative case (the fold starting from the first element, not zero) is
+// verified at the synthesis level in the code package.
+func TestComprehendExtremalDiscoversAFunction(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	r := say(t, d, "the peak is the greatest")
+	if !strings.Contains(r.Say, "peak") {
+		t.Fatalf("the extremal goal should learn the peak: %q", r.Say)
+	}
+	out, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the peak of the list of 3 and 9 and 2"}, nil)
+	if !strings.Contains(out.Say, "9") {
+		t.Errorf("the discovered peak should be the interior max 9: %q", out.Say)
+	}
+	last, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the peak of the list of 2 and 5 and 8"}, nil)
+	if !strings.Contains(last.Say, "8") {
+		t.Errorf("the discovered peak should be the trailing max 8: %q", last.Say)
+	}
+
+	r2 := say(t, d, "the trough is the smallest")
+	if !strings.Contains(r2.Say, "trough") {
+		t.Fatalf("the smallest should learn the trough: %q", r2.Say)
+	}
+	mn, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the trough of the list of 4 and 1 and 7"}, nil)
+	if !strings.Contains(mn.Say, "1") {
+		t.Errorf("the discovered trough should be the min 1: %q", mn.Say)
+	}
+}
+
+// The discovered extremal and a largest reduction taught by example coexist: the
+// extremal marker "greatest" and a taught "largest" live in separate concept
+// namespaces, so each computes without interfering with the other.
+func TestExtremalAndTaughtLargestCoexist(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "largest")
+	say(t, d, "the peak is the greatest")
+
+	lg, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the largest of the list of 4 and 9 and 1"}, nil)
+	if !strings.Contains(lg.Say, "9") {
+		t.Errorf("the taught largest should still compute the max: %q", lg.Say)
+	}
+	pk, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the peak of the list of 4 and 9 and 1"}, nil)
+	if !strings.Contains(pk.Say, "9") {
+		t.Errorf("the discovered peak should compute the max: %q", pk.Say)
+	}
+}
+
 // Re-teaching a function GOLEM already learned re-finds its rule rather than the
 // trivial call to itself: it sits in the synthesis search inventory now, but it is
 // left out of its own search, so the re-synthesis lands on the rule again.
