@@ -66,8 +66,14 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > compute question, and the learn-loop closer) share one helper that prefers the walk:
 > the typed `code.ToCode` render is now a silent cross-check and a fallback for a shape
 > the walk does not build yet, logged on the rare disagreement but never substituted when
-> the walk succeeds. Remaining there: move comprehension onto the graph (the live path
-> still produces a `Computation` first). The floor (Go parser, primitives,
+> the walk succeeds. COMPREHENSION has begun the same move: `comprehendCall` builds the
+> code-meaning subgraph directly from the grounded grammar application (the inverse of the
+> generation walk), shadowed against the IR route over the base shapes (literal, binary
+> operation, list) and logging a mismatch while changing nothing; the off-rail hand-parser
+> that read surfaces with literal string checks is gone, so the grounded grammar is the
+> only comprehension-to-graph path. Remaining there: widen the comprehension build to
+> calls and conditionals, then cut generation over to the comprehension-built graph and
+> take `TypeCheck` off the `Computation` type. The floor (Go parser, primitives,
 > grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
