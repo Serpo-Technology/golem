@@ -253,6 +253,12 @@ type Daemon struct {
 	// category from the graph; like the participants, they sit outside the grown
 	// concept layer.
 	refinements map[uint64]string
+	// categoryClasses are the bare grammatical-class concepts a closed-class word is a
+	// member of: a determiner, a copula, a negator. Where a refinement adds a subtype to a
+	// class kept in the seed, a class concept IS the broad class, so the grammar derives a
+	// word's whole category from the link rather than a seeded class string, and membership
+	// becomes a teachable graph fact. Like the refinements, they sit outside the grown layer.
+	categoryClasses map[uint64]string
 
 	// deicticByForm resolves a deictic pronoun to the participant it points at,
 	// built from the graph: each deixis word is linked to its participant concept,
@@ -776,11 +782,74 @@ func (d *Daemon) ensureCategoryRefinements() error {
 	return nil
 }
 
+// ensureCategoryClasses makes a bare grammatical class into a graph concept and links
+// each member word to it, so the broad class a closed-class word belongs to lives in the
+// graph rather than as a category string in the seed. The grammar compile then derives the
+// word's category from the link. Idempotent: the concept and edges are reused if present, so
+// a brain self-heals at boot. Called before the compile (in loadGrammar), so a member word
+// has its category by the time anything reads it.
+func (d *Daemon) ensureCategoryClasses() error {
+	d.categoryClasses = map[uint64]string{}
+	classes := []struct {
+		name  string
+		words []string
+	}{
+		{"det", []string{"a", "an", "my", "the", "your", "bir"}},
+	}
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return err
+	}
+	idByWord := make(map[string]uint64, len(gnodes))
+	for _, n := range gnodes {
+		if strings.HasPrefix(n.Template, "fw:") {
+			idByWord[strings.ToLower(n.Content)] = n.ID
+		}
+	}
+	for _, c := range classes {
+		id := d.ensureClassConcept("class:"+c.name, c.name)
+		if id == 0 {
+			continue
+		}
+		d.categoryClasses[id] = c.name
+		for _, w := range c.words {
+			fwID, ok := idByWord[w]
+			if !ok {
+				continue
+			}
+			if err := d.store.LinkRel(fwID, id, memory.RelMarks, 1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// ensureClassConcept is ensureConcept with the distinct "class" category, so a bare
+// grammatical class lives as a graph concept that cannot collide with a grown noun in the
+// naming or hygiene views, on top of being excluded as a system concept.
+func (d *Daemon) ensureClassConcept(template, content string) uint64 {
+	if c, err := d.store.ConceptByTemplate(template); err == nil && c != nil {
+		return c.ID
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+		Template: template, Category: "class", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "class concept error: %v\n", err)
+		return 0
+	}
+	return c.ID
+}
+
 // isSystemConcept reports whether a concept is innate scaffolding rather than part
-// of the grown layer: a conversation participant or a category refinement. Such a
-// concept is kept out of the concept listing the way the participants are.
+// of the grown layer: a conversation participant, a category refinement, or a bare
+// grammatical class. Such a concept is kept out of the concept listing the way the
+// participants are.
 func (d *Daemon) isSystemConcept(id uint64) bool {
 	if d.isParticipant(id) {
+		return true
+	}
+	if _, ok := d.categoryClasses[id]; ok {
 		return true
 	}
 	if _, ok := d.commandName[id]; ok {

@@ -69,6 +69,12 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureCategoryRefinements(); err != nil {
 		return err
 	}
+	// The bare grammatical classes (a determiner, ...) are graph concepts a closed-class
+	// word is a member of; ensure them and the links here too, before the compile, so a
+	// member word's category is derived from the graph rather than read from the seed.
+	if err := d.ensureCategoryClasses(); err != nil {
+		return err
+	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
 	// just seeded are picked up without a second fetch here.
 	return d.recompileGrammar()
@@ -130,6 +136,7 @@ func (d *Daemon) recompileGrammar() error {
 	// and the declarative grammar the general engine runs; each compile step
 	// reads the slice it understands and ignores the rest.
 	gparams := paramsOf(gnodes)
+	d.deriveCategoryClasses(gnodes, gparams)
 	d.deriveCategoryRefinements(gnodes, gparams)
 	cparams := paramsOf(cnodes)
 	d.gram = grammar.Compile(gparams, mass).
@@ -148,6 +155,44 @@ func (d *Daemon) recompileGrammar() error {
 	// engine is rebuilt above.
 	d.code.SetBodyParser(d.parseBodyGrammar)
 	return nil
+}
+
+// deriveCategoryClasses sets each closed-class word's whole category from the bare class
+// it is linked to in the graph: "det" for a word marked a determiner. So the broad class
+// the parser reads is derived from a graph concept rather than a seeded class string, and
+// which class a word belongs to becomes a teachable link. It runs before the refinement
+// derive, so a class sets the base and a refinement appends to it. A grammar node and its
+// compiled param line up by index (paramsOf preserves order). While the seed still carries
+// the class, a derived class that disagrees with the seeded one is logged as a tripwire that
+// the links and the seed have parted; the link is authoritative.
+func (d *Daemon) deriveCategoryClasses(gnodes []*memory.Fragment, gparams []grammar.Param) {
+	if len(d.categoryClasses) == 0 {
+		return
+	}
+	ids := make([]uint64, len(gnodes))
+	at := make(map[uint64]int, len(gnodes))
+	for i, n := range gnodes {
+		ids[i] = n.ID
+		at[n.ID] = i
+	}
+	edges, err := d.store.LinksFromRel(ids, memory.RelMarks)
+	if err != nil {
+		return
+	}
+	for _, e := range edges {
+		class, ok := d.categoryClasses[e.To]
+		if !ok {
+			continue
+		}
+		i, ok := at[e.From]
+		if !ok {
+			continue
+		}
+		if prev := gparams[i].Category; prev != "" && prev != class {
+			fmt.Fprintf(d.out, "category class mismatch: %q seeded %q, derived %q\n", gnodes[i].Content, prev, class)
+		}
+		gparams[i].Category = class
+	}
 }
 
 // deriveCategoryRefinements rewrites each closed-class word's category with the
