@@ -55,6 +55,33 @@ var extremalOps = []struct {
 	{"min", "lt", map[string][]string{"en": {"smallest", "minimum", "lowest"}}},
 }
 
+// propertyOps are the properties a goal names, each a concept whose meaning is the
+// conjunction of grounded relations a function must satisfy. Like the extremals they are
+// grounded concepts kept in propertyConcept apart from the other namespaces, so a property
+// word ("magnitude") never reads as a call head, a relator, or an extremal. The relations
+// are built from grounded operations (multiply) and grounded comparison symbols read from
+// the comparison concepts, so the property's meaning is grounded data, not a literal here;
+// the procedure that satisfies it is discovered by running, never written.
+var propertyOps = []struct {
+	name  string
+	words map[string][]string
+	build func(eq, lt string) code.Property
+}{
+	// The magnitude: the output squares to the input squared (so it is the number or its
+	// negation) and is not below zero (so the non-negative one is chosen). Non-negativity is
+	// the forbidden region "below zero", read through the grounded lt comparison, so no
+	// "at least" comparison is invented.
+	{"magnitude", map[string][]string{"en": {"magnitude", "size"}}, func(eq, lt string) code.Property {
+		square := func(v code.Computation) code.Computation {
+			return code.Computation{Op: "multiply", Args: []code.Computation{v, v}}
+		}
+		return code.Property{
+			Equational: []code.Relation{{Left: square(code.Computation{Var: code.ResultVar}), Cmp: eq, Right: square(code.Computation{Var: inducedParam})}},
+			Ordering:   &code.Relation{Left: code.Computation{Var: code.ResultVar}, Cmp: lt, Right: code.Computation{Lit: "0"}},
+		}
+	}},
+}
+
 // ensureOperations seeds each operation the engine carries as a concept and loads the
 // resolver index. Idempotent like the participants and commands: the concept and its
 // naming edges are reused when present, re-minted after a consolidation prunes them.
@@ -62,6 +89,7 @@ func (d *Daemon) ensureOperations() {
 	d.opConcept = map[uint64]code.OpRef{}
 	d.cmpConcept = map[uint64]string{}
 	d.extremalConcept = map[uint64]string{}
+	d.propertyConcept = map[uint64]code.Property{}
 	d.cmpDefault = ""
 	if d.code == nil {
 		return
@@ -115,6 +143,25 @@ func (d *Daemon) ensureOperations() {
 		for lang, words := range ex.words {
 			for _, w := range words {
 				d.nameConceptWord(id, w, lang)
+			}
+		}
+	}
+	// The properties are grounded the same way, recorded apart in propertyConcept, after the
+	// comparisons so each relation reads its comparison's symbol from the grounded concept
+	// rather than a literal.
+	eq, eqok := d.cmpSymbolByName("eq")
+	lt, ltok := d.cmpSymbolByName("lt")
+	if eqok && ltok {
+		for _, pr := range propertyOps {
+			id := d.ensureOperationConcept("op:"+pr.name, pr.name)
+			if id == 0 {
+				continue
+			}
+			d.propertyConcept[id] = pr.build(eq, lt)
+			for lang, words := range pr.words {
+				for _, w := range words {
+					d.nameConceptWord(id, w, lang)
+				}
 			}
 		}
 	}
@@ -206,6 +253,33 @@ func (d *Daemon) extremalRelator(word string) (string, bool) {
 	}
 	sym, ok := d.extremalConcept[c.ID]
 	return sym, ok
+}
+
+// propertyKind resolves a property word to the property concept it names, for the grammar's
+// property-goal parse: it returns the concept's name and whether the word names a property,
+// a namespace apart from the operation, comparison, and extremal resolvers. The grammar uses
+// only the resolution; the daemon reads the property's meaning with propertyFor.
+func (d *Daemon) propertyKind(word string) (string, bool) {
+	c := d.resolveConcept(word)
+	if c == nil {
+		return "", false
+	}
+	if _, ok := d.propertyConcept[c.ID]; ok {
+		return c.Content, true
+	}
+	return "", false
+}
+
+// propertyFor resolves a property word to the grounded property it denotes, the conjunction
+// of relations a discovered function must satisfy, read from the property concept the word
+// names.
+func (d *Daemon) propertyFor(word string) (code.Property, bool) {
+	c := d.resolveConcept(word)
+	if c == nil {
+		return code.Property{}, false
+	}
+	p, ok := d.propertyConcept[c.ID]
+	return p, ok
 }
 
 // parseBodyGrammar reads a function body through the grammar, the daemon's grounded

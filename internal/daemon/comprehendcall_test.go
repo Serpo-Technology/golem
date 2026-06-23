@@ -113,6 +113,36 @@ func TestComprehendExtremalDiscoversAFunction(t *testing.T) {
 	}
 }
 
+// A function stated by a property is discovered by synthesis, not shown: GOLEM learns the
+// abs from "the abs is the magnitude" and computes the absolute value, the number when it is
+// not negative and its negation when it is (so it is the conditional, not "return the
+// number"). A property whose word names no known property is not learned.
+func TestComprehendPropertyDiscoversAbs(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	r := say(t, d, "the abs is the magnitude")
+	if !strings.Contains(r.Say, "abs") {
+		t.Fatalf("the magnitude property should learn the abs: %q", r.Say)
+	}
+	for _, tc := range []struct{ in, want string }{
+		{"the abs of -3", "3"},
+		{"the abs of 5", "5"},
+		{"the abs of -7", "7"},
+		{"the abs of 0", "0"},
+	} {
+		out, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: tc.in}, nil)
+		if !strings.Contains(out.Say, tc.want) {
+			t.Errorf("%q should be %s: %q", tc.in, tc.want, out.Say)
+		}
+	}
+
+	r2 := say(t, d, "the blob is the flimmox")
+	if strings.Contains(r2.Say, "I learned blob") {
+		t.Errorf("a property naming no known relation should not be learned: %q", r2.Say)
+	}
+}
+
 // A list literal keeps its negative numbers, so a reduction over an all-negative
 // list computes over the values, not their magnitudes. Before, the tokenizer
 // dropped the signs and the largest of -5, -2, -8 came out 8.

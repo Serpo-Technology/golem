@@ -100,6 +100,39 @@ func (d *Daemon) comprehendExtremal(content string) (string, bool) {
 	return line, true
 }
 
+// comprehendProperty learns a function stated by a property, "the abs is the magnitude":
+// the grammar reads the goal, the property's grounded meaning (the conjunction of relations
+// the output must satisfy) drives the synthesis floor, which discovers the procedure
+// verified by running, and it is kept. It returns false when the turn is no property goal,
+// so the other paths read it; when the goal is understood but no procedure is found, it
+// admits the gap rather than learning a wrong rule.
+func (d *Daemon) comprehendProperty(content string) (string, bool) {
+	if !d.cfg.RuntimeEnabled || d.code == nil {
+		return "", false
+	}
+	name, propWord, ok := d.gram.ParseProperty("en", content, d.opHead, d.propertyKind)
+	if !ok {
+		return "", false
+	}
+	prop, ok := d.propertyFor(propWord)
+	if !ok {
+		return "", false
+	}
+	// The function being defined is left out of its own search, so it is not found as the
+	// trivial call to itself.
+	d.code.SetSynthSelf(name)
+	defer d.code.SetSynthSelf("")
+	body, ok := d.code.SynthesizeFromProperty(inducedParam, prop, d.evalCode)
+	if !ok {
+		return "I could not work out the " + name + ".", true
+	}
+	line, err := d.learnFunction(code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body})
+	if err != nil {
+		return "I could not keep the " + name + ".", true
+	}
+	return line, true
+}
+
 // advancePendingCompute takes a turn while a computation is awaited and reads it as an
 // example of that operation. Each example accumulates; once two stand, they are fed to
 // the synthesis floor together, and as soon as it assembles a rule the operation is

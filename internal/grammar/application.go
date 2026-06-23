@@ -68,6 +68,13 @@ type CmpFunc func(relator string) (symbol string, ok bool)
 // names no extremal.
 type ExtremalFunc func(word string) (symbol string, ok bool)
 
+// PropertyFunc resolves a property word to the property concept it names ("magnitude"),
+// returning the concept's name and whether the word names a property. It is a namespace
+// apart from the others so a property word never reads as a call head, relator, or extremal;
+// the property's grounded meaning stays in the concept, the grammar only needing to know the
+// word names one. ok is false for a word that names no property.
+type PropertyFunc func(word string) (kind string, ok bool)
+
 // ParseApplication reads the operation-application call "the <operation> of <arg>
 // and <arg>..." into the application it means, the of-construction run form to
 // meaning. The determiner, the genitive linker, and the coordinator are the
@@ -466,4 +473,49 @@ func (p *Params) ParseExtremal(lang, utterance string, head HeadFunc, ext Extrem
 		return "", "", false
 	}
 	return newName, sym, true
+}
+
+// ParseProperty reads a property goal, "the abs is the magnitude": the new function before
+// the copula, a property word the prop callback names after it. It mirrors ParseExtremal,
+// the right side a determiner then one property word and nothing more, the new name a content
+// word that does not already resolve as an operation or a property. It returns the new name
+// and the property word, the daemon reading that word's grounded meaning to drive the search.
+func (p *Params) ParseProperty(lang, utterance string, head HeadFunc, prop PropertyFunc) (newName, propertyWord string, ok bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	det := p.Article(lang)
+	if det == "" || head == nil || prop == nil {
+		return "", "", false
+	}
+	toks, _ := Tokenize(utterance)
+	cop := -1
+	for i, t := range toks {
+		if p.category(lang, t) == catCop {
+			cop = i
+			break
+		}
+	}
+	if cop < 1 || cop+1 >= len(toks) {
+		return "", "", false
+	}
+	newName = toks[cop-1]
+	if p.isFunctionWordLang(lang, newName) {
+		return "", "", false
+	}
+	if _, _, taken := head(newName); taken {
+		return "", "", false
+	}
+	if _, taken := prop(newName); taken {
+		return "", "", false
+	}
+	rhs := toks[cop+1:]
+	if len(rhs) != 2 || rhs[0] != det {
+		return "", "", false
+	}
+	if _, resolved := prop(rhs[1]); !resolved {
+		return "", "", false
+	}
+	return newName, rhs[1], true
 }

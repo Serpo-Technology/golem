@@ -245,6 +245,12 @@ type Daemon struct {
 	// goal names ("greatest" -> max), kept apart from opConcept and cmpConcept so an
 	// extremal word never reads as a call head or a conditional relator.
 	extremalConcept map[uint64]string
+	// propertyConcept maps a property concept to the grounded property it denotes, the
+	// conjunction of relations a function must satisfy ("magnitude" -> the output squares to
+	// the input squared and is not below zero). A property goal names one ("the abs is the
+	// magnitude") and the procedure is discovered by running; kept apart from the other
+	// concept maps so a property word never reads as a call head, relator, or extremal.
+	propertyConcept map[uint64]code.Property
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -864,6 +870,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.extremalConcept[id]; ok {
+		return true
+	}
+	if _, ok := d.propertyConcept[id]; ok {
 		return true
 	}
 	for _, triggers := range d.commandTriggers {
@@ -1995,6 +2004,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			// A list function stated by an extremal property is discovered the same
 			// way: the running-fold whose output is the list's maximum or minimum.
 			if say, ok := d.comprehendExtremal(req.Content); ok {
+				return wire.Response{OK: true, Say: say}, false, false
+			}
+			// A function stated by a property is discovered too: "the abs is the
+			// magnitude" works out the procedure whose output meets the property.
+			if say, ok := d.comprehendProperty(req.Content); ok {
 				return wire.Response{OK: true, Say: say}, false, false
 			}
 			// A function can also be shown rather than told: "the double of 3 is
