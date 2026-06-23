@@ -790,36 +790,36 @@ func (d *Daemon) ensureCategoryRefinements() error {
 // has its category by the time anything reads it.
 func (d *Daemon) ensureCategoryClasses() error {
 	d.categoryClasses = map[uint64]string{}
-	classes := []struct {
-		name  string
-		words []string
-	}{
-		{"det", []string{"a", "an", "my", "the", "your", "bir"}},
+	// The bare grammatical classes: a broad-function tag with no subtype, unlike the
+	// colon-refined classes whose base stays in the seed and gain only a graph refinement.
+	// Each closed-class word is linked to the class its seed category names, so membership
+	// comes from the seed (the floor) and a taught word joins a class by the same link. The
+	// deictic pronouns are left to the participant resolution they already ride, and the
+	// refined classes (speech, rel, wh, pro, property) keep their base.
+	bare := map[string]bool{
+		"det": true, "cop": true, "neg": true, "imp": true, "adv": true, "cnt": true,
+		"than": true, "again": true, "oth": true, "time": true, "exist": true, "fn": true,
 	}
 	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
 	if err != nil {
 		return err
 	}
-	idByWord := make(map[string]uint64, len(gnodes))
+	classID := make(map[string]uint64)
 	for _, n := range gnodes {
-		if strings.HasPrefix(n.Template, "fw:") {
-			idByWord[strings.ToLower(n.Content)] = n.ID
-		}
-	}
-	for _, c := range classes {
-		id := d.ensureClassConcept("class:"+c.name, c.name)
-		if id == 0 {
+		if !strings.HasPrefix(n.Template, "fw:") || !bare[n.Category] {
 			continue
 		}
-		d.categoryClasses[id] = c.name
-		for _, w := range c.words {
-			fwID, ok := idByWord[w]
-			if !ok {
+		id, ok := classID[n.Category]
+		if !ok {
+			id = d.ensureClassConcept("class:"+n.Category, n.Category)
+			if id == 0 {
 				continue
 			}
-			if err := d.store.LinkRel(fwID, id, memory.RelMarks, 1); err != nil {
-				return err
-			}
+			classID[n.Category] = id
+			d.categoryClasses[id] = n.Category
+		}
+		if err := d.store.LinkRel(n.ID, id, memory.RelMarks, 1); err != nil {
+			return err
 		}
 	}
 	return nil

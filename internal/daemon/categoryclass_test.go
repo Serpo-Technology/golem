@@ -9,47 +9,54 @@ import (
 	"golem/internal/memory"
 )
 
-// A bare grammatical class is a graph concept a closed-class word is a member of: the
-// determiner forms link to a det class concept, and the grammar derives their "det"
-// category from the link rather than a seeded string. Every seeded determiner still parses
-// as one (dropped from the content of a noun phrase), the class concept is kept out of the
-// grown layer, and a fresh word linked to the class parses as a determiner, so class
-// membership is a teachable graph fact.
-func TestDeterminerClassDerivedFromGraph(t *testing.T) {
+// A bare grammatical class is a graph concept the closed-class words of that class are
+// members of: each word links to a class concept, and the grammar derives its category from
+// the link rather than reading it from the seed. The classes are seeded from the words' own
+// seed categories (the floor), so the derive agrees with the seed and a tripwire stays
+// silent; closed-class detection is unchanged across the classes; a determiner sentence
+// still parses; the class concepts sit outside the grown layer; and a fresh word linked to a
+// class parses as a member, so membership is a teachable graph fact.
+func TestBareClassesDerivedFromGraph(t *testing.T) {
 	d, s := testDaemon(t)
+
+	// Every bare class is a system concept, kept out of the grown layer; all twelve the
+	// seed carries are present.
+	if len(d.categoryClasses) != 12 {
+		t.Fatalf("the twelve bare classes should each be a graph concept, got %d", len(d.categoryClasses))
+	}
+	for id := range d.categoryClasses {
+		if !d.isSystemConcept(id) {
+			t.Errorf("the %q class concept should be a system concept", d.categoryClasses[id])
+		}
+	}
+
+	// Closed-class detection is unchanged: a representative word of each class still reads
+	// as closed class, its category derived from the link.
+	for _, tc := range []struct{ lang, form string }{
+		{"en", "the"}, {"en", "is"}, {"en", "not"}, {"en", "of"}, {"en", "always"},
+		{"en", "do"}, {"en", "than"}, {"en", "again"}, {"en", "other"}, {"en", "many"},
+		{"tr", "bir"}, {"tr", "var"},
+	} {
+		if !d.gram.IsFunctionWord(tc.lang, tc.form) {
+			t.Errorf("%q (%s) should read as closed class from the graph", tc.form, tc.lang)
+		}
+	}
 
 	// A determiner sentence parses with the articles dropped from the content.
 	f := d.gram.ParseHint("the dog followed the cat", "en", d.resolveConcept)
 	if f.Agent.Phrase != "dog" || f.Patient.Phrase != "cat" {
 		t.Fatalf("determiners should drop from the content: agent %q patient %q", f.Agent.Phrase, f.Patient.Phrase)
 	}
-	// Every determiner form is closed class, its category derived to "det" from the graph.
-	for _, w := range []string{"the", "a", "an", "my", "your"} {
-		if !d.gram.IsFunctionWord("en", w) {
-			t.Errorf("%q should be a closed-class determiner derived from the graph", w)
-		}
-	}
-	if !d.gram.IsFunctionWord("tr", "bir") {
-		t.Error("the Turkish determiner bir should stay closed class from the graph")
-	}
 
-	// The det class concept is innate scaffolding, kept out of the grown concept layer.
+	// The derive agrees with the seed for every linked word, so the recompile is silent;
+	// and a fresh word with NO seeded category, linked to the det class, parses as a
+	// determiner, the membership read from the graph rather than the seed.
 	var detID uint64
 	for id, name := range d.categoryClasses {
 		if name == "det" {
 			detID = id
 		}
 	}
-	if detID == 0 {
-		t.Fatal("the det class concept should exist after boot")
-	}
-	if !d.isSystemConcept(detID) {
-		t.Error("the det class concept should be a system concept")
-	}
-
-	// Learnability: a fresh closed-class word with NO seeded category, linked to the det
-	// class, parses as a determiner once the grammar recompiles. The recompile is silent,
-	// the derived class agreeing with the seeded one for the real determiners.
 	fw := &memory.Fragment{Kind: memory.KindGrammar, Channel: "grammar", Content: "zix",
 		Template: "fw:en:zix", Lang: "en", Time: time.Now()}
 	if _, err := s.Encode(fw); err != nil {
