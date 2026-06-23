@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strconv"
 	"strings"
 
 	"golem/internal/code"
@@ -139,12 +140,39 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 // gives a Raw call. It refuses a shape parseFold does not recognize so the dispatch
 // falls back to the typed render rather than mis-building.
 func (d *Daemon) materializeRawCall(g *scratchGraph, c code.Computation, op code.Op, selfName string, fnNodes map[string]uint64) (uint64, bool) {
-	if op.Ret != "int" || len(op.Params) != 1 {
-		return 0, false // value-folds over one list here; list-returning loops are a later slice
+	if len(op.Params) != 1 {
+		return 0, false
 	}
 	param := op.Params[0]
-	acc, first, initLit, step, guard, pok := d.parseFold(op.Raw, param)
-	if !pok {
+	var body uint64
+	var bok bool
+	switch op.Ret {
+	case "int":
+		body, bok = d.materializeFold(g, op.Raw, param, fnNodes)
+	case "list":
+		body, bok = d.materializeListLoop(g, op.Raw, param, fnNodes)
+	}
+	if !bok {
+		return 0, false
+	}
+	fn := g.add(c.Op)
+	g.attachSlot(fn, paramRel, 0, g.add(param))
+	g.link(fn, body, bodyRel)
+	call := g.add("")
+	g.link(call, fn, memory.RelGrounds)
+	if !d.materializeSlots(g, call, elemRel, c.Args, selfName, fnNodes) {
+		return 0, false
+	}
+	return call, true
+}
+
+// materializeFold builds a value-fold body node from the synthesizer's Raw statements:
+// the accumulator, the start (a const or the first element), the step expression, and
+// the guard, recovered by parseFold. It returns the fold node and false when the Raw
+// is not a fold parseFold recognizes.
+func (d *Daemon) materializeFold(g *scratchGraph, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
+	acc, first, initLit, step, guard, ok := d.parseFold(raw, param)
+	if !ok {
 		return 0, false
 	}
 	fold := g.add("")
@@ -162,15 +190,30 @@ func (d *Daemon) materializeRawCall(g *scratchGraph, c code.Computation, op code
 	if !d.materializeInto(g, fold, foldStepRel, step, "", fnNodes) {
 		return 0, false
 	}
-	fn := g.add(c.Op)
-	g.attachSlot(fn, paramRel, 0, g.add(param))
-	g.link(fn, fold, bodyRel)
-	call := g.add("")
-	g.link(call, fn, memory.RelGrounds)
-	if !d.materializeSlots(g, call, elemRel, c.Args, selfName, fnNodes) {
+	return fold, true
+}
+
+// materializeListLoop builds a list-returning loop body node from the synthesizer's
+// Raw statements: a map carries its per-element transform, a filter its comparison and
+// constant, recovered by parseListLoop. It returns the list-loop node and false when
+// the Raw is not a map or filter parseListLoop recognizes.
+func (d *Daemon) materializeListLoop(g *scratchGraph, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
+	filter, cmp, c, step, ok := d.parseListLoop(raw, param)
+	if !ok {
 		return 0, false
 	}
-	return call, true
+	loop := g.add("")
+	g.link(loop, g.add("listloop"), memory.RelGrounds)
+	g.link(loop, g.add(param), listParamRel)
+	if filter {
+		g.link(loop, g.add(cmp), listCmpRel)
+		g.link(loop, g.add(c), listConstRel)
+		return loop, true
+	}
+	if !d.materializeInto(g, loop, listStepRel, step, "", fnNodes) {
+		return 0, false
+	}
+	return loop, true
 }
 
 // parseFold recovers a value-fold from the synthesizer's Raw statements, the inverse
@@ -230,6 +273,51 @@ func (d *Daemon) parseFold(raw, param string) (acc string, first bool, initLit s
 	return acc, first, initLit, step, guard, true
 }
 
+// parseListLoop recovers a list-returning loop from the synthesizer's Raw statements,
+// the inverse of mapBody/filterBody: a map appends a per-element transform, a filter
+// appends each element a comparison keeps. It strips the fixed b/x skeleton and reads
+// the middle as either a guarded append of the element (the filter's comparison and
+// integer constant) or an append of a transform expression (the map step, read by the
+// engine's reader). It returns false for anything else, so an unrecognized loop
+// declines to the typed render rather than being misread.
+func (d *Daemon) parseListLoop(raw, param string) (filter bool, cmp, c string, step code.Computation, ok bool) {
+	inner, found := strings.CutPrefix(raw, "b := []int{}; for _, x := range "+param+" { ")
+	if !found {
+		return false, "", "", code.Computation{}, false
+	}
+	body, found := strings.CutSuffix(inner, " }; return b")
+	if !found {
+		return false, "", "", code.Computation{}, false
+	}
+	if test, isFilter := strings.CutPrefix(body, "if x "); isFilter {
+		test, found = strings.CutSuffix(test, " { b = append(b, x) }")
+		if !found {
+			return false, "", "", code.Computation{}, false
+		}
+		cmp, c, found = strings.Cut(test, " ")
+		if !found {
+			return false, "", "", code.Computation{}, false
+		}
+		if _, err := strconv.Atoi(c); err != nil {
+			return false, "", "", code.Computation{}, false
+		}
+		return true, cmp, c, code.Computation{}, true
+	}
+	stepStr, found := strings.CutPrefix(body, "b = append(b, ")
+	if !found {
+		return false, "", "", code.Computation{}, false
+	}
+	stepStr, found = strings.CutSuffix(stepStr, ")")
+	if !found {
+		return false, "", "", code.Computation{}, false
+	}
+	step, ok = d.code.Comprehend(stepStr)
+	if !ok {
+		return false, "", "", code.Computation{}, false
+	}
+	return false, "", "", step, true
+}
+
 // materializeInto materializes c and links it from parent under rel, false on failure.
 func (d *Daemon) materializeInto(g *scratchGraph, parent uint64, rel string, c code.Computation, selfName string, fnNodes map[string]uint64) bool {
 	id, ok := d.materializeCode(g, c, selfName, fnNodes)
@@ -262,8 +350,8 @@ func (d *Daemon) isCall(c code.Computation) bool {
 // materializes the computation as a transient subgraph and walks it through the shared
 // traverser's Go surface for the source. This is the production generator on the runcode
 // path, so the one traverser that renders language renders code here too. ok is false
-// when the shape is not one the materializer builds yet (a list-returning synthesized
-// loop, a Raw map or filter), so the caller falls back to the typed render.
+// when a shape does not materialize (a Raw loop the parsers do not recognize), so the
+// caller falls back to the typed render.
 func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	g := newScratchGraph()
 	root, ok := d.materializeCode(g, comp, "", map[string]uint64{})

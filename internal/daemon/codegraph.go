@@ -68,6 +68,16 @@ const (
 	foldStepRel  = "foldStep"
 	foldGuardRel = "foldGuard"
 
+	// A list-returning loop builds a result list from a list element by element: a
+	// map appends a transform of each element, a filter appends the elements a
+	// comparison keeps. Named roles, the list param ranged over, and either the map
+	// step or the filter's comparison and constant. Its own shape, distinct from the
+	// told map (which renders the out/IIFE form).
+	listParamRel = "listParam"
+	listStepRel  = "listStep"
+	listCmpRel   = "listCmp"
+	listConstRel = "listConst"
+
 	// Ordered children bind each child to its position through a slot node, so order
 	// is meaning and a value can repeat: root --elem--> slot, slot --rank--> ordinal,
 	// slot --holds--> value. A list literal uses them; an n-ary call will reuse them.
@@ -123,6 +133,10 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg, se
 	if firstDest(g, nodeID, foldStepRel) != 0 {
 		s, ok := d.genFold(g, nodeID, env, self)
 		return s, false, ok // a fold renders as the loop statements its call wrapper holds
+	}
+	if firstDest(g, nodeID, listParamRel) != 0 {
+		s, ok := d.genListLoop(g, nodeID, env, self)
+		return s, false, ok // a list-returning loop renders as its statements too
 	}
 	if firstDest(g, nodeID, elemRel) != 0 {
 		return d.genOrderedNode(g, nodeID, env, self)
@@ -241,6 +255,42 @@ func foldSource(acc, param, start, guard, step string) string {
 // statements run and yield their value.
 func rawCallSource(op code.Op, body, args string) string {
 	return "(func(" + sigParams(op) + ") " + goCodeType(op.Ret) + " { " + body + " })(" + args + ")"
+}
+
+// genListLoop renders a list-returning loop node -- a synthesized map or filter -- as
+// the loop statements its call wrapper holds, regenerated from the structure so the
+// walked source matches the stored Raw. A map appends a transform of each element; a
+// filter appends each element a comparison keeps.
+func (d *Daemon) genListLoop(g codeGraph, nodeID uint64, env map[string]boundArg, self uint64) (string, bool) {
+	param := g.content(firstDest(g, nodeID, listParamRel))
+	if param == "" {
+		return "", false
+	}
+	if step := firstDest(g, nodeID, listStepRel); step != 0 {
+		s, _, ok := d.genCode(g, step, env, self)
+		if !ok {
+			return "", false
+		}
+		return listMapSource(param, s), true
+	}
+	cmp := g.content(firstDest(g, nodeID, listCmpRel))
+	c := g.content(firstDest(g, nodeID, listConstRel))
+	if cmp == "" || c == "" {
+		return "", false
+	}
+	return listFilterSource(param, cmp, c), true
+}
+
+// listMapSource and listFilterSource write a list-returning loop's statements, the one
+// place the mapLoop and filterBody shapes are regenerated so the graph walk and the
+// typed render agree to the character: a map appends the per-element transform, a
+// filter appends each element the comparison keeps.
+func listMapSource(param, step string) string {
+	return "b := []int{}; for _, x := range " + param + " { b = append(b, " + step + ") }; return b"
+}
+
+func listFilterSource(param, cmp, c string) string {
+	return "b := []int{}; for _, x := range " + param + " { if x " + cmp + " " + c + " { b = append(b, x) } }; return b"
 }
 
 // genOrderedNode renders a node whose children are ordered -- a list literal or a
@@ -445,7 +495,7 @@ func (d *Daemon) reaches(g codeGraph, nodeID, target uint64, seen map[uint64]boo
 	if firstDest(g, nodeID, memory.RelGrounds) == target {
 		return true
 	}
-	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, mapListRel, mapBodyRel, foldStepRel, elemRel, holdsRel} {
+	for _, rel := range []string{operand0Rel, operand1Rel, condLeftRel, condRightRel, condThenRel, condElseRel, mapListRel, mapBodyRel, foldStepRel, listStepRel, elemRel, holdsRel} {
 		for _, dest := range g.dests(nodeID, rel) {
 			if d.reaches(g, dest, target, seen) {
 				return true

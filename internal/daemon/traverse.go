@@ -168,6 +168,25 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 			},
 		}, true
 	}
+	if firstDest(g, node, listParamRel) != 0 {
+		param := g.content(firstDest(g, node, listParamRel))
+		if param == "" {
+			return construction{}, false
+		}
+		if step := firstDest(g, node, listStepRel); step != 0 {
+			return construction{slots: []slot{{child: step, ctx: ctx}}, assemble: func(parts []rendered) (rendered, bool) {
+				return rendered{src: listMapSource(param, parts[0].src)}, true
+			}}, true
+		}
+		cmp := g.content(firstDest(g, node, listCmpRel))
+		c := g.content(firstDest(g, node, listConstRel))
+		if cmp == "" || c == "" {
+			return construction{}, false
+		}
+		return construction{assemble: func([]rendered) (rendered, bool) {
+			return rendered{src: listFilterSource(param, cmp, c)}, true
+		}}, true
+	}
 	left := firstDest(g, node, operand0Rel)
 	right := firstDest(g, node, operand1Rel)
 	if left == 0 && right == 0 {

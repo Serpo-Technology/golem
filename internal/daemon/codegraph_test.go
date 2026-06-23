@@ -523,6 +523,62 @@ func TestCodeGraphShadowsFold(t *testing.T) {
 	}
 }
 
+// A synthesized list-returning loop generates through the traversal too: its Raw map or
+// filter is parsed into a list-loop subgraph and walked back to the applied func literal
+// the render emits, running to the transformed or filtered list.
+func TestCodeGraphShadowsListLoop(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	if r := say(t, d, "the twice of the list of 1 and 2 and 3 is the list of 2 and 4 and 6 and the twice of the list of 5 and 0 is the list of 10 and 0"); !strings.Contains(r.Say, "I learned twice") {
+		t.Fatalf("twice should synthesize as a map: %q", r.Say)
+	}
+	if r := say(t, d, "the big of the list of 1 and 5 and 2 and 9 is the list of 5 and 9 and the big of the list of 4 and 1 and 7 is the list of 7"); !strings.Contains(r.Say, "I learned big") {
+		t.Fatalf("big should synthesize as a filter: %q", r.Say)
+	}
+
+	for _, tc := range []struct{ utterance, want string }{
+		{"the twice of the list of 3 and 4", "[6 8]"},
+		{"the big of the list of 3 and 8 and 1", "[8]"},
+	} {
+		comp, ok := d.code.Comprehend(tc.utterance)
+		if !ok {
+			t.Fatalf("the engine should comprehend %q", tc.utterance)
+		}
+		walked, wok := d.traverseCode(comp)
+		typed, tok := d.code.ToCode(comp)
+		if !wok || !tok || walked != typed {
+			t.Fatalf("%q: the list-loop should walk to the render: %q vs %q (walked ok %v)", tc.utterance, walked, typed, wok)
+		}
+		if v, vok := d.evalCode(walked); !vok || v != tc.want {
+			t.Fatalf("%q: the walked list-loop should run to %s: %q (ok %v)", tc.utterance, tc.want, v, vok)
+		}
+		g := newScratchGraph()
+		root, mok := d.materializeCode(g, comp, "", map[string]uint64{})
+		r, rok := d.traverse(goSurface{}, g, root, nil)
+		gen, _, gok := d.genCode(g, root, nil, 0)
+		if !mok || !rok || !gok || r.src != gen {
+			t.Fatalf("%q: goSurface and genCode should agree on the list-loop: %q vs %q", tc.utterance, r.src, gen)
+		}
+	}
+}
+
+// parseListLoop reads the synthesizer's own map and filter shapes and declines anything
+// else, so an unrecognized list-returning loop falls back to the typed render.
+func TestParseListLoopDeclinesUnrecognized(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, raw := range []string{
+		"b := []int{}; for _, y := range numbers { b = append(b, y) }; return b", // a different loop variable
+		"weird statements",
+	} {
+		if _, _, _, _, ok := d.parseListLoop(raw, "numbers"); ok {
+			t.Errorf("parseListLoop should decline %q", raw)
+		}
+	}
+	if _, _, _, _, ok := d.parseListLoop("b := []int{}; for _, x := range numbers { b = append(b, x + x) }; return b", "numbers"); !ok {
+		t.Error("parseListLoop should read a map")
+	}
+}
+
 // parseFold reads the synthesizer's own fold shapes and declines anything else, so an
 // unrecognized Raw loop falls back to the typed render rather than being misread.
 func TestParseFoldDeclinesUnrecognized(t *testing.T) {
