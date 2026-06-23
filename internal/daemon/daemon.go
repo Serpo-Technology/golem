@@ -1855,7 +1855,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			if comp, g, root, ok := d.comprehendCall("en", src); ok {
 				// A computation that does not type-check (a list operation on a
 				// number, say) is a gap to admit, not source to run to a broken program.
-				if !d.code.TypeCheck(comp) {
+				if !d.typeChecks(comp, g, root) {
 					return wire.Response{OK: true, Say: "I could not work that out."}, false, false
 				}
 				// Generate by walking the graph comprehension built from the grounded

@@ -398,3 +398,83 @@ func (d *Daemon) generateCode(comp code.Computation, g *scratchGraph, root uint6
 	}
 	return "", false
 }
+
+// typeChecks reports whether a comprehended computation is type-consistent. When
+// comprehension built the substrate graph (g is non-nil), the check reads the graph, so the
+// type check runs over the same structure generation walks rather than the Computation. The
+// typed check stays the cross-check, logged on a disagreement; a surface with no graph (the
+// operator or raw-Go form, a told map) is checked the prior way.
+func (d *Daemon) typeChecks(comp code.Computation, g *scratchGraph, root uint64) bool {
+	if g == nil {
+		return d.code.TypeCheck(comp)
+	}
+	ok := d.typeCheckGraph(g, root)
+	if typed := d.code.TypeCheck(comp); typed != ok {
+		fmt.Fprintf(d.out, "typecheck graph mismatch: graph %v vs render %v\n", ok, typed)
+	}
+	return ok
+}
+
+// typeCheckGraph reports whether the code-meaning subgraph is type-consistent, the inverse
+// reading of the type the engine's typeOf computes over a Computation. It walks the shapes a
+// comprehension graph holds at the top level (a literal leaf, a list, a binary primitive, a
+// call) and reads a called function's parameter and result types from the operation
+// inventory, so a body it does not walk still constrains the call.
+func (d *Daemon) typeCheckGraph(g *scratchGraph, root uint64) bool {
+	_, ok := d.typeOfGraph(g, root)
+	return ok
+}
+
+// typeOfGraph computes a node's type, "int" or "list", false when it is ill-typed. A
+// top-level leaf is a literal number (a parameter reference lives only in a body, which the
+// call case does not walk). A list takes integer elements. A binary primitive takes two
+// integers. A call's arguments must match the operation's parameter types, and it yields the
+// operation's return type, both read from the inventory rather than the body.
+func (d *Daemon) typeOfGraph(g codeGraph, node uint64) (string, bool) {
+	grounds := firstDest(g, node, memory.RelGrounds)
+	if grounds == 0 {
+		if g.content(node) == "" {
+			return "", false
+		}
+		return "int", true
+	}
+	name := g.content(grounds)
+	if name == code.ListWord {
+		elems, ok := d.orderedSlots(g, node, elemRel)
+		if !ok {
+			return "", false
+		}
+		for _, el := range elems {
+			if t, tok := d.typeOfGraph(g, el); !tok || t != "int" {
+				return "", false
+			}
+		}
+		return "list", true
+	}
+	op, ok := d.opByName(name)
+	if !ok {
+		return "", false
+	}
+	if d.opSymbol(name) != "" {
+		l, lok := d.typeOfGraph(g, firstDest(g, node, operand0Rel))
+		r, rok := d.typeOfGraph(g, firstDest(g, node, operand1Rel))
+		if !lok || !rok || l != "int" || r != "int" {
+			return "", false
+		}
+		return "int", true
+	}
+	args, ok := d.orderedSlots(g, node, elemRel)
+	if !ok || len(args) != len(op.Params) {
+		return "", false
+	}
+	for i, a := range args {
+		expect := "int"
+		if i < len(op.ParamTypes) && op.ParamTypes[i] != "" {
+			expect = op.ParamTypes[i]
+		}
+		if t, tok := d.typeOfGraph(g, a); !tok || t != expect {
+			return "", false
+		}
+	}
+	return d.code.ReturnType(name)
+}

@@ -114,3 +114,68 @@ func TestApplicationToGraphDeclinesUnbuilt(t *testing.T) {
 		t.Fatal("an unknown operation should decline")
 	}
 }
+
+// The type check reads the comprehension graph and agrees with the engine reading the
+// Computation, across well-typed shapes (arithmetic, a list, a call, a fold over a list, a
+// nested call argument) and the ill-typed ones the engine refuses (a list reduction on a
+// number, an integer operation on a list). So reading the type off the substrate admits the
+// same gaps as reading it off the Computation.
+func TestTypeCheckGraphMatchesEngine(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the triple of a number is the product of the number and 3")
+	teachReductions(t, d, "total")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, surface := range []string{
+		"the sum of 6 and 7",
+		"the list of 1 and 2 and 3",
+		"the triple of 5",
+		"the total of the list of 1 and 2 and 3",
+		"the sum of the triple of 4 and 2",
+		"the total of 5",                  // ill-typed: a list reduction on a number
+		"the triple of the list of 1 and 2", // ill-typed: an integer function on a list
+	} {
+		app, ok := d.gram.ParseApplication("en", surface, d.opHead)
+		if !ok {
+			t.Fatalf("the grammar should parse %q", surface)
+		}
+		g, root, gok := d.applicationToGraph(app)
+		if !gok {
+			t.Fatalf("the application should build a graph: %q", surface)
+		}
+		comp := applicationToComputation(app)
+		graphOK := d.typeCheckGraph(g, root)
+		if graphOK != d.code.TypeCheck(comp) {
+			t.Errorf("%q: graph type check %v disagrees with the engine %v", surface, graphOK, d.code.TypeCheck(comp))
+		}
+	}
+}
+
+// The live path type-checks off the graph: a well-typed reduction runs, an ill-typed one (a
+// list reduction on a number) admits a gap, and the graph check agrees with the engine so
+// nothing is logged.
+func TestTypeCheckGraphLivePath(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	teachReductions(t, d, "total")
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	d.out = &buf
+	good, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the total of the list of 4 and 5 and 6"}, nil)
+	if !strings.Contains(good.Say, "15") {
+		t.Fatalf("a well-typed reduction should run to 15: %q", good.Say)
+	}
+	bad, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the total of 5"}, nil)
+	if !strings.Contains(bad.Say, "could not") {
+		t.Fatalf("an ill-typed reduction should admit a gap: %q", bad.Say)
+	}
+	if strings.Contains(buf.String(), "typecheck graph mismatch") {
+		t.Fatalf("the graph type check should agree with the engine, but logged: %q", buf.String())
+	}
+}

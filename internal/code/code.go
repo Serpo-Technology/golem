@@ -939,6 +939,28 @@ func (e *Engine) TypeCheck(c Computation) bool {
 	return ok
 }
 
+// ReturnType reports the type a call of the named operation yields, "int" or "list", so a
+// caller type-checking over a representation other than the Computation (the substrate
+// graph) can read an operation's result type without re-deriving its body. A synthesized
+// operation carries its return type, a defined one yields its body's type, and a primitive
+// returns a number.
+func (e *Engine) ReturnType(name string) (string, bool) {
+	op, ok := e.byName[name]
+	if !ok {
+		return "", false
+	}
+	if op.Raw != "" {
+		if op.Ret == typeList {
+			return typeList, true
+		}
+		return typeInt, true
+	}
+	if op.Body != nil {
+		return e.retType(op)
+	}
+	return typeInt, true
+}
+
 // comprehendCode reads the executable surface as real Go: the language's own
 // parser turns the source into a syntax tree, and fromExpr walks it into the
 // computation, so a nested, parenthesized expression of any depth comprehends.

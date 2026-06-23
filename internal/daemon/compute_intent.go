@@ -180,7 +180,7 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 		return "", false
 	}
 	comp, g, root, ok := d.comprehendCall("en", src)
-	if !ok || !d.code.TypeCheck(comp) {
+	if !ok || !d.typeChecks(comp, g, root) {
 		return "", false
 	}
 	out := src
