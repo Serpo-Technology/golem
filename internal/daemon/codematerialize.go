@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -360,4 +361,26 @@ func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	}
 	r, rok := d.traverse(goSurface{}, g, root, nil)
 	return r.src, rok
+}
+
+// generateCode produces the runnable Go for a comprehended computation by graph
+// traversal. The computation is materialized onto a subgraph and walked for its source,
+// so production code is written by reading the meaning back out of the graph. The typed
+// render is kept only as a cross-check and a fallback: when the walk succeeds it is used,
+// a render that disagrees is logged as a tripwire while the walk still serves, and the
+// render serves a shape the traversal does not build yet. It returns false when neither
+// path produces source, so the caller runs the surface it already holds.
+func (d *Daemon) generateCode(comp code.Computation) (string, bool) {
+	walked, wok := d.traverseCode(comp)
+	generated, gok := d.code.ToCode(comp)
+	switch {
+	case wok:
+		if gok && walked != generated {
+			fmt.Fprintf(d.out, "codegraph mismatch: walked %q vs render %q\n", walked, generated)
+		}
+		return walked, true
+	case gok:
+		return generated, true
+	}
+	return "", false
 }

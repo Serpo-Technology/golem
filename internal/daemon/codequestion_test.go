@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -22,6 +23,26 @@ func TestComputationQuestionRunsAndAnswers(t *testing.T) {
 	resp = say(t, d, "what is the product of 12 and 11")
 	if !strings.Contains(resp.Say, "132") {
 		t.Fatalf("a novel computation should run to 132: %q", resp.Say)
+	}
+}
+
+// The in-conversation compute path generates by traversal as the explicit runcode path
+// does: a computation posed as a question materializes onto the graph and is walked for
+// the source it runs, with the typed render only a cross-check. The answer is the right
+// value and nothing is logged, so the conversational generator agrees with the render on
+// real input.
+func TestComputationQuestionGeneratesViaTraversal(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	var buf bytes.Buffer
+	d.out = &buf
+	resp := say(t, d, "what is the sum of 6 and 7")
+	if !strings.Contains(resp.Say, "13") {
+		t.Fatalf("the computation question should run to 13: %q", resp.Say)
+	}
+	if strings.Contains(buf.String(), "mismatch") {
+		t.Fatalf("the conversational compute path should agree with the render, but logged: %q", buf.String())
 	}
 }
 

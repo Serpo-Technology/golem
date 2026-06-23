@@ -1125,7 +1125,7 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if !ok {
 		return "", false
 	}
-	src, ok := d.code.ToCode(comp)
+	src, ok := d.generateCode(comp)
 	if !ok {
 		return "", false
 	}

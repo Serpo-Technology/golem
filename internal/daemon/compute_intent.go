@@ -184,12 +184,7 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 		return "", false
 	}
 	out := src
-	walked, wok := d.traverseCode(comp)
-	generated, gok := d.code.ToCode(comp)
-	switch {
-	case wok && (!gok || walked == generated):
-		out = walked
-	case gok:
+	if generated, ok := d.generateCode(comp); ok {
 		out = generated
 	}
 	return runSummary(d.runProgram(out)), true

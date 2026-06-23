@@ -1860,20 +1860,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				}
 				// Generate by traversal: materialize the comprehended computation as a
 				// subgraph and walk it for the source to run, the meaning rendered by
-				// walking the graph rather than the typed form. The typed render is kept as
-				// a cross-check and a fallback: a shape the traversal does not build yet (a
-				// map) runs from the render, and a disagreement is logged with the render
-				// serving instead, so moving onto the traversal cannot regress what ran before.
-				walked, wok := d.traverseCode(comp)
-				generated, gok := d.code.ToCode(comp)
-				switch {
-				case wok && (!gok || walked == generated):
-					src = walked
-				case gok:
-					if wok {
-						fmt.Fprintf(d.out, "codegraph mismatch: walked %q vs render %q\n", walked, generated)
-					}
-					src = generated
+				// walking the graph rather than the typed form. The typed render stays
+				// only a cross-check and a fallback for a shape the traversal does not
+				// build yet, so a richer surface still runs.
+				if out, ok := d.generateCode(comp); ok {
+					src = out
 				}
 				return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
 			}
