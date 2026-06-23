@@ -756,11 +756,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
-	// "Do you know X": a reflexive question about what GOLEM has grounded, read
-	// from its tokens because "do" opens an imperative and "know" is a function
-	// word, so the clause would otherwise be mis-handled as a command. It runs
-	// before the polar and command paths so that misreading never surfaces.
-	if ans, ok := d.planEpistemic(raw); ok {
+	// "Do you know X": a reflexive question about what GOLEM has grounded, recognized off the
+	// frame the know verb marks as an epistemic move. It runs before the polar and command
+	// paths so the "do"-opened clause is read as a question rather than mis-handled as a
+	// command.
+	if ans, ok := d.planEpistemic(frame, raw); ok {
 		return ans, nil
 	}
 	// The same reflexive know-question in the other tongues: Turkish "X biliyor

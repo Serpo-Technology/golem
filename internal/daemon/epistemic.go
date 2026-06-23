@@ -8,39 +8,33 @@ import (
 	"golem/internal/memory"
 )
 
-// epistemicOpener marks the auxiliaries that front a "do you know" question. The
-// clause cannot be read from its frame: "do" also opens an imperative, so the
-// grammar takes the whole thing for a command, and "know" is a function word, so it
-// never reads as a verb. The question is recognized from its tokens instead.
-var epistemicOpener = map[string]bool{"do": true, "does": true, "did": true}
-
-// planEpistemic answers a reflexive question about what GOLEM itself knows. GOLEM
-// knows a thing when it has grounded it in experience, so a thing with a positive
-// grounding tally answers yes and an ungrounded or unrecognized thing answers no.
-// Read with "I" instead of "you", the same shape asks about the speaker, whose
-// knowledge GOLEM cannot see. The whole "do you know ..." shape is caught here so
-// the command misreading never surfaces, even for a thing GOLEM cannot place.
-func (d *Daemon) planEpistemic(raw string) (string, bool) {
-	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
-	if len(tokens) < 3 || !epistemicOpener[tokens[0]] || tokens[2] != "know" {
+// planEpistemic answers a reflexive question about what GOLEM itself knows, recognized off
+// the frame rather than a token pattern: the know verb is a closed-class speech move, so the
+// clause carries frame.Speech == "know"; the participant subject (you, resolved to GOLEM)
+// names whose knowledge is asked; and a polar force with no wh word sets it apart from the
+// open "what do you know" summary and the "what do you know about X" describe, the wh forms
+// the dispatch routes to first. GOLEM knows a thing it has grounded in experience, so a grounded
+// thing answers yes and an ungrounded one no. Read with "I", the question asks about the
+// speaker, whose knowledge GOLEM cannot see.
+func (d *Daemon) planEpistemic(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Speech != "know" || frame.Wh != "" {
 		return "", false
 	}
-	// "Do you know X" asks of GOLEM; "do I know X" asks of the speaker.
-	subject := tokens[1]
-	if subject != "you" && subject != "i" {
+	subject := frame.Agent.Concept
+	if subject == nil || !d.isParticipant(subject.ID) {
 		return "", false
 	}
-	thing := strings.Join(tokens[3:], " ")
+	if subject.ID != d.selfID {
+		return "I cannot tell what you know.", true
+	}
+	thing := epistemicComplement(raw)
 	if thing == "" {
 		return "Know what?", true
 	}
-	if subject == "i" {
-		return "I cannot tell what you know.", true
-	}
-	// A proposition as the object of know ("do you know that the dog chased the
-	// cat") asks whether GOLEM holds that fact, not whether it knows an incidental
-	// noun in it. The optional "that" is dropped; a clause that is not a full
-	// proposition falls through to the concept check below.
+	// A proposition as the object of know ("do you know that the dog chased the cat") asks
+	// whether GOLEM holds that fact, not whether it knows an incidental noun in it. The
+	// optional "that" is dropped; a clause that is not a full proposition falls through to the
+	// concept check below.
 	if line, ok := d.knowsProposition(strings.TrimPrefix(thing, "that ")); ok {
 		return line, true
 	}
@@ -48,6 +42,18 @@ func (d *Daemon) planEpistemic(raw string) (string, bool) {
 		return "Yes, I know " + thing + ".", true
 	}
 	return "No, I do not know " + thing + ".", true
+}
+
+// epistemicComplement reads the object of a "do you know" question: the text after the
+// auxiliary, the participant subject, and the know verb, the way polarClause strips a polar
+// question's marker down to its bare clause. The frame has already recognized the move from
+// the know verb; this reads its complement for re-comprehension.
+func epistemicComplement(raw string) string {
+	tokens := strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!")))
+	if len(tokens) < 4 {
+		return ""
+	}
+	return strings.Join(tokens[3:], " ")
 }
 
 // knowsThing reports whether GOLEM knows the thing a phrase names, in either of the

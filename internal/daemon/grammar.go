@@ -88,13 +88,22 @@ func (d *Daemon) loadGrammar() error {
 // first boot and the top-up. The kind decides which curriculum a node
 // belongs to; both ride the same columns.
 func (d *Daemon) seedParams(held []*memory.Fragment, kind string, curriculum []grammar.Param) (int, error) {
-	have := make(map[string]bool, len(held))
+	have := make(map[string]*memory.Fragment, len(held))
 	for _, n := range held {
-		have[n.Template] = true
+		have[n.Template] = n
 	}
 	trained := 0
 	for _, p := range curriculum {
-		if have[p.Key] {
+		if n := have[p.Key]; n != nil {
+			// A held entry keeps its lived weight, but a closed-class word's category is
+			// structural seed data, not learned, so a re-class in the seed is reconciled
+			// onto the stored node at boot. Without it, a word the seed moves to a new
+			// class keeps its old one on every brain saved before the move.
+			if p.Category != "" && n.Category != p.Category {
+				if err := d.store.UpdateCategory(n.ID, p.Category); err != nil {
+					return trained, err
+				}
+			}
 			continue
 		}
 		f := &memory.Fragment{

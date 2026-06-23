@@ -376,6 +376,14 @@ func (s *Store) UpdateContent(id uint64, content, template string) error {
 	return err
 }
 
+// UpdateCategory rewrites a fragment's grammatical category. A seeded closed-class
+// word's category is structural, not learned, so when the seed re-classes a word the
+// stored node is reconciled to the floor at boot, the way a fresh word is seeded.
+func (s *Store) UpdateCategory(id uint64, category string) error {
+	_, err := s.db.Exec(`UPDATE fragments SET category = ? WHERE id = ?`, category, id)
+	return err
+}
+
 // DeleteByID removes one fragment by its id and every edge touching it,
 // reporting whether a node was there to go. It is deletion in the raw, distinct
 // from Forget's template sweep: it takes exactly the node named.

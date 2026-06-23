@@ -84,6 +84,35 @@ func TestEpistemicDidOpener(t *testing.T) {
 	}
 }
 
+// The epistemic question is recognized off the frame rather than a token pattern: the know
+// verb is a closed-class speech move, so "do you know X" carries frame.Speech == "know" with
+// no wh word, which sets it apart from the "what do you know" forms that carry a wh word and
+// route to the summary and the describe instead. A new auxiliary or phrasing rides the same
+// frame, not a new token list.
+func TestEpistemicRoutesOffKnowVerb(t *testing.T) {
+	d, _ := testDaemon(t)
+	lion := groundNoun(t, d, "lion")
+	groundOccurrences(t, d, lion, 3)
+
+	// The know verb marks the clause epistemic; the polar concept question carries no wh word.
+	if f := d.gram.ParseHint("do you know the lion", "en", d.resolveConcept); f.Speech != "know" || f.Wh != "" {
+		t.Fatalf("do you know X should be an epistemic clause with no wh word: speech %q wh %q", f.Speech, f.Wh)
+	}
+	// The about-X form carries the same know verb but a wh word, so it is not the polar
+	// epistemic and routes to the describe instead.
+	if f := d.gram.ParseHint("what do you know about the lion", "en", d.resolveConcept); f.Speech != "know" || f.Wh == "" {
+		t.Fatalf("what do you know about X should carry a wh word: speech %q wh %q", f.Speech, f.Wh)
+	}
+	// End to end, the polar question answers yes from grounding, off the frame.
+	if got := strings.ToLower(say(t, d, "do you know the lion").Say); !strings.Contains(got, "yes") {
+		t.Fatalf("a grounded thing should be known: %q", got)
+	}
+	// The about-X form still describes, not the yes/no the polar epistemic gives.
+	if got := strings.ToLower(say(t, d, "what do you know about the lion").Say); strings.HasPrefix(got, "yes") || strings.HasPrefix(got, "no") {
+		t.Fatalf("what do you know about X should describe, not answer the polar epistemic: %q", got)
+	}
+}
+
 // "Do I know X" asks of the speaker, whose mind GOLEM cannot read, so it admits
 // the limit rather than answering from its own grounding.
 func TestEpistemicSpeakerDeferred(t *testing.T) {

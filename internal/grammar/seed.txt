@@ -43,7 +43,7 @@ fw:en:introspect	introspect	en	imp
 fw:en:is	is	en	cop
 fw:en:he	he	en	pro
 fw:en:it	it	en	pro
-fw:en:know	know	en	fn
+fw:en:know	know	en	speech
 fw:en:many	many	en	cnt
 fw:en:me	me	en	deixis
 fw:en:mean	mean	en	speech
