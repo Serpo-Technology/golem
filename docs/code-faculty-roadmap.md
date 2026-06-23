@@ -25,10 +25,14 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > baseline: the rule is found by a reasoning-driven SYNTHESIS FLOOR that assembles
 > and runs candidate programs rather than fitting templates
 > (`internal/code/synth.go`, `synthloop.go`: expressions, value-fold loops,
-> map/filter list loops); recursion synthesizes from examples; conditionals, typed
-> lists, and the reductions (total/length/first/largest, now LEARNED not floor) are
-> built; and a dialogue loop learns an unknown computation by eliciting examples or
-> a definition (`internal/daemon/compute_intent.go`).
+> map/filter list loops); recursion and two-way conditionals (abs, relu) both
+> synthesize from examples; conditionals, typed lists, and the reductions
+> (total/length/first/largest, now LEARNED not floor) are built; and a dialogue loop
+> learns an unknown computation by eliciting examples or a definition
+> (`internal/daemon/compute_intent.go`). By-example synthesis is under-determined by
+> a narrow example set (integer-division truncation can fit a few points), so a
+> conditional wants examples spanning a wide range to be pinned down, the after-the-fact
+> limit; a candidate that divides by the input is dropped (it crashes at zero).
 >
 > The faculty's English surface recognition has now been DISSOLVED into the grammar
 > + grounded concepts. Each operation is a grounded concept (`op:<name>`, resolved
