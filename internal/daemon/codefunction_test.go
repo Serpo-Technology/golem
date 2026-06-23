@@ -87,6 +87,33 @@ func TestInducesSquareFromExamples(t *testing.T) {
 	}
 }
 
+// A two-way conditional is discovered from examples no single expression fits: a
+// predicate over the input splits the examples, each side a searched expression,
+// grounded by running. abs branches on the sign into the number and its negation;
+// relu's else branch is a constant. The examples span a wide range, so an
+// arithmetic rule that fits a narrow set by integer-division truncation is ruled
+// out and the conditional is what remains. The learned rule runs on an input the
+// examples never named.
+func TestInducesConditionalFromExamples(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+
+	resp := say(t, d, "the abs of -3 is 3 and the abs of 1 is 1 and the abs of -5 is 5 and the abs of 8 is 8")
+	if !strings.Contains(resp.Say, "I learned abs") || !strings.Contains(resp.Say, "if number > 0") {
+		t.Fatalf("abs should be discovered as a conditional from examples: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the abs of -7"); !strings.Contains(r.Say, "is 7") {
+		t.Fatalf("the discovered abs of -7 should be 7: %q", r.Say)
+	}
+	resp = say(t, d, "the relu of -3 is 0 and the relu of 1 is 1 and the relu of -2 is 0 and the relu of 8 is 8")
+	if !strings.Contains(resp.Say, "I learned relu") || !strings.Contains(resp.Say, "if number > 0") {
+		t.Fatalf("relu should be discovered as a conditional from examples: %q", resp.Say)
+	}
+	if r := say(t, d, "what is the relu of -9"); !strings.Contains(r.Say, "is 0") {
+		t.Fatalf("the discovered relu of -9 should be 0: %q", r.Say)
+	}
+}
+
 // A function over a list is synthesized as a loop, the structure assembled from
 // the examples rather than templated: the search lands on a range over the list
 // with an accumulator, written as real Go and grounded by running. The loop body's

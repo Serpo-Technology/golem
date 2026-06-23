@@ -31,6 +31,24 @@ func (e *Engine) SynthesizeExpr(param string, ins, outs []string, run func(strin
 	if len(ins) < 2 || len(ins) != len(outs) {
 		return Computation{}, false
 	}
+	c, ok := e.fitExpr(param, ins, outs)
+	if !ok || !e.bodyFits(c, param, ins, outs, run) {
+		return Computation{}, false
+	}
+	return c, true
+}
+
+// fitExpr finds the smallest expression over the parameter whose interpreted
+// behaviour on the example inputs is the outputs, the search SynthesizeExpr grounds
+// and a conditional's branch fit draws on. It prunes by behaviour: an expression
+// whose results on the inputs match a kept one is interchangeable, so only the first
+// of each is grown from, and the match is the one whose behaviour is the wanted
+// outputs. It does not run the candidate, since a branch is decided by
+// interpretation and the assembled body is what gets grounded; the caller grounds.
+func (e *Engine) fitExpr(param string, ins, outs []string) (Computation, bool) {
+	if len(ins) == 0 || len(ins) != len(outs) {
+		return Computation{}, false
+	}
 	envs := make([]map[string]int, len(ins))
 	for i, in := range ins {
 		n, err := strconv.Atoi(in)
@@ -55,26 +73,110 @@ func (e *Engine) SynthesizeExpr(param string, ins, outs []string, run func(strin
 	}
 	leaves = append(leaves, Computation{Var: param})
 
-	// The search prunes by behaviour: an expression whose results on the example
-	// inputs match a kept one is interchangeable, so only the first of each is grown
-	// from, and the match is the one whose behaviour is the wanted outputs and which
-	// grounds by running.
 	seen := map[string]bool{}
 	var found Computation
 	got := false
 	e.buildExprs(leaves, synthMaxOps, synthPoolCap, func(c Computation, ops int) (bool, bool) {
+		if dividesByParam(c, param) {
+			return false, false // a step function from truncation, not a rule, see below
+		}
 		key, ok := e.behaviourKey(c, envs)
 		if !ok || seen[key] {
 			return false, false
 		}
 		seen[key] = true
-		if key == wantKey && e.bodyFits(c, param, ins, outs, run) {
+		if key == wantKey {
 			found, got = c, true
 			return true, true
 		}
 		return true, false
 	})
 	return found, got
+}
+
+// dividesByParam reports whether a candidate divides by a quantity that depends on
+// the parameter. Integer division by the input truncates to a step function, which
+// over-fits a finite example set by mimicking a piecewise rule (relu as
+// number * (1 + 3 / number)), so the expression search leaves it out and a
+// genuinely piecewise function is discovered as a conditional instead. Division by
+// a constant (number / 2) is untouched. A rule that truly divides by the input is
+// vanishingly rare and better told than guessed.
+func dividesByParam(c Computation, param string) bool {
+	if c.Op == "divide" && len(c.Args) == 2 && usesVar(c.Args[1], param) {
+		return true
+	}
+	for _, a := range c.Args {
+		if dividesByParam(a, param) {
+			return true
+		}
+	}
+	return false
+}
+
+// SynthesizeConditional discovers a two-way conditional from examples that no single
+// expression fits: a predicate over the parameter splits the examples, each side fit
+// by its own expression, "the abs of -3 is 3 and the abs of 5 is 5 ..." landing on
+// number if number > 0 else 0 - number. The predicate is the parameter compared to a
+// constant, the comparison and the constant drawn from the floor the rest of the
+// search uses, the branches found by interpretation, and the whole grounded by
+// running. It needs at least two examples on each side of a split, so at least four
+// in all, and declines when no split with two distinct fitting branches grounds. A
+// split whose branches are the same expression is no conditional and is left to the
+// expression search.
+func (e *Engine) SynthesizeConditional(param string, ins, outs []string, run func(string) (string, bool)) (Computation, bool) {
+	if len(ins) < 4 || len(ins) != len(outs) {
+		return Computation{}, false
+	}
+	inN, _, ok := numberPairs(ins, outs)
+	if !ok {
+		return Computation{}, false
+	}
+	for _, cmp := range []string{">", "<", "=="} {
+		for _, c := range condConstants(ins, outs) {
+			cv, err := strconv.Atoi(c)
+			if err != nil {
+				continue
+			}
+			var tIns, tOuts, fIns, fOuts []string
+			for i := range ins {
+				if compareInt(cmp, inN[i], cv) {
+					tIns, tOuts = append(tIns, ins[i]), append(tOuts, outs[i])
+				} else {
+					fIns, fOuts = append(fIns, ins[i]), append(fOuts, outs[i])
+				}
+			}
+			if len(tIns) < 2 || len(fIns) < 2 {
+				continue // an empty or single-point side underdetermines a branch
+			}
+			thenE, tok := e.fitExpr(param, tIns, tOuts)
+			elseE, fok := e.fitExpr(param, fIns, fOuts)
+			if !tok || !fok || sameComputation(thenE, elseE) {
+				continue
+			}
+			cond := Computation{Cond: &Conditional{
+				Cmp: cmp, Left: Computation{Var: param}, Right: Computation{Lit: c},
+				Then: thenE, Else: elseE}}
+			if e.bodyFits(cond, param, ins, outs, run) {
+				return cond, true
+			}
+		}
+	}
+	return Computation{}, false
+}
+
+// condConstants are the thresholds a conditional's predicate is tried against: the
+// small constants the floor seeds, zero among them since abs and relu and their kind
+// turn on the sign, plus the constants a pair suggests.
+func condConstants(ins, outs []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range append([]string{"0", "1", "-1", "2", "-2"}, deriveConstants(ins[0], outs[0])...) {
+		if !seen[c] {
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // SynthesizeInverse searches for the inverse of a known unary operation: the

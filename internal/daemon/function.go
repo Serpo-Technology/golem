@@ -37,6 +37,12 @@ func (d *Daemon) induceFunction(name string, ins, outs []string) (code.Op, bool)
 	if body, ok := d.code.SynthesizeExpr(inducedParam, ins, outs, d.evalCode); ok {
 		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
 	}
+	// A rule that is no single expression may still be a two-way conditional, a
+	// predicate over the input choosing between two expressions (abs, relu); that
+	// branch shape is searched and grounded by running.
+	if body, ok := d.code.SynthesizeConditional(inducedParam, ins, outs, d.evalCode); ok {
+		return code.Op{Name: name, Word: name, Params: []string{inducedParam}, Body: &body}, true
+	}
 	// A rule that is no single expression, like factorial, is a base case and a
 	// self-call over the predecessor; that recursive shape is searched separately
 	// and grounded by running.

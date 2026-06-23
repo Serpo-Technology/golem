@@ -92,3 +92,40 @@ func TestConditionalRejectsDeadParameter(t *testing.T) {
 		t.Fatal("a conditional that never uses the count is not a function of it")
 	}
 }
+
+// fitExpr finds an expression matching a subset of examples by interpretation, the
+// branch fit a conditional draws on: the negative side of abs maps to its negation,
+// generalizing to a negative it never saw; a side no bounded expression carries
+// declines.
+func TestFitExpr(t *testing.T) {
+	e := testEngine()
+	neg, ok := e.fitExpr("number", []string{"-3", "-2"}, []string{"3", "2"})
+	if !ok {
+		t.Fatal("the negative branch of abs should fit an expression")
+	}
+	for _, c := range []struct{ in, out int }{{-3, 3}, {-2, 2}, {-7, 7}} {
+		if v, ok := e.evalExpr(neg, map[string]int{"number": c.in}); !ok || v != c.out {
+			t.Fatalf("the fitted branch should carry %d to %d, got %d", c.in, c.out, v)
+		}
+	}
+	if _, ok := e.fitExpr("number", []string{"3", "4"}, []string{"6", "24"}); ok {
+		t.Fatal("a side no bounded expression carries should decline")
+	}
+}
+
+// SynthesizeConditional declines a plain expression, whose split branches are the
+// same expression (the equal-branch guard), and a recursion, whose high side no
+// bounded expression fits, so each is left to its own search. The positive case
+// (abs, relu found and grounded) is exercised against the real runtime in the
+// daemon, since the in-package runner does not evaluate the conditional's loop form.
+func TestSynthesizeConditionalDeclines(t *testing.T) {
+	e := testEngine()
+	if _, ok := e.SynthesizeConditional("number",
+		[]string{"3", "5", "2", "4"}, []string{"6", "10", "4", "8"}, arith); ok {
+		t.Fatal("double is one expression, not a conditional with distinct branches")
+	}
+	if _, ok := e.SynthesizeConditional("number",
+		[]string{"1", "2", "3", "4"}, []string{"1", "2", "6", "24"}, arith); ok {
+		t.Fatal("factorial is a recursion, no two-way split of bounded expressions fits it")
+	}
+}
