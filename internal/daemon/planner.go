@@ -741,9 +741,15 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return line, nil
 	}
 
-	// "What do you know": the open self-report, read from the whole graph. It runs
-	// after the "about X" form above, which reads a single concept, so only the
-	// bare question reaches the summary.
+	// "What do you know [about X]": the open epistemic question off the frame. "about X"
+	// describes the one concept, the bare form reports the whole graph; the object tells them
+	// apart. It runs after the describe verb above, which the patient also feeds.
+	if line, ok := d.planKnowledgeQuery(frame); ok {
+		return line, nil
+	}
+
+	// The same open question in the surfaces not yet read off the frame: the Latin quid scis,
+	// the Turkish neler variant.
 	if line, ok := d.planKnowledgeSummary(raw); ok {
 		return line, nil
 	}

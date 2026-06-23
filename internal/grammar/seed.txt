@@ -151,9 +151,9 @@ fw:tr:biz	biz	tr	deixis
 fw:tr:bizi	bizi	tr	deixis
 fw:tr:bil	bil	tr	fn
 fw:tr:bilir	bilir	tr	speech
-fw:tr:bilirsin	bilirsin	tr	fn
+fw:tr:bilirsin	bilirsin	tr	speech
 fw:tr:biliyor	biliyor	tr	speech
-fw:tr:biliyorsun	biliyorsun	tr	fn
+fw:tr:biliyorsun	biliyorsun	tr	speech
 fw:la:narra	narra	la	speech
 fw:la:scis	scis	la	speech
 fw:la:scisne	scisne	la	speech

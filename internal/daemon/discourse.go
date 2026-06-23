@@ -765,12 +765,13 @@ var trFusedInterrogative = map[string]string{
 var trSubjectPronoun = map[string]bool{"ben": true, "sen": true, "biz": true}
 
 // describeReferent reads the focus of an open request to say what is known about something.
-// The "describe X" phrasing routes off the describe speech-act verb now (the subject the
-// parsed patient); the "tell me about" and "know about" phrasings still read the surface
-// until they route off the recall and know verbs.
+// The "describe X" and English and Turkish "what do you know about X" phrasings route off the
+// describe and know verbs now (the subject the parsed patient); the "tell me about" recall
+// phrasings and the Latin "quid de X scis" still read the surface until they route off their
+// verbs too.
 func describeReferent(raw string) (string, bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
-	for _, lead := range []string{"tell me about ", "tell me of ", "what can you tell me about ", "what do you know about "} {
+	for _, lead := range []string{"tell me about ", "tell me of ", "what can you tell me about "} {
 		rest, ok := strings.CutPrefix(s, lead)
 		if !ok {
 			continue
@@ -781,15 +782,6 @@ func describeReferent(raw string) (string, bool) {
 		}
 		if rest = strings.TrimSpace(rest); rest != "" {
 			return rest, true
-		}
-	}
-	// Turkish: "X hakkında ne biliyorsun" (what do you know about X), the topic
-	// before the postposition rather than after a lead.
-	for _, tail := range []string{" hakkında ne biliyorsun", " hakkında ne bilirsin"} {
-		if rest, ok := strings.CutSuffix(s, tail); ok {
-			if rest = strings.TrimSpace(rest); rest != "" {
-				return rest, true
-			}
 		}
 	}
 	// Latin: "quid de X scis" (what do you know about X).

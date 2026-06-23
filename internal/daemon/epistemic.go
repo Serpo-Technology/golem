@@ -288,16 +288,28 @@ func (d *Daemon) knowsProposition(clause string) (string, bool) {
 	return "No, I do not know that " + echo + ".", true
 }
 
-// planKnowledgeSummary answers the open "what do you know" with a report of what
-// GOLEM holds, read from the graph: the kinds it has abstracted and the actions it
-// has learned. It is the counterpart to "what do you know about X", which reads one
-// concept; the bare question reads the whole graph. The "about X" form is handled
-// before this, so only the open question reaches here.
+// planKnowledgeQuery answers the open epistemic wh-question off the frame: the know verb
+// marks the clause (frame.Speech == "know") and a wh word makes it the open form; the object
+// tells the two readings apart. "what do you know about X" names X as the patient and
+// describes it; the bare "what do you know" names nothing and reports the whole graph. English
+// and Turkish derive the wh word (what, ne); the Latin quid is read by its own surface still.
+func (d *Daemon) planKnowledgeQuery(frame grammar.Frame) (string, bool) {
+	if frame.Speech != "know" || frame.Wh != "what" {
+		return "", false
+	}
+	if focus := d.patientFocus(frame); focus != nil {
+		d.turnFocus = focus.ID
+		return d.describeConcept(frame, focus), true
+	}
+	return d.knowledgeSummary(frame.Lang), true
+}
+
+// planKnowledgeSummary answers the open "what do you know" for the surfaces not yet read off
+// the frame: the Latin quid scis, whose wh word the parser does not mark, and the Turkish
+// neler variant. The English and the bare Turkish forms route through planKnowledgeQuery.
 func (d *Daemon) planKnowledgeSummary(raw string) (string, bool) {
 	switch strings.ToLower(strings.Trim(strings.TrimSpace(raw), " ?.!")) {
-	case "what do you know":
-		return d.knowledgeSummary("en"), true
-	case "ne biliyorsun", "neler biliyorsun":
+	case "neler biliyorsun":
 		return d.knowledgeSummary("tr"), true
 	case "quid scis":
 		return d.knowledgeSummary("la"), true

@@ -734,7 +734,7 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated"}},
 		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told"}},
 		{"speech:describe", "describe", []string{"describe", "describes", "described", "anlat", "narra"}},
-		{"speech:know", "know", []string{"know", "knows", "known", "biliyor", "bilir", "scis", "scisne"}},
+		{"speech:know", "know", []string{"know", "knows", "known", "biliyor", "bilir", "biliyorsun", "bilirsin", "scis", "scisne"}},
 		{"rel:after", "after", []string{"sonra"}},
 		{"rel:before", "before", []string{"önce"}},
 		{"property:transitive", "transitive", []string{"transitive"}},

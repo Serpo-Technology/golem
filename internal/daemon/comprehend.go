@@ -708,6 +708,13 @@ func (d *Daemon) describeFocus(frame grammar.Frame) *memory.Fragment {
 	if frame.Speech != "describe" {
 		return nil
 	}
+	return d.patientFocus(frame)
+}
+
+// patientFocus resolves a clause's patient to the concept it names, through the tongue's case
+// stems, nil when the patient is empty or a conversation participant. It is the focus a move
+// pointed at a thing acts on: the describe verb's object, the "what do you know about X" topic.
+func (d *Daemon) patientFocus(frame grammar.Frame) *memory.Fragment {
 	focus := frame.Patient.Concept
 	if focus == nil && frame.Patient.Phrase != "" {
 		focus = d.resolveCased(frame.Patient.Phrase, frame.Lang)
