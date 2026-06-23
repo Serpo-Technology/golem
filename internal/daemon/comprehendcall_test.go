@@ -29,7 +29,7 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 		if _, ok := d.gram.ParseApplication("en", s, d.opHead); !ok {
 			t.Fatalf("the grammar should parse the operation call %q", s)
 		}
-		got, gok := d.comprehendCall("en", s)
+		got, _, _, gok := d.comprehendCall("en", s)
 		want, wok := d.code.Comprehend(s)
 		if gok != wok || !reflect.DeepEqual(got, want) {
 			t.Fatalf("comprehendCall(%q) = %+v (ok=%v), engine = %+v (ok=%v)", s, got, gok, want, wok)
@@ -44,7 +44,7 @@ func TestComprehendCallMatchesEngine(t *testing.T) {
 		if _, ok := d.gram.ParseApplication("en", s, d.opHead); ok {
 			t.Fatalf("the grammar should not claim the non-call surface %q", s)
 		}
-		got, gok := d.comprehendCall("en", s)
+		got, _, _, gok := d.comprehendCall("en", s)
 		want, wok := d.code.Comprehend(s)
 		if gok != wok || !reflect.DeepEqual(got, want) {
 			t.Fatalf("comprehendCall(%q) = %+v (ok=%v), engine = %+v (ok=%v)", s, got, gok, want, wok)

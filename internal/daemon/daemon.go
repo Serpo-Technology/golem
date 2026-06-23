@@ -1852,18 +1852,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// run as the program it already is.
 		src := req.Content
 		if d.code != nil {
-			if comp, ok := d.comprehendCall("en", src); ok {
+			if comp, g, root, ok := d.comprehendCall("en", src); ok {
 				// A computation that does not type-check (a list operation on a
 				// number, say) is a gap to admit, not source to run to a broken program.
 				if !d.code.TypeCheck(comp) {
 					return wire.Response{OK: true, Say: "I could not work that out."}, false, false
 				}
-				// Generate by traversal: materialize the comprehended computation as a
-				// subgraph and walk it for the source to run, the meaning rendered by
-				// walking the graph rather than the typed form. The typed render stays
-				// only a cross-check and a fallback for a shape the traversal does not
-				// build yet, so a richer surface still runs.
-				if out, ok := d.generateCode(comp); ok {
+				// Generate by walking the graph comprehension built from the grounded
+				// grammar; a surface the build does not cover falls back to materializing
+				// the computation, with the typed render the cross-check and last resort.
+				if out, ok := d.generateCode(comp, g, root); ok {
 					src = out
 				}
 				return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false

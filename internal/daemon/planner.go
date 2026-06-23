@@ -1121,11 +1121,11 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if !ok {
 		return "", false
 	}
-	comp, ok := d.comprehendCall(frame.Lang, phrase)
+	comp, g, root, ok := d.comprehendCall(frame.Lang, phrase)
 	if !ok {
 		return "", false
 	}
-	src, ok := d.generateCode(comp)
+	src, ok := d.generateCode(comp, g, root)
 	if !ok {
 		return "", false
 	}
@@ -1156,7 +1156,7 @@ func (d *Daemon) computationSpan(lang, raw string) (string, bool) {
 		// The span must name an operation, not merely comprehend: the Go parser reads a
 		// bare word as an identifier and a bare number as a literal, so requiring an
 		// operation keeps "what is a lion" from reading "lion" as a computation.
-		if comp, ok := d.comprehendCall(lang, phrase); ok && comp.Op != "" {
+		if comp, _, _, ok := d.comprehendCall(lang, phrase); ok && comp.Op != "" {
 			return phrase, true
 		}
 	}

@@ -179,12 +179,12 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 	if d.code == nil {
 		return "", false
 	}
-	comp, ok := d.comprehendCall("en", src)
+	comp, g, root, ok := d.comprehendCall("en", src)
 	if !ok || !d.code.TypeCheck(comp) {
 		return "", false
 	}
 	out := src
-	if generated, ok := d.generateCode(comp); ok {
+	if generated, ok := d.generateCode(comp, g, root); ok {
 		out = generated
 	}
 	return runSummary(d.runProgram(out)), true

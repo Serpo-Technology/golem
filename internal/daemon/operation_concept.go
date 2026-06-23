@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"fmt"
 	"time"
 
 	"golem/internal/code"
@@ -272,24 +271,33 @@ func applicationToComputation(a grammar.Application) code.Computation {
 // while every surface the engine read still comprehends. This is the single point
 // the daemon's computation paths comprehend a call, so the live answer and the
 // learning-loop close never part on two parsers.
-func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, bool) {
+func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, *scratchGraph, uint64, bool) {
 	if d.code == nil {
-		return code.Computation{}, false
+		return code.Computation{}, nil, 0, false
 	}
 	if app, ok := d.gram.ParseApplication(lang, phrase, d.opHead); ok {
-		comp := applicationToComputation(app)
-		d.shadowComprehension(app, comp)
-		return comp, true
+		return d.comprehendApplication(app)
 	}
 	// The bare imperative "double 4" / "add 6 and 7" names the operation with the
 	// leading word and applies it to the operands that follow, the same call without
 	// the genitive scaffolding.
 	if app, ok := d.gram.ParseBareCall(lang, phrase, d.opHead); ok {
-		comp := applicationToComputation(app)
-		d.shadowComprehension(app, comp)
-		return comp, true
+		return d.comprehendApplication(app)
 	}
-	return d.code.Comprehend(phrase)
+	comp, ok := d.code.Comprehend(phrase)
+	return comp, nil, 0, ok
+}
+
+// comprehendApplication lowers a grounded grammar application to its meaning: the
+// computation, and the substrate graph built straight from the application when the build
+// covers the shape. The graph is generation's source when present; it is nil for a shape
+// the build declines, and the caller falls back to materializing the computation.
+func (d *Daemon) comprehendApplication(app grammar.Application) (code.Computation, *scratchGraph, uint64, bool) {
+	comp := applicationToComputation(app)
+	if g, root, ok := d.applicationToGraph(app); ok {
+		return comp, g, root, true
+	}
+	return comp, nil, 0, true
 }
 
 // applicationToGraph builds the code-meaning subgraph a comprehended call denotes directly
@@ -376,22 +384,4 @@ func (d *Daemon) buildAppGraph(g *scratchGraph, a grammar.Application) (uint64, 
 		g.attachSlot(call, elemRel, i, child)
 	}
 	return call, true
-}
-
-// shadowComprehension proves comprehension can build the substrate graph straight from the
-// grounded grammar application, the way generation walks a graph rather than the typed
-// form. It renders the graph built from the application and the graph the IR route would
-// build, and logs when they differ; it changes nothing and never runs code, comparing
-// generated source alone. A shape the grammar-built graph does not cover yet is skipped, as
-// the generation shadow skips one the materializer does not build.
-func (d *Daemon) shadowComprehension(app grammar.Application, comp code.Computation) {
-	g, root, ok := d.applicationToGraph(app)
-	if !ok {
-		return
-	}
-	walked, wok := d.traverse(goSurface{}, g, root, nil)
-	ir, iok := d.traverseCode(comp)
-	if wok && iok && walked.src != ir {
-		fmt.Fprintf(d.out, "comprehension graph mismatch: grammar %q vs ir %q\n", walked.src, ir)
-	}
 }

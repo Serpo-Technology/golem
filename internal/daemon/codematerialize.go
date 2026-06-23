@@ -367,14 +367,24 @@ func (d *Daemon) traverseCode(comp code.Computation) (string, bool) {
 	return r.src, rok
 }
 
-// generateCode produces the runnable Go for a comprehended computation by graph
-// traversal. The computation is materialized onto a subgraph and walked for its source,
-// so production code is written by reading the meaning back out of the graph. The typed
-// render is kept only as a cross-check and a fallback: when the walk succeeds it is used,
-// a render that disagrees is logged as a tripwire while the walk still serves, and the
-// render serves a shape the traversal does not build yet. It returns false when neither
-// path produces source, so the caller runs the surface it already holds.
-func (d *Daemon) generateCode(comp code.Computation) (string, bool) {
+// generateCode produces the runnable Go for a comprehended computation by graph traversal.
+// When comprehension built the substrate graph straight from the grounded grammar (g is
+// non-nil), that graph is walked for the source, so the meaning comprehension landed in the
+// graph drives generation with no re-materialize. Otherwise the computation is materialized
+// onto a subgraph and walked, the path a surface the grammar build does not cover takes (the
+// operator or raw-Go expression, or a told map). The typed render stays only a cross-check
+// and a fallback: the walk is used whenever it succeeds, a render that disagrees is logged as
+// a tripwire while the walk still serves, and the render serves a shape no walk builds yet.
+// It returns false when neither path produces source, so the caller runs the surface it holds.
+func (d *Daemon) generateCode(comp code.Computation, g *scratchGraph, root uint64) (string, bool) {
+	if g != nil {
+		if r, ok := d.traverse(goSurface{}, g, root, nil); ok {
+			if typed, tok := d.code.ToCode(comp); tok && r.src != typed {
+				fmt.Fprintf(d.out, "comprehension graph mismatch: grammar %q vs render %q\n", r.src, typed)
+			}
+			return r.src, true
+		}
+	}
 	walked, wok := d.traverseCode(comp)
 	generated, gok := d.code.ToCode(comp)
 	switch {
