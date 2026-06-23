@@ -66,16 +66,19 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > compute question, and the learn-loop closer) share one helper that prefers the walk:
 > the typed `code.ToCode` render is now a silent cross-check and a fallback for a shape
 > the walk does not build yet, logged on the rare disagreement but never substituted when
-> the walk succeeds. COMPREHENSION has begun the same move: `comprehendCall` builds the
-> code-meaning subgraph directly from the grounded grammar application (the inverse of the
-> generation walk), shadowed against the IR route and logging a mismatch while changing
-> nothing; the off-rail hand-parser that read surfaces with literal string checks is gone,
-> so the grounded grammar is the only comprehension-to-graph path. The build covers the
-> base shapes (literal, binary operation, list) and a call to any defined function, the
-> function node (parameters and body, including a recursive or conditional one) built by a
-> materializer shared with generation. Remaining there: cut generation over to the
-> comprehension-built graph and take `TypeCheck` off the `Computation` type. The floor (Go
-> parser, primitives, grounding-by-running) is unchanged throughout.
+> the walk succeeds. COMPREHENSION now makes the same move on the live compute path:
+> `comprehendCall` builds the code-meaning subgraph directly from the grounded grammar
+> application (the inverse of the generation walk; the off-rail hand-parser that read
+> surfaces with literal string checks is gone), covering the base shapes (literal, binary
+> operation, list) and a call to any defined function, the function node built by a
+> materializer shared with generation. That graph is now LOAD-BEARING: generation walks it
+> for the source, and the type check reads it, so a comprehended call generates and
+> type-checks off the substrate without consuming the `Computation`. The typed render and
+> the engine's type check stay as cross-checks (logged on a disagreement) and the fallback
+> for a surface the grammar build does not cover (the operator or raw-Go form, a told map).
+> Remaining there: stop producing the `Computation` for the cases that still read it (the
+> span finder, the fallback), and lift comprehension of those surfaces onto the graph too.
+> The floor (Go parser, primitives, grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
 `source.go`):
