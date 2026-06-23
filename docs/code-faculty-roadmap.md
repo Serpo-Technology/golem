@@ -62,11 +62,13 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > materializes a comprehended computation into a subgraph and walks it for the Go,
 > sharing the one traverser that renders language. Every shape it produces (operation,
 > conditional, list, call, recursion, told map, value-fold, synthesized map/filter)
-> materializes, with the typed `code.ToCode` render kept as the cross-check and no
-> longer reached on a successful walk. Remaining there: retire that fallback dispatch
-> (the code-gen `code.Computation` dissolution's landing), then move comprehension onto
-> the graph (the live path still produces a `Computation` first). The floor (Go parser,
-> primitives, grounding-by-running) is unchanged throughout.
+> materializes, and all three live generators (the explicit runcode, the in-conversation
+> compute question, and the learn-loop closer) share one helper that prefers the walk:
+> the typed `code.ToCode` render is now a silent cross-check and a fallback for a shape
+> the walk does not build yet, logged on the rare disagreement but never substituted when
+> the walk succeeds. Remaining there: move comprehension onto the graph (the live path
+> still produces a `Computation` first). The floor (Go parser, primitives,
+> grounding-by-running) is unchanged throughout.
 
 Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
 `source.go`):
