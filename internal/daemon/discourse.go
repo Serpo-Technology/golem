@@ -516,6 +516,15 @@ func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, co
 		if d.factIsComparative(k.rel) {
 			continue // a comparison answers through its own query, not as a verb here
 		}
+		// A tongue can only state a fact in the words it has learned. When the relation has no
+		// verb in a non-English tongue, the clause is left unsaid there rather than rendered as
+		// the foreign content under the tongue's case morphology; English is the floor every
+		// concept is named in, so it is not gated.
+		if lang != "en" {
+			if rel := d.resolveRelation(k.rel); rel == nil || !d.relationNamedIn(rel.ID, lang) {
+				continue
+			}
+		}
 		// The focus plays k.role and the co-arguments fill the other. A participant
 		// in the patient role takes its object case ("the dog chased me"), so the
 		// patient-side filler is cased before the clause is built.
