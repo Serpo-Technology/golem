@@ -776,14 +776,17 @@ func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) st
 	// question answers, the firm part of the description.
 	observed := map[string]bool{}
 	if facts := d.gatherFacts(focus, "", ""); len(facts) > 0 {
-		if line, ok := d.renderFactsCapped(frame.Lang, name, facts, true, true, describeClauseCap); ok {
+		// Salience, not a fixed count, decides how much is said: the facts are taken strongest
+		// first and the tail dropped once it thins, the description capped only against a hub.
+		salient := salientFacts(facts, describeClauseCap)
+		if line, ok := d.renderFactsCapped(frame.Lang, name, salient, true, true, describeClauseCap); ok {
 			parts = append(parts, line)
 		}
 		for _, f := range facts {
 			d.ws.excite(f.coID, exciteSpeech)
-			observed[f.rel] = true
+			observed[f.rel] = true // the full set marks what is observed, so the hedge below adds only fresh relations
 		}
-		d.claimFacts(focus, facts) // a description asserts these facts too; record them
+		d.claimFacts(focus, salient) // a description asserts what it actually said
 	}
 	// Then what the focus probably also does, from a near neighbour or a category it belongs
 	// to, for relations it has not been observed in, so the description shades from what is

@@ -1012,6 +1012,38 @@ func TestDescribeElaboratesBeyondFocusedCap(t *testing.T) {
 	}
 }
 
+// salientFacts orders by weight and stops where the tail thins: an exchange-established fact
+// is kept whatever its weight, the rest come strongest first, and one fainter than a fraction
+// of the strongest is dropped. A ceiling backstops a hub of equally strong facts.
+func TestSalientFactsOrdersAndStops(t *testing.T) {
+	facts := []focusFact{
+		{rel: "chase", focusRole: "agent", coID: 1, weight: 0.9},
+		{rel: "watch", focusRole: "agent", coID: 2, weight: 0.5},
+		{rel: "want", focusRole: "agent", coID: 3, weight: 0.05}, // below 0.9*0.15, the thinned tail
+		{rel: "love", focusRole: "agent", coID: 4, weight: 0.0, fromThread: true},
+	}
+	got := salientFacts(facts, 8)
+	if len(got) != 3 {
+		t.Fatalf("the faint want should drop and the rest stay, got %d: %+v", len(got), got)
+	}
+	if got[0].rel != "love" {
+		t.Errorf("an exchange-established fact should lead, kept whatever its weight: %+v", got)
+	}
+	if got[1].rel != "chase" || got[2].rel != "watch" {
+		t.Errorf("the graph facts should come strongest first: %+v", got)
+	}
+	for _, f := range got {
+		if f.rel == "want" {
+			t.Errorf("the thinned tail should be dropped: %+v", got)
+		}
+	}
+	// The ceiling backstops a run of equally strong facts.
+	many := []focusFact{{rel: "a", coID: 1, weight: 1}, {rel: "b", coID: 2, weight: 1}, {rel: "c", coID: 3, weight: 1}}
+	if got := salientFacts(many, 2); len(got) != 2 {
+		t.Errorf("the ceiling should cap a hub of equally strong facts: %d", len(got))
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"golem/internal/grammar"
@@ -211,20 +212,56 @@ func (d *Daemon) recordThreadProp(rel string, agent, patient uint64, agentGloss,
 // part in, the role the focus plays in it, and the co-argument filling the
 // other role. The thread and the walk both yield these.
 type focusFact struct {
-	rel       string
-	focusRole string // "agent" or "patient": the role the focus plays
-	coGloss   string
-	coID      uint64
+	rel        string
+	focusRole  string // "agent" or "patient": the role the focus plays
+	coGloss    string
+	coID       uint64
+	weight     float64 // the fact's salience: its proposition's edge weight from the walk
+	fromThread bool    // established this exchange, so kept whatever its entrenched weight
 }
 
 const (
 	factCoArgCap  = 4 // co-arguments coordinated within one clause
 	factClauseCap = 3 // relation clauses joined in a focused answer
-	// describeClauseCap is the looser limit a description runs to: it elaborates the focus
-	// across more of its grounded relations than a focused question answers, bounded so even
-	// a richly connected concept stops at a paragraph rather than a dump.
+	// describeClauseCap backstops a description against a pathological hub: a concept reached
+	// by dozens of equally strong facts still stops at a paragraph. Within it, salience decides
+	// the real length, so a sparsely grounded concept reads short and a richly grounded one
+	// reads long.
 	describeClauseCap = 8
 )
+
+// salienceFraction is where a description's tail is judged to have thinned: a fact weaker than
+// this slice of the strongest is dropped, so the answer runs as long as the concept is richly
+// connected and stops once the remaining facts are faint beside what was already said.
+const salienceFraction = 0.15
+
+// salientFacts orders a focus's facts by salience and stops when it thins: the facts
+// established this exchange are kept whatever their entrenched weight (the talk just raised
+// them), and the rest are taken strongest first until one falls below salienceFraction of the
+// strongest or the ceiling is reached. So the length of a description follows how richly the
+// focus is grounded rather than a fixed count.
+func salientFacts(facts []focusFact, ceiling int) []focusFact {
+	var thread, graph []focusFact
+	for _, f := range facts {
+		if f.fromThread {
+			thread = append(thread, f)
+		} else {
+			graph = append(graph, f)
+		}
+	}
+	sort.SliceStable(graph, func(i, j int) bool { return graph[i].weight > graph[j].weight })
+	out := thread
+	for _, f := range graph {
+		if len(out) >= ceiling {
+			break
+		}
+		if len(graph) > 0 && f.weight < graph[0].weight*salienceFraction {
+			break
+		}
+		out = append(out, f)
+	}
+	return out
+}
 
 // conceptName is a concept's speakable face in a tongue: the firmest word that
 // names it there, so an answer says "the dog" or, in Turkish, "köpek" rather
@@ -419,7 +456,7 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 	seen := map[key]bool{}
 	var out []focusFact
 	threadCovered := map[string]bool{} // rel|role the thread has spoken of
-	add := func(rl, frole, gloss string, id uint64) {
+	add := func(rl, frole, gloss string, id uint64, weight float64, thread bool) {
 		if id == 0 || rl == "" || !wantRole(frole) || !wantRel(rl) {
 			return
 		}
@@ -428,15 +465,15 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 			return
 		}
 		seen[k] = true
-		out = append(out, focusFact{rel: rl, focusRole: frole, coGloss: gloss, coID: id})
+		out = append(out, focusFact{rel: rl, focusRole: frole, coGloss: gloss, coID: id, weight: weight, fromThread: thread})
 	}
 	for _, p := range d.threadProps {
 		if p.agent == focus.ID {
-			add(p.rel, "agent", p.patientGloss, p.patient)
+			add(p.rel, "agent", p.patientGloss, p.patient, 0, true)
 			threadCovered[p.rel+"|agent"] = true
 		}
 		if p.patient == focus.ID {
-			add(p.rel, "patient", p.agentGloss, p.agent)
+			add(p.rel, "patient", p.agentGloss, p.agent, 0, true)
 			threadCovered[p.rel+"|patient"] = true
 		}
 	}
@@ -446,12 +483,12 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 	}
 	for _, dst := range dests[memory.RelPatient] { // the focus as agent, reaching its patients
 		if !threadCovered[dst.via+"|agent"] {
-			add(dst.via, "agent", dst.gloss, dst.id)
+			add(dst.via, "agent", dst.gloss, dst.id, dst.weight, false)
 		}
 	}
 	for _, dst := range dests[memory.RelAgent] { // the focus as patient, reaching its agents
 		if !threadCovered[dst.via+"|patient"] {
-			add(dst.via, "patient", dst.gloss, dst.id)
+			add(dst.via, "patient", dst.gloss, dst.id, dst.weight, false)
 		}
 	}
 	return out
