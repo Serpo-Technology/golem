@@ -603,6 +603,7 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 	}
 	var clauses []string
 	priorCompDir := "" // the pole the last comparison was spoken with, to read a contrast off the next
+	actionRun := 0     // consecutive actions by the focus, so a further one reads as an addition
 	for _, k := range order {
 		names := coargs[k]
 		// A locative relation speaks as a copula with a preposition ("the leaf is on
@@ -610,6 +611,7 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		// ground its patient, so the focus is the figure when it stood as agent and
 		// the ground when it stood as patient; the co-arguments fill the other side.
 		if d.factIsLocative(k.rel) {
+			actionRun = 0 // a placement is not an action, so it breaks an addition run
 			prep := k.rel // the canonical preposition the tongue renders by
 			given := continuation || len(clauses) > 0
 			for _, co := range names {
@@ -628,6 +630,7 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		// as a verb. The focus is the greater pole when it stood as agent and the lesser when
 		// it stood as patient, so the lesser is spoken with the relation's opposite ("smaller").
 		if rel := d.resolveRelation(k.rel); rel != nil && len(d.oppositeRelations(rel.ID)) > 0 {
+			actionRun = 0 // a comparison is not an action, so it breaks an addition run
 			given := continuation || len(clauses) > 0
 			for _, co := range names {
 				dir := k.rel
@@ -712,6 +715,21 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			line, ok = alt, true
 		}
 		if ok {
+			// A further action by the same subject reads as an addition. The focus is the
+			// constant agent across these clauses, so a second action is something it also
+			// did; the marker is spoken once, on the first continuation, the rest understood
+			// as part of the same run. The discourse relation is meaning (same subject, another
+			// action); the connective is the tongue's seeded word, so the plan reads in any tongue.
+			if k.role == "agent" {
+				if actionRun == 1 {
+					if w := d.gram.Word(lang, "addition"); w != "" {
+						line = upperFirst(w) + " " + lowerFirst(line)
+					}
+				}
+				actionRun++
+			} else {
+				actionRun = 0
+			}
 			clauses = append(clauses, line)
 		}
 	}

@@ -366,3 +366,5 @@ surface:en:firstpersonpl.obj	us	en
 surface:en:than	than	en
 surface:en:contrast	but	en
 surface:tr:contrast	ama	tr
+surface:en:addition	also	en
+surface:tr:addition	ayrıca	tr

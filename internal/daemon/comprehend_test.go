@@ -1126,6 +1126,35 @@ func TestDescriptionContrastsOppositePoles(t *testing.T) {
 	}
 }
 
+// A description of a thing that did several things marks the further actions as additions:
+// "It chased the mouse. It also watched the horse." The focus is the constant subject, so a
+// second action is something it also did. The additive relation is read from meaning (the same
+// subject across actions); the word is the tongue's seeded data, spoken once rather than on
+// every action.
+func TestDescriptionAddsAcrossActions(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"hare", "mouse", "horse"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a hare chased a mouse")
+	say(t, d, "a hare watched a horse")
+
+	got := say(t, d, "tell me about the hare").Say
+	if c := strings.Count(strings.ToLower(got), "also"); c != 1 {
+		t.Fatalf("a second action by the same subject should be marked as an addition once, not %d: %q", c, got)
+	}
+
+	// A lone action stands on its own, so nothing is added to it.
+	d2, _ := testDaemon(t)
+	for _, n := range []string{"hare", "mouse"} {
+		groundNoun(t, d2, n)
+	}
+	say(t, d2, "a hare chased a mouse")
+	if got := say(t, d2, "tell me about the hare").Say; strings.Contains(strings.ToLower(got), "also") {
+		t.Fatalf("a single action should not be marked as an addition: %q", got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
