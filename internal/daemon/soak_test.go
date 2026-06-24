@@ -116,6 +116,103 @@ func TestDeclShadowSoak(t *testing.T) {
 	}
 }
 
+// TestComprehensionTraversalSoak generates a clause from every stored proposition and reads it
+// back through both comprehension paths, failing on any divergence between the construction
+// traversal and the coded comprehender. It measures the traversal's agreement at scale (every
+// relation and concept the brain holds, both tongues) before the cutover. Env-gated on
+// GOLEM_SOAK_DB, on a copy of the snapshot so it is not touched.
+func TestComprehensionTraversalSoak(t *testing.T) {
+	dbPath := os.Getenv("GOLEM_SOAK_DB")
+	if dbPath == "" {
+		t.Skip("set GOLEM_SOAK_DB to a snapshot path to soak the comprehension traversal")
+	}
+	tmp := filepath.Join(t.TempDir(), "soak.db")
+	data, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := memory.OpenStore(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d := testDaemonOn(t, s)
+	teachTurkishMorphology(t, d) // so a Turkish clause generates with the learned verb morphology
+
+	concepts, err := s.Concepts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	covered, declined := 0, 0
+	var mismatches []string
+	for _, c := range concepts {
+		for _, f := range d.gatherFacts(c, "agent", "") {
+			// Plain action propositions: a comparison or placement renders as a copula, not the
+			// verb clause this round-trip reads, so it is left to those paths' own soaks.
+			if d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
+				continue
+			}
+			rel := d.resolveRelation(f.rel)
+			if rel == nil {
+				continue
+			}
+			frags, err := s.FragmentsByIDs([]uint64{f.coID})
+			if err != nil || len(frags) != 1 {
+				continue
+			}
+			patient := frags[0]
+			for _, lang := range []string{"en", "tr"} {
+				m := grammar.Meaning{
+					Relation: grammar.Term{Phrase: d.relationName(rel.Content, lang)},
+					Past:     true,
+					Lang:     lang,
+					Roles: map[string]grammar.Term{
+						"agent":   {Phrase: d.conceptName(c.ID, c.Content, lang), Definite: true},
+						"patient": {Phrase: d.conceptName(patient.ID, patient.Content, lang), Definite: true},
+					},
+				}
+				clause, ok := d.gram.Speak(lang, m)
+				if !ok {
+					continue
+				}
+				coded, cok := d.gram.Comprehend(lang, clause, d.resolveConcept, d.roleFit)
+				if !cok {
+					continue // the coded path cannot read its own generated clause; out of this slice's scope
+				}
+				walked, wok := d.gram.ComprehendByTraversal(lang, clause, d.resolveConcept, d.roleFit)
+				if !wok {
+					declined++
+					continue
+				}
+				if meaningsAgree(walked, coded) {
+					covered++
+				} else {
+					mismatches = append(mismatches, clause+": walked "+meaningGloss(walked)+" vs coded "+meaningGloss(coded))
+				}
+			}
+		}
+	}
+	total := covered + declined + len(mismatches)
+	pct := 0.0
+	if total > 0 {
+		pct = 100 * float64(covered) / float64(total)
+	}
+	t.Logf("comprehension soak: %d concepts, %d clauses (%d covered %.0f%%, %d declined, %d mismatch)",
+		len(concepts), total, covered, pct, declined, len(mismatches))
+	for i, m := range mismatches {
+		if i >= 20 {
+			break
+		}
+		t.Logf("  %s", m)
+	}
+	if len(mismatches) > 0 {
+		t.Fatalf("the comprehension traversal diverged on %d clauses the coded path read", len(mismatches))
+	}
+}
+
 func teachTurkishMorphology(t *testing.T, d *Daemon) {
 	t.Helper()
 	rules := map[string][][2]string{
