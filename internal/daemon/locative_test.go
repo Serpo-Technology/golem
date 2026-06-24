@@ -192,3 +192,28 @@ func TestLocativeContainmentComposes(t *testing.T) {
 	no("is the leaf in the tree")    // the leaf is on, not in, the tree
 	no("is the forest in the leaf")  // the chain does not run backward
 }
+
+// The Turkish form of the place question, asked with the locative case, composes the same chain:
+// a leaf on a tree in the forest is in the forest. The reasoning is the English path's; only the
+// parse is Turkish, so the deduction is language-decoupled.
+func TestLocativeContainmentComposesTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	leaf := groundNoun(t, d, "leaf")
+	tree := groundNoun(t, d, "tree")
+	forest := groundNoun(t, d, "forest")
+	// Name the same concepts in Turkish, so the Turkish question resolves them.
+	nameInLang(t, d, leaf, "yaprak", "tr")
+	nameInLang(t, d, tree, "ağaç", "tr")
+	nameInLang(t, d, forest, "orman", "tr")
+	// The chain is stated in English (the "in" relation); the Turkish question reads it.
+	say(t, d, "the leaf is on the tree")
+	say(t, d, "the tree is in the forest")
+
+	if got := say(t, d, "yaprak ormanda mı").Say; !strings.Contains(strings.ToLower(got), "evet") {
+		t.Fatalf("the Turkish containment question should compose the chain to yes: %q", got)
+	}
+	// The leaf is on, not in, the tree, so the contact does not read as containment.
+	if got := say(t, d, "yaprak ağaçta mı").Say; strings.Contains(strings.ToLower(got), "evet") {
+		t.Fatalf("the leaf is on the tree, not in it: %q", got)
+	}
+}

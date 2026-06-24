@@ -793,6 +793,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planLocativePolar(frame); ok {
 		return ans, nil
 	}
+	// "Yaprak ormanda mı": the Turkish form of the same place question, the locative case
+	// standing in for the preposition, composing the placement chain the same way.
+	if ans, ok := d.planLocativePolarTR(frame, raw); ok {
+		return ans, nil
+	}
 	// "Is a cat an animal": an is-a question, recognized from its comprehended
 	// frame (a copular question over two concepts) and settled against the category
 	// hierarchy rather than the relation graph a polar question reads.

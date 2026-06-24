@@ -37,6 +37,20 @@ func groundNounLang(t *testing.T, d *Daemon, gloss, lang string) *memory.Fragmen
 	return c
 }
 
+// nameInLang adds a second tongue's name to an existing concept, so one concept
+// is named in both languages (the leaf is "leaf" and "yaprak").
+func nameInLang(t *testing.T, d *Daemon, c *memory.Fragment, word, lang string) {
+	t.Helper()
+	now := time.Now()
+	w, _, err := d.store.WordNode(word, lang, d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.9); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // sayLang tells GOLEM an utterance tagged with its language, the path the
 // CLI takes for "tell --lang tr".
 func sayLang(t *testing.T, d *Daemon, lang, words string) wire.Response {

@@ -63,6 +63,13 @@ func (d *Daemon) locativeClause(lang, figure, prep, ground string, given, negate
 		} else {
 			clause = figure + " " + d.gram.Locative(lang, ground)
 		}
+		if negate {
+			// Turkish denies a copular place with the standing negator "değil" after the
+			// placed phrase ("yaprak ormanda değil"), the same word a comparison is denied with.
+			if not := d.gram.Word(lang, "notcompare"); not != "" {
+				clause += " " + not
+			}
+		}
 		return grammar.Sentence(clause), true
 	}
 	if lang == "la" {
@@ -205,15 +212,28 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 			}
 		}
 	}
-	// General locative form: figure ground-LOC ("yaprak ağaçta"). The locative-cased
-	// noun is the ground and the bare noun the figure; the relation is the warm
+	// General locative form: figure ground-LOC ("yaprak ağaçta"). The relation is the warm
 	// locative one or a general Turkish locative.
-	if len(tokens) != 2 {
+	figure, ground, ok := d.parseLocativeContainmentTR(raw)
+	if !ok {
 		return false
 	}
-	groundIdx, ground := -1, (*memory.Fragment)(nil)
+	return d.storeLocative(momentID, figure, ground, d.locativeRelationTR())
+}
+
+// parseLocativeContainmentTR reads a Turkish general-locative clause ("yaprak ormanda", the leaf
+// in the forest) into its figure and ground: the locative-cased noun (-da/-de) is the ground and
+// the bare noun the figure. The locative case asks containment, so it is the form a "is X in Y"
+// question takes, distinct from the postposition forms (on, under) that state contact. It returns
+// false when the clause is not a two-noun general locative.
+func (d *Daemon) parseLocativeContainmentTR(raw string) (figure, ground *memory.Fragment, ok bool) {
+	tokens, _ := grammar.Tokenize(raw)
+	if len(tokens) != 2 {
+		return nil, nil, false
+	}
+	groundIdx := -1
 	for i, tok := range tokens {
-		if stem, ok := d.gram.LocativeGround("tr", tok); ok {
+		if stem, isLoc := d.gram.LocativeGround("tr", tok); isLoc {
 			if c := d.resolveConcept(stem); c != nil {
 				groundIdx, ground = i, c
 				break
@@ -221,13 +241,41 @@ func (d *Daemon) comprehendLocativeTR(raw string, momentID uint64) bool {
 		}
 	}
 	if ground == nil {
-		return false
+		return nil, nil, false
 	}
-	figure := d.resolveConcept(tokens[1-groundIdx])
+	figure = d.resolveConcept(tokens[1-groundIdx])
 	if figure == nil || figure.ID == ground.ID {
-		return false
+		return nil, nil, false
 	}
-	return d.storeLocative(momentID, figure, ground, d.locativeRelationTR())
+	return figure, ground, true
+}
+
+// planLocativePolarTR answers a Turkish "is X in Y" asked with the locative case ("yaprak ormanda
+// mı"). The locative case asks containment, so the placement chain reads the way the English "is X
+// in Y" reads it: a leaf on a tree that is in the forest is in the forest. It reuses
+// assessProposition (the containment composition) and answerPolar (the locative copula), so the
+// reasoning and the surface are the English path's; only the parse is Turkish. It returns false
+// when the clause is not a Turkish locative question, so the ordinary polar path stands.
+func (d *Daemon) planLocativePolarTR(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "tr" {
+		return "", false
+	}
+	clause, _, ok := polarClause(frame.Lang, raw)
+	if !ok {
+		return "", false
+	}
+	figure, ground, ok := d.parseLocativeContainmentTR(clause)
+	if !ok {
+		return "", false
+	}
+	rel := d.resolveRelation(containmentPrep)
+	if rel == nil {
+		// Nothing has ever been placed inside anything, so the chain cannot hold.
+		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
+	}
+	d.noteFocus(figure)
+	belief, _, supposed := d.assessProposition(figure, containmentPrep, ground)
+	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed), true
 }
 
 // storeLocative writes a locative proposition (the figure at the ground
