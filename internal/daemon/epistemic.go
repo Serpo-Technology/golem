@@ -291,8 +291,10 @@ func (d *Daemon) knowsProposition(clause string) (string, bool) {
 // planKnowledgeQuery answers the open epistemic wh-question off the frame: the know verb
 // marks the clause (frame.Speech == "know") and a wh word makes it the open form; the object
 // tells the two readings apart. "what do you know about X" names X as the patient and
-// describes it; the bare "what do you know" names nothing and reports the whole graph. English
-// and Turkish derive the wh word (what, ne); the Latin quid is read by its own surface still.
+// describes it; the bare "what do you know" names nothing and reports the whole graph. English,
+// Turkish, and Latin all derive the wh word now (what, ne, quid), so the bare summary routes
+// here in every tongue; the Latin about-form still reads its de-X object off the surface until
+// the preposition is parsed onto the patient.
 func (d *Daemon) planKnowledgeQuery(frame grammar.Frame) (string, bool) {
 	if frame.Speech != "know" || frame.Wh != "what" {
 		return "", false
@@ -304,15 +306,13 @@ func (d *Daemon) planKnowledgeQuery(frame grammar.Frame) (string, bool) {
 	return d.knowledgeSummary(frame.Lang), true
 }
 
-// planKnowledgeSummary answers the open "what do you know" for the surfaces not yet read off
-// the frame: the Latin quid scis, whose wh word the parser does not mark, and the Turkish
-// neler variant. The English and the bare Turkish forms route through planKnowledgeQuery.
+// planKnowledgeSummary answers the open "what do you know" for the one surface not yet read
+// off the frame: the Turkish neler variant, whose wh word is not seeded. The English, Turkish
+// ne, and Latin quid forms route through planKnowledgeQuery.
 func (d *Daemon) planKnowledgeSummary(raw string) (string, bool) {
 	switch strings.ToLower(strings.Trim(strings.TrimSpace(raw), " ?.!")) {
 	case "neler biliyorsun":
 		return d.knowledgeSummary("tr"), true
-	case "quid scis":
-		return d.knowledgeSummary("la"), true
 	}
 	return "", false
 }

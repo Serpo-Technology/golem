@@ -731,8 +731,8 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		template, name string
 		words          []string
 	}{
-		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated"}},
-		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told"}},
+		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated", "açıkla", "explica", "significas"}},
+		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told", "söyle", "söyledim", "söyledin", "dedim", "dedin", "dic", "dixi", "dixisti"}},
 		{"speech:describe", "describe", []string{"describe", "describes", "described", "anlat", "narra"}},
 		{"speech:know", "know", []string{"know", "knows", "known", "biliyor", "bilir", "biliyorsun", "bilirsin", "scis", "scisne"}},
 		{"rel:after", "after", []string{"sonra"}},
@@ -747,7 +747,7 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		// Interrogative type: English wh words name their own type, so only the
 		// forms that need translating link; "what:be" carries the copula nedir folds
 		// in ("what is"), read back by whInfo's type-then-copula split.
-		{"wh:what", "what", []string{"ne", "neyi"}},
+		{"wh:what", "what", []string{"ne", "neyi", "quid"}},
 		{"wh:who", "who", []string{"kim"}},
 		{"wh:where", "where", []string{"nerede"}},
 		{"wh:why", "why", []string{"neden", "niye"}},

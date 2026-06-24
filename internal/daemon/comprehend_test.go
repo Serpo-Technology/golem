@@ -1742,6 +1742,21 @@ func TestSpeechMoveDerivedFromGraph(t *testing.T) {
 	}
 }
 
+// The clarify and recall moves derive from the speech-act verb in every tongue they are
+// seeded in, so a Turkish or Latin conversation reaches them the same way English does. The
+// move is one concept; each tongue contributes a verb that links to it.
+func TestClarifyRecallCrossTongue(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, c := range []struct{ word, lang, move string }{
+		{"açıkla", "tr", "clarify"}, {"explica", "la", "clarify"}, {"quid significas", "la", "clarify"},
+		{"söyle", "tr", "recall"}, {"ne söyledim", "tr", "recall"}, {"dixi", "la", "recall"},
+	} {
+		if mv := d.gram.ParseHint(c.word, c.lang, d.resolveConcept).Speech; mv != c.move {
+			t.Errorf("%q (%s) should derive the %s move, got %q", c.word, c.lang, c.move, mv)
+		}
+	}
+}
+
 // A deictic pronoun resolves to the participant it is linked to in the graph, not
 // a table in code: a seeded pronoun resolves through its link, and a fresh deixis
 // word linked to a participant resolves to it once the index reloads.
