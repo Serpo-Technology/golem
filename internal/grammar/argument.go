@@ -371,8 +371,8 @@ func (p *Params) resolveCasedNoun(lang, span string, resolve func(string) *memor
 // construction is chosen by how the GROUNDED spans fit its slots' roles (selectArgByFit), the way
 // generation chooses by the role set, rather than by the span count alone. So the form-meaning
 // pairing is one bidirectional source of truth walked both ways. This is the additive traversal
-// counterpart of the coded parser; it declines the case-driven and pro-drop specials for now, so
-// it is shadowed only where it is the plain construction inverse. It returns false when no
+// counterpart of the coded parser; it recovers a Turkish pro-dropped subject the way the coded
+// path does, and declines only the case-driven roles (Latin) for now. It returns false when no
 // construction's grounded shape fits.
 func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(string) *memory.Fragment, fit func(*memory.Fragment, string) float64) (Meaning, bool) {
 	p = p.get()
@@ -383,15 +383,19 @@ func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(stri
 	if !ok {
 		return Meaning{}, false
 	}
-	// The case-driven roles (Latin) and the Turkish pro-drop recovery are the coded path's
-	// specials; this slice walks the plain construction, so it declines them and the shadow
-	// compares only where both read the construction the same way.
+	// Latin reads roles from case, not the slot order, so this position-based walk declines it
+	// to the coded path for now.
 	if p.caseDriven(lang) {
 		return Meaning{}, false
 	}
+	// Turkish drops a subject its verb's agreement carries ("kediyi kovaladım" is "(I) chased the
+	// cat", the -m marking first person). Recover the implied pronoun as the first span, the way
+	// the coded path does, so the clause walks as the transitive it is.
 	if lang == "tr" && len(spans) > 0 {
 		if person := pastVerbPersonTR(spans[len(spans)-1]); person != trPerson3sg && !p.hasSubjectPronounTR(spans) {
-			return Meaning{}, false
+			if pronoun := p.personPronounTR(person); pronoun != "" {
+				spans = append([]string{pronoun}, spans...)
+			}
 		}
 	}
 	cxn, order, ok := p.selectArgByFit(lang, spans, resolve, fit)

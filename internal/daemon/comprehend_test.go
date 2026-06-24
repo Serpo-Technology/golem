@@ -1325,6 +1325,33 @@ func TestComprehendByTraversalShadowStaysSilent(t *testing.T) {
 	}
 }
 
+// The traversal recovers a Turkish pro-dropped subject the way the coded path does: "kediyi
+// kovaladım" is "(I) chased the cat", the verb's -m carrying the speaker as the agent.
+func TestComprehendByTraversalReadsTurkishProDrop(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	nameInLang(t, d, dog, "köpek", "tr")
+	nameInLang(t, d, cat, "kedi", "tr")
+	sayLang(t, d, "tr", "köpek kediyi kovaladı") // establishes the kovala relation
+
+	// Word order is authoritative for a deictic subject (nil fit), the way the daemon reads it.
+	coded, ok1 := d.gram.Comprehend("tr", "kediyi kovaladım", d.resolveConcept, nil)
+	walked, ok2 := d.gram.ComprehendByTraversal("tr", "kediyi kovaladım", d.resolveConcept, nil)
+	if !ok1 || !ok2 {
+		t.Fatalf("both paths should read the pro-drop clause: coded=%v walked=%v", ok1, ok2)
+	}
+	if !meaningsAgree(walked, coded) {
+		t.Fatalf("the traversal should match the coded reading of pro-drop: walked %+v vs coded %+v", walked, coded)
+	}
+	if a := walked.Roles["agent"].Concept; a == nil || a.ID != d.userID {
+		t.Fatalf("the dropped subject should resolve to the speaker: %+v", walked.Roles["agent"])
+	}
+	if p := walked.Roles["patient"].Concept; p == nil || p.ID != cat.ID {
+		t.Fatalf("the patient should be the cat: %+v", walked.Roles["patient"])
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
