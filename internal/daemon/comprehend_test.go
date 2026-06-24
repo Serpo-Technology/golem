@@ -981,6 +981,37 @@ func TestDescribeInfersProperty(t *testing.T) {
 	}
 }
 
+// A description elaborates the focus across all its grounded relations, where a focused
+// question stops at the terse cap. The dog taught four activities, "tell me about the dog"
+// names all four; "what did the dog do" keeps the shorter cap of a focused answer.
+func TestDescribeElaboratesBeyondFocusedCap(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "ball", "bird", "bone"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog fetched a ball")
+	say(t, d, "a dog watched a bird")
+	say(t, d, "a dog ate a bone")
+
+	verbs := []string{"chased", "fetched", "watched", "ate"}
+	count := func(s string) int {
+		n := 0
+		for _, v := range verbs {
+			if strings.Contains(s, v) {
+				n++
+			}
+		}
+		return n
+	}
+	if got := say(t, d, "tell me about the dog").Say; count(got) != len(verbs) {
+		t.Fatalf("a description should elaborate across all four relations: %q", got)
+	}
+	if got := say(t, d, "what did the dog do").Say; count(got) > factClauseCap {
+		t.Fatalf("a focused question should keep the terse cap of %d: %q", factClauseCap, got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches

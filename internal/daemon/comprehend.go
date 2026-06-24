@@ -770,24 +770,64 @@ func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) st
 	if focus.Category == "verb" || focus.Category == "relation" {
 		kind = "action"
 	}
-	parts := []string{d.definitionClause(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), sortalWord(frame.Lang, kind), chem)}
+	name := d.conceptName(focus.ID, focus.Content, frame.Lang)
+	parts := []string{d.definitionClause(frame.Lang, name, sortalWord(frame.Lang, kind), chem)}
+	// What is observed about the focus, elaborated across more of its relations than a focused
+	// question answers, the firm part of the description.
+	observed := map[string]bool{}
 	if facts := d.gatherFacts(focus, "", ""); len(facts) > 0 {
-		if line, ok := d.renderFacts(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), facts, true, true); ok {
+		if line, ok := d.renderFactsCapped(frame.Lang, name, facts, true, true, describeClauseCap); ok {
 			parts = append(parts, line)
 		}
 		for _, f := range facts {
 			d.ws.excite(f.coID, exciteSpeech)
+			observed[f.rel] = true
 		}
 		d.claimFacts(focus, facts) // a description asserts these facts too; record them
-	} else if guess, ok := d.inferRole(frame, focus, "agent", "", true, true); ok {
-		// Nothing observed about the focus: offer what a near neighbour does as a
-		// hedged guess at what this one likely does, the property counterpart of
-		// the kind guess "what is X" makes. The focus was just named, so the guess
-		// carries it as a pronoun.
-		parts = append(parts, guess)
+	}
+	// Then what the focus probably also does, from a near neighbour or a category it belongs
+	// to, for relations it has not been observed in, so the description shades from what is
+	// known to what is likely and stops at what can be grounded. When nothing is observed this
+	// hedged guess is the whole of what can be said, the focus carried as a pronoun after the
+	// definition just spoken.
+	if hedged, ok := d.hedgedElaboration(frame, focus, observed); ok {
+		parts = append(parts, hedged)
 	}
 	d.warmSpoken(focus.Content)
 	return strings.Join(parts, " ")
+}
+
+// hedgedElaboration offers what a focus probably also does, beyond what was observed of it: the
+// facts a near neighbour stands in (or a category it belongs to does), filtered to relations
+// the focus has not been seen in, rendered behind the tongue's "probably". It returns false
+// when no fresh likely fact can be drawn, so a description never pads with an empty guess.
+func (d *Daemon) hedgedElaboration(frame grammar.Frame, focus *memory.Fragment, observed map[string]bool) (string, bool) {
+	kept, _, ok := d.inferredFacts(focus, "agent", "")
+	if !ok {
+		if kept, ok = d.inheritedFacts(focus, "agent", ""); !ok {
+			return "", false
+		}
+	}
+	fresh := kept[:0]
+	for _, f := range kept {
+		if !observed[f.rel] {
+			fresh = append(fresh, f)
+		}
+	}
+	if len(fresh) == 0 {
+		return "", false
+	}
+	// One clause only: the hedge prefixes the line, so a second guessed clause would trail
+	// behind it reading as firm. The single likeliest guess keeps the shade honest.
+	line, ok := d.renderFactsCapped(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang), fresh, true, true, 1)
+	if !ok {
+		return "", false
+	}
+	hedge := d.gram.Word(frame.Lang, "probably")
+	if hedge == "" {
+		return line, true
+	}
+	return upperFirst(hedge) + ", " + lowerFirst(line), true
 }
 
 // planTopicRecall answers a turn that asks what the talk is on, or was on before:

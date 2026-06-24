@@ -219,7 +219,11 @@ type focusFact struct {
 
 const (
 	factCoArgCap  = 4 // co-arguments coordinated within one clause
-	factClauseCap = 3 // relation clauses joined in one answer
+	factClauseCap = 3 // relation clauses joined in a focused answer
+	// describeClauseCap is the looser limit a description runs to: it elaborates the focus
+	// across more of its grounded relations than a focused question answers, bounded so even
+	// a richly connected concept stops at a paragraph rather than a dump.
+	describeClauseCap = 8
 )
 
 // conceptName is a concept's speakable face in a tongue: the firmest word that
@@ -463,13 +467,20 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 // it too. The focus fills its role and the co-arguments the other; the caps
 // keep an answer from running on. It returns false when nothing renders.
 func (d *Daemon) renderFacts(lang, focusName string, facts []focusFact, past, continuation bool) (string, bool) {
+	return d.renderFactsCapped(lang, focusName, facts, past, continuation, factClauseCap)
+}
+
+// renderFactsCapped is renderFacts with the clause limit as a parameter, so a focused answer
+// keeps the terse cap while a description can run longer, up to the count its salience-ordered
+// facts fill.
+func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, past, continuation bool, maxClauses int) (string, bool) {
 	type key struct{ rel, role string }
 	var order []key
 	coargs := map[key][]string{}
 	for _, f := range facts {
 		k := key{f.rel, f.focusRole}
 		if _, ok := coargs[k]; !ok {
-			if len(order) >= factClauseCap {
+			if len(order) >= maxClauses {
 				continue
 			}
 			order = append(order, k)
