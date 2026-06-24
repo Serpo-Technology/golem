@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -1266,6 +1267,61 @@ func TestDescriptionCoordinatesSameDirectionStandards(t *testing.T) {
 	}
 	if c := strings.Count(got, "lighter"); c != 1 {
 		t.Fatalf("the direction should be named once, not %d: %q", c, got)
+	}
+}
+
+// The construction-traversal comprehender reads a clause to the same meaning the coded path does,
+// and the construction round-trips: generation walks it back to the clause. One bidirectional
+// form-meaning pairing, walked both ways. This is the first slice of comprehension-by-traversal,
+// shadowed against the coded parser.
+func TestComprehendByTraversalShadowsAndRoundTrips(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat") // establishes the chase relation
+
+	coded, ok1 := d.gram.Comprehend("en", "a dog chased a cat", d.resolveConcept, d.roleFit)
+	walked, ok2 := d.gram.ComprehendByTraversal("en", "a dog chased a cat", d.resolveConcept, d.roleFit)
+	if !ok1 || !ok2 {
+		t.Fatalf("both paths should comprehend the clause: coded=%v walked=%v", ok1, ok2)
+	}
+	if !meaningsAgree(walked, coded) {
+		t.Fatalf("the traversal should read the meaning the coded path does: walked %+v vs coded %+v", walked, coded)
+	}
+	if walked.Relation.Concept == nil || walked.Roles["agent"].Concept == nil || walked.Roles["patient"].Concept == nil {
+		t.Fatalf("the traversal should ground the relation and both roles: %+v", walked)
+	}
+
+	// Round-trip: generation walks the same construction back to the clause (definiteness is the
+	// generator's to choose, so it is set for the surface).
+	back := grammar.Meaning{Relation: walked.Relation, Past: walked.Past, Lang: "en", Roles: map[string]grammar.Term{
+		"agent":   {Concept: walked.Roles["agent"].Concept, Definite: true},
+		"patient": {Concept: walked.Roles["patient"].Concept, Definite: true},
+	}}
+	if got, ok := d.gram.Speak("en", back); !ok || got != "The dog chased the cat." {
+		t.Fatalf("the construction should round-trip to the clause: %q (ok=%v)", got, ok)
+	}
+}
+
+// Across a range of told clauses the traversal comprehender agrees with the coded path, so the
+// shadow stays silent. The soak-lite for the first comprehension-by-traversal slice.
+func TestComprehendByTraversalShadowStaysSilent(t *testing.T) {
+	d, _ := testDaemon(t)
+	var buf bytes.Buffer
+	d.out = &buf
+	for _, n := range []string{"dog", "cat", "mouse", "wolf"} {
+		groundNoun(t, d, n)
+	}
+	for _, clause := range []string{
+		"a dog chased a cat",
+		"a wolf chased a mouse",
+		"a cat chased a mouse",
+		"the dog chased the cat",
+	} {
+		say(t, d, clause)
+	}
+	if strings.Contains(buf.String(), "comprehension traversal mismatch") {
+		t.Fatalf("the traversal should agree with the coded path across clauses, but a mismatch fired:\n%s", buf.String())
 	}
 }
 

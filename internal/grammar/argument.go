@@ -337,28 +337,114 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 			m.Past = p.verbPast(lang, span)
 			continue
 		}
-		// A noun phrase resolves on its surface, and on its case-stripped form
-		// when the surface names nothing, so a case-marked Turkish object
-		// ("kediyi") reaches the concept its stem names ("kedi"). The stem may
-		// also need its softened stop hardened back ("köpeği" -> "köpeğ" ->
-		// "köpek"), tried after the literal stem so a word genuinely ending in
-		// the voiced consonant resolves first. An unmarked word is left as it is.
-		filler := Term{Concept: resolve(span), Phrase: span}
-		if filler.Concept == nil {
-			for _, base := range p.caseStems(lang, span) {
-				if base == span {
-					continue
-				}
-				if c := resolve(base); c != nil {
-					filler = Term{Concept: c, Phrase: base}
-					break
-				}
-			}
-		}
-		m.Roles[slot.Role] = filler
+		m.Roles[slot.Role] = p.resolveCasedNoun(lang, span, resolve)
 	}
 	p.bestFit(cxn, m, fit)
 	return m, true
+}
+
+// resolveCasedNoun grounds a noun span to its concept: the surface first, then its case-stripped
+// stems when the surface names nothing, so a case-marked Turkish object ("kediyi") reaches the
+// concept its stem names ("kedi"). The stem may need its softened stop hardened back ("köpeği" ->
+// "köpeğ" -> "köpek"), tried after the literal stem so a word genuinely ending in the voiced
+// consonant resolves first. An unmarked word is left as it is. Both comprehension paths share it.
+func (p *Params) resolveCasedNoun(lang, span string, resolve func(string) *memory.Fragment) Term {
+	if c := resolve(span); c != nil {
+		return Term{Concept: c, Phrase: span}
+	}
+	for _, base := range p.caseStems(lang, span) {
+		if base == span {
+			continue
+		}
+		if c := resolve(base); c != nil {
+			return Term{Concept: c, Phrase: base}
+		}
+	}
+	return Term{Phrase: span}
+}
+
+// ComprehendByTraversal reads a clause to a meaning by walking the SAME argument construction
+// that Speak walks to generate one, in reverse: where Speak selects a construction, lays its
+// slots out in word order, and renders each role's filler, this segments the surface in that
+// layout, binds each slot's span to the concept it names, and the predicate span to the relation.
+// It differs from the coded Comprehend in ONE way that matters as the grammar grows: the
+// construction is chosen by how the GROUNDED spans fit its slots' roles (selectArgByFit), the way
+// generation chooses by the role set, rather than by the span count alone. So the form-meaning
+// pairing is one bidirectional source of truth walked both ways. This is the additive traversal
+// counterpart of the coded parser; it declines the case-driven and pro-drop specials for now, so
+// it is shadowed only where it is the plain construction inverse. It returns false when no
+// construction's grounded shape fits.
+func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(string) *memory.Fragment, fit func(*memory.Fragment, string) float64) (Meaning, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	spans, ok := p.argSpans(lang, utterance)
+	if !ok {
+		return Meaning{}, false
+	}
+	// The case-driven roles (Latin) and the Turkish pro-drop recovery are the coded path's
+	// specials; this slice walks the plain construction, so it declines them and the shadow
+	// compares only where both read the construction the same way.
+	if p.caseDriven(lang) {
+		return Meaning{}, false
+	}
+	if lang == "tr" && len(spans) > 0 {
+		if person := pastVerbPersonTR(spans[len(spans)-1]); person != trPerson3sg && !p.hasSubjectPronounTR(spans) {
+			return Meaning{}, false
+		}
+	}
+	cxn, order, ok := p.selectArgByFit(lang, spans, resolve, fit)
+	if !ok {
+		return Meaning{}, false
+	}
+	m := Meaning{Roles: map[string]Term{}, Lang: lang}
+	for i, slot := range order {
+		span := spans[i]
+		if slot.Role == cxn.Pred {
+			lemma := p.verbLemma(lang, span)
+			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
+			m.Past = p.verbPast(lang, span)
+			continue
+		}
+		m.Roles[slot.Role] = p.resolveCasedNoun(lang, span, resolve)
+	}
+	p.bestFit(cxn, m, fit)
+	return m, true
+}
+
+// selectArgByFit picks the construction the grounded spans best fill: among the constructions
+// whose laid-out slots match the span count, the entrenched one, ties broken by how well the
+// resolved concepts fit its non-predicate slots' roles. So comprehension reasons over the
+// grounding to choose its construction, the form-meaning counterpart of how generation's selectArg
+// chooses by the role set, rather than by arity alone. It returns the construction and its slots
+// in surface-layout order.
+func (p *Params) selectArgByFit(lang string, spans []string, resolve func(string) *memory.Fragment, fit func(*memory.Fragment, string) float64) (ArgConstruction, []ArgSlot, bool) {
+	var best ArgConstruction
+	var bestOrder []ArgSlot
+	bestScore := 0.0
+	found := false
+	for _, cxn := range p.argcxns[lang] {
+		order := p.layout(lang, cxn)
+		if len(order) != len(spans) {
+			continue
+		}
+		score := 0.0
+		if fit != nil {
+			for i, slot := range order {
+				if slot.Role == cxn.Pred {
+					continue
+				}
+				if c := resolve(spans[i]); c != nil {
+					score += fit(c, slot.Role)
+				}
+			}
+		}
+		if !found || cxn.Weight > best.Weight || (cxn.Weight == best.Weight && score > bestScore) {
+			best, bestOrder, bestScore, found = cxn, order, score, true
+		}
+	}
+	return best, bestOrder, found
 }
 
 // comprehendByCase reads a clause whose roles come from case, not position: the

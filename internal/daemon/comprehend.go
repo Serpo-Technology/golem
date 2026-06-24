@@ -125,6 +125,40 @@ func (d *Daemon) nounLemma(phrase, lang string) string {
 	return head
 }
 
+// meaningsAgree reports whether two comprehended meanings bind the same relation and role
+// concepts (and tense), the check the comprehension-traversal shadow uses to confirm the
+// traversal reads what the coded path reads.
+func meaningsAgree(a, b grammar.Meaning) bool {
+	if a.Past != b.Past || !sameConcept(a.Relation.Concept, b.Relation.Concept) || len(a.Roles) != len(b.Roles) {
+		return false
+	}
+	for role, ta := range a.Roles {
+		if !sameConcept(ta.Concept, b.Roles[role].Concept) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameConcept(a, b *memory.Fragment) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.ID == b.ID
+}
+
+// meaningGloss is a short surface for a meaning, for the shadow's mismatch log.
+func meaningGloss(m grammar.Meaning) string {
+	g := m.Relation.Phrase
+	if a := m.Roles["agent"].Phrase; a != "" {
+		g = a + " " + g
+	}
+	if p := m.Roles["patient"].Phrase; p != "" {
+		g += " " + p
+	}
+	return g
+}
+
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {
 	d.followUp = "" // set only when this telling answers a question left open
 	if momentID == 0 {
@@ -161,6 +195,12 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
 	if !ok {
 		return false
+	}
+	// SHADOW: the construction-traversal comprehender (the inverse of Speak) runs alongside to
+	// prove it reads the same meaning the coded path does. Demonstrated, not load-bearing -- the
+	// coded m is used; a disagreement on a shape both handle is logged as a tripwire.
+	if alt, aok := d.gram.ComprehendByTraversal(frame.Lang, raw, d.resolveConcept, d.roleFit); aok && !meaningsAgree(alt, m) {
+		fmt.Fprintf(d.out, "comprehension traversal mismatch: walked %q vs coded %q\n", meaningGloss(alt), meaningGloss(m))
 	}
 	// A clause naming a conversation participant is a deictic assertion ("I chased
 	// the cat", "kediyi kovaladım"): the speaker fixed the roles by the pronoun or
