@@ -649,10 +649,23 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 	}
 	sort.SliceStable(compGroups, func(i, j int) bool { return compGroups[i].scale < compGroups[j].scale })
 
+	// Actions over the same subject and object coordinate their verbs into one clause ("loved and
+	// ate the cheese"), so only the verb differs. Group the plain-action keys by the role and the
+	// co-argument set; a group of several verbs speaks once, the verbs joined at realization.
+	actionVerbs := map[string][]string{}
+	for _, k := range order {
+		if d.factIsLocative(k.rel) || d.factIsComparative(k.rel) {
+			continue
+		}
+		gk := actionGroupKey(k.role, coargs[k])
+		actionVerbs[gk] = append(actionVerbs[gk], k.rel)
+	}
+
 	var clauses []string
-	compRendered := false // the comparison block is emitted as a whole at its first key
-	priorCompDir := ""    // the pole the last comparison was spoken with, to read a contrast off the next
-	actionRun := 0        // consecutive actions by the focus, so a further one reads as an addition
+	compRendered := false       // the comparison block is emitted as a whole at its first key
+	emittedAction := map[string]bool{} // a subject-object pair's verbs are spoken together, once
+	priorCompDir := ""          // the pole the last comparison was spoken with, to read a contrast off the next
+	actionRun := 0              // consecutive actions by the focus, so a further one reads as an addition
 	for _, k := range order {
 		names := coargs[k]
 		// A locative relation speaks as a copula with a preposition ("the leaf is on
@@ -688,8 +701,20 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			}
 			compRendered = true
 			given := continuation || len(clauses) > 0
-			for _, g := range compGroups {
-				cl, ok := d.comparativeClause(lang, focusName, g.dirs, g.name, given)
+			for i := 0; i < len(compGroups); i++ {
+				g := compGroups[i]
+				dirs := g.dirs
+				stds := []string{g.name}
+				// Several standards the focus stands to in one direction coordinate ("lighter than
+				// the cat and the dog"). They share a scale, so the sort placed them adjacent; gather
+				// the run of single-pole groups in this direction.
+				if len(dirs) == 1 {
+					for i+1 < len(compGroups) && len(compGroups[i+1].dirs) == 1 && compGroups[i+1].dirs[0] == dirs[0] {
+						i++
+						stds = append(stds, compGroups[i].name)
+					}
+				}
+				cl, ok := d.comparativeClause(lang, focusName, dirs, stds, given)
 				if !ok {
 					continue
 				}
@@ -697,14 +722,14 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 				// than the snail, but smaller than the lion." A coordinated group spans several
 				// scales, so only a single-pole group carries a pole the next can oppose. The
 				// relation is meaning (the opposite pole), the connective the tongue's seeded word.
-				if len(g.dirs) == 1 && d.opposesDir(g.dirs[0], priorCompDir) {
+				if len(dirs) == 1 && d.opposesDir(dirs[0], priorCompDir) {
 					if c := d.gram.Word(lang, "contrast"); c != "" {
 						cl = upperFirst(c) + " " + lowerFirst(cl)
 					}
 				}
 				clauses = append(clauses, cl)
-				if len(g.dirs) == 1 {
-					priorCompDir = g.dirs[0]
+				if len(dirs) == 1 {
+					priorCompDir = dirs[0]
 				} else {
 					priorCompDir = ""
 				}
@@ -721,6 +746,13 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 				continue
 			}
 		}
+		// Actions over the same subject and object speak together at the first of them, so a later
+		// verb over the same pair does not open a clause of its own.
+		gk := actionGroupKey(k.role, names)
+		if emittedAction[gk] {
+			continue
+		}
+		emittedAction[gk] = true
 		// The focus plays k.role and the co-arguments fill the other. A participant
 		// in the patient role takes its object case ("the dog chased me"), so the
 		// patient-side filler is cased before the clause is built.
@@ -767,6 +799,21 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		if dok {
 			line, ok = alt, true
 		}
+		// Several actions over the same subject and object coordinate their verbs into the one
+		// clause. The clause is built for the first verb, then the others join it through the
+		// coordinator ("loved and ate the cheese"). Each verb is conjugated by the same morphology
+		// the clause used, so the join lands on the verb the clause speaks; if it does not match,
+		// the single clause stands rather than a broken splice.
+		if verbs := actionVerbs[gk]; ok && len(verbs) > 1 {
+			conj := make([]string, len(verbs))
+			for i, v := range verbs {
+				conj[i] = d.gram.Conjugate(lang, d.relationName(v, lang), false, past, false)
+			}
+			phrase := d.joinCoordinated(lang, conj)
+			if at := strings.Index(line, conj[0]); at >= 0 {
+				line = line[:at] + phrase + line[at+len(conj[0]):]
+			}
+		}
 		if ok {
 			// A further action by the same subject reads as an addition. The focus is the
 			// constant agent across these clauses, so a second action is something it also
@@ -790,6 +837,15 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		return "", false
 	}
 	return strings.Join(clauses, " "), true
+}
+
+// actionGroupKey identifies the actions that share a subject and object: the role the focus plays
+// and the co-argument set, so verbs over the same pair group together however the facts were
+// ordered. The co-arguments are sorted so the key does not depend on the order they were gathered.
+func actionGroupKey(role string, coargs []string) string {
+	names := append([]string(nil), coargs...)
+	sort.Strings(names)
+	return role + "\x00" + strings.Join(names, "\x00")
 }
 
 // threadFactClause speaks what the exchange just established about a concept, a

@@ -1381,15 +1381,20 @@ func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, s
 // than the mouse"), the comparison spoken as a fact in a description rather than as the yes/no
 // a question gets. When several gradable relations share a standard the predicates coordinate
 // into one clause ("the mouse is lighter and slower than the cat"): the standard is named once
-// and the directions are joined by the tongue's coordinator. The subject is "it" when a clause
+// and the directions are joined by the tongue's coordinator. Likewise several standards in one
+// direction coordinate ("lighter than the cat and the dog"). The subject is "it" when a clause
 // was already spoken. It returns false when the tongue has no comparison surface for the fact.
-func (d *Daemon) comparativeClause(lang, subj string, dirs []string, std string, given bool) (string, bool) {
-	if len(dirs) == 0 {
+func (d *Daemon) comparativeClause(lang, subj string, dirs, stds []string, given bool) (string, bool) {
+	if len(dirs) == 0 || len(stds) == 0 {
 		return "", false
 	}
 	rel := d.joinCoordinated(lang, dirs)
 	if lang == "tr" {
-		clause := subj + " " + d.gram.Ablative(lang, std) + " " + rel
+		abl := make([]string, len(stds))
+		for i, s := range stds {
+			abl[i] = d.gram.Ablative(lang, s)
+		}
+		clause := subj + " " + d.joinCoordinated(lang, abl) + " " + rel
 		return grammar.Sentence(strings.TrimSpace(clause)), true
 	}
 	if lang != "en" {
@@ -1401,7 +1406,11 @@ func (d *Daemon) comparativeClause(lang, subj string, dirs []string, std string,
 			subjPhrase = pron
 		}
 	}
-	pred := strings.TrimSpace(rel + " " + d.gram.Word(lang, "than") + " " + definiteForm(lang, std))
+	defs := make([]string, len(stds))
+	for i, s := range stds {
+		defs[i] = definiteForm(lang, s)
+	}
+	pred := strings.TrimSpace(rel + " " + d.gram.Word(lang, "than") + " " + d.joinCoordinated(lang, defs))
 	line := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
 		Agent:   grammar.Term{Phrase: subjPhrase},
 		Action:  grammar.Term{Phrase: "be"},

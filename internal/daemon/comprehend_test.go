@@ -1187,6 +1187,70 @@ func TestDescriptionCoordinatesSameStandardComparisons(t *testing.T) {
 	}
 }
 
+// Several actions over the same subject and object coordinate their verbs into one clause ("it
+// chased and watched the fox") instead of a clause each, so the shared pair is named once. The
+// grouping is by the role and the co-argument (meaning); the coordinator is the tongue's data.
+func TestDescriptionCoordinatesSameObjectActions(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"hare", "fox"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a hare chased a fox")
+	say(t, d, "a hare watched a fox")
+
+	got := say(t, d, "tell me about the hare").Say
+	if c := strings.Count(got, "fox"); c != 1 {
+		t.Fatalf("the shared object should be named once when the verbs coordinate, not %d: %q", c, got)
+	}
+	if !strings.Contains(got, "chased") || !strings.Contains(got, "watched") {
+		t.Fatalf("both verbs should be spoken in the coordinated clause: %q", got)
+	}
+	if !strings.Contains(got, " and ") {
+		t.Fatalf("the verbs over one object should join with the coordinator: %q", got)
+	}
+}
+
+// The same agent acting on the focus several times coordinates likewise from the focus's side
+// ("the fox chased and watched it"), the agent named once.
+func TestDescriptionCoordinatesSameAgentActionsOnFocus(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"hare", "fox"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a fox chased a hare")
+	say(t, d, "a fox watched a hare")
+
+	got := say(t, d, "tell me about the hare").Say
+	if c := strings.Count(got, "fox"); c != 1 {
+		t.Fatalf("the shared agent should be named once when the verbs coordinate, not %d: %q", c, got)
+	}
+	if !strings.Contains(got, "chased") || !strings.Contains(got, "watched") {
+		t.Fatalf("both verbs should be spoken in the coordinated clause: %q", got)
+	}
+}
+
+// The focus standing in one direction against several standards coordinates them ("lighter than
+// the cat and the dog"), the direction named once. This is the standard's axis of comparison
+// coordination, mirroring how the verbs of one action already coordinate their co-arguments.
+func TestDescriptionCoordinatesSameDirectionStandards(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"mouse", "cat", "dog"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a mouse is lighter than a cat")
+	say(t, d, "a cat is heavier than a mouse") // pairs lighter and heavier so the relation is gradable
+	say(t, d, "a mouse is lighter than a dog")
+
+	got := say(t, d, "tell me about the mouse").Say
+	if !strings.Contains(got, "lighter than the cat and the dog") &&
+		!strings.Contains(got, "lighter than the dog and the cat") {
+		t.Fatalf("one direction against several standards should coordinate them: %q", got)
+	}
+	if c := strings.Count(got, "lighter"); c != 1 {
+		t.Fatalf("the direction should be named once, not %d: %q", c, got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
