@@ -650,6 +650,16 @@ func (d *Daemon) planActivityQuestion(frame grammar.Frame, raw string) (string, 
 	// no single relation, so each relation becomes a clause and the agent is
 	// carried as "it" after the first.
 	facts := d.gatherFacts(agent, "agent", "")
+	// "Do" asks for actions, so a state the gather also turns up is left out: a comparison
+	// answers "how big", a placement answers "where", neither is a thing the agent did.
+	actions := facts[:0]
+	for _, f := range facts {
+		if d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
+			continue
+		}
+		actions = append(actions, f)
+	}
+	facts = actions
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(agent.ID, agent.Content, frame.Lang), facts, past, false)
 	if !ok {
 		// No observed activity. Reason under a supposition in play, then offer a
@@ -1364,6 +1374,35 @@ func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, s
 		word = d.gram.Word(lang, "no")
 	}
 	return upperFirst(word) + ", " + lowerFirst(clause)
+}
+
+// comparativeClause renders "SUBJ is REL than STD" as a plain statement ("the lion is bigger
+// than the mouse"), the comparison spoken as a fact in a description rather than as the yes/no
+// a question gets. The subject is "it" when a clause was already spoken. It returns false when
+// the tongue has no comparison surface to speak the fact in.
+func (d *Daemon) comparativeClause(lang, subj, rel, std string, given bool) (string, bool) {
+	if lang == "tr" {
+		clause := subj + " " + d.gram.Ablative(lang, std) + " " + rel
+		return grammar.Sentence(strings.TrimSpace(clause)), true
+	}
+	if lang != "en" {
+		return "", false // other tongues read a comparison through their own query for now
+	}
+	subjPhrase := definiteForm(lang, subj)
+	if given {
+		if pron := d.gram.Pronoun(lang, "agent"); pron != "" {
+			subjPhrase = pron
+		}
+	}
+	pred := strings.TrimSpace(rel + " " + d.gram.Word(lang, "than") + " " + definiteForm(lang, std))
+	line := d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent:   grammar.Term{Phrase: subjPhrase},
+		Action:  grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: pred}}, d.chem.Snapshot())
+	if line == "" {
+		return "", false
+	}
+	return line, true
 }
 
 // sayMagnitude speaks a comparison's degree: the clause the question asked with the

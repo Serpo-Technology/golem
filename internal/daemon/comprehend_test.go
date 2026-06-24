@@ -1044,6 +1044,31 @@ func TestSalientFactsOrdersAndStops(t *testing.T) {
 	}
 }
 
+// A description speaks every grounded relation by its kind, a gradable one as "X is bigger
+// than Y", so a comparison is part of a description; the activity question keeps to actions,
+// so the same comparison is left out of "what did X do".
+func TestDescribeSpeaksComparisonActivityKeepsToActions(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"lion", "mouse", "deer"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a lion chased a deer")
+	say(t, d, "a lion is bigger than a mouse")
+	say(t, d, "a mouse is smaller than a lion") // the converse pole, so bigger is known gradable
+
+	desc := say(t, d, "tell me about the lion").Say
+	if !strings.Contains(desc, "chased") || !strings.Contains(desc, "bigger than") {
+		t.Fatalf("a description should speak both the action and the comparison: %q", desc)
+	}
+	act := say(t, d, "what did the lion do").Say
+	if !strings.Contains(act, "chased") {
+		t.Fatalf("the activity should report the action: %q", act)
+	}
+	if strings.Contains(act, "bigger") {
+		t.Fatalf("the activity should keep to actions, not the comparison state: %q", act)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches

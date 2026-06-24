@@ -561,8 +561,26 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			}
 			continue
 		}
-		if d.factIsComparative(k.rel) {
-			continue // a comparison answers through its own query, not as a verb here
+		// A gradable relation speaks as a comparison ("the lion is bigger than the mouse"), not
+		// as a verb. The focus is the greater pole when it stood as agent and the lesser when
+		// it stood as patient, so the lesser is spoken with the relation's opposite ("smaller").
+		if rel := d.resolveRelation(k.rel); rel != nil && len(d.oppositeRelations(rel.ID)) > 0 {
+			given := continuation || len(clauses) > 0
+			for _, co := range names {
+				dir := k.rel
+				if k.role == "patient" {
+					opp := d.oppositeRelations(rel.ID)
+					if len(opp) == 0 {
+						continue
+					}
+					dir = opp[0]
+				}
+				if cl, ok := d.comparativeClause(lang, focusName, dir, co, given); ok {
+					clauses = append(clauses, cl)
+					given = true
+				}
+			}
+			continue
 		}
 		// A tongue can only state a fact in the words it has learned. When the relation has no
 		// verb in a non-English tongue, the clause is left unsaid there rather than rendered as
