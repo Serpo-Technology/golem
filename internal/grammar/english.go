@@ -429,6 +429,64 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	return f
 }
 
+// comprehendCopularQuestion reads a yes/no copula question formed by subject-auxiliary inversion
+// ("is a cat an animal") into its frame by walking the construction: the fronted copula marks the
+// question and the predicate "be", and the two noun phrases after it are the subject and the
+// complement, filling the patient then the agent the way the coded role assignment does for a
+// post-verb span. It is the traversal counterpart for this question shape, the inverse of how the
+// copula is generated; it declines a copula clause that carries a place or a comparison (those are
+// their own constructions). It returns false when the clause is not a plain copular question.
+func (p *Params) comprehendCopularQuestion(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	if p.verbFinal(lang) {
+		return Frame{}, false // subject-auxiliary inversion is a verb-medial form
+	}
+	tokens, _ := Tokenize(utterance)
+	if len(tokens) < 3 || p.category(lang, tokens[0]) != catCop {
+		return Frame{}, false
+	}
+	f := Frame{Force: ForceQuestion, Action: Term{Phrase: "be"}}
+	if lang != "en" {
+		f.Lang = lang
+	}
+	if tokens[0] == "was" || tokens[0] == "were" {
+		f.Past = true
+	}
+	// Segment the noun phrases after the copula, a determiner opening each. A place preposition or
+	// a comparison marker means a locative or comparative clause, its own construction, declined.
+	var nps []string
+	var cur []string
+	for _, tok := range tokens[1:] {
+		switch cat := p.category(lang, tok); {
+		case cat == catThan || p.LocativePrep(lang, tok) || p.TopicPrep(lang, tok):
+			return Frame{}, false
+		case cat == catCop || cat == catWh:
+			return Frame{}, false // a second verb or a wh: not this shape
+		case cat == catDet:
+			if len(cur) > 0 {
+				nps = append(nps, strings.Join(cur, " "))
+				cur = nil
+			}
+		default:
+			cur = append(cur, tok)
+		}
+	}
+	if len(cur) > 0 {
+		nps = append(nps, strings.Join(cur, " "))
+	}
+	if len(nps) != 2 {
+		return Frame{}, false
+	}
+	// Both noun phrases sit after the fronted copula, so the first fills the patient and the
+	// second the agent, the post-verb order the coded role assignment uses.
+	f.Patient = resolveTerm(nps[0], resolve)
+	f.Agent = resolveTerm(nps[1], resolve)
+	return f, true
+}
+
 // comparativeParts reads a comparison "X is bigger than Y" into its relation, its
 // subject, and its standard (after "than"), and whether it is asked (the copula
 // inverted to the front). The relation is the gradable word before "than"; an

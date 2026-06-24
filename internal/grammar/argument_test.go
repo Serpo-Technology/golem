@@ -253,6 +253,48 @@ func TestComprehendTransitive(t *testing.T) {
 // A multi-word noun phrase still binds, the determiners marking where the
 // agent ends and the patient begins, so an adjective rides along into the
 // role's phrase.
+// The construction-traversal reading of a copular question matches the coded parser: "is a cat an
+// animal" is a yes/no question predicating "be", the inverted subject (cat) the patient and the
+// complement (animal) the agent, the way the post-verb role assignment fills them.
+func TestComprehendCopularQuestionMatchesParse(t *testing.T) {
+	p := Builtin()
+	cat := &memory.Fragment{ID: 1, Content: "cat"}
+	animal := &memory.Fragment{ID: 2, Content: "animal"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "cat":
+			return cat
+		case "animal":
+			return animal
+		}
+		return nil
+	}
+	coded := p.Parse("is a cat an animal", resolve)
+	walked, ok := p.comprehendCopularQuestion("en", "is a cat an animal", resolve)
+	if !ok {
+		t.Fatal("the traversal should read the copular question")
+	}
+	if walked.Force != ForceQuestion || coded.Force != ForceQuestion {
+		t.Fatalf("both should be questions: walked %v coded %v", walked.Force, coded.Force)
+	}
+	if walked.Action.Phrase != "be" || coded.Action.Phrase != "be" {
+		t.Fatalf("both should predicate be: walked %q coded %q", walked.Action.Phrase, coded.Action.Phrase)
+	}
+	same := func(a, b Term) bool {
+		if a.Concept == nil || b.Concept == nil {
+			return a.Concept == b.Concept
+		}
+		return a.Concept.ID == b.Concept.ID
+	}
+	if !same(walked.Agent, coded.Agent) || !same(walked.Patient, coded.Patient) {
+		t.Fatalf("roles should match the coded reading: walked agent=%v patient=%v vs coded agent=%v patient=%v",
+			walked.Agent.Concept, walked.Patient.Concept, coded.Agent.Concept, coded.Patient.Concept)
+	}
+	if walked.Patient.Concept != cat || walked.Agent.Concept != animal {
+		t.Fatalf("the member (cat) should be the patient and the category (animal) the agent: %+v", walked)
+	}
+}
+
 func TestComprehendMultiWordPhrases(t *testing.T) {
 	p := Builtin()
 	resolve := func(string) *memory.Fragment { return nil }
