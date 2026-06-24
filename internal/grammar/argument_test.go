@@ -327,6 +327,66 @@ func TestComprehendWhQuestionMatchesParse(t *testing.T) {
 	}
 }
 
+// The construction-traversal recognition of an asked comparison matches the coded parser across both
+// tongues and the analytic forms: the relation fills the predicate, the subject the agent, and the
+// standard the patient, with "less" inverting the pair. The bare statement comparison is declined to
+// the statement path, so only the inverted (asked) form reads as a question.
+func TestComprehendComparativeQuestionMatchesParse(t *testing.T) {
+	p := Builtin()
+	frag := map[string]*memory.Fragment{
+		"cat": {ID: 1, Content: "cat"}, "mouse": {ID: 2, Content: "mouse"}, "dog": {ID: 3, Content: "dog"},
+		"kedi": {ID: 4, Content: "kedi"}, "fare": {ID: 5, Content: "fare"},
+	}
+	resolve := func(s string) *memory.Fragment { return frag[s] }
+	same := func(a, b Term) bool {
+		if a.Concept == nil || b.Concept == nil {
+			return a.Concept == b.Concept
+		}
+		return a.Concept.ID == b.Concept.ID
+	}
+	for _, c := range []struct {
+		lang, in, rel string
+		agent, std    *memory.Fragment
+	}{
+		{"en", "is the cat bigger than the mouse", "bigger", frag["cat"], frag["mouse"]},
+		{"en", "is the cat more clever than the dog", "more clever", frag["cat"], frag["dog"]},
+		{"en", "is the cat less big than the mouse", "more big", frag["mouse"], frag["cat"]}, // "less" inverts the pair
+		{"tr", "kedi fareden büyük mü", "daha büyük", frag["kedi"], frag["fare"]},
+		{"tr", "kedi fareden daha büyük mü", "daha büyük", frag["kedi"], frag["fare"]},
+	} {
+		coded := p.ParseHint(c.in, c.lang, resolve)
+		walked, ok := p.comprehendComparativeQuestion(c.lang, c.in, resolve)
+		if !ok {
+			t.Fatalf("%q: the traversal should read the comparison question", c.in)
+		}
+		if walked.Force != ForceQuestion || coded.Force != ForceQuestion {
+			t.Fatalf("%q: both should be questions: walked %v coded %v", c.in, walked.Force, coded.Force)
+		}
+		if !walked.Comparative || !coded.Comparative {
+			t.Fatalf("%q: both should be comparative: walked %v coded %v", c.in, walked.Comparative, coded.Comparative)
+		}
+		if walked.Action.Phrase != c.rel || coded.Action.Phrase != c.rel {
+			t.Fatalf("%q: relation should be %q: walked %q coded %q", c.in, c.rel, walked.Action.Phrase, coded.Action.Phrase)
+		}
+		if !same(walked.Agent, coded.Agent) || !same(walked.Patient, coded.Patient) {
+			t.Fatalf("%q: roles should match the coded reading: walked agent=%v patient=%v vs coded agent=%v patient=%v",
+				c.in, walked.Agent.Concept, walked.Patient.Concept, coded.Agent.Concept, coded.Patient.Concept)
+		}
+		if walked.Agent.Concept != c.agent || walked.Patient.Concept != c.std {
+			t.Fatalf("%q: subject should be the agent and standard the patient: %+v", c.in, walked)
+		}
+	}
+	// The bare statement comparison is declined; only the asked (inverted) form is a question.
+	for _, c := range []struct{ lang, text string }{
+		{"en", "the cat is bigger than the mouse"},
+		{"tr", "kedi fareden büyük"},
+	} {
+		if _, ok := p.comprehendComparativeQuestion(c.lang, c.text, resolve); ok {
+			t.Fatalf("%q: the statement comparison should be declined", c.text)
+		}
+	}
+}
+
 func TestComprehendMultiWordPhrases(t *testing.T) {
 	p := Builtin()
 	resolve := func(string) *memory.Fragment { return nil }

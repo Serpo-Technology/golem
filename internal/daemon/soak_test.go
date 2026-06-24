@@ -152,9 +152,34 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 	var qMismatch []string
 	for _, c := range concepts {
 		for _, f := range d.gatherFacts(c, "agent", "") {
-			// Plain action propositions: a comparison or placement renders as a copula, not the
-			// verb clause this round-trip reads, so it is left to those paths' own soaks.
-			if d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
+			// An asked comparison goes through its own traversal recognizer, so a comparison told
+			// is rebuilt as the question "is a X bigger than a Y" and read both ways. A placement
+			// renders as a copula, not the verb clause the round-trip below reads, so it is left to
+			// that path's own soak.
+			if d.factIsComparative(f.rel) {
+				subj := d.conceptName(c.ID, c.Content, "en")
+				cmpRel := d.resolveRelation(f.rel)
+				cf, err := s.FragmentsByIDs([]uint64{f.coID})
+				if err != nil || len(cf) != 1 || cmpRel == nil || subj == "" || strings.Contains(subj, " ") {
+					continue
+				}
+				std := d.conceptName(f.coID, cf[0].Content, "en")
+				relName := d.relationName(cmpRel.Content, "en")
+				if std == "" || strings.Contains(std, " ") || relName == "" || strings.Contains(relName, " ") {
+					continue
+				}
+				q := "is " + grammar.Indefinite(subj) + " " + relName + " than " + grammar.Indefinite(std)
+				coded := d.gram.ParseHint(q, "en", d.resolveConcept)
+				if walked, wok := d.gram.ParseByTraversal("en", q, d.resolveConcept); wok {
+					if framesAgree(walked, coded) {
+						qCovered++
+					} else {
+						qMismatch = append(qMismatch, q)
+					}
+				}
+				continue
+			}
+			if d.factIsLocative(f.rel) {
 				continue
 			}
 			rel := d.resolveRelation(f.rel)

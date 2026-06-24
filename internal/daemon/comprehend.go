@@ -159,14 +159,19 @@ func meaningGloss(m grammar.Meaning) string {
 	return g
 }
 
-// framesAgree reports whether two parsed frames carry the same force, interrogative, and predicate,
-// the check the parse-traversal shadow uses to confirm the question traversal reads the frame the
-// coded parser does. A wh-question's roles are the asked-role extraction the planner reads off the
-// tokens (analyzeRoleQuestion), not the frame's spans, which the coded parser leaves garbled for a
-// learned verb; so the recognition is the check there, and the role concepts only for a non-wh
-// frame (the copular question, whose roles are reliable).
+// framesAgree reports whether two parsed frames carry the same force, interrogative, predicate, and
+// question kind, the check the parse-traversal shadow uses to confirm the question traversal reads
+// the frame the coded parser does. The comparative and magnitude flags distinguish an asked
+// comparison from a plain copular question that shares the same force and predicate, so they are
+// part of the recognition. A wh-question's roles are the asked-role extraction the planner reads off
+// the tokens (analyzeRoleQuestion), not the frame's spans, which the coded parser leaves garbled for
+// a learned verb; so the recognition is the check there, and the role concepts only for a non-wh
+// frame (the copular and comparison questions, whose roles the planner reads from the frame).
 func framesAgree(a, b grammar.Frame) bool {
 	if a.Force != b.Force || a.Wh != b.Wh || a.Action.Phrase != b.Action.Phrase {
+		return false
+	}
+	if a.Comparative != b.Comparative || a.Magnitude != b.Magnitude {
 		return false
 	}
 	if a.Wh != "" {

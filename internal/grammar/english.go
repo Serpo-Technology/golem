@@ -519,13 +519,50 @@ func (p *Params) comprehendWhQuestion(lang, utterance string, resolve func(strin
 	return f, true
 }
 
+// comprehendComparativeQuestion reads an asked comparison ("is the cat bigger than the mouse",
+// "kedi fareden büyük mü") into its frame. The comparative is its own construction, a gradable
+// relation between two arguments with the standard marked off (English "than", Turkish the ablative
+// case), and inversion makes it a question: a fronted copula in English, a trailing question
+// particle in Turkish. So the recognition routes through the same comparative-construction walk the
+// coded parse reads (comparativeParts / trComparativeParts), both category-driven, and keeps only the
+// asked form: the relation fills the predicate, the subject the agent, the standard the patient, the
+// way planComparative consumes them. It declines the bare statement comparison (its own path stores
+// it) and any clause that is not a comparison.
+func (p *Params) comprehendComparativeQuestion(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	tokens, _ := Tokenize(utterance)
+	var rel, subject, standard string
+	var ask, ok bool
+	if lang == "tr" {
+		rel, subject, standard, ask, ok = p.trComparativeParts(tokens)
+	} else {
+		rel, subject, standard, ask, ok = p.comparativeParts(lang, tokens)
+	}
+	if !ok || !ask {
+		return Frame{}, false // not a comparison, or the bare statement form
+	}
+	f := Frame{Force: ForceQuestion, Comparative: true, Action: Term{Phrase: rel}}
+	if lang != "en" {
+		f.Lang = lang
+	}
+	f.Agent = resolveTerm(subject, resolve)
+	f.Patient = resolveTerm(standard, resolve)
+	return f, true
+}
+
 // ParseByTraversal reads a question to its frame by walking the grounded constructions, the
-// question-side counterpart of ComprehendByTraversal. It handles the copular yes/no question and
-// the wh-fronted role question; the special forms and the do-support polars are still the coded
-// parser's, so it declines them. It is shadowed against the coded Parse, demonstrated before the
-// cutover.
+// question-side counterpart of ComprehendByTraversal. It handles the copular yes/no question, the
+// asked comparison, and the wh-fronted role question; the remaining special forms and the do-support
+// polars are still the coded parser's, so it declines them. It is shadowed against the coded Parse,
+// demonstrated before the cutover.
 func (p *Params) ParseByTraversal(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
 	if f, ok := p.comprehendCopularQuestion(lang, utterance, resolve); ok {
+		return f, true
+	}
+	if f, ok := p.comprehendComparativeQuestion(lang, utterance, resolve); ok {
 		return f, true
 	}
 	return p.comprehendWhQuestion(lang, utterance, resolve)
