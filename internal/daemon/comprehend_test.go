@@ -1143,6 +1143,10 @@ func TestDescriptionAddsAcrossActions(t *testing.T) {
 	if c := strings.Count(strings.ToLower(got), "also"); c != 1 {
 		t.Fatalf("a second action by the same subject should be marked as an addition once, not %d: %q", c, got)
 	}
+	// English places the additive after the subject ("it also watched"), not at the front.
+	if !strings.Contains(strings.ToLower(got), "it also ") {
+		t.Fatalf("the additive should sit after the subject in English: %q", got)
+	}
 
 	// A lone action stands on its own, so nothing is added to it.
 	d2, _ := testDaemon(t)

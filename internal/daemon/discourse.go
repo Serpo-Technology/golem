@@ -823,7 +823,7 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			if k.role == "agent" {
 				if actionRun == 1 {
 					if w := d.gram.Word(lang, "addition"); w != "" {
-						line = upperFirst(w) + " " + lowerFirst(line)
+						line = d.placeAdditive(lang, w, line)
 					}
 				}
 				actionRun++
@@ -837,6 +837,22 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		return "", false
 	}
 	return strings.Join(clauses, " "), true
+}
+
+// placeAdditive sets the additive connective where the tongue's word order wants it. A verb-final
+// tongue takes it at the front (Turkish "Ayrıca o ... kovaladı"); a verb-medial tongue takes it
+// after the subject, which for a continuation is the given pronoun, a single word ("It also
+// watched the deer"). The discourse relation is the same either way; only the placement is the
+// tongue's, like the connective word itself.
+func (d *Daemon) placeAdditive(lang, word, clause string) string {
+	if d.gram.VerbFinal(lang) {
+		return upperFirst(word) + " " + lowerFirst(clause)
+	}
+	subject, rest, found := strings.Cut(clause, " ")
+	if !found {
+		return upperFirst(word) + " " + lowerFirst(clause)
+	}
+	return subject + " " + word + " " + rest
 }
 
 // actionGroupKey identifies the actions that share a subject and object: the role the focus plays
