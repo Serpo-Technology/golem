@@ -487,6 +487,15 @@ func (p *Params) comprehendCopularQuestion(lang, utterance string, resolve func(
 	return f, true
 }
 
+// ParseByTraversal reads a question to its frame by walking the grounded constructions, the
+// question-side counterpart of ComprehendByTraversal. It currently handles the copular yes/no
+// question; the other question shapes (wh role-questions, the special forms, do-support polars)
+// are still the coded parser's, so it declines them. It is shadowed against the coded Parse,
+// demonstrated before the cutover.
+func (p *Params) ParseByTraversal(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
+	return p.comprehendCopularQuestion(lang, utterance, resolve)
+}
+
 // comparativeParts reads a comparison "X is bigger than Y" into its relation, its
 // subject, and its standard (after "than"), and whether it is asked (the copula
 // inverted to the front). The relation is the gradable word before "than"; an

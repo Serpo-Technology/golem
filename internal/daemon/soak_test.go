@@ -148,6 +148,8 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 	}
 	covered, declined := 0, 0
 	var mismatches []string
+	qCovered := 0
+	var qMismatch []string
 	for _, c := range concepts {
 		for _, f := range d.gatherFacts(c, "agent", "") {
 			// Plain action propositions: a comparison or placement renders as a copula, not the
@@ -194,6 +196,31 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 				}
 			}
 		}
+
+		// is-a questions: for each category the concept belongs to, ask it both ways and confirm
+		// the question traversal reads the frame the coded parser does.
+		cName := d.conceptName(c.ID, c.Content, "en")
+		if cName != "" && !strings.Contains(cName, " ") {
+			for _, catID := range d.categoriesOf(c.ID) {
+				cf, err := s.FragmentsByIDs([]uint64{catID})
+				if err != nil || len(cf) != 1 {
+					continue
+				}
+				catName := d.conceptName(catID, cf[0].Content, "en")
+				if catName == "" || strings.Contains(catName, " ") {
+					continue
+				}
+				q := "is " + grammar.Indefinite(cName) + " " + grammar.Indefinite(catName)
+				coded := d.gram.ParseHint(q, "en", d.resolveConcept)
+				if walked, wok := d.gram.ParseByTraversal("en", q, d.resolveConcept); wok {
+					if framesAgree(walked, coded) {
+						qCovered++
+					} else {
+						qMismatch = append(qMismatch, q)
+					}
+				}
+			}
+		}
 	}
 	total := covered + declined + len(mismatches)
 	pct := 0.0
@@ -208,8 +235,15 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 		}
 		t.Logf("  %s", m)
 	}
-	if len(mismatches) > 0 {
-		t.Fatalf("the comprehension traversal diverged on %d clauses the coded path read", len(mismatches))
+	t.Logf("  is-a questions: %d covered, %d mismatch", qCovered, len(qMismatch))
+	for i, q := range qMismatch {
+		if i >= 20 {
+			break
+		}
+		t.Logf("    %s", q)
+	}
+	if len(mismatches) > 0 || len(qMismatch) > 0 {
+		t.Fatalf("the traversal diverged: %d statement clauses, %d is-a questions", len(mismatches), len(qMismatch))
 	}
 }
 

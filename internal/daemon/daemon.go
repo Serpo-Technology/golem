@@ -2078,6 +2078,12 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if frame.Lang == "" {
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
+		// SHADOW: the question-side construction traversal runs alongside the coded parse to prove
+		// it reads the same frame. Demonstrated, not load-bearing -- the coded frame drives; a
+		// disagreement on a question shape the traversal handles is logged as a tripwire.
+		if alt, aok := d.gram.ParseByTraversal(frame.Lang, req.Content, d.resolveConcept); aok && !framesAgree(alt, frame) {
+			fmt.Fprintf(d.out, "parse traversal mismatch: %q\n", req.Content)
+		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
 		// The words enter the lexicon only after the clause is read, so an
 		// inflection keys on the lemma comprehension has by now established: a

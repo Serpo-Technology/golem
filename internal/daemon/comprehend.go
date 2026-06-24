@@ -159,6 +159,14 @@ func meaningGloss(m grammar.Meaning) string {
 	return g
 }
 
+// framesAgree reports whether two parsed frames carry the same force, interrogative, predicate,
+// and role concepts, the check the parse-traversal shadow uses to confirm the question traversal
+// reads the frame the coded parser does.
+func framesAgree(a, b grammar.Frame) bool {
+	return a.Force == b.Force && a.Wh == b.Wh && a.Action.Phrase == b.Action.Phrase &&
+		sameConcept(a.Agent.Concept, b.Agent.Concept) && sameConcept(a.Patient.Concept, b.Patient.Concept)
+}
+
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {
 	d.followUp = "" // set only when this telling answers a question left open
 	if momentID == 0 {
