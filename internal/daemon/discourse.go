@@ -263,6 +263,60 @@ func salientFacts(facts []focusFact, ceiling int) []focusFact {
 	return out
 }
 
+// aspectKey buckets a fact by the facet of the focus it speaks to, so a description can group
+// like with like: what it is compared on, where it is, what it did, what was done to it. The
+// bucket is read from the relation's grounded kind and the focus's role, never from a surface
+// word, so the grouping is the same whatever tongue the description is later spoken in.
+func (d *Daemon) aspectKey(f focusFact) string {
+	switch {
+	case d.factIsComparative(f.rel):
+		return "comparison"
+	case d.factIsLocative(f.rel):
+		return "location"
+	default:
+		return "action:" + f.focusRole
+	}
+}
+
+// planDescription orders a description's facts into a coherent sequence while touching no
+// language: the facts established this exchange lead, then the rest group by aspect with the
+// strongest-grounded aspect first and salience order kept within each group. So like is spoken
+// with like rather than the aspects interleaving by raw strength. The plan is over meaning
+// alone (the relation's kind, the role, the salience); the realizer adds the words per tongue,
+// so the same plan reads in any tongue the facts can be spoken in.
+func (d *Daemon) planDescription(facts []focusFact) []focusFact {
+	type group struct {
+		facts []focusFact
+		peak  float64
+	}
+	var thread []focusFact
+	var groups []*group
+	byKey := map[string]*group{}
+	for _, f := range facts {
+		if f.fromThread {
+			thread = append(thread, f)
+			continue
+		}
+		k := d.aspectKey(f)
+		g := byKey[k]
+		if g == nil {
+			g = &group{}
+			byKey[k] = g
+			groups = append(groups, g)
+		}
+		g.facts = append(g.facts, f)
+		if f.weight > g.peak {
+			g.peak = f.weight
+		}
+	}
+	sort.SliceStable(groups, func(i, j int) bool { return groups[i].peak > groups[j].peak })
+	out := thread
+	for _, g := range groups {
+		out = append(out, g.facts...)
+	}
+	return out
+}
+
 // conceptName is a concept's speakable face in a tongue: the firmest word that
 // names it there, so an answer says "the dog" or, in Turkish, "köpek" rather
 // than the raw percept caption the concept distilled from. It falls back to the

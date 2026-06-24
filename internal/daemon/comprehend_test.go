@@ -1069,6 +1069,42 @@ func TestDescribeSpeaksComparisonActivityKeepsToActions(t *testing.T) {
 	}
 }
 
+// planDescription groups a description's facts by aspect so like is spoken with like, the
+// strongest-grounded aspect first, instead of letting kinds interleave by raw salience. The
+// ordering is over the relation's grounded kind, not any word, so it holds in any tongue.
+func TestPlanDescriptionGroupsByAspect(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "lion", "mouse"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")            // chase: a plain action
+	say(t, d, "a lion is bigger than a mouse") // bigger and smaller, a known gradable pair
+	say(t, d, "a mouse is smaller than a lion")
+
+	// Facts that interleave by weight, so only grouping can cluster them.
+	facts := []focusFact{
+		{rel: "chase", focusRole: "agent", coID: 1, weight: 0.9},
+		{rel: "bigger", focusRole: "agent", coID: 2, weight: 0.8},
+		{rel: "chase", focusRole: "agent", coID: 3, weight: 0.7},
+		{rel: "bigger", focusRole: "agent", coID: 4, weight: 0.6},
+	}
+	got := d.planDescription(facts)
+	seen := map[string]bool{}
+	prev := ""
+	for _, f := range got {
+		a := d.aspectKey(f)
+		if a != prev && seen[a] {
+			t.Fatalf("aspect %q reappeared, so the facts were not grouped: %v", a, got)
+		}
+		seen[a] = true
+		prev = a
+	}
+	// The stronger-grounded aspect (chase, peak 0.9) leads the weaker (bigger, peak 0.8).
+	if d.aspectKey(got[0]) != "action:agent" {
+		t.Errorf("the strongest aspect should lead: %v", got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
