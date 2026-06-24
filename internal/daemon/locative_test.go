@@ -159,3 +159,36 @@ func TestTurkishSpatialStandalone(t *testing.T) {
 		t.Errorf("a standalone Turkish locative should read back: %q", got)
 	}
 }
+
+// Containment composes across placements of different kinds: a thing on or in something that
+// is in a place is in that place. "The leaf is on the tree" and "the tree is in the
+// forest" entail "the leaf is in the forest", though the leaf is not in the tree (on does not
+// contain) nor on the forest (the chain composes into containment, not contact).
+func TestLocativeContainmentComposes(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"leaf", "tree", "forest", "book", "box", "room"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "the leaf is on the tree")
+	say(t, d, "the tree is in the forest")
+	say(t, d, "the book is in the box")
+	say(t, d, "the box is in the room")
+
+	yes := func(q string) {
+		t.Helper()
+		if got := say(t, d, q).Say; !strings.HasPrefix(got, "Yes") {
+			t.Errorf("%q should compose to yes: %q", q, got)
+		}
+	}
+	no := func(q string) {
+		t.Helper()
+		if got := say(t, d, q).Say; !strings.HasPrefix(got, "No") {
+			t.Errorf("%q should not hold: %q", q, got)
+		}
+	}
+	yes("is the leaf in the forest") // on + in compose into containment
+	yes("is the book in the room")   // in + in is transitive containment
+	no("is the leaf on the forest")  // contact does not compose
+	no("is the leaf in the tree")    // the leaf is on, not in, the tree
+	no("is the forest in the leaf")  // the chain does not run backward
+}

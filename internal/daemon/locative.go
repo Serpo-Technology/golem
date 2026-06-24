@@ -104,6 +104,53 @@ func definiteForm(lang, gloss string) string {
 	return "the " + gloss
 }
 
+// locativeChainDepth bounds the placement walk so a cycle in the grounds cannot loop.
+const locativeChainDepth = 8
+
+// containmentPrep is the canonical preposition of the containment relation, the one a chain of
+// placements composes into: a thing placed at something within a place is within that place.
+// Containment composes where contact does not, so it is the relation the chain reads.
+const containmentPrep = "in"
+
+// locativeGrounds lists the grounds a figure is placed at: the patients of its locative
+// propositions ("the leaf is on the tree" yields the tree).
+func (d *Daemon) locativeGrounds(figureID uint64) []uint64 {
+	frags, err := d.store.FragmentsByIDs([]uint64{figureID})
+	if err != nil || len(frags) != 1 {
+		return nil
+	}
+	var grounds []uint64
+	for _, f := range d.gatherFacts(frags[0], "agent", "") {
+		if d.factIsLocative(f.rel) {
+			grounds = append(grounds, f.coID)
+		}
+	}
+	return grounds
+}
+
+// locativelyInside reports whether the figure is spatially within the target through a chain
+// of placements: a thing on or in something that is itself within the target is within the
+// target ("the leaf is on the tree, the tree is in the forest, so the leaf is in the forest").
+// Containment composes across the specific placements; the deduction is sound. The walk is
+// bounded so a cycle in the placements cannot loop. The chain hops follow any placement, but
+// the step that reaches the target is containment, so a leaf on a tree is in the tree's forest
+// without being in the tree.
+func (d *Daemon) locativelyInside(figureID, targetID uint64, depth int) bool {
+	if depth <= 0 || figureID == targetID {
+		return false
+	}
+	if frags, err := d.store.FragmentsByIDs([]uint64{figureID}); err == nil && len(frags) == 1 &&
+		d.propositionHolds(frags[0], containmentPrep, targetID) {
+		return true
+	}
+	for _, ground := range d.locativeGrounds(figureID) {
+		if ground != figureID && d.locativelyInside(ground, targetID, depth-1) {
+			return true
+		}
+	}
+	return false
+}
+
 // planLocativePolar answers "is X on Y" from the placed proposition. A copula
 // question carrying a locative preposition is a place question, not a category
 // one: subject-auxiliary inversion seats the figure in the patient slot and the

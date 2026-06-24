@@ -1837,6 +1837,15 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 			return beliefObserved, 1, false
 		}
 	}
+	// Containment composes across placements of different kinds: a thing on or in something
+	// that is in a place is in that place ("the leaf is on the tree, the tree is in the
+	// forest, so the leaf is in the forest"). The chain of locative grounds is walked for the
+	// containment query; the deduction is sound, so it answers as firmly as the placements.
+	if agent.ID != patient.ID && relContent == containmentPrep {
+		if d.locativelyInside(agent.ID, patient.ID, locativeChainDepth) {
+			return beliefObserved, 1, false
+		}
+	}
 	// A thing standing in a relation to itself is not a claim worth guessing, so
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {
