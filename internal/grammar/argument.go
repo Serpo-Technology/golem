@@ -423,6 +423,17 @@ func (p *Params) personPronounLatin(person string) string {
 // accusative ending marks the patient, the bare nominative the agent. The endings
 // are the seeded case data, so the rule is a fact about the language, not the parser.
 func (p *Params) caseRole(lang, span string) (role, lemma string) {
+	// Latin marks the patient with the accusative of the first two declensions (-am, -um); the
+	// bare nominative is the agent. The stem reduces to the nominative the noun is named by.
+	if lang == "la" {
+		if strings.HasSuffix(span, "am") && len([]rune(span)) > 3 {
+			return "patient", strings.TrimSuffix(span, "am") + "a"
+		}
+		if strings.HasSuffix(span, "um") && len([]rune(span)) > 3 {
+			return "patient", strings.TrimSuffix(span, "um") + "us"
+		}
+		return "agent", span
+	}
 	if acc := p.caseEnding(lang, "accusative"); acc != "" && strings.HasSuffix(span, acc) {
 		return "patient", strings.TrimSuffix(span, acc)
 	}
@@ -451,6 +462,36 @@ func latinVerb(span string) (lemma, person string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// latinNominativeCandidates lists the nominative forms a cased Latin noun of the first two
+// declensions might reduce to: the accusative -am and -um and the ablative -o shed back to the
+// -a and -us a noun is named by ("lupum"/"lupo" -> "lupus", "rosam" -> "rosa"). The third
+// declension's nominative is not predictable from the stem (leo/leonem), so it is left for an
+// explicit naming. The resolver tries each in turn after the literal form.
+func latinNominativeCandidates(span string) []string {
+	switch {
+	case strings.HasSuffix(span, "am") && len([]rune(span)) > 3:
+		return []string{strings.TrimSuffix(span, "am") + "a"}
+	case strings.HasSuffix(span, "um") && len([]rune(span)) > 3:
+		return []string{strings.TrimSuffix(span, "um") + "us"}
+	case strings.HasSuffix(span, "o") && len([]rune(span)) > 2:
+		return []string{strings.TrimSuffix(span, "o") + "us"}
+	}
+	return nil
+}
+
+// latinAccusative forms the accusative a first- or second-declension Latin patient wears from
+// its nominative (-a -> -am, -us -> -um). A noun of another declension keeps its nominative,
+// the honest limit until its stem is known.
+func latinAccusative(nom string) string {
+	switch {
+	case strings.HasSuffix(nom, "us"):
+		return strings.TrimSuffix(nom, "us") + "um"
+	case strings.HasSuffix(nom, "a"):
+		return nom + "m"
+	}
+	return nom
 }
 
 // finiteVerbByCase reports whether a span is the finite verb of a case-marked clause,

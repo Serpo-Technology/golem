@@ -73,6 +73,9 @@ func (p *Params) caseStems(lang, span string) []string {
 			}
 		}
 	}
+	if lang == "la" {
+		out = append(out, latinNominativeCandidates(base)...)
+	}
 	return out
 }
 

@@ -219,12 +219,13 @@ func (d *Daemon) planEpistemicLA(frame grammar.Frame, raw string) (string, bool)
 		}
 	}
 	obj := strings.Join(tokens[1:], " ")
-	known := d.knowsThing(obj)
-	if !known {
-		// The object of scio is accusative ("scisne puellam"); resolve its
-		// nominative when the cased form names nothing directly.
-		if base := strings.TrimSuffix(obj, "m"); base != obj {
-			known = d.knowsThing(base)
+	// The object of scio is accusative ("scisne lupum"); reduce it to the nominative through
+	// the case stems of the first two declensions before grounding it.
+	known := false
+	for _, base := range d.gram.CaseStems("la", obj) {
+		if d.knowsThing(base) {
+			known = true
+			break
 		}
 	}
 	if known {

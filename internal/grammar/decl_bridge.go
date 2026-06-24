@@ -95,7 +95,9 @@ func (p *Params) speakDeclByCase(lang string, m Meaning, verb string) (string, b
 		if patient.Given || patient.Speak() == "" || len(patient.With) > 0 {
 			return "", false
 		}
-		parts = append(parts, patient.Speak()+p.caseEnding(lang, "accusative"))
+		// The accusative follows the noun's declension (lupus -> lupum, rosa -> rosam), so a
+		// second-declension patient is not cased as a first-declension one would be.
+		parts = append(parts, latinAccusative(patient.Speak()))
 	}
 	if m.Negate {
 		// Latin denies the verb with a preverbal "non" ("rosa puellam non amat").
