@@ -211,14 +211,17 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 	type span struct {
 		text     string
 		postVerb bool
+		topic    bool // the object of a topic preposition ("de X"): the patient whatever its position
 	}
 	var spans []span
 	var current []string
 	verbSeen := false
+	topicNext := false
 	flush := func() {
 		if len(current) > 0 {
-			spans = append(spans, span{strings.Join(current, " "), verbSeen})
+			spans = append(spans, span{strings.Join(current, " "), verbSeen, topicNext})
 			current = nil
+			topicNext = false
 		}
 	}
 	// In a verb-medial language a relator precedes its anchor, so the anchor
@@ -348,7 +351,13 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			if cat == catFn && p.LocativePrep(lang, tok) {
 				f.LocPrep = tok
 			}
+			// A topic preposition ("quid de cane scis") names what the clause is about; its
+			// object fills the patient, so the span after it is marked, the word itself flushed.
+			topic := cat == catFn && p.TopicPrep(lang, tok)
 			flush()
+			if topic {
+				topicNext = true
+			}
 		case catSpeech:
 			// A speech-act verb is the predicate, but the move it carries (clarify,
 			// recall) is about the talk rather than the world, so a clause built on
@@ -393,7 +402,11 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			}
 		}
 		term := resolveTerm(text, resolve)
-		if verbFinal || f.Force == ForceCommand || sp.postVerb {
+		if sp.topic {
+			if f.Patient.Empty() {
+				f.Patient = term
+			}
+		} else if verbFinal || f.Force == ForceCommand || sp.postVerb {
 			if f.Patient.Empty() {
 				f.Patient = term
 			} else if f.Agent.Empty() {

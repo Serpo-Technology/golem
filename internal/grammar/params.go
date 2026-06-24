@@ -268,6 +268,18 @@ func (p *Params) LocativePrep(lang, form string) bool {
 	return false
 }
 
+// TopicPrep reports whether a form is a seeded topic preposition (Latin "de"), the closed
+// class that names the thing a clause is about, so its object fills the patient whatever its
+// position. The refinement rides on the function-word category ("fn:topic"), so the broad
+// class the parser reads is still "fn"; only this accessor reads the refinement.
+func (p *Params) TopicPrep(lang, form string) bool {
+	p = p.get()
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "fn:"); ok {
+		return spec == "topic"
+	}
+	return false
+}
+
 // Existential reports whether a form is the seeded existential that closes a
 // Turkish location or possession clause ("var"), the word that stands in for the
 // copula English would use ("there is", "X has").

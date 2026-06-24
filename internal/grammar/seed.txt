@@ -160,6 +160,7 @@ fw:tr:bilir	bilir	tr	speech
 fw:tr:bilirsin	bilirsin	tr	speech
 fw:tr:biliyor	biliyor	tr	speech
 fw:tr:biliyorsun	biliyorsun	tr	speech
+fw:la:de	de	la	fn
 fw:la:quid	quid	la	wh
 fw:la:narra	narra	la	speech
 fw:la:explica	explica	la	speech

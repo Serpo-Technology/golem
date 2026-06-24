@@ -744,6 +744,9 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		// locative-marking path reads the spec. Linked here so an existing brain gains
 		// it at boot rather than needing a re-seed.
 		{"fn:locative", "locative", []string{"on", "in", "under"}},
+		// Topic preposition: the object of Latin "de" ("quid de cane scis") is what the clause
+		// is about, so it fills the patient. Rides the function-word category like the locative.
+		{"fn:topic", "topic", []string{"de"}},
 		// Interrogative type: English wh words name their own type, so only the
 		// forms that need translating link; "what:be" carries the copula nedir folds
 		// in ("what is"), read back by whInfo's type-then-copula split.

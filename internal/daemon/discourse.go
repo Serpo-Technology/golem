@@ -765,10 +765,10 @@ var trFusedInterrogative = map[string]string{
 var trSubjectPronoun = map[string]bool{"ben": true, "sen": true, "biz": true}
 
 // describeReferent reads the focus of an open request to say what is known about something.
-// The "describe X" and English and Turkish "what do you know about X" phrasings route off the
-// describe and know verbs now (the subject the parsed patient); the "tell me about" recall
-// phrasings and the Latin "quid de X scis" still read the surface until they route off their
-// verbs too.
+// The "describe X" and "what do you know about X" phrasings route off the describe and know
+// verbs now in every tongue (the subject the parsed patient, the Latin de-object included);
+// only the "tell me about" recall phrasings still read the surface until they route off the
+// recall verb too.
 func describeReferent(raw string) (string, bool) {
 	s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.ToLower(raw)), "?"))
 	for _, lead := range []string{"tell me about ", "tell me of ", "what can you tell me about "} {
@@ -782,14 +782,6 @@ func describeReferent(raw string) (string, bool) {
 		}
 		if rest = strings.TrimSpace(rest); rest != "" {
 			return rest, true
-		}
-	}
-	// Latin: "quid de X scis" (what do you know about X).
-	if mid, ok := strings.CutPrefix(s, "quid de "); ok {
-		if x, ok := strings.CutSuffix(mid, " scis"); ok {
-			if x = strings.TrimSpace(x); x != "" {
-				return x, true
-			}
 		}
 	}
 	return "", false
