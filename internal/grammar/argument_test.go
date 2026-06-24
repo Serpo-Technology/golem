@@ -295,6 +295,38 @@ func TestComprehendCopularQuestionMatchesParse(t *testing.T) {
 	}
 }
 
+// The construction-traversal recognition of a wh role-question matches the coded parser: a
+// wh-fronted question ("who chased the cat", "what did the dog chase") reads as a question of that
+// interrogative. The verb and the known argument are the planner's token walk, so the frame's job
+// here is the recognition (force and interrogative).
+func TestComprehendWhQuestionMatchesParse(t *testing.T) {
+	p := Builtin()
+	resolve := func(string) *memory.Fragment { return nil }
+	for _, c := range []struct{ in, wh string }{
+		{"who chased the cat", "who"},
+		{"what did the dog chase", "what"},
+	} {
+		coded := p.Parse(c.in, resolve)
+		walked, ok := p.comprehendWhQuestion("en", c.in, resolve)
+		if !ok {
+			t.Fatalf("%q: the traversal should read the wh question", c.in)
+		}
+		if walked.Force != ForceQuestion || coded.Force != ForceQuestion {
+			t.Fatalf("%q: both should be questions: walked %v coded %v", c.in, walked.Force, coded.Force)
+		}
+		if walked.Wh != c.wh || coded.Wh != c.wh {
+			t.Fatalf("%q: interrogative should be %q: walked %q coded %q", c.in, c.wh, walked.Wh, coded.Wh)
+		}
+		if walked.Action.Phrase != coded.Action.Phrase {
+			t.Fatalf("%q: predicate should match: walked %q coded %q", c.in, walked.Action.Phrase, coded.Action.Phrase)
+		}
+	}
+	// A copula wh is the definition question, declined to the coded path.
+	if _, ok := p.comprehendWhQuestion("en", "what is a cat", resolve); ok {
+		t.Fatal("a copula wh should be declined")
+	}
+}
+
 func TestComprehendMultiWordPhrases(t *testing.T) {
 	p := Builtin()
 	resolve := func(string) *memory.Fragment { return nil }

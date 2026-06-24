@@ -195,6 +195,19 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 					mismatches = append(mismatches, clause+": walked "+meaningGloss(walked)+" vs coded "+meaningGloss(coded))
 				}
 			}
+
+			// wh role-question (subject-wh): "who <verb> a <patient>", read both ways.
+			if pn := d.conceptName(patient.ID, patient.Content, "en"); pn != "" && !strings.Contains(pn, " ") {
+				q := "who " + d.relationName(rel.Content, "en") + " " + grammar.Indefinite(pn)
+				coded := d.gram.ParseHint(q, "en", d.resolveConcept)
+				if walked, wok := d.gram.ParseByTraversal("en", q, d.resolveConcept); wok {
+					if framesAgree(walked, coded) {
+						qCovered++
+					} else {
+						qMismatch = append(qMismatch, q)
+					}
+				}
+			}
 		}
 
 		// is-a questions: for each category the concept belongs to, ask it both ways and confirm
@@ -235,7 +248,7 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 		}
 		t.Logf("  %s", m)
 	}
-	t.Logf("  is-a questions: %d covered, %d mismatch", qCovered, len(qMismatch))
+	t.Logf("  questions (is-a + wh): %d covered, %d mismatch", qCovered, len(qMismatch))
 	for i, q := range qMismatch {
 		if i >= 20 {
 			break

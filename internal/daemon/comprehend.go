@@ -159,12 +159,20 @@ func meaningGloss(m grammar.Meaning) string {
 	return g
 }
 
-// framesAgree reports whether two parsed frames carry the same force, interrogative, predicate,
-// and role concepts, the check the parse-traversal shadow uses to confirm the question traversal
-// reads the frame the coded parser does.
+// framesAgree reports whether two parsed frames carry the same force, interrogative, and predicate,
+// the check the parse-traversal shadow uses to confirm the question traversal reads the frame the
+// coded parser does. A wh-question's roles are the asked-role extraction the planner reads off the
+// tokens (analyzeRoleQuestion), not the frame's spans, which the coded parser leaves garbled for a
+// learned verb; so the recognition is the check there, and the role concepts only for a non-wh
+// frame (the copular question, whose roles are reliable).
 func framesAgree(a, b grammar.Frame) bool {
-	return a.Force == b.Force && a.Wh == b.Wh && a.Action.Phrase == b.Action.Phrase &&
-		sameConcept(a.Agent.Concept, b.Agent.Concept) && sameConcept(a.Patient.Concept, b.Patient.Concept)
+	if a.Force != b.Force || a.Wh != b.Wh || a.Action.Phrase != b.Action.Phrase {
+		return false
+	}
+	if a.Wh != "" {
+		return true
+	}
+	return sameConcept(a.Agent.Concept, b.Agent.Concept) && sameConcept(a.Patient.Concept, b.Patient.Concept)
 }
 
 func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID uint64) bool {

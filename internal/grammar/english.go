@@ -487,13 +487,48 @@ func (p *Params) comprehendCopularQuestion(lang, utterance string, resolve func(
 	return f, true
 }
 
+// comprehendWhQuestion reads a wh-fronted role question ("who chased the cat", "what did the dog
+// chase") into its frame's recognition: the force and the interrogative. The fronted wh word marks
+// the question and which role is asked; the verb and the known argument are read off the tokens by
+// the planner (analyzeRoleQuestion), already a grounded walk, so the recognition is what the frame
+// supplies. It declines a fused copula wh (the definition question "nedir") and a wh followed by a
+// copula (a definition or place question), which are their own shapes. It returns false when the
+// clause is not a plain wh-fronted role question.
+func (p *Params) comprehendWhQuestion(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	tokens, _ := Tokenize(utterance)
+	if len(tokens) < 2 || p.category(lang, tokens[0]) != catWh {
+		return Frame{}, false
+	}
+	whType, copula := p.whInfo(lang, tokens[0])
+	if copula {
+		return Frame{}, false // a fused copula wh is the definition question, its own shape
+	}
+	for _, tok := range tokens[1:] {
+		if p.category(lang, tok) == catCop {
+			return Frame{}, false // a copula makes it a definition or place question, not a role one
+		}
+	}
+	f := Frame{Force: ForceQuestion, Wh: whType}
+	if lang != "en" {
+		f.Lang = lang
+	}
+	return f, true
+}
+
 // ParseByTraversal reads a question to its frame by walking the grounded constructions, the
-// question-side counterpart of ComprehendByTraversal. It currently handles the copular yes/no
-// question; the other question shapes (wh role-questions, the special forms, do-support polars)
-// are still the coded parser's, so it declines them. It is shadowed against the coded Parse,
-// demonstrated before the cutover.
+// question-side counterpart of ComprehendByTraversal. It handles the copular yes/no question and
+// the wh-fronted role question; the special forms and the do-support polars are still the coded
+// parser's, so it declines them. It is shadowed against the coded Parse, demonstrated before the
+// cutover.
 func (p *Params) ParseByTraversal(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
-	return p.comprehendCopularQuestion(lang, utterance, resolve)
+	if f, ok := p.comprehendCopularQuestion(lang, utterance, resolve); ok {
+		return f, true
+	}
+	return p.comprehendWhQuestion(lang, utterance, resolve)
 }
 
 // comparativeParts reads a comparison "X is bigger than Y" into its relation, its
