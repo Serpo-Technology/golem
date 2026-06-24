@@ -1155,6 +1155,38 @@ func TestDescriptionAddsAcrossActions(t *testing.T) {
 	}
 }
 
+// Comparisons that share a standard speak as one predicate, the standard named once ("the mouse
+// is lighter and slower than the cat"), while opposite poles of another scale still contrast. The
+// grouping is by the standard (meaning); the coordinator and contrast words are the tongue's data.
+func TestDescriptionCoordinatesSameStandardComparisons(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"mouse", "cat", "snail", "lion"} {
+		groundNoun(t, d, n)
+	}
+	// Two scales sharing the cat as standard: the mouse is lighter and slower than the cat.
+	say(t, d, "a mouse is lighter than a cat")
+	say(t, d, "a cat is heavier than a mouse") // pairs lighter and heavier as one scale
+	say(t, d, "a mouse is slower than a cat")
+	say(t, d, "a cat is faster than a mouse") // pairs slower and faster as one scale
+	// A size scale with opposite poles against two standards, so the contrast still coexists.
+	say(t, d, "a mouse is bigger than a snail")
+	say(t, d, "a snail is smaller than a mouse") // pairs bigger and smaller
+	say(t, d, "a mouse is smaller than a lion")
+
+	got := say(t, d, "tell me about the mouse").Say
+	coord := strings.Contains(got, "lighter and slower than the cat") ||
+		strings.Contains(got, "slower and lighter than the cat")
+	if !coord {
+		t.Fatalf("same-standard comparisons should coordinate into one predicate: %q", got)
+	}
+	if c := strings.Count(got, "than the cat"); c != 1 {
+		t.Fatalf("the shared standard should be named once, not %d times: %q", c, got)
+	}
+	if !strings.Contains(strings.ToLower(got), "but") {
+		t.Fatalf("opposite poles of one scale should still read as a contrast: %q", got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches

@@ -1379,9 +1379,15 @@ func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, s
 
 // comparativeClause renders "SUBJ is REL than STD" as a plain statement ("the lion is bigger
 // than the mouse"), the comparison spoken as a fact in a description rather than as the yes/no
-// a question gets. The subject is "it" when a clause was already spoken. It returns false when
-// the tongue has no comparison surface to speak the fact in.
-func (d *Daemon) comparativeClause(lang, subj, rel, std string, given bool) (string, bool) {
+// a question gets. When several gradable relations share a standard the predicates coordinate
+// into one clause ("the mouse is lighter and slower than the cat"): the standard is named once
+// and the directions are joined by the tongue's coordinator. The subject is "it" when a clause
+// was already spoken. It returns false when the tongue has no comparison surface for the fact.
+func (d *Daemon) comparativeClause(lang, subj string, dirs []string, std string, given bool) (string, bool) {
+	if len(dirs) == 0 {
+		return "", false
+	}
+	rel := d.joinCoordinated(lang, dirs)
 	if lang == "tr" {
 		clause := subj + " " + d.gram.Ablative(lang, std) + " " + rel
 		return grammar.Sentence(strings.TrimSpace(clause)), true
@@ -1404,6 +1410,21 @@ func (d *Daemon) comparativeClause(lang, subj, rel, std string, given bool) (str
 		return "", false
 	}
 	return line, true
+}
+
+// joinCoordinated joins predicates with the tongue's coordinator ("lighter and slower", "daha
+// hafif ve daha yavaş"), a comma before the last when there are three or more.
+func (d *Daemon) joinCoordinated(lang string, items []string) string {
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	case 2:
+		return items[0] + " " + d.gram.Coordinator(lang) + " " + items[1]
+	default:
+		return strings.Join(items[:len(items)-1], ", ") + " " + d.gram.Coordinator(lang) + " " + items[len(items)-1]
+	}
 }
 
 // comparisonDir is the relation a comparison is spoken with from the focus's side: the

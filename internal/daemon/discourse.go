@@ -601,9 +601,58 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			}
 		}
 	}
+	// Comparisons that share a standard speak as one predicate ("lighter and slower than the
+	// cat"), so the standard is named once. The grouping is by the standard concept and the
+	// direction each is spoken with (meaning); the groups order by scale so the two poles of one
+	// scale stay adjacent and a switch between them still reads as a contrast at realization.
+	type compGroup struct {
+		name  string
+		dirs  []string
+		scale string
+	}
+	var compGroups []*compGroup
+	byStd := map[string]*compGroup{}
+	for _, k := range order {
+		if !d.factIsComparative(k.rel) {
+			continue
+		}
+		dir := k.rel
+		if k.role == "patient" {
+			opp := d.oppositeRelations(d.resolveRelation(k.rel).ID)
+			if len(opp) == 0 {
+				continue
+			}
+			dir = opp[0]
+		}
+		scale := d.comparisonScale(dir)
+		for _, name := range coargs[k] {
+			g := byStd[name]
+			if g == nil {
+				g = &compGroup{name: name, scale: scale}
+				byStd[name] = g
+				compGroups = append(compGroups, g)
+			}
+			has := false
+			for _, dd := range g.dirs {
+				if dd == dir {
+					has = true
+					break
+				}
+			}
+			if !has {
+				g.dirs = append(g.dirs, dir)
+			}
+			if scale < g.scale {
+				g.scale = scale
+			}
+		}
+	}
+	sort.SliceStable(compGroups, func(i, j int) bool { return compGroups[i].scale < compGroups[j].scale })
+
 	var clauses []string
-	priorCompDir := "" // the pole the last comparison was spoken with, to read a contrast off the next
-	actionRun := 0     // consecutive actions by the focus, so a further one reads as an addition
+	compRendered := false // the comparison block is emitted as a whole at its first key
+	priorCompDir := ""    // the pole the last comparison was spoken with, to read a contrast off the next
+	actionRun := 0        // consecutive actions by the focus, so a further one reads as an addition
 	for _, k := range order {
 		names := coargs[k]
 		// A locative relation speaks as a copula with a preposition ("the leaf is on
@@ -627,34 +676,38 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 			continue
 		}
 		// A gradable relation speaks as a comparison ("the lion is bigger than the mouse"), not
-		// as a verb. The focus is the greater pole when it stood as agent and the lesser when
-		// it stood as patient, so the lesser is spoken with the relation's opposite ("smaller").
-		if rel := d.resolveRelation(k.rel); rel != nil && len(d.oppositeRelations(rel.ID)) > 0 {
+		// a verb. The focus is the greater pole when it stood as agent and the lesser when it
+		// stood as patient, so the lesser is spoken with the relation's opposite ("smaller").
+		// Comparisons that share a standard coordinate into one clause; opposite poles of one
+		// scale read as a contrast. The whole block is emitted at its first key, so the grouped
+		// order holds rather than the key order.
+		if d.factIsComparative(k.rel) {
 			actionRun = 0 // a comparison is not an action, so it breaks an addition run
+			if compRendered {
+				continue
+			}
+			compRendered = true
 			given := continuation || len(clauses) > 0
-			for _, co := range names {
-				dir := k.rel
-				if k.role == "patient" {
-					opp := d.oppositeRelations(rel.ID)
-					if len(opp) == 0 {
-						continue
-					}
-					dir = opp[0]
-				}
-				cl, ok := d.comparativeClause(lang, focusName, dir, co, given)
+			for _, g := range compGroups {
+				cl, ok := d.comparativeClause(lang, focusName, g.dirs, g.name, given)
 				if !ok {
 					continue
 				}
 				// A switch to the opposite pole of the same scale reads as a contrast: "bigger
-				// than the snail, but smaller than the lion." The relation is meaning (the
-				// opposite pole), the connective the tongue's seeded word.
-				if d.opposesDir(dir, priorCompDir) {
+				// than the snail, but smaller than the lion." A coordinated group spans several
+				// scales, so only a single-pole group carries a pole the next can oppose. The
+				// relation is meaning (the opposite pole), the connective the tongue's seeded word.
+				if len(g.dirs) == 1 && d.opposesDir(g.dirs[0], priorCompDir) {
 					if c := d.gram.Word(lang, "contrast"); c != "" {
 						cl = upperFirst(c) + " " + lowerFirst(cl)
 					}
 				}
 				clauses = append(clauses, cl)
-				priorCompDir = dir
+				if len(g.dirs) == 1 {
+					priorCompDir = g.dirs[0]
+				} else {
+					priorCompDir = ""
+				}
 				given = true
 			}
 			continue
