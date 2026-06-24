@@ -61,6 +61,34 @@ func TestLatinFreeWordOrder(t *testing.T) {
 	}
 }
 
+// The construction-traversal comprehender reads Latin's case-bound roles the way the coded path
+// does: across any word order the nominative puella is the agent and the accusative rosam the
+// patient. The traversal walks the construction by case here, not position, the same in either
+// direction.
+func TestComprehendByTraversalReadsLatinCase(t *testing.T) {
+	d, _ := testDaemon(t)
+	puella := groundNounLang(t, d, "puella", "la")
+	rosa := groundNounLang(t, d, "rosa", "la")
+	sayLang(t, d, "la", "puella rosam amat") // establishes the amat relation
+
+	for _, clause := range []string{"puella rosam amat", "rosam puella amat", "amat rosam puella"} {
+		coded, ok1 := d.gram.Comprehend("la", clause, d.resolveConcept, d.roleFit)
+		walked, ok2 := d.gram.ComprehendByTraversal("la", clause, d.resolveConcept, d.roleFit)
+		if !ok1 || !ok2 {
+			t.Fatalf("%q: both paths should read it: coded=%v walked=%v", clause, ok1, ok2)
+		}
+		if !meaningsAgree(walked, coded) {
+			t.Fatalf("%q: traversal should match the coded reading: walked %+v vs coded %+v", clause, walked, coded)
+		}
+		if a := walked.Roles["agent"].Concept; a == nil || a.ID != puella.ID {
+			t.Fatalf("%q: the nominative puella should be the agent: %+v", clause, walked.Roles["agent"])
+		}
+		if p := walked.Roles["patient"].Concept; p == nil || p.ID != rosa.ID {
+			t.Fatalf("%q: the accusative rosam should be the patient: %+v", clause, walked.Roles["patient"])
+		}
+	}
+}
+
 // The roles come from the case, not the order: swapping which noun wears the
 // accusative reverses who loves whom even at the same word order.
 func TestLatinCaseAssignsRoles(t *testing.T) {

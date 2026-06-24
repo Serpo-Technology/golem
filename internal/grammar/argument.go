@@ -371,9 +371,9 @@ func (p *Params) resolveCasedNoun(lang, span string, resolve func(string) *memor
 // construction is chosen by how the GROUNDED spans fit its slots' roles (selectArgByFit), the way
 // generation chooses by the role set, rather than by the span count alone. So the form-meaning
 // pairing is one bidirectional source of truth walked both ways. This is the additive traversal
-// counterpart of the coded parser; it recovers a Turkish pro-dropped subject the way the coded
-// path does, and declines only the case-driven roles (Latin) for now. It returns false when no
-// construction's grounded shape fits.
+// counterpart of the coded parser; it recovers a Turkish pro-dropped subject and reads Latin's
+// case-bound roles the way the coded path does, so it now walks the construction across all three
+// tongues. It returns false when no construction's grounded shape fits.
 func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(string) *memory.Fragment, fit func(*memory.Fragment, string) float64) (Meaning, bool) {
 	p = p.get()
 	if lang == "" {
@@ -383,10 +383,11 @@ func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(stri
 	if !ok {
 		return Meaning{}, false
 	}
-	// Latin reads roles from case, not the slot order, so this position-based walk declines it
-	// to the coded path for now.
+	// A case-driven tongue (Latin) binds roles by the case endings, not the slot order, so the
+	// construction is walked by reading each span's case rather than its position. That walk is
+	// the same in either direction, so it dispatches to it the way the coded path does.
 	if p.caseDriven(lang) {
-		return Meaning{}, false
+		return p.comprehendByCase(lang, spans, resolve)
 	}
 	// Turkish drops a subject its verb's agreement carries ("kediyi kovaladım" is "(I) chased the
 	// cat", the -m marking first person). Recover the implied pronoun as the first span, the way
