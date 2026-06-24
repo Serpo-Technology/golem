@@ -364,3 +364,5 @@ surface:tr:firstpersonpl	biz	tr
 surface:en:firstperson.obj	me	en
 surface:en:firstpersonpl.obj	us	en
 surface:en:than	than	en
+surface:en:contrast	but	en
+surface:tr:contrast	ama	tr

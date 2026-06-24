@@ -310,6 +310,14 @@ func (d *Daemon) planDescription(facts []focusFact) []focusFact {
 		}
 	}
 	sort.SliceStable(groups, func(i, j int) bool { return groups[i].peak > groups[j].peak })
+	// Within the comparisons, cluster the two poles of one scale so a switch between them
+	// ("bigger than the snail", then "smaller than the lion") falls adjacent and reads as a
+	// contrast at realization. The clustering is by the scale, a grounded property, not a word.
+	if g := byKey["comparison"]; g != nil {
+		sort.SliceStable(g.facts, func(i, j int) bool {
+			return d.comparisonScale(d.comparisonDir(g.facts[i])) < d.comparisonScale(d.comparisonDir(g.facts[j]))
+		})
+	}
 	out := thread
 	for _, g := range groups {
 		out = append(out, g.facts...)
@@ -594,6 +602,7 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		}
 	}
 	var clauses []string
+	priorCompDir := "" // the pole the last comparison was spoken with, to read a contrast off the next
 	for _, k := range order {
 		names := coargs[k]
 		// A locative relation speaks as a copula with a preposition ("the leaf is on
@@ -629,10 +638,21 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 					}
 					dir = opp[0]
 				}
-				if cl, ok := d.comparativeClause(lang, focusName, dir, co, given); ok {
-					clauses = append(clauses, cl)
-					given = true
+				cl, ok := d.comparativeClause(lang, focusName, dir, co, given)
+				if !ok {
+					continue
 				}
+				// A switch to the opposite pole of the same scale reads as a contrast: "bigger
+				// than the snail, but smaller than the lion." The relation is meaning (the
+				// opposite pole), the connective the tongue's seeded word.
+				if d.opposesDir(dir, priorCompDir) {
+					if c := d.gram.Word(lang, "contrast"); c != "" {
+						cl = upperFirst(c) + " " + lowerFirst(cl)
+					}
+				}
+				clauses = append(clauses, cl)
+				priorCompDir = dir
+				given = true
 			}
 			continue
 		}

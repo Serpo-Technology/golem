@@ -1406,6 +1406,55 @@ func (d *Daemon) comparativeClause(lang, subj, rel, std string, given bool) (str
 	return line, true
 }
 
+// comparisonDir is the relation a comparison is spoken with from the focus's side: the
+// relation itself when the focus is the greater pole (agent), its opposite when the focus is
+// the lesser (patient), so the same stored "bigger" reads "bigger" or "smaller".
+func (d *Daemon) comparisonDir(f focusFact) string {
+	if f.focusRole != "patient" {
+		return f.rel
+	}
+	if rel := d.resolveRelation(f.rel); rel != nil {
+		if opp := d.oppositeRelations(rel.ID); len(opp) > 0 {
+			return opp[0]
+		}
+	}
+	return f.rel
+}
+
+// comparisonScale names the gradable scale a direction lies on, the same for a pole and its
+// opposite ("bigger" and "smaller" share one scale), so the two poles cluster in a description
+// and a switch between them reads as a contrast.
+func (d *Daemon) comparisonScale(dir string) string {
+	rel := d.resolveRelation(dir)
+	if rel == nil {
+		return dir
+	}
+	for _, opp := range d.oppositeRelations(rel.ID) {
+		if opp < dir {
+			return opp
+		}
+	}
+	return dir
+}
+
+// opposesDir reports whether two comparison directions are the opposite poles of one scale
+// ("bigger" against "smaller"), the discourse relation a contrast connective realizes.
+func (d *Daemon) opposesDir(a, b string) bool {
+	if a == "" || b == "" || a == b {
+		return false
+	}
+	rel := d.resolveRelation(a)
+	if rel == nil {
+		return false
+	}
+	for _, opp := range d.oppositeRelations(rel.ID) {
+		if opp == b {
+			return true
+		}
+	}
+	return false
+}
+
 // sayMagnitude speaks a comparison's degree: the clause the question asked with the
 // degree word set before the gradable relation, "The lion is much bigger than the
 // mouse". A middling gap takes no word, reading as the plain comparative. The

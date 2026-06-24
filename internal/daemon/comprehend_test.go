@@ -1105,6 +1105,27 @@ func TestPlanDescriptionGroupsByAspect(t *testing.T) {
 	}
 }
 
+// Opposite poles of one gradable scale read as a contrast: a thing bigger than one thing and
+// smaller than another is described "bigger than X, but smaller than Y". The contrast is the
+// meaning (the opposite pole); the connective is the tongue's seeded word.
+func TestDescriptionContrastsOppositePoles(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"hare", "mouse", "horse"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a hare is bigger than a mouse")
+	say(t, d, "a mouse is smaller than a hare") // pairs bigger and smaller as one scale
+	say(t, d, "a hare is smaller than a horse") // the hare is the lesser here, same scale
+
+	got := say(t, d, "tell me about the hare").Say
+	if !strings.Contains(got, "bigger than") || !strings.Contains(got, "smaller than") {
+		t.Fatalf("the description should speak both poles: %q", got)
+	}
+	if !strings.Contains(strings.ToLower(got), "but") {
+		t.Fatalf("the opposite poles of one scale should be joined by a contrast: %q", got)
+	}
+}
+
 // A "what is X" GOLEM holds only the generic kind for it answers with a hedged
 // guess at what it is, from the better-known thing it resembles. The wolf, seen
 // once, resembles the dog GOLEM has seen many times, so "what is a wolf" reaches
