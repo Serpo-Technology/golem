@@ -28,13 +28,19 @@ func (d *Daemon) cognitionInfo() (*wire.CognitionInfo, error) {
 	// The refinement and bare-class concepts are grammar scaffolding the closed-class words
 	// link to, not part of the grown layer, so they are kept out of the reasoning view
 	// (they carry no features and so never resemble anything regardless).
-	if len(d.refinements) > 0 || len(d.categoryClasses) > 0 {
+	if len(d.refinements) > 0 || len(d.categoryClasses) > 0 || len(d.argConstructions) > 0 {
 		grown := make([]*memory.Fragment, 0, len(concepts))
 		for _, c := range concepts {
 			if _, ok := d.refinements[c.ID]; ok {
 				continue
 			}
 			if _, ok := d.categoryClasses[c.ID]; ok {
+				continue
+			}
+			if _, ok := d.argConstructions[c.ID]; ok {
+				continue
+			}
+			if d.argConstructionParts[c.ID] {
 				continue
 			}
 			grown = append(grown, c)

@@ -805,6 +805,16 @@ func (p *Params) verbLemma(lang, surface string) string {
 // value lists the form slots in citation order as "role/syn" (with an
 // optional "/prefer" feature), and the category names the predicate role.
 func (p *Params) SetArgConstructions(entries []Param) *Params {
+	p.argcxns = ParseArgConstructions(entries)
+	return p
+}
+
+// ParseArgConstructions reads the argument-structure constructions out of the construction
+// parameters into their form-meaning structures, keyed by language. Each key is
+// "acxn:<lang>:<name>"; the value lists the form slots in citation order as "role/syn" (with an
+// optional "/prefer" feature), and the category names the predicate role. It is exported so the
+// same parse feeds the engine and a caller representing the constructions in the graph.
+func ParseArgConstructions(entries []Param) map[string][]ArgConstruction {
 	reg := map[string][]ArgConstruction{}
 	for _, e := range entries {
 		rest, ok := strings.CutPrefix(e.Key, "acxn:")
@@ -829,6 +839,11 @@ func (p *Params) SetArgConstructions(entries []Param) *Params {
 		}
 		reg[lang] = append(reg[lang], c)
 	}
-	p.argcxns = reg
-	return p
+	return reg
+}
+
+// ArgConstructions returns the argument-structure constructions for a language, read-only, for a
+// caller cross-checking the constructions held in the graph against the compiled ones.
+func (p *Params) ArgConstructions(lang string) []ArgConstruction {
+	return p.get().argcxns[lang]
 }

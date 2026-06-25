@@ -433,6 +433,35 @@ func TestComprehendMagnitudeQuestionMatchesParse(t *testing.T) {
 	}
 }
 
+// The seed's argument-structure constructions parse into their form-meaning structures, and the
+// read-only accessor returns them, so the same parse can feed the engine and a graph representation.
+func TestParseArgConstructionsRoundTrips(t *testing.T) {
+	reg := ParseArgConstructions(Constructions())
+	var transitive ArgConstruction
+	for _, c := range reg["en"] {
+		if c.Name == "transitive" {
+			transitive = c
+		}
+	}
+	if transitive.Name != "transitive" || transitive.Pred != "rel" {
+		t.Fatalf("the transitive construction should parse with predicate rel: %+v", transitive)
+	}
+	want := []ArgSlot{{Role: "agent", Syn: "np", Prefer: "animate"}, {Role: "rel", Syn: "v"}, {Role: "patient", Syn: "np"}}
+	if len(transitive.Slots) != len(want) {
+		t.Fatalf("transitive slots: got %v want %v", transitive.Slots, want)
+	}
+	for i := range want {
+		if transitive.Slots[i] != want[i] {
+			t.Fatalf("slot %d: got %+v want %+v", i, transitive.Slots[i], want[i])
+		}
+	}
+	// The accessor reads the compiled constructions back for a cross-check.
+	p := Builtin().SetArgConstructions(Constructions())
+	if got := p.ArgConstructions("en"); len(got) == 0 {
+		t.Fatal("the accessor should return the English constructions")
+	}
+}
+
 func TestComprehendMultiWordPhrases(t *testing.T) {
 	p := Builtin()
 	resolve := func(string) *memory.Fragment { return nil }

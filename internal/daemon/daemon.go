@@ -266,6 +266,15 @@ type Daemon struct {
 	// becomes a teachable graph fact. Like the refinements, they sit outside the grown layer.
 	categoryClasses map[uint64]string
 
+	// argConstructions are the argument-structure construction concepts (transitive,
+	// intransitive), each carrying its form pole as a slot subgraph in the graph (an ordered slot
+	// per argument holding its role, syntactic type, and feature preference, plus the predicate
+	// role), so a form-meaning pattern is a graph fact the way a category membership is. The
+	// concept ID maps to "<lang>:<name>". argConstructionParts holds the slot and role/syn/prefer
+	// vocabulary nodes of those subgraphs. Both sit outside the grown concept layer.
+	argConstructions     map[uint64]string
+	argConstructionParts map[uint64]bool
+
 	// deicticByForm resolves a deictic pronoun to the participant it points at,
 	// built from the graph: each deixis word is linked to its participant concept,
 	// so the mapping is a learnable graph relation, not a hardcoded matcher.
@@ -863,6 +872,12 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.categoryClasses[id]; ok {
+		return true
+	}
+	if _, ok := d.argConstructions[id]; ok {
+		return true
+	}
+	if d.argConstructionParts[id] {
 		return true
 	}
 	if _, ok := d.commandName[id]; ok {

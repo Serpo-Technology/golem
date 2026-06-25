@@ -75,6 +75,12 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureCategoryClasses(); err != nil {
 		return err
 	}
+	// The argument-structure constructions live as concepts carrying their form pole in the graph;
+	// ensure them and their slot subgraphs here too, before the compile, so the derive can shadow
+	// the graph representation against the compiled constructions.
+	if err := d.ensureArgConstructions(); err != nil {
+		return err
+	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
 	// just seeded are picked up without a second fetch here.
 	return d.recompileGrammar()
@@ -152,6 +158,9 @@ func (d *Daemon) recompileGrammar() error {
 		SetConstructions(cparams).
 		SetDecl(gparams).
 		SetArgConstructions(cparams)
+	// The constructions also live as concepts in the graph; shadow that representation against the
+	// compiled ones to prove it round-trips the form pole before the graph is made the source.
+	d.shadowArgConstructions()
 	d.code = code.NewEngine(codeOps(cparams))
 	// Which word names an operation is resolved through the grounded concept graph,
 	// not the engine's own English word map: the engine consults this resolver, which
