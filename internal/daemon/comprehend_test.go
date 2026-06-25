@@ -1851,6 +1851,47 @@ func TestMagnitudeQuestionAnswered(t *testing.T) {
 	}
 }
 
+// The question-side construction traversal is load-bearing on the live handler path for the shapes
+// it reads completely: the copular is-a, the comparison, and its degree question are driven by the
+// walk's frame, the coded parse the cross-check. The answers are unchanged (the walk agrees with the
+// coded reading) and the parse-site shadow stays silent, so the cutover routes through the traversal
+// without a mismatch. A wh role-question keeps the coded frame and is silent there too.
+func TestQuestionCutoverDrivesCoveredShapes(t *testing.T) {
+	d, s := testDaemon(t)
+	var buf bytes.Buffer
+	d.out = &buf
+	cat := groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5)
+	say(t, d, "the cat is bigger than the mouse")
+
+	for _, c := range []struct{ q, want string }{
+		{"is a cat an animal", "Yes, a cat is an animal."},
+		{"is the cat bigger than the mouse", "Yes, the cat is bigger than the mouse."},
+		{"how much bigger is the cat than the mouse", "The cat is a little bigger than the mouse."},
+	} {
+		if got := say(t, d, c.q).Say; got != c.want {
+			t.Fatalf("%q: got %q, want %q", c.q, got, c.want)
+		}
+	}
+	// A wh role-question is shadowed but keeps the coded frame; it must be silent too.
+	say(t, d, "the cat chased the mouse")
+	say(t, d, "what did the cat chase")
+	if strings.Contains(buf.String(), "parse traversal mismatch") {
+		t.Fatalf("the cutover should drive the covered shapes without a mismatch: %s", buf.String())
+	}
+}
+
 // A proportion a:b::c:? is completed from the told relation: the relation that
 // holds cat -> mouse (chase) is found and applied to the dog, so the fourth term is
 // what the dog chased. Grounded in the relation, not a vector offset.

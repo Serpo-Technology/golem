@@ -2078,11 +2078,21 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if frame.Lang == "" {
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
-		// SHADOW: the question-side construction traversal runs alongside the coded parse to prove
-		// it reads the same frame. Demonstrated, not load-bearing -- the coded frame drives; a
-		// disagreement on a question shape the traversal handles is logged as a tripwire.
-		if alt, aok := d.gram.ParseByTraversal(frame.Lang, req.Content, d.resolveConcept); aok && !framesAgree(alt, frame) {
-			fmt.Fprintf(d.out, "parse traversal mismatch: %q\n", req.Content)
+		// The question-side construction traversal drives the shapes it reads completely: the
+		// copular is-a, the comparison, and its degree question carry every field their planners
+		// read, so the walk's frame is preferred and the coded parse becomes the cross-check (a
+		// disagreement is logged) and the fallback for the shapes the walk declines. The walk is a
+		// recognition reading, so the residual the coded span walk alone gathers (the default tongue
+		// and the unresolved words a curiosity follow-up asks after) is carried across. A wh
+		// role-question keeps the coded frame: its roles and that residual are read off the tokens,
+		// so its cutover waits on the planner reading the meaning graph rather than the frame.
+		if walked, wok := d.gram.ParseByTraversal(frame.Lang, req.Content, d.resolveConcept); wok {
+			if !framesAgree(walked, frame) {
+				fmt.Fprintf(d.out, "parse traversal mismatch: %q\n", req.Content)
+			} else if walked.Wh == "" {
+				walked.Lang, walked.Unknown = frame.Lang, frame.Unknown
+				frame = walked
+			}
 		}
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
 		// The words enter the lexicon only after the clause is read, so an
