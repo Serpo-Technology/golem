@@ -553,13 +553,44 @@ func (p *Params) comprehendComparativeQuestion(lang, utterance string, resolve f
 	return f, true
 }
 
+// comprehendMagnitudeQuestion reads a comparison asked for its DEGREE ("how much bigger is the lion
+// than the mouse") into its frame. It is the comparison construction opened by the degree
+// interrogative ("how much") instead of inverted for truth, so it carries both Comparative and
+// Magnitude, and the relation, subject, and standard fill the same roles planMagnitude reads. The
+// recognition routes through magnitudeParts, the same "how much" walk the coded parse reads, which
+// is keyed on the English degree opener and so declines the other tongues. It declines any clause
+// not opened that way (a plain comparison, a copular question).
+func (p *Params) comprehendMagnitudeQuestion(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	tokens, _ := Tokenize(utterance)
+	rel, subject, standard, ok := p.magnitudeParts(lang, tokens)
+	if !ok {
+		return Frame{}, false
+	}
+	f := Frame{Force: ForceQuestion, Comparative: true, Magnitude: true, Action: Term{Phrase: rel}}
+	if lang != "en" {
+		f.Lang = lang
+	}
+	f.Agent = resolveTerm(subject, resolve)
+	f.Patient = resolveTerm(standard, resolve)
+	return f, true
+}
+
 // ParseByTraversal reads a question to its frame by walking the grounded constructions, the
 // question-side counterpart of ComprehendByTraversal. It handles the copular yes/no question, the
-// asked comparison, and the wh-fronted role question; the remaining special forms and the do-support
-// polars are still the coded parser's, so it declines them. It is shadowed against the coded Parse,
-// demonstrated before the cutover.
+// asked comparison and its degree question, and the wh-fronted role question; the remaining special
+// forms and the do-support polars are still the coded parser's, so it declines them. The degree
+// question is tried before the plain comparison, the precedence the coded parse keeps so the degree
+// opener is not mistaken for the subject. It is shadowed against the coded Parse, demonstrated before
+// the cutover.
 func (p *Params) ParseByTraversal(lang, utterance string, resolve func(string) *memory.Fragment) (Frame, bool) {
 	if f, ok := p.comprehendCopularQuestion(lang, utterance, resolve); ok {
+		return f, true
+	}
+	if f, ok := p.comprehendMagnitudeQuestion(lang, utterance, resolve); ok {
 		return f, true
 	}
 	if f, ok := p.comprehendComparativeQuestion(lang, utterance, resolve); ok {

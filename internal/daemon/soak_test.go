@@ -152,10 +152,10 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 	var qMismatch []string
 	for _, c := range concepts {
 		for _, f := range d.gatherFacts(c, "agent", "") {
-			// An asked comparison goes through its own traversal recognizer, so a comparison told
-			// is rebuilt as the question "is a X bigger than a Y" and read both ways. A placement
-			// renders as a copula, not the verb clause the round-trip below reads, so it is left to
-			// that path's own soak.
+			// An asked comparison goes through its own traversal recognizer, so a comparison told is
+			// rebuilt as the truth question "is a X bigger than a Y" and the degree question "how
+			// much bigger is a X than a Y", each read both ways. A placement renders as a copula, not
+			// the verb clause the round-trip below reads, so it is left to that path's own soak.
 			if d.factIsComparative(f.rel) {
 				subj := d.conceptName(c.ID, c.Content, "en")
 				cmpRel := d.resolveRelation(f.rel)
@@ -168,13 +168,17 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 				if std == "" || strings.Contains(std, " ") || relName == "" || strings.Contains(relName, " ") {
 					continue
 				}
-				q := "is " + grammar.Indefinite(subj) + " " + relName + " than " + grammar.Indefinite(std)
-				coded := d.gram.ParseHint(q, "en", d.resolveConcept)
-				if walked, wok := d.gram.ParseByTraversal("en", q, d.resolveConcept); wok {
-					if framesAgree(walked, coded) {
-						qCovered++
-					} else {
-						qMismatch = append(qMismatch, q)
+				for _, q := range []string{
+					"is " + grammar.Indefinite(subj) + " " + relName + " than " + grammar.Indefinite(std),
+					"how much " + relName + " is " + grammar.Indefinite(subj) + " than " + grammar.Indefinite(std),
+				} {
+					coded := d.gram.ParseHint(q, "en", d.resolveConcept)
+					if walked, wok := d.gram.ParseByTraversal("en", q, d.resolveConcept); wok {
+						if framesAgree(walked, coded) {
+							qCovered++
+						} else {
+							qMismatch = append(qMismatch, q)
+						}
 					}
 				}
 				continue

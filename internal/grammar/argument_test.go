@@ -387,6 +387,52 @@ func TestComprehendComparativeQuestionMatchesParse(t *testing.T) {
 	}
 }
 
+// The construction-traversal recognition of a degree question ("how much bigger is the lion than the
+// mouse") matches the coded parser: it reads as both comparative and magnitude, the relation in the
+// predicate, the subject the agent, the standard the patient. A plain comparison and a degree clause
+// missing its standard are declined.
+func TestComprehendMagnitudeQuestionMatchesParse(t *testing.T) {
+	p := Builtin()
+	lion := &memory.Fragment{ID: 1, Content: "lion"}
+	mouse := &memory.Fragment{ID: 2, Content: "mouse"}
+	resolve := func(s string) *memory.Fragment {
+		switch s {
+		case "lion":
+			return lion
+		case "mouse":
+			return mouse
+		}
+		return nil
+	}
+	const in = "how much bigger is the lion than the mouse"
+	coded := p.ParseHint(in, "en", resolve)
+	walked, ok := p.comprehendMagnitudeQuestion("en", in, resolve)
+	if !ok {
+		t.Fatalf("%q: the traversal should read the degree question", in)
+	}
+	if walked.Force != ForceQuestion || coded.Force != ForceQuestion {
+		t.Fatalf("%q: both should be questions: walked %v coded %v", in, walked.Force, coded.Force)
+	}
+	if !walked.Magnitude || !coded.Magnitude || !walked.Comparative || !coded.Comparative {
+		t.Fatalf("%q: both should be comparative+magnitude: walked %+v coded %+v", in, walked, coded)
+	}
+	if walked.Action.Phrase != coded.Action.Phrase || walked.Action.Phrase != "bigger" {
+		t.Fatalf("%q: relation should be bigger: walked %q coded %q", in, walked.Action.Phrase, coded.Action.Phrase)
+	}
+	if walked.Agent.Concept != lion || walked.Patient.Concept != mouse {
+		t.Fatalf("%q: subject should be the agent and standard the patient: %+v", in, walked)
+	}
+	if walked.Agent.Concept != coded.Agent.Concept || walked.Patient.Concept != coded.Patient.Concept {
+		t.Fatalf("%q: roles should match the coded reading: walked %+v coded %+v", in, walked, coded)
+	}
+	// A plain comparison is not a degree question, and a degree clause needs its standard.
+	for _, text := range []string{"is the lion bigger than the mouse", "how much bigger is the lion"} {
+		if _, ok := p.comprehendMagnitudeQuestion("en", text, resolve); ok {
+			t.Fatalf("%q: should be declined as not a degree question", text)
+		}
+	}
+}
+
 func TestComprehendMultiWordPhrases(t *testing.T) {
 	p := Builtin()
 	resolve := func(string) *memory.Fragment { return nil }
