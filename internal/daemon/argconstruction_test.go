@@ -149,3 +149,49 @@ func TestTaughtConstructionParsesAndSpeaks(t *testing.T) {
 		}
 	}
 }
+
+// A clause a learned construction reads into more than two roles is stored with every grounded role
+// on the moment, each edge labelled by its name. So a ditransitive told through the taught
+// construction keeps its recipient alongside the agent and patient, the grounded proposition the
+// reasoning reads from carrying all three.
+func TestComprehendStoresGroundedRolesBeyondAgentPatient(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	bone := groundNoun(t, d, "bone")
+	ditransitive := grammar.ArgConstruction{Name: "ditransitive", Lang: "en", Pred: "rel", Slots: []grammar.ArgSlot{
+		{Role: "agent", Syn: "np", Prefer: "animate"},
+		{Role: "rel", Syn: "v"},
+		{Role: "recipient", Syn: "np"},
+		{Role: "patient", Syn: "np"},
+	}}
+	if _, err := d.buildArgConstructionConcept(ditransitive, taughtConstructionWeight); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.registerGraphConstructions(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	say(t, d, "the dog showed the cat the bone")
+
+	// The moment the dog is the agent of carries the recipient and the patient too.
+	agentEdges, err := s.LinksToRel([]uint64{dog.ID}, memory.RelAgent)
+	if err != nil || len(agentEdges) == 0 {
+		t.Fatalf("the dog should be the agent of the told proposition: %v", err)
+	}
+	moment := agentEdges[0].From
+	roleTarget := func(role string) uint64 {
+		edges, _ := s.LinksFromRel([]uint64{moment}, role)
+		if len(edges) == 0 {
+			return 0
+		}
+		return edges[0].To
+	}
+	if roleTarget("agent") != dog.ID || roleTarget("recipient") != cat.ID || roleTarget("patient") != bone.ID {
+		t.Fatalf("the moment should carry all three grounded roles: agent=%d recipient=%d patient=%d (want dog=%d cat=%d bone=%d)",
+			roleTarget("agent"), roleTarget("recipient"), roleTarget("patient"), dog.ID, cat.ID, bone.ID)
+	}
+}

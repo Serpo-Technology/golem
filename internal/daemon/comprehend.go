@@ -335,6 +335,22 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		d.ws.exciteRole(patientID, exciteSpeech, "patient")
 		d.event(events.Event{Ev: "link", From: momentID, To: patientID, Rel: memory.RelPatient, Weight: comprehendWeight})
 	}
+	// A role beyond the agent and patient that a construction binds (a recipient, an instrument)
+	// is grounded the same way, written as a role edge labelled by its name, so a clause a learned
+	// construction reads into more than two roles keeps every grounded role. The role name is the
+	// edge, as the agent and patient ones are ("agent", "patient"); an unresolved extra role is
+	// left for a later acquisition, the way the patient gap is.
+	for role, t := range m.Roles {
+		if role == "agent" || role == "patient" || t.Concept == nil {
+			continue
+		}
+		if err := d.store.LinkRel(momentID, t.Concept.ID, role, comprehendWeight); err != nil {
+			fmt.Fprintf(d.out, "role link error: %v\n", err)
+			continue
+		}
+		d.ws.exciteRole(t.Concept.ID, exciteSpeech, role)
+		d.event(events.Event{Ev: "link", From: momentID, To: t.Concept.ID, Rel: role, Weight: comprehendWeight})
+	}
 
 	// A gap in what was bound is a learning signal, not a failure: a role
 	// whose filler grounds in nothing is held as a goal so the drives hunt
