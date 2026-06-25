@@ -159,6 +159,9 @@ func (d *Daemon) recompileGrammar() error {
 	// than the seed string; a construction with no concept (an induced per-verb one) keeps its stored
 	// value. A grammar node and its compiled param line up by index, as the construction nodes do.
 	d.deriveArgConstructions(cnodes, cparams)
+	// A construction taught into the graph as a concept with no construction node is enumerated in
+	// here, so a new argument-structure pattern reaches the engine with no seed edit.
+	cparams = d.enumerateGraphArgConstructions(cnodes, cparams)
 	d.gram = grammar.Compile(gparams, mass).
 		SetConstructions(cparams).
 		SetDecl(gparams).

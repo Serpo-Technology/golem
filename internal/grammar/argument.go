@@ -675,10 +675,23 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 			verb := tokens[len(tokens)-1]
 			return []string{np1, np2, verb}, np1 != "" && np2 != "" && verb != ""
 		}
+		// A verb-medial clause splits into the subject before the verb, the verb, and one noun
+		// phrase per determiner after it, so a clause with more arguments than the transitive yields
+		// a span apiece: "the dog gave the cat the bone" reads as agent, verb, recipient, patient.
+		// The verb sits just before the second determiner.
 		verb := tokens[d2-1]
-		np1 := p.contentSpan(tokens[:d2-1])
-		np2 := p.contentSpan(tokens[d2:])
-		return []string{np1, verb, np2}, np1 != "" && np2 != "" && verb != ""
+		spans := []string{p.contentSpan(tokens[:d2-1]), verb}
+		ok := spans[0] != "" && verb != ""
+		for i := 1; i < len(anchors); i++ {
+			end := len(tokens)
+			if i+1 < len(anchors) {
+				end = anchors[i+1]
+			}
+			np := p.contentSpan(tokens[anchors[i]:end])
+			spans = append(spans, np)
+			ok = ok && np != ""
+		}
+		return spans, ok
 	case len(anchors) == 1:
 		verb := tokens[len(tokens)-1]
 		np1 := p.contentSpan(tokens[:len(tokens)-1])

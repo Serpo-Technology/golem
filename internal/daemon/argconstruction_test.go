@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
 
@@ -83,5 +84,68 @@ func TestArgConstructionsDeriveFromGraph(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "argcxn mismatch") {
 		t.Fatalf("a seed disagreeing with the graph should log the tripwire:\n%s", buf.String())
+	}
+}
+
+// A new argument-structure construction taught into the graph (no seed edit, no recompile from code)
+// reaches the engine and both parses and speaks a clause of its shape: a ditransitive binds four
+// roles. The construction is learned the way the seeded ones live, in the graph the snapshot keeps.
+func TestTaughtConstructionParsesAndSpeaks(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	bone := groundNoun(t, d, "bone")
+
+	ditransitive := grammar.ArgConstruction{Name: "ditransitive", Lang: "en", Pred: "rel", Slots: []grammar.ArgSlot{
+		{Role: "agent", Syn: "np", Prefer: "animate"},
+		{Role: "rel", Syn: "v"},
+		{Role: "recipient", Syn: "np"},
+		{Role: "patient", Syn: "np"},
+	}}
+	if _, err := d.buildArgConstructionConcept(ditransitive, taughtConstructionWeight); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.registerGraphConstructions(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The engine now holds the ditransitive, sourced from the graph with no seed entry.
+	var got grammar.ArgConstruction
+	for _, c := range d.gram.ArgConstructions("en") {
+		if c.Name == "ditransitive" {
+			got = c
+		}
+	}
+	if len(got.Slots) != 4 || got.Slots[2].Role != "recipient" || got.Slots[3].Role != "patient" {
+		t.Fatalf("the taught ditransitive should be sourced from the graph: %+v", got)
+	}
+
+	// It comprehends a four-role clause, binding each constituent to its role.
+	m, ok := d.gram.Comprehend("en", "the dog gave the cat the bone", d.resolveConcept, nil)
+	if !ok {
+		t.Fatal("the taught ditransitive should comprehend a four-role clause")
+	}
+	boundTo := func(role string, want *memory.Fragment) bool {
+		c := m.Roles[role].Concept
+		return c != nil && c.ID == want.ID
+	}
+	if !boundTo("agent", dog) || !boundTo("recipient", cat) || !boundTo("patient", bone) {
+		t.Fatalf("the roles should bind through the taught construction: agent=%v recipient=%v patient=%v",
+			m.Roles["agent"].Concept, m.Roles["recipient"].Concept, m.Roles["patient"].Concept)
+	}
+
+	// And it speaks the meaning back through the same construction, rendering all four constituents.
+	clause, ok := d.gram.Speak("en", m)
+	if !ok {
+		t.Fatal("the taught ditransitive should speak")
+	}
+	lc := strings.ToLower(clause)
+	for _, w := range []string{"dog", "cat", "bone"} {
+		if !strings.Contains(lc, w) {
+			t.Fatalf("the spoken clause should render every role, got %q", clause)
+		}
 	}
 }

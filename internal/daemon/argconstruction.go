@@ -27,66 +27,130 @@ const (
 	cxnPredRel   = "cxnpred"   // a construction to the role that carries the relation
 )
 
-// ensureArgConstructions represents each argument-structure construction as a concept carrying its
-// form pole in the graph: an ordered slot per argument (its content the citation rank), each slot
-// linked to its role, syntactic type, and feature preference, plus the predicate role. The roles,
-// syntactic types, and features are a small shared vocabulary reused across constructions. It is
-// seeded from the same seed that is the floor, idempotent and self-healing at boot, and runs before
-// the compile so the derive can shadow the graph against the compiled constructions. The
-// construction concepts sit outside the grown layer.
+// ensureArgConstructions represents each seed argument-structure construction as a concept carrying
+// its form pole in the graph, then registers every construction concept the graph holds (the seeds
+// plus any taught since) so the exclusion maps and the enumeration cover both. It is seeded from the
+// same seed that stays the floor, idempotent and self-healing at boot, and runs before the compile so
+// the derive reads each construction from the graph. The construction concepts sit outside the grown
+// layer.
 func (d *Daemon) ensureArgConstructions() error {
 	d.argConstructions = map[uint64]string{}
 	d.argConstructionParts = map[uint64]bool{}
+	for _, cxns := range grammar.ParseArgConstructions(grammar.Constructions()) {
+		for _, c := range cxns {
+			if _, err := d.buildArgConstructionConcept(c, c.Weight); err != nil {
+				return err
+			}
+		}
+	}
+	return d.registerGraphConstructions()
+}
+
+// buildArgConstructionConcept writes one construction's form pole into the graph: a concept (at the
+// given entrenchment weight) carrying its predicate role and an ordered slot per argument, each slot
+// linked to its role, syntactic type, and feature preference through a shared vocabulary. It is the
+// find-or-create used both to seed the constructions and to teach a new one, so a construction
+// learned into the graph is built the same way the seed ones are.
+func (d *Daemon) buildArgConstructionConcept(c grammar.ArgConstruction, weight float64) (uint64, error) {
 	vocab := func(kind, value string) uint64 {
 		if value == "" {
 			return 0
 		}
-		id := d.ensureConstructionNode("cxn:"+kind+":"+value, value, "")
-		if id != 0 {
-			d.argConstructionParts[id] = true
-		}
-		return id
+		return d.ensureConstructionNode("cxn:"+kind+":"+value, value, "")
 	}
-	linkVocab := func(slot uint64, rel, kind, value string) error {
-		if vid := vocab(kind, value); vid != 0 {
-			return d.store.LinkRel(slot, vid, rel, 1)
-		}
-		return nil
+	cid := d.ensureConstructionNode("acxn:"+c.Lang+":"+c.Name, c.Name, c.Lang)
+	if cid == 0 {
+		return 0, nil
 	}
-	for lang, cxns := range grammar.ParseArgConstructions(grammar.Constructions()) {
-		for _, c := range cxns {
-			cid := d.ensureConstructionNode("acxn:"+lang+":"+c.Name, c.Name, lang)
-			if cid == 0 {
-				continue
-			}
-			d.argConstructions[cid] = lang + ":" + c.Name
-			if pid := vocab("role", c.Pred); pid != 0 {
-				if err := d.store.LinkRel(cid, pid, cxnPredRel, 1); err != nil {
-					return err
+	if err := d.store.SetWeight(cid, weight); err != nil {
+		return cid, err
+	}
+	if pid := vocab("role", c.Pred); pid != 0 {
+		if err := d.store.LinkRel(cid, pid, cxnPredRel, 1); err != nil {
+			return cid, err
+		}
+	}
+	for i, s := range c.Slots {
+		sid := d.ensureConstructionNode(fmt.Sprintf("acxn:%s:%s/%d", c.Lang, c.Name, i), strconv.Itoa(i), c.Lang)
+		if sid == 0 {
+			continue
+		}
+		if err := d.store.LinkRel(cid, sid, cxnSlotRel, 1); err != nil {
+			return cid, err
+		}
+		for _, attr := range []struct{ rel, kind, value string }{
+			{cxnRoleRel, "role", s.Role}, {cxnSynRel, "syn", s.Syn}, {cxnPreferRel, "prefer", s.Prefer},
+		} {
+			if vid := vocab(attr.kind, attr.value); vid != 0 {
+				if err := d.store.LinkRel(sid, vid, attr.rel, 1); err != nil {
+					return cid, err
 				}
 			}
-			for i, s := range c.Slots {
-				sid := d.ensureConstructionNode(fmt.Sprintf("acxn:%s:%s/%d", lang, c.Name, i), strconv.Itoa(i), lang)
-				if sid == 0 {
-					continue
-				}
-				d.argConstructionParts[sid] = true
-				if err := d.store.LinkRel(cid, sid, cxnSlotRel, 1); err != nil {
-					return err
-				}
-				if err := linkVocab(sid, cxnRoleRel, "role", s.Role); err != nil {
-					return err
-				}
-				if err := linkVocab(sid, cxnSynRel, "syn", s.Syn); err != nil {
-					return err
-				}
-				if err := linkVocab(sid, cxnPreferRel, "prefer", s.Prefer); err != nil {
-					return err
-				}
-			}
+		}
+	}
+	return cid, nil
+}
+
+// registerGraphConstructions populates the exclusion maps from every construction-category concept
+// the graph holds: a construction concept (template "acxn:<lang>:<name>") into argConstructions
+// keyed by "<lang>:<name>", and a slot or a vocabulary node into argConstructionParts. So a
+// construction taught into the graph is discovered at boot, kept out of the grown layer, and reached
+// by the enumeration, alongside the seeded ones.
+func (d *Daemon) registerGraphConstructions() error {
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return err
+	}
+	for _, c := range concepts {
+		if c.Category != "construction" {
+			continue
+		}
+		if rest, ok := strings.CutPrefix(c.Template, "acxn:"); ok && !strings.Contains(rest, "/") {
+			d.argConstructions[c.ID] = rest // "<lang>:<name>"
+		} else {
+			d.argConstructionParts[c.ID] = true // a slot ("acxn:.../N") or a vocabulary node ("cxn:...")
 		}
 	}
 	return nil
+}
+
+// enumerateGraphArgConstructions appends a parameter for every construction the graph holds as a
+// concept but no construction node carries, so a construction taught into the graph (with no seed or
+// induced node) reaches the engine. Its form pole comes from the subgraph and its weight from the
+// concept, so a taught construction is entrenched and selected like any other. A construction that a
+// node already carries is left to deriveArgConstructions, which reads it from the graph in place.
+func (d *Daemon) enumerateGraphArgConstructions(cnodes []*memory.Fragment, cparams []grammar.Param) []grammar.Param {
+	if len(d.argConstructions) == 0 {
+		return cparams
+	}
+	have := make(map[string]bool, len(cnodes))
+	for _, n := range cnodes {
+		have[n.Template] = true
+	}
+	g := d.storeView()
+	for id, label := range d.argConstructions {
+		lang, name, ok := strings.Cut(label, ":")
+		if !ok {
+			continue
+		}
+		template := "acxn:" + lang + ":" + name
+		if have[template] {
+			continue // a construction node carries this; the in-place derive reads it from the graph
+		}
+		frags, err := d.store.FragmentsByIDs([]uint64{id})
+		if err != nil || len(frags) != 1 {
+			continue
+		}
+		built := d.argConstructionFromGraph(g, id, lang, name)
+		if len(built.Slots) == 0 {
+			continue // a stale id (a brain swapped under the daemon) resolves to no slots; skip it
+		}
+		cparams = append(cparams, grammar.Param{
+			Key: template, Value: serializeArgSlots(built.Slots), Lang: lang,
+			Category: built.Pred, Weight: frags[0].Weight,
+		})
+	}
+	return cparams
 }
 
 // ensureConstructionNode is the find-or-create for a construction-scaffolding concept (a
