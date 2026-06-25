@@ -1303,9 +1303,11 @@ func TestComprehendByTraversalShadowsAndRoundTrips(t *testing.T) {
 	}
 }
 
-// Across a range of told clauses the traversal comprehender agrees with the coded path, so the
-// shadow stays silent. The soak-lite for the first comprehension-by-traversal slice.
-func TestComprehendByTraversalShadowStaysSilent(t *testing.T) {
+// The traversal comprehender is load-bearing on the live teaching path: told clauses are read
+// through the walk (the coded path the cross-check), so they comprehend correctly and the cutover
+// stays silent. A proposition taught this way reads back the way it was told, and across a range of
+// clauses no mismatch fires.
+func TestStatementCutoverDrivesComprehension(t *testing.T) {
 	d, _ := testDaemon(t)
 	var buf bytes.Buffer
 	d.out = &buf
@@ -1319,6 +1321,10 @@ func TestComprehendByTraversalShadowStaysSilent(t *testing.T) {
 		"the dog chased the cat",
 	} {
 		say(t, d, clause)
+	}
+	// The walk drove the read, so the proposition is in the graph and answers back.
+	if got := say(t, d, "what did the wolf chase").Say; got != "The wolf chased the mouse." {
+		t.Fatalf("the clause comprehended through the traversal should read back: %q", got)
 	}
 	if strings.Contains(buf.String(), "comprehension traversal mismatch") {
 		t.Fatalf("the traversal should agree with the coded path across clauses, but a mismatch fired:\n%s", buf.String())

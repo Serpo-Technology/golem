@@ -217,11 +217,21 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if !ok {
 		return false
 	}
-	// SHADOW: the construction-traversal comprehender (the inverse of Speak) runs alongside to
-	// prove it reads the same meaning the coded path does. Demonstrated, not load-bearing -- the
-	// coded m is used; a disagreement on a shape both handle is logged as a tripwire.
-	if alt, aok := d.gram.ComprehendByTraversal(frame.Lang, raw, d.resolveConcept, d.roleFit); aok && !meaningsAgree(alt, m) {
-		fmt.Fprintf(d.out, "comprehension traversal mismatch: walked %q vs coded %q\n", meaningGloss(alt), meaningGloss(m))
+	// The construction-traversal comprehender (the inverse of Speak) drives where it reads the same
+	// meaning the coded path does. It walks the same bidirectional argument construction and chooses
+	// it by how the grounded spans fit its slots' roles (selectArgByFit), the reasoned counterpart of
+	// the coded path's arity selection; its meaning is preferred and the coded Comprehend becomes the
+	// cross-check (logged on disagreement) and the fallback for a clause the traversal declines. On
+	// agreement the two meanings are identical: they share the span segmentation, the relation lemma,
+	// and resolveCasedNoun, differing only in how the construction is selected, so the role spans the
+	// minting reads are the same. So preferring the walk is behaviour-preserving while making it the
+	// source of the read.
+	if walked, wok := d.gram.ComprehendByTraversal(frame.Lang, raw, d.resolveConcept, d.roleFit); wok {
+		if meaningsAgree(walked, m) {
+			m = walked
+		} else {
+			fmt.Fprintf(d.out, "comprehension traversal mismatch: walked %q vs coded %q\n", meaningGloss(walked), meaningGloss(m))
+		}
 	}
 	// A clause naming a conversation participant is a deictic assertion ("I chased
 	// the cat", "kediyi kovaladım"): the speaker fixed the roles by the pronoun or
