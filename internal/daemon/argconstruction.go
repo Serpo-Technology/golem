@@ -105,32 +105,40 @@ func (d *Daemon) ensureConstructionNode(template, content, lang string) uint64 {
 	return c.ID
 }
 
-// shadowArgConstructions rebuilds each construction from its graph subgraph and compares it to the
-// compiled, seed-derived one, logging any divergence. It proves the graph representation round-trips
-// the form pole the engine walks before the graph is made the source; the compiled constructions
-// still drive, so this changes nothing. It finds each construction concept in the current store by
-// its template rather than a cached id, so it stays correct when the brain is swapped under the
-// daemon by a restore, and is silent for a brain that does not hold the construction concepts yet.
-func (d *Daemon) shadowArgConstructions() {
+// deriveArgConstructions rewrites each construction parameter's form pole from the construction
+// concept the graph holds for it, so the engine reads the slots, their roles, and the predicate from
+// the graph rather than the seed string. A construction with no concept in the graph (a per-verb one
+// induced from usage, or a brain that does not represent it yet) keeps its stored value, and the
+// weight is the stored parameter's throughout, so entrenchment and the induced constructions are
+// untouched. While the seed still carries the form pole, a derived pole that disagrees is logged as a
+// tripwire that the graph and the seed have parted; the graph is authoritative. It finds the concept
+// by template in the current store, so it stays correct when a restore swaps the brain under the
+// daemon. A construction node and its parameter line up by index (paramsOf preserves order).
+func (d *Daemon) deriveArgConstructions(cnodes []*memory.Fragment, cparams []grammar.Param) {
+	if len(d.argConstructions) == 0 {
+		return
+	}
 	g := d.storeView()
-	for lang, cxns := range grammar.ParseArgConstructions(grammar.Constructions()) {
-		for _, seed := range cxns {
-			c, err := d.store.ConceptByTemplate("acxn:" + lang + ":" + seed.Name)
-			if err != nil || c == nil {
-				continue // this brain does not represent the construction in the graph yet
-			}
-			built := d.argConstructionFromGraph(g, c.ID, lang, seed.Name)
-			var compiled grammar.ArgConstruction
-			for _, x := range d.gram.ArgConstructions(lang) {
-				if x.Name == seed.Name {
-					compiled = x
-					break
-				}
-			}
-			if !argConstructionsEqual(built, compiled) {
-				fmt.Fprintf(d.out, "argcxn mismatch: %s:%s graph %s vs seed %s\n", lang, seed.Name, slotsGloss(built), slotsGloss(compiled))
-			}
+	for i, n := range cnodes {
+		rest, ok := strings.CutPrefix(n.Template, "acxn:")
+		if !ok {
+			continue
 		}
+		lang, name, ok := strings.Cut(rest, ":")
+		if !ok || name == "" {
+			continue
+		}
+		c, err := d.store.ConceptByTemplate(n.Template)
+		if err != nil || c == nil {
+			continue // induced or not yet represented: the stored construction stands
+		}
+		built := d.argConstructionFromGraph(g, c.ID, lang, name)
+		value := serializeArgSlots(built.Slots)
+		if value != cparams[i].Value || built.Pred != cparams[i].Category {
+			fmt.Fprintf(d.out, "argcxn mismatch: %s graph %q/%q vs seed %q/%q\n", n.Template, value, built.Pred, cparams[i].Value, cparams[i].Category)
+		}
+		cparams[i].Value = value
+		cparams[i].Category = built.Pred
 	}
 }
 
@@ -169,26 +177,21 @@ func (d *Daemon) argConstructionFromGraph(g codeGraph, id uint64, lang, name str
 	return c
 }
 
-// argConstructionsEqual compares two constructions on the structure the graph holds: the name, the
-// language, the predicate role, and the slots in order (role, syntactic type, feature). The weight
-// is the seed's metadata, not yet represented in the graph, so it is left out of the comparison.
-func argConstructionsEqual(a, b grammar.ArgConstruction) bool {
-	if a.Name != b.Name || a.Lang != b.Lang || a.Pred != b.Pred || len(a.Slots) != len(b.Slots) {
-		return false
-	}
-	for i := range a.Slots {
-		if a.Slots[i] != b.Slots[i] {
-			return false
+// serializeArgSlots writes a construction's slots back into the seed's citation-order form
+// ("agent/np/animate rel/v patient/np"), the inverse of the parse, so the form pole derived from the
+// graph feeds the same compile the seed string did. A trailing empty field is dropped; a feature with
+// no syntactic type keeps the empty middle ("role//prefer") so the parse reads it back the same.
+func serializeArgSlots(slots []grammar.ArgSlot) string {
+	fields := make([]string, len(slots))
+	for i, s := range slots {
+		parts := []string{s.Role}
+		if s.Syn != "" || s.Prefer != "" {
+			parts = append(parts, s.Syn)
 		}
+		if s.Prefer != "" {
+			parts = append(parts, s.Prefer)
+		}
+		fields[i] = strings.Join(parts, "/")
 	}
-	return true
-}
-
-// slotsGloss renders a construction's slots for the shadow's mismatch log.
-func slotsGloss(c grammar.ArgConstruction) string {
-	parts := make([]string, len(c.Slots))
-	for i, s := range c.Slots {
-		parts[i] = s.Role + "/" + s.Syn + "/" + s.Prefer
-	}
-	return "[" + strings.Join(parts, " ") + "] pred=" + c.Pred
+	return strings.Join(fields, " ")
 }

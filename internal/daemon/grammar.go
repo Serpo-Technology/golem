@@ -154,13 +154,15 @@ func (d *Daemon) recompileGrammar() error {
 	d.deriveCategoryClasses(gnodes, gparams)
 	d.deriveCategoryRefinements(gnodes, gparams)
 	cparams := paramsOf(cnodes)
+	// The argument-structure constructions' form poles are derived from the concepts the graph holds
+	// for them, so the engine reads the slots, their roles, and the predicate from the graph rather
+	// than the seed string; a construction with no concept (an induced per-verb one) keeps its stored
+	// value. A grammar node and its compiled param line up by index, as the construction nodes do.
+	d.deriveArgConstructions(cnodes, cparams)
 	d.gram = grammar.Compile(gparams, mass).
 		SetConstructions(cparams).
 		SetDecl(gparams).
 		SetArgConstructions(cparams)
-	// The constructions also live as concepts in the graph; shadow that representation against the
-	// compiled ones to prove it round-trips the form pole before the graph is made the source.
-	d.shadowArgConstructions()
 	d.code = code.NewEngine(codeOps(cparams))
 	// Which word names an operation is resolved through the grounded concept graph,
 	// not the engine's own English word map: the engine consults this resolver, which

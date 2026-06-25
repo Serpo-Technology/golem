@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"golem/internal/memory"
 )
 
 // The argument-structure constructions live as concepts in the graph, each carrying its form pole
@@ -47,5 +49,39 @@ func TestArgConstructionsLiveInGraph(t *testing.T) {
 		if !roles[want] {
 			t.Fatalf("the transitive construction should hold the %q role, got %v", want, roles)
 		}
+	}
+}
+
+// The construction's form pole is derived from the graph: where a stored parameter disagrees with the
+// concept the graph holds, the graph drives and the tripwire fires. So editing the construction in the
+// graph reaches the engine, the cutover that makes the graph the source.
+func TestArgConstructionsDeriveFromGraph(t *testing.T) {
+	d, _ := testDaemon(t)
+	cnodes, err := d.store.NodesByKind(memory.KindConstruction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cparams := paramsOf(cnodes)
+	idx := -1
+	for i, n := range cnodes {
+		if n.Template == "acxn:en:transitive" {
+			cparams[i].Value = "agent/np" // a seed disagreeing with the graph's full transitive
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("the transitive construction node should exist")
+	}
+	var buf bytes.Buffer
+	d.out = &buf
+	d.deriveArgConstructions(cnodes, cparams)
+	if cparams[idx].Value != "agent/np/animate rel/v patient/np" {
+		t.Fatalf("the graph should drive the construction's form pole, got %q", cparams[idx].Value)
+	}
+	if cparams[idx].Category != "rel" {
+		t.Fatalf("the graph should drive the predicate role, got %q", cparams[idx].Category)
+	}
+	if !strings.Contains(buf.String(), "argcxn mismatch") {
+		t.Fatalf("a seed disagreeing with the graph should log the tripwire:\n%s", buf.String())
 	}
 }
