@@ -305,6 +305,22 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		patientID = patient.Concept.ID
 		patientGloss = patient.Concept.Content
 	}
+	// A negated proposition ("the cat does not eat the plant") is a standing denial, not an
+	// observation: it is recorded as a direct denial edge from the agent to the patient under the
+	// relation rather than proposed as a fact, so it stays out of the positive walks yet is honoured
+	// when the proposition is later assessed, overriding an inherited default. A denial with no
+	// patient (an intransitive negative) is acknowledged but not yet stored.
+	if frame.Negate {
+		if patientID != 0 {
+			if err := d.store.LinkRel(agent.Concept.ID, patientID, denyRel(rel.Content), comprehendWeight); err != nil {
+				fmt.Fprintf(d.out, "denial store error: %v\n", err)
+				return false
+			}
+			d.event(events.Event{Ev: "link", From: agent.Concept.ID, To: patientID, Rel: denyRel(rel.Content), Weight: comprehendWeight})
+		}
+		d.noteFocus(agent.Concept)
+		return true
+	}
 	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patientID, comprehendWeight); err != nil {
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
@@ -1993,6 +2009,30 @@ func (d *Daemon) propositionHolds(agent *memory.Fragment, relContent string, pat
 	return false
 }
 
+// denyRel is the edge a told negative is recorded under: a relation-specific denial, distinct from
+// the positive role edges, so a denial stands in the graph without entering the walks that read
+// what an agent does.
+func denyRel(relContent string) string { return "deny:" + relContent }
+
+// propositionDenied reports whether the agent was told it does not stand in the relation to the
+// patient: a standing denial edge from the agent to the patient under the relation. It is the
+// negative the defeasible reasoning honours over an inherited or resembled default.
+func (d *Daemon) propositionDenied(agent *memory.Fragment, relContent string, patientID uint64) bool {
+	if patientID == 0 {
+		return false
+	}
+	edges, err := d.store.LinksFromRel([]uint64{agent.ID}, denyRel(relContent))
+	if err != nil {
+		return false
+	}
+	for _, e := range edges {
+		if e.To == patientID {
+			return true
+		}
+	}
+	return false
+}
+
 // isCategory reports whether a concept is an abstraction over members, a category
 // in the is-a hierarchy rather than a thing in it.
 func (d *Daemon) isCategory(c *memory.Fragment) bool {
@@ -2128,6 +2168,7 @@ const (
 	beliefUnknown  propBelief = iota // neither observed nor inferable
 	beliefObserved                   // the graph holds it, a fact
 	beliefInferred                   // not observed, but a near neighbour did it, a guess
+	beliefDenied                     // told not to hold, so it does not, overriding any default
 )
 
 // inferenceFloor is how near a neighbour must be for its proposition to support
@@ -2178,6 +2219,12 @@ func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID
 // evidence for it, so a re-ask is consistent and the belief stays warm. The
 // confidence is the resemblance the guess rode in on, attenuated once per hop.
 func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (belief propBelief, conf float64, supposed bool) {
+	// A told negative is authoritative: "the cat does not eat plants" denies the proposition even
+	// where the cat would inherit it as an animal. So a standing denial is honoured before any
+	// positive is weighed, the defeasible exception overriding the default.
+	if d.propositionDenied(agent, relContent, patient.ID) {
+		return beliefDenied, 1, false
+	}
 	if d.propositionHolds(agent, relContent, patient.ID) {
 		return beliefObserved, 1, false
 	}
@@ -2627,10 +2674,11 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		affirm := belief == beliefObserved || belief == beliefInferred
 		hedged := belief == beliefInferred
 		if prior := d.recallClaim(rel.Content, agent.ID, patient.ID); prior != nil {
-			if prior.affirmed && !affirm {
+			if prior.affirmed && !affirm && belief != beliefDenied {
 				// GOLEM affirmed this proposition earlier and nothing told this
 				// exchange overturns it; it stands by its claim rather than quietly
-				// contradict itself, at the confidence it first gave.
+				// contradict itself, at the confidence it first gave. A told negative
+				// does overturn it, so a denial is exempt from standing by the affirmation.
 				affirm, hedged = true, prior.hedged
 				if hedged {
 					belief = beliefInferred

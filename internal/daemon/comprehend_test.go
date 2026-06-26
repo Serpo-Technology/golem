@@ -1516,6 +1516,38 @@ func TestDefeasibleCategoryInheritance(t *testing.T) {
 	}
 }
 
+// A told negative overrides an inherited default, the defeasible exception: the cat would inherit
+// the animal's chasing of the mouse, but told it did not, GOLEM denies it. The negative is a
+// standing denial in the graph, honoured before the inheritance is weighed, so the specific beats
+// the general even after the guess was already voiced.
+func TestDefeasibleToldNegativeOverridesInheritance(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5)
+	say(t, d, "an animal chased the mouse")
+
+	// The cat inherits the category's doing as a hedged default.
+	if got := say(t, d, "did the cat chase the mouse").Say; !strings.HasPrefix(got, "Probably") {
+		t.Fatalf("the cat should inherit the animal's doing, hedged: %q", got)
+	}
+	// Told it did not, GOLEM denies it, the specific negative overriding the general default.
+	say(t, d, "the cat did not chase the mouse")
+	if got := say(t, d, "did the cat chase the mouse").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("a told negative should override the inherited default: %q", got)
+	}
+}
+
 // GOLEM reasons over the is-a hierarchy: it answers whether a thing belongs to a
 // category, and composes membership with a relation, soundly and firmly, so "did
 // the dog chase an animal" holds because the dog chased a cat and a cat is an
