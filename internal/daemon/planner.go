@@ -947,6 +947,12 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	if line, ok := d.planLocativeWh(frame, chem); ok {
 		return line
 	}
+	// A question that gives more than one role and asks another ("what did the dog show the cat")
+	// is answered from the proposition the given arguments all stand in, before the single-role walk
+	// that would read only the first of them.
+	if line, ok := d.planMultiRoleQuestion(frame, raw); ok {
+		return line
+	}
 	// A question about a relation's role is answered from the proposition
 	// graph through the engine: the walk crosses to the co-argument and the
 	// construction speaks the proposition back, not a hardcoded reply.

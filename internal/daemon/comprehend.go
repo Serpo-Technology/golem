@@ -497,6 +497,119 @@ func (d *Daemon) momentBoundRoles(momentID uint64) bool {
 	return err == nil && len(edges) > 0
 }
 
+// planMultiRoleQuestion answers a question that gives more than one role of a relation and asks
+// for another: "what did the dog show the cat" gives the agent and the recipient and asks the
+// patient. It finds the proposition the given arguments all stand in and speaks it back whole, so
+// the answer reads off the same grounded roles the construction stored. The roles are discovered
+// from the proposition itself rather than parsed from position, so a clause a learned construction
+// read into three roles is answered without naming the roles in code. It declines a question with
+// fewer than two given arguments to the single-role path, and a question whose given arguments do
+// not all meet in one proposition to the gap admission.
+func (d *Daemon) planMultiRoleQuestion(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Wh != "what" && frame.Wh != "who" && frame.Wh != "which" {
+		return "", false
+	}
+	rel, knowns := d.multiRoleQuestionParts(frame.Lang, raw)
+	if rel == nil || len(knowns) < 2 {
+		return "", false // the single-role path handles a question that gives one argument
+	}
+	roles, ok := d.matchProposition(rel, knowns)
+	if !ok {
+		return "", false // the given arguments never met in one proposition; let the gap stand
+	}
+	m := grammar.Meaning{
+		Relation: grammar.Term{Phrase: d.relationName(rel.Content, frame.Lang)},
+		Lang:     frame.Lang,
+		Past:     frame.Past,
+		Roles:    map[string]grammar.Term{},
+	}
+	for role, id := range roles {
+		frags, err := d.store.FragmentsByIDs([]uint64{id})
+		if err != nil || len(frags) != 1 {
+			return "", false
+		}
+		m.Roles[role] = grammar.Term{Phrase: d.conceptName(id, frags[0].Content, frame.Lang), Definite: true}
+	}
+	line, ok := d.gram.Speak(frame.Lang, m)
+	if !ok {
+		return "", false
+	}
+	d.noteFocus(knowns[0])
+	return line, true
+}
+
+// multiRoleQuestionParts reads a role question's relation and every argument it gives: the relation
+// is the content word whose lemma names one, the given arguments the content words that ground in a
+// non-relation concept. The asked role is left out, so "what did the dog show the cat" yields the
+// show relation and the dog and the cat.
+func (d *Daemon) multiRoleQuestionParts(lang, raw string) (rel *memory.Fragment, knowns []*memory.Fragment) {
+	tokens, _ := grammar.Tokenize(raw)
+	for _, t := range tokens {
+		if !d.gram.IsContentWord(lang, t) && !d.gram.IsDeictic(lang, t) {
+			continue
+		}
+		if rel == nil {
+			if r := d.resolveRelation(d.gram.Lemma(lang, t)); r != nil {
+				rel = r
+				continue
+			}
+		}
+		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+			knowns = append(knowns, c)
+		}
+	}
+	return rel, knowns
+}
+
+// matchProposition finds a proposition of the relation that holds every given argument in some role
+// and carries at least one more, returning all its roles so the answer can speak it whole. The roles
+// are read off the moment's edges, each labelled by its name, and only concept fillers count, so a
+// moment's succession links are not mistaken for roles. It returns false when no proposition holds
+// all the given arguments together.
+func (d *Daemon) matchProposition(rel *memory.Fragment, knowns []*memory.Fragment) (map[string]uint64, bool) {
+	grounds, err := d.store.LinksFromRel([]uint64{rel.ID}, memory.RelGrounds)
+	if err != nil {
+		return nil, false
+	}
+	for _, g := range grounds {
+		edges, err := d.store.LinksFrom([]uint64{g.To})
+		if err != nil {
+			continue
+		}
+		ids := make([]uint64, 0, len(edges))
+		for _, e := range edges {
+			ids = append(ids, e.To)
+		}
+		frags, err := d.store.FragmentsByIDs(ids)
+		if err != nil {
+			continue
+		}
+		isConcept := make(map[uint64]bool, len(frags))
+		for _, f := range frags {
+			isConcept[f.ID] = f.Kind == memory.KindConcept
+		}
+		roles := map[string]uint64{}
+		present := map[uint64]bool{}
+		for _, e := range edges {
+			if isConcept[e.To] {
+				roles[e.Rel] = e.To
+				present[e.To] = true
+			}
+		}
+		allGiven := true
+		for _, k := range knowns {
+			if !present[k.ID] {
+				allGiven = false
+				break
+			}
+		}
+		if allGiven && len(roles) > len(knowns) {
+			return roles, true
+		}
+	}
+	return nil, false
+}
+
 // planRoleQuestion answers a question about a role of a relation by walking
 // the proposition graph and generating the answer through the engine, rather
 // than selecting a reply from a fixed menu. "What did the dog chase" asks for

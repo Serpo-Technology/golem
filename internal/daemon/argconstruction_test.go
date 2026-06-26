@@ -175,7 +175,7 @@ func TestComprehendStoresGroundedRolesBeyondAgentPatient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	say(t, d, "the dog showed the cat the bone")
+	say(t, d, "the dog traded the cat the bone")
 
 	// The moment the dog is the agent of carries the recipient and the patient too.
 	agentEdges, err := s.LinksToRel([]uint64{dog.ID}, memory.RelAgent)
@@ -193,5 +193,12 @@ func TestComprehendStoresGroundedRolesBeyondAgentPatient(t *testing.T) {
 	if roleTarget("agent") != dog.ID || roleTarget("recipient") != cat.ID || roleTarget("patient") != bone.ID {
 		t.Fatalf("the moment should carry all three grounded roles: agent=%d recipient=%d patient=%d (want dog=%d cat=%d bone=%d)",
 			roleTarget("agent"), roleTarget("recipient"), roleTarget("patient"), dog.ID, cat.ID, bone.ID)
+	}
+
+	// A question giving two of the three roles and asking the third is answered from the
+	// proposition they all stand in, spoken back whole through the construction.
+	answer := say(t, d, "what did the dog trade the cat").Say
+	if !strings.Contains(strings.ToLower(answer), "bone") {
+		t.Fatalf("the two-known question should answer with the asked patient, got %q", answer)
 	}
 }
