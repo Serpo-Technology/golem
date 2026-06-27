@@ -245,6 +245,37 @@ func (d *Daemon) registerGraphDeclGrammar() error {
 	return nil
 }
 
+// enumerateGraphDeclRules appends a parameter for every phrase rule the graph holds as a concept but no
+// grammar node carries, so a rule taught into the graph with no seed entry reaches the engine and drives
+// generation like a seeded one. Its form pole comes from the subgraph. A rule a grammar node already
+// carries is left to deriveDeclGrammar, which reads it in place. Lex forms ride on word nodes, not rule
+// concepts, so only phrase rules enumerate here.
+func (d *Daemon) enumerateGraphDeclRules(gnodes []*memory.Fragment, gparams []grammar.Param) []grammar.Param {
+	if len(d.declRules) == 0 {
+		return gparams
+	}
+	have := make(map[string]bool, len(gnodes))
+	for _, n := range gnodes {
+		have[n.Template] = true
+	}
+	g := d.storeView()
+	for id, template := range d.declRules {
+		if have[template] {
+			continue // a grammar node carries this rule; the in-place derive reads it
+		}
+		parts := strings.SplitN(template, ":", 3)
+		if len(parts) != 3 || parts[0] != "syn" {
+			continue
+		}
+		built := d.declSynFromGraph(g, id)
+		if len(built.order) == 0 {
+			continue // a stale id (a brain swapped under the daemon) resolves to no daughters; skip it
+		}
+		gparams = append(gparams, grammar.Param{Key: template, Value: serializeDeclSyn(built), Lang: parts[1]})
+	}
+	return gparams
+}
+
 // deriveDeclGrammar rewrites each phrase rule parameter's form pole from the rule concept the graph
 // holds for it, so the engine reads the daughter order, the agreement flows, and the head from the
 // graph rather than the seed string. A rule with no concept in the graph (a brain that does not

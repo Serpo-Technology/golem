@@ -190,6 +190,46 @@ func TestDeclLexOrphanLivesOnLexemeNode(t *testing.T) {
 	}
 }
 
+// A phrase rule taught ONLY into the graph (no seed entry, no recompile from code) reaches the
+// realization engine and drives generation, and it survives the night, so a grammar rule learned into
+// the graph is a durable fluid weight. The taught rule orders its daughters b then a; the engine renders
+// that order though no seed line describes it.
+func TestTaughtPhraseRuleGeneratesAndSurvivesSleep(t *testing.T) {
+	d, s := testDaemon(t)
+	if _, err := d.buildDeclSynConcept("en", "demo", declSyn{order: []string{"b", "a"}, head: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.registerGraphDeclGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+
+	tree := func() *grammar.GenNode {
+		return grammar.Phrase("demo", nil, map[string]*grammar.GenNode{
+			"a": grammar.Leaf("dog", map[string]string{"cat": "n", "num": "sg"}),
+			"b": grammar.Leaf("cat", map[string]string{"cat": "n", "num": "sg"}),
+		})
+	}
+	surface, _, ok := d.gram.Generate("en", tree())
+	if !ok || surface != "cat dog" {
+		t.Fatalf("the taught rule should order b before a: %q (ok %v)", surface, ok)
+	}
+
+	// It survives the night and still drives generation: a rule taught into the graph is durable.
+	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	surface, _, ok = d.gram.Generate("en", tree())
+	if !ok || surface != "cat dog" {
+		t.Fatalf("the taught rule should survive the night and still generate: %q (ok %v)", surface, ok)
+	}
+}
+
 // Grammar scaffolding lives in the graph as a fluid weight: a night's prune spares the dissolution
 // concepts and their structural edges, so a phrase rule, an argument construction, a lexical form, and
 // a construction taught with no seed entry all survive a sleep intact rather than fading and re-growing

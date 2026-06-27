@@ -166,6 +166,9 @@ func (d *Daemon) recompileGrammar() error {
 	// A function word's inflected forms ride on its own node; the lex parameters read their category and
 	// forms from there, so a word's realization morphology is sourced from the word's node in the graph.
 	d.deriveDeclLex(gnodes, gparams)
+	// A phrase rule taught into the graph as a concept with no grammar node is enumerated in here, so a
+	// new declarative grammar rule reaches the realization engine with no seed edit.
+	gparams = d.enumerateGraphDeclRules(gnodes, gparams)
 	cparams := paramsOf(cnodes)
 	// The argument-structure constructions' form poles are derived from the concepts the graph holds
 	// for them, so the engine reads the slots, their roles, and the predicate from the graph rather
