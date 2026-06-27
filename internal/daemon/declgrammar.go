@@ -82,12 +82,20 @@ func (d *Daemon) ensureDeclGrammar() error {
 				return err
 			}
 		case "lex":
-			// A function word's forms ride on its own fw node, so a word's inflection lives with the
-			// word. A lex entry with no fw node keeps its seed floor: a content example (dog, chase)
-			// whose forms the open-vocabulary minter derives, or a load-bearing orphan (be, may) given
-			// a created lexeme node in a later step.
-			if host := byTemplate["fw:"+lang+":"+name]; host != nil {
-				if err := d.buildDeclLexOnNode(host.ID, lang, name, parseDeclLex(p.Value)); err != nil {
+			// A function word's forms ride on its own node, so a word's inflection lives with the
+			// word. A word that already has an fw node uses it; a closed-class word with no fw node
+			// (the copula, a modal, an auxiliary) gets a created lexeme word node to host its forms;
+			// a content example (a noun, a verb) is left to the open-vocabulary minter and keeps its
+			// seed floor.
+			lx := parseDeclLex(p.Value)
+			host := uint64(0)
+			if fw := byTemplate["fw:"+lang+":"+name]; fw != nil {
+				host = fw.ID
+			} else if lx.cat != "n" && lx.cat != "v" {
+				host = d.ensureLexemeNode(lang, name)
+			}
+			if host != 0 {
+				if err := d.buildDeclLexOnNode(host, lang, name, lx); err != nil {
 					return err
 				}
 			}
@@ -177,6 +185,26 @@ func (d *Daemon) buildDeclSynConcept(lang, name string, r declSyn) (uint64, erro
 		}
 	}
 	return rid, nil
+}
+
+// ensureLexemeNode is the find-or-create for a closed-class lexeme word node: a function word the
+// realizer inflects (the copula be, a modal, an auxiliary) that names no concept and so has no fw node
+// of its own. Held as a word node under a "lexeme:<lang>:<lemma>" template, it hosts the word's realizer
+// category and forms the way an fw node does, so even a word with no other graph presence carries its
+// morphology on its own node. Its form and category nodes are declgrammar concepts spared the prune, and
+// the lexeme node itself is touched only by edges (never pruned as orphan).
+func (d *Daemon) ensureLexemeNode(lang, name string) uint64 {
+	tpl := "lexeme:" + lang + ":" + name
+	if f, err := d.store.WordByTemplate(tpl); err == nil && f != nil {
+		return f.ID
+	}
+	f := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: name,
+		Template: tpl, Lang: lang, Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(f); err != nil {
+		fmt.Fprintf(d.out, "lexeme node error: %v\n", err)
+		return 0
+	}
+	return f.ID
 }
 
 // ensureDeclNode is the find-or-create for a declarative-grammar scaffolding concept (a phrase rule, a
@@ -360,11 +388,19 @@ func (d *Daemon) deriveDeclLex(gnodes []*memory.Fragment, gparams []grammar.Para
 		if len(parts) != 3 || parts[0] != "lex" {
 			continue
 		}
-		host := byTemplate["fw:"+parts[1]+":"+parts[2]]
-		if host == nil {
+		// The forms ride on the word's fw node, or on a created lexeme node for a closed-class word
+		// that has none. Both are looked up by template in the current store, so the derive stays
+		// correct after a restore swaps the brain.
+		hostID := uint64(0)
+		if fw := byTemplate["fw:"+parts[1]+":"+parts[2]]; fw != nil {
+			hostID = fw.ID
+		} else if lex, err := d.store.WordByTemplate("lexeme:" + parts[1] + ":" + parts[2]); err == nil && lex != nil {
+			hostID = lex.ID
+		}
+		if hostID == 0 {
 			continue // no word node carries the forms: the seed value stands as the floor
 		}
-		lx := d.declLexFromGraph(g, host.ID)
+		lx := d.declLexFromGraph(g, hostID)
 		if lx.cat == "" || len(lx.forms) == 0 {
 			continue // the node does not carry the lex pole yet
 		}

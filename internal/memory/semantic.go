@@ -27,6 +27,19 @@ func (s *Store) ConceptByTemplate(tpl string) (*Fragment, error) {
 	return frags[0], nil
 }
 
+// WordByTemplate returns the word node a template keys, or nil if none.
+// A closed-class lexeme that names no concept (the copula, a modal) is held
+// as a word node under a "lexeme:" template; this finds it by that template
+// the way ConceptByTemplate finds a concept, current after a restore.
+func (s *Store) WordByTemplate(tpl string) (*Fragment, error) {
+	frags, err := s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE kind = ? AND template = ? LIMIT 1`, KindWord, tpl)
+	if err != nil || len(frags) == 0 {
+		return nil, err
+	}
+	return frags[0], nil
+}
+
 // EpisodesByExactShape returns the moments whose template or content is
 // exactly the phrase, newest first. An exact shape is the strongest
 // possible anchor a phrase can have.

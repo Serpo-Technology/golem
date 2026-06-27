@@ -146,6 +146,50 @@ func TestDeclLexDeriveFromNode(t *testing.T) {
 	}
 }
 
+// A closed-class word with no fw node (the copula) gets a created lexeme word node that hosts its
+// realizer category and irregular forms, so even a word with no other graph presence carries its
+// morphology on its own node; the derive sources the lex pole from there.
+func TestDeclLexOrphanLivesOnLexemeNode(t *testing.T) {
+	d, s := testDaemon(t)
+	be, err := s.WordByTemplate("lexeme:en:be")
+	if err != nil || be == nil {
+		t.Fatalf("the copula should have a lexeme node: %v", err)
+	}
+	if be.Kind != memory.KindWord {
+		t.Fatalf("the lexeme node should be a word node, got kind %q", be.Kind)
+	}
+	lx := d.declLexFromGraph(d.storeView(), be.ID)
+	if lx.cat != "cop" {
+		t.Fatalf("be's realizer category should be cop, got %q", lx.cat)
+	}
+	for k, want := range map[string]string{"sg": "is", "pl": "are", "past:sg": "was", "past:pl": "were"} {
+		if lx.forms[k] != want {
+			t.Fatalf("be's %s form should be %q, got %q", k, want, lx.forms[k])
+		}
+	}
+
+	// The derive sources the lex:en:be parameter from the lexeme node.
+	gnodes, err := s.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gparams := paramsOf(gnodes)
+	idx := -1
+	for i, n := range gnodes {
+		if n.Template == "lex:en:be" {
+			gparams[i].Value = "cat=cop;sg=is" // missing the rest, which the lexeme node carries
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("the be lex node should exist")
+	}
+	d.deriveDeclLex(gnodes, gparams)
+	if !strings.Contains(gparams[idx].Value, "past:pl=were") {
+		t.Fatalf("the lexeme node should drive be's lex pole, got %q", gparams[idx].Value)
+	}
+}
+
 // Grammar scaffolding lives in the graph as a fluid weight: a night's prune spares the dissolution
 // concepts and their structural edges, so a phrase rule, an argument construction, a lexical form, and
 // a construction taught with no seed entry all survive a sleep intact rather than fading and re-growing
@@ -164,11 +208,14 @@ func TestDissolutionScaffoldingSurvivesSleep(t *testing.T) {
 		c, _ := s.ConceptByTemplate(tpl)
 		return c
 	}
-	scaffolding := []string{"syn:en:s", "acxn:en:transitive", "acxn:en:benefactive", "lexform:en:do/past"}
+	scaffolding := []string{"syn:en:s", "acxn:en:transitive", "acxn:en:benefactive", "lexform:en:do/past", "lexform:en:be/sg"}
 	for _, tpl := range scaffolding {
 		if present(tpl) == nil {
 			t.Fatalf("%s should exist before the sleep", tpl)
 		}
+	}
+	if be, _ := s.WordByTemplate("lexeme:en:be"); be == nil {
+		t.Fatal("the copula's lexeme node should exist before the sleep")
 	}
 
 	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
@@ -179,6 +226,9 @@ func TestDissolutionScaffoldingSurvivesSleep(t *testing.T) {
 		if present(tpl) == nil {
 			t.Fatalf("%s should survive the night as a fluid weight, got pruned", tpl)
 		}
+	}
+	if be, _ := s.WordByTemplate("lexeme:en:be"); be == nil {
+		t.Fatal("the copula's lexeme node should survive the night")
 	}
 	// The taught construction keeps all four slots: its structural edges did not decay away.
 	bc := present("acxn:en:benefactive")
