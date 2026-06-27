@@ -86,6 +86,27 @@ const (
 // constellation that dissolves stops being refreshed, its grounds edges
 // decay with the nightly link fade, and the concept dies of
 // disconnection like anything else no longer lived.
+// grownConcepts returns the concepts the nightly consolidation works over, leaving out the grammar
+// scaffolding (argument constructions, declarative phrase rules and lexical forms, grammatical classes)
+// that now persists in the graph as a fluid weight. Scaffolding is grammar living in the graph rather
+// than a perceptual concept, so it is not embedded or featured; this keeps consolidation's view of the
+// grown layer the same as before the scaffolding was spared the nightly prune.
+func (d *Daemon) grownConcepts() ([]*memory.Fragment, error) {
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return nil, err
+	}
+	var out []*memory.Fragment
+	for _, c := range concepts {
+		switch c.Category {
+		case "construction", declGrammarCategory, "class":
+			continue
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
 func (d *Daemon) growAbstractions() (born int) {
 	pairs, err := d.store.NamingPairs()
 	if err != nil {

@@ -252,7 +252,12 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?`, linkNightlyKeep); err != nil {
+	// An edge into grammar scaffolding (a construction's slot, a phrase rule's daughter, a word's
+	// form) is structural rather than associative: it defines the pattern, it does not fade with
+	// disuse. So it is spared the nightly decay and stands at full weight, which keeps a taught
+	// grammar pattern intact across nights instead of thinning toward the link floor.
+	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
+		WHERE to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class'))`, linkNightlyKeep); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {
@@ -288,7 +293,13 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 		AND id NOT IN (SELECT to_id FROM links)`, KindWord); err != nil {
 		return int(pruned), err
 	}
+	// Grammar scaffolding (an argument-structure construction, a declarative phrase rule or
+	// lexical form, a grammatical class) is the grammar living in the graph rather than a
+	// perceptual concept; it stands for a learned form-meaning fact, not a thing seen, so it
+	// is spared the grounding test. This is what lets a grammar pattern taught into the graph
+	// survive the night as a fluid weight rather than fade and re-grow only from the seed.
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
+		AND category NOT IN ('construction', 'declgrammar', 'class')
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
 			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)`, KindConcept, RelGrounds, RelAgent, RelPatient); err != nil {
 		return int(pruned), err

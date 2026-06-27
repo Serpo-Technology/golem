@@ -49,7 +49,7 @@ var rePlaceholder = regexp.MustCompile(`<[a-z]+>`)
 // Features earn their place from clustered experience: an attribute
 // must recur across the concept's lived moments to enter the signature.
 func (d *Daemon) growFeatures() (built int) {
-	concepts, err := d.store.Concepts()
+	concepts, err := d.grownConcepts()
 	if err != nil {
 		fmt.Fprintf(d.out, "feature error: %v\n", err)
 		return 0

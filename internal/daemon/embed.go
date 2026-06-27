@@ -37,7 +37,7 @@ const categoryTraitWeight = 6.0
 // night after the graph settles; under two concepts or with no traits it writes
 // nothing.
 func (d *Daemon) growEmbeddings() {
-	concepts, err := d.store.Concepts()
+	concepts, err := d.grownConcepts()
 	if err != nil {
 		fmt.Fprintf(d.out, "embedding error: %v\n", err)
 		return

@@ -238,7 +238,11 @@ func (d *Daemon) deriveDeclGrammar(gnodes []*memory.Fragment, gparams []grammar.
 		if err != nil || c == nil {
 			continue // not represented yet: the stored rule stands
 		}
-		value := serializeDeclSyn(d.declSynFromGraph(g, c.ID))
+		built := d.declSynFromGraph(g, c.ID)
+		if len(built.order) == 0 {
+			continue // the concept carries no daughters: the seed value stands as the floor
+		}
+		value := serializeDeclSyn(built)
 		if value != serializeDeclSyn(parseDeclSyn(gparams[i].Value)) {
 			fmt.Fprintf(d.out, "declgrammar mismatch: %s graph %q vs seed %q\n", n.Template, value, gparams[i].Value)
 		}

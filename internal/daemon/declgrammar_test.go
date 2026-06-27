@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
 
@@ -142,5 +143,54 @@ func TestDeclLexDeriveFromNode(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "declgrammar lex mismatch") {
 		t.Fatalf("a seed disagreeing with the node should log the tripwire:\n%s", buf.String())
+	}
+}
+
+// Grammar scaffolding lives in the graph as a fluid weight: a night's prune spares the dissolution
+// concepts and their structural edges, so a phrase rule, an argument construction, a lexical form, and
+// a construction taught with no seed entry all survive a sleep intact rather than fading and re-growing
+// only from the seed.
+func TestDissolutionScaffoldingSurvivesSleep(t *testing.T) {
+	d, s := testDaemon(t)
+	// Teach a construction with no seed entry, so its survival can only come from the graph.
+	taught := grammar.ArgConstruction{Name: "benefactive", Lang: "en", Pred: "rel", Slots: []grammar.ArgSlot{
+		{Role: "agent", Syn: "np"}, {Role: "rel", Syn: "v"}, {Role: "patient", Syn: "np"}, {Role: "beneficiary", Syn: "np"},
+	}}
+	if _, err := d.buildArgConstructionConcept(taught, taughtConstructionWeight); err != nil {
+		t.Fatal(err)
+	}
+
+	present := func(tpl string) *memory.Fragment {
+		c, _ := s.ConceptByTemplate(tpl)
+		return c
+	}
+	scaffolding := []string{"syn:en:s", "acxn:en:transitive", "acxn:en:benefactive", "lexform:en:do/past"}
+	for _, tpl := range scaffolding {
+		if present(tpl) == nil {
+			t.Fatalf("%s should exist before the sleep", tpl)
+		}
+	}
+
+	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tpl := range scaffolding {
+		if present(tpl) == nil {
+			t.Fatalf("%s should survive the night as a fluid weight, got pruned", tpl)
+		}
+	}
+	// The taught construction keeps all four slots: its structural edges did not decay away.
+	bc := present("acxn:en:benefactive")
+	if got := d.argConstructionFromGraph(d.storeView(), bc.ID, "en", "benefactive"); len(got.Slots) != 4 {
+		t.Fatalf("the taught construction should keep its 4 slots through the night, got %d", len(got.Slots))
+	}
+	// A scaffolding edge is structural, not associative, so its weight does not decay overnight.
+	edges, err := s.LinksFromRel([]uint64{present("acxn:en:transitive").ID}, cxnSlotRel)
+	if err != nil || len(edges) == 0 {
+		t.Fatalf("the transitive construction should keep its slot edges: %v", err)
+	}
+	if edges[0].Weight != 1.0 {
+		t.Fatalf("a scaffolding edge should not decay overnight, got weight %v", edges[0].Weight)
 	}
 }
