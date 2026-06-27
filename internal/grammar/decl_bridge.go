@@ -127,6 +127,26 @@ func (p *Params) speakDeclCased(g *DeclGrammar, lang string, m Meaning, verb str
 	if !ok {
 		return "", false
 	}
+	// A verb whose paradigm is seeded (a stored Turkish verb keyed by its aorist) takes its form from
+	// that paradigm, the way the coded realizer does, rather than re-inflecting an already-formed stem
+	// through the regular learned suffixes (which would double-mark it: "ister" -> "isterir"). The
+	// person suffix rides the past as it does in the coded path; the formed verb is placed verbatim.
+	if v, seeded := p.verbsTR[verb]; seeded {
+		form := selectTRVerb(v, m.Past, m.Negate, false)
+		if m.Past {
+			form += pastPersonSuffixTR(p.trPersonOf(agent.Speak()))
+		}
+		root := Phrase("s", nil, map[string]*GenNode{
+			"subj": subj,
+			"obj":  obj,
+			"v":    Leaf(form, fs{"cat": "comp"}),
+		})
+		surface, _, gok := p.Generate(lang, root)
+		if !gok {
+			return "", false
+		}
+		return Sentence(surface), true
+	}
 	// The verb stacks its morphemes, each a learned rule the engine folds in order. The clause
 	// carries the features; the verb leaf forms itself from them.
 	clause := fs{}
