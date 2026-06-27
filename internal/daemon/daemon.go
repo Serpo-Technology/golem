@@ -275,6 +275,15 @@ type Daemon struct {
 	argConstructions     map[uint64]string
 	argConstructionParts map[uint64]bool
 
+	// declRules are the declarative-grammar phrase-rule concepts (the general realization engine's
+	// syn rules), each carrying its form pole as a subgraph: an ordered slot per daughter, a head edge,
+	// and a flow node per agreement constraint. So a phrase rule is a graph fact the engine reads its
+	// daughter order and agreement from, the way the argument-structure constructions are. The concept
+	// ID maps to its template ("syn:<lang>:<name>"). declParts holds the slot, flow, and role vocabulary
+	// nodes of those subgraphs. Both sit outside the grown concept layer.
+	declRules map[uint64]string
+	declParts map[uint64]bool
+
 	// deicticByForm resolves a deictic pronoun to the participant it points at,
 	// built from the graph: each deixis word is linked to its participant concept,
 	// so the mapping is a learnable graph relation, not a hardcoded matcher.
@@ -878,6 +887,12 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if d.argConstructionParts[id] {
+		return true
+	}
+	if _, ok := d.declRules[id]; ok {
+		return true
+	}
+	if d.declParts[id] {
 		return true
 	}
 	if _, ok := d.commandName[id]; ok {

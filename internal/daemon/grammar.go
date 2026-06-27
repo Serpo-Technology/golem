@@ -81,6 +81,12 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureArgConstructions(); err != nil {
 		return err
 	}
+	// The declarative grammar's phrase rules live as concepts carrying their form pole in the graph;
+	// ensure them and their slot subgraphs here too, before the compile, so the derive reads each rule's
+	// daughter order and agreement from the graph rather than the seed string.
+	if err := d.ensureDeclGrammar(); err != nil {
+		return err
+	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
 	// just seeded are picked up without a second fetch here.
 	return d.recompileGrammar()
@@ -153,6 +159,10 @@ func (d *Daemon) recompileGrammar() error {
 	gparams := paramsOf(gnodes)
 	d.deriveCategoryClasses(gnodes, gparams)
 	d.deriveCategoryRefinements(gnodes, gparams)
+	// The declarative grammar's phrase rules read their form pole (daughter order, agreement flows, head)
+	// from the concepts the graph holds for them, so the general realization engine compiles the rules
+	// from the graph rather than the seed string; a rule with no concept keeps its stored value.
+	d.deriveDeclGrammar(gnodes, gparams)
 	cparams := paramsOf(cnodes)
 	// The argument-structure constructions' form poles are derived from the concepts the graph holds
 	// for them, so the engine reads the slots, their roles, and the predicate from the graph rather
