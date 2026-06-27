@@ -2033,6 +2033,23 @@ func (d *Daemon) propositionDenied(agent *memory.Fragment, relContent string, pa
 	return false
 }
 
+// propositionDeniedCategorically reads whether a category the agent belongs to was told it does not
+// stand in the relation to the patient: told "mammals do not eat the plant", a cow (a mammal)
+// inherits the denial. It is the negative counterpart of categoryInherits, the defeasible exception
+// carried at the category level, so a member denies what its category was told it does not do.
+func (d *Daemon) propositionDeniedCategorically(agent *memory.Fragment, relContent string, patientID uint64) bool {
+	for _, catID := range d.categoriesOf(agent.ID) {
+		cf, err := d.fragmentsByIDsTiered([]uint64{catID})
+		if err != nil || len(cf) != 1 {
+			continue
+		}
+		if d.propositionDenied(cf[0], relContent, patientID) {
+			return true
+		}
+	}
+	return false
+}
+
 // isCategory reports whether a concept is an abstraction over members, a category
 // in the is-a hierarchy rather than a thing in it.
 func (d *Daemon) isCategory(c *memory.Fragment) bool {
@@ -2259,6 +2276,13 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {
 		return beliefUnknown, 0, false
+	}
+	// A category the agent belongs to was told it does not stand in the relation: told "mammals do
+	// not eat the plant", a cow (a mammal) denies it. The category-level negative overrides the
+	// inherited default below, the defeasible exception inherited the way the default would be, but
+	// it is weighed after the firm positives above, so an observed fact about the member still wins.
+	if d.propositionDeniedCategorically(agent, relContent, patient.ID) {
+		return beliefDenied, 1, false
 	}
 	// A category the agent belongs to standing in the relation lends it, hedged:
 	// the cat is an animal, and the animal chased the mouse, so probably the cat

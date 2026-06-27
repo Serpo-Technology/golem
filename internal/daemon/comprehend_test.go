@@ -1548,6 +1548,42 @@ func TestDefeasibleToldNegativeOverridesInheritance(t *testing.T) {
 	}
 }
 
+// A denial told at a category is inherited by its members, the defeasible exception carried the way
+// the default is: the animal chases the mouse so the cat would too, but told mammals do not, the cat
+// (a mammal) denies it. A category-level negative is deny-once for every member.
+func TestDefeasibleCategoryDenialInheritedByMembers(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	mkCategory := func(name string, member uint64) {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: name,
+			Template: "abs:en:" + name, Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		w, _, err := s.WordNode(name, "en", d.chem.Snapshot(), time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.8)
+		s.SetLinkRel(c.ID, member, memory.RelGrounds, 0.5)
+	}
+	mkCategory("animal", cat.ID)
+	mkCategory("mammal", cat.ID)
+	say(t, d, "an animal chased the mouse")
+
+	// The cat inherits the animal's doing as a hedged default.
+	if got := say(t, d, "did the cat chase the mouse").Say; !strings.HasPrefix(got, "Probably") {
+		t.Fatalf("the cat should inherit the animal's doing, hedged: %q", got)
+	}
+	// Told mammals do not, the cat (a mammal) denies it, the category-level denial overriding the
+	// inherited default.
+	say(t, d, "the mammal did not chase the mouse")
+	if got := say(t, d, "did the cat chase the mouse").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("a category-level denial should be inherited and override the inherited default: %q", got)
+	}
+}
+
 // GOLEM reasons over the is-a hierarchy: it answers whether a thing belongs to a
 // category, and composes membership with a relation, soundly and firmly, so "did
 // the dog chase an animal" holds because the dog chased a cat and a cat is an
