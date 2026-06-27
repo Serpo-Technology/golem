@@ -1584,6 +1584,25 @@ func TestDefeasibleCategoryDenialInheritedByMembers(t *testing.T) {
 	}
 }
 
+// Part-whole composes with placement: a part is located where its whole is, so a leaf that is part
+// of a tree that is in the forest is in the forest. A part is not thereby inside its whole, the way
+// contact does not compose, so the leaf is not in the tree itself.
+func TestPartWholeComposesWithContainment(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "leaf")
+	groundNoun(t, d, "tree")
+	groundNoun(t, d, "forest")
+	say(t, d, "the leaf is part of the tree")
+	say(t, d, "the tree is in the forest")
+
+	if got := say(t, d, "is the leaf in the forest").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("a part of a thing in a place is in that place: %q", got)
+	}
+	if got := say(t, d, "is the leaf in the tree").Say; strings.HasPrefix(got, "Yes") {
+		t.Fatalf("a part is located with its whole, not inside it: %q", got)
+	}
+}
+
 // GOLEM reasons over the is-a hierarchy: it answers whether a thing belongs to a
 // category, and composes membership with a relation, soundly and firmly, so "did
 // the dog chase an animal" holds because the dog chased a cat and a cat is an

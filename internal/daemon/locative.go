@@ -46,6 +46,93 @@ func (d *Daemon) factIsLocative(relContent string) bool {
 	return rel != nil && d.relationIsLocative(rel.ID)
 }
 
+// markPartWhole records that a relation holds one thing as part of another, a self-edge on the
+// relation concept carrying the learned property, so the containment walk steps through it.
+func (d *Daemon) markPartWhole(relID uint64) {
+	d.store.SetLinkRel(relID, relID, memory.RelPartWhole, locativeWeight)
+}
+
+// factIsPartWhole reports whether a gathered fact's relation holds a part of a whole, the test the
+// containment walk uses to step from a part to the whole it is located with.
+func (d *Daemon) factIsPartWhole(relContent string) bool {
+	rel := d.resolveRelation(relContent)
+	if rel == nil {
+		return false
+	}
+	edges, err := d.store.LinksFromRel([]uint64{rel.ID}, memory.RelPartWhole)
+	return err == nil && len(edges) > 0
+}
+
+// partWholes lists the wholes a figure is a part of: the patients of its part-whole propositions
+// ("the leaf is part of the tree" yields the tree).
+func (d *Daemon) partWholes(figureID uint64) []uint64 {
+	frags, err := d.store.FragmentsByIDs([]uint64{figureID})
+	if err != nil || len(frags) != 1 {
+		return nil
+	}
+	var wholes []uint64
+	for _, f := range d.gatherFacts(frags[0], "agent", "") {
+		if d.factIsPartWhole(f.rel) {
+			wholes = append(wholes, f.coID)
+		}
+	}
+	return wholes
+}
+
+// partWholeRelation is the canonical content of the part-whole relation, distinct from the noun
+// "part" so the relation a part-of clause stores is one concept however the clause was phrased.
+const partWholeRelation = "part-of"
+
+// comprehendPartWhole reads a part-of clause ("the leaf is part of the tree") into a part-whole
+// proposition: the construction's marker is "part of" between the part and the whole, so the figure
+// is the noun before it and the whole the noun after. The standard argument parse mistakes "of" for
+// the verb, so the construction is read here, before that path, the way the locative clause is. It
+// returns false when the clause is not a part-of one, so ordinary comprehension stands.
+func (d *Daemon) comprehendPartWhole(raw string, momentID uint64) bool {
+	tokens, _ := grammar.Tokenize(raw)
+	mark := -1
+	for i := 0; i+1 < len(tokens); i++ {
+		if tokens[i] == "part" && tokens[i+1] == "of" {
+			mark = i
+			break
+		}
+	}
+	if mark < 1 || mark+2 >= len(tokens) {
+		return false
+	}
+	resolveNoun := func(toks []string) *memory.Fragment {
+		for _, t := range toks {
+			if !d.gram.IsContentWord("en", t) {
+				continue // the determiner and the copula name no part or whole
+			}
+			if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+				return c
+			}
+		}
+		return nil
+	}
+	part := resolveNoun(tokens[:mark])
+	whole := resolveNoun(tokens[mark+2:])
+	if part == nil || whole == nil || part.ID == whole.ID {
+		return false
+	}
+	rel, err := d.relationConcept(grammar.Term{Phrase: partWholeRelation}, "en")
+	if err != nil || rel == nil {
+		return false
+	}
+	if err := d.store.Propose(rel.ID, momentID, part.ID, whole.ID, comprehendWeight); err != nil {
+		fmt.Fprintf(d.out, "part-whole propose error: %v\n", err)
+		return false
+	}
+	d.markPartWhole(rel.ID)
+	d.noteFocus(part)
+	d.recordThreadProp(rel.Content, part.ID, whole.ID, part.Content, whole.Content)
+	d.ws.excite(rel.ID, exciteSpeech)
+	d.ws.exciteRole(part.ID, exciteSpeech, "agent")
+	d.ws.exciteRole(whole.ID, exciteSpeech, "patient")
+	return true
+}
+
 // locativeClause renders "FIGURE is PREP GROUND" ("the leaf is on the tree")
 // through the copula construction, the preposition and ground riding as the
 // complement the way an is-a answer's category does. The figure and ground are
@@ -152,6 +239,14 @@ func (d *Daemon) locativelyInside(figureID, targetID uint64, depth int) bool {
 	}
 	for _, ground := range d.locativeGrounds(figureID) {
 		if ground != figureID && d.locativelyInside(ground, targetID, depth-1) {
+			return true
+		}
+	}
+	// A part is located where its whole is, so the walk steps from a part to its whole: a leaf
+	// that is part of a tree that is in the forest is in the forest. Part-whole composes with
+	// placement the way placements compose with each other.
+	for _, whole := range d.partWholes(figureID) {
+		if whole != figureID && d.locativelyInside(whole, targetID, depth-1) {
 			return true
 		}
 	}

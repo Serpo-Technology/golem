@@ -71,6 +71,12 @@ const (
 	// the existential "var" rather than a verb, render and unify across tongues with
 	// the English "have"/"own" the same property names.
 	RelPossessive = "possessive"
+	// RelPartWhole marks a relation concept as part-whole: a self-edge recording that the
+	// relation holds one thing as part of another ("the leaf is part of the tree"). A part is
+	// located where its whole is, so the containment walk steps through it: a leaf part of a tree
+	// that is in the forest is in the forest. Like the others, the character is a fact about the
+	// relation in the graph, not baked into a construction.
+	RelPartWhole = "partwhole"
 	// RelMarks links a closed-class word to a concept it marks, so a grammatical
 	// category the engine reads is derived from the graph rather than a seeded
 	// string. A speech-act verb marks the discourse move it carries (clarify,

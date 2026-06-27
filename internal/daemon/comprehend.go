@@ -213,6 +213,11 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Lang == "tr" && d.comprehendPossessionTR(raw, momentID) {
 		return true
 	}
+	// A part-of clause ("the leaf is part of the tree") names a part-whole, which the argument
+	// parse would mistake for a verb clause, so the construction is read before that path.
+	if frame.Lang == "en" && !frame.Comparative && d.comprehendPartWhole(raw, momentID) {
+		return true
+	}
 	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
 	if !ok {
 		return false
