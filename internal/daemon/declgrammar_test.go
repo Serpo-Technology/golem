@@ -73,3 +73,74 @@ func TestDeclRulesDeriveFromGraph(t *testing.T) {
 		t.Fatalf("a seed disagreeing with the graph should log the tripwire:\n%s", buf.String())
 	}
 }
+
+// A function word's inflected forms live on its own fw node: the realizer category and each form keyed
+// by its agreement value, so a word's morphology lives with the word. The derive of the lex pole stays
+// silent against the seed.
+func TestDeclLexLivesOnWordNode(t *testing.T) {
+	d, s := testDaemon(t) // boot ran ensureDeclGrammar, attaching lex forms to fw nodes
+	var buf bytes.Buffer
+	d.out = &buf
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "declgrammar lex mismatch") {
+		t.Fatalf("the word-node-derived lex forms should match the seed:\n%s", buf.String())
+	}
+
+	gnodes, err := s.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doNode *memory.Fragment
+	for _, n := range gnodes {
+		if n.Template == "fw:en:do" {
+			doNode = n
+		}
+	}
+	if doNode == nil {
+		t.Fatal("the do function word should be an fw node")
+	}
+	// The do node carries its realizer category (aux, distinct from its parser category imp) and its
+	// suppletive forms read back off the node.
+	lx := d.declLexFromGraph(d.storeView(), doNode.ID)
+	if lx.cat != "aux" {
+		t.Fatalf("do's realizer category should be aux, got %q", lx.cat)
+	}
+	for k, want := range map[string]string{"sg": "does", "pl": "do", "past": "did"} {
+		if lx.forms[k] != want {
+			t.Fatalf("do's %s form should be %q, got %q", k, want, lx.forms[k])
+		}
+	}
+}
+
+// A word's lex pole is derived from its node: where a stored parameter disagrees with the forms the node
+// carries, the node drives and the tripwire fires. So editing a word's forms on its node reaches the
+// realizer.
+func TestDeclLexDeriveFromNode(t *testing.T) {
+	d, _ := testDaemon(t)
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gparams := paramsOf(gnodes)
+	idx := -1
+	for i, n := range gnodes {
+		if n.Template == "lex:en:do" {
+			gparams[i].Value = "cat=aux;sg=does" // a seed missing the forms the node carries
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("the do lex node should exist")
+	}
+	var buf bytes.Buffer
+	d.out = &buf
+	d.deriveDeclLex(gnodes, gparams)
+	if gparams[idx].Value != "cat=aux;past=did;pl=do;sg=does" {
+		t.Fatalf("the node should drive do's lex pole, got %q", gparams[idx].Value)
+	}
+	if !strings.Contains(buf.String(), "declgrammar lex mismatch") {
+		t.Fatalf("a seed disagreeing with the node should log the tripwire:\n%s", buf.String())
+	}
+}

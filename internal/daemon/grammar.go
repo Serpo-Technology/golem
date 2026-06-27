@@ -163,6 +163,9 @@ func (d *Daemon) recompileGrammar() error {
 	// from the concepts the graph holds for them, so the general realization engine compiles the rules
 	// from the graph rather than the seed string; a rule with no concept keeps its stored value.
 	d.deriveDeclGrammar(gnodes, gparams)
+	// A function word's inflected forms ride on its own node; the lex parameters read their category and
+	// forms from there, so a word's realization morphology is sourced from the word's node in the graph.
+	d.deriveDeclLex(gnodes, gparams)
 	cparams := paramsOf(cnodes)
 	// The argument-structure constructions' form poles are derived from the concepts the graph holds
 	// for them, so the engine reads the slots, their roles, and the predicate from the graph rather

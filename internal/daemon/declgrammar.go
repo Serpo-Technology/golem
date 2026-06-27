@@ -28,6 +28,10 @@ const (
 	declFlowRel     = "declflow"     // a phrase rule to one of its agreement-flow nodes
 	declFlowFromRel = "declflowfrom" // a flow to the daughter the feature flows from
 	declFlowToRel   = "declflowto"   // a flow to the daughter the feature flows to
+
+	declCatRel  = "declcat"  // a word node to its realizer category (cop, aux, pron)
+	declFormRel = "declform" // a word node to one of its inflected form nodes
+	declKeyRel  = "declkey"  // a form node to the agreement value that selects it (sg, pl, past)
 )
 
 // declSyn is a phrase rule's form pole as the daemon reads and writes it: the daughter order, the
@@ -42,6 +46,14 @@ type declSyn struct {
 // declFlow is one agreement constraint: a feature copied from one daughter to another.
 type declFlow struct{ feat, from, to string }
 
+// declLex is a lexical entry's form pole as the daemon reads and writes it: the realizer category
+// and the inflected forms keyed by the agreement value that selects each. It rides on the word's own
+// node (a function word's fw node, or a created lexeme node), so a word's forms live with the word.
+type declLex struct {
+	cat   string
+	forms map[string]string
+}
+
 // ensureDeclGrammar represents each seed phrase rule as a concept carrying its form pole in the graph,
 // then registers every declarative-grammar concept the graph holds so the exclusion maps and the
 // enumeration cover the seeds and any taught since. It is seeded from the curriculum that stays the
@@ -50,19 +62,65 @@ type declFlow struct{ feat, from, to string }
 func (d *Daemon) ensureDeclGrammar() error {
 	d.declRules = map[uint64]string{}
 	d.declParts = map[uint64]bool{}
+	gnodes, err := d.store.NodesByKind(memory.KindGrammar)
+	if err != nil {
+		return err
+	}
+	byTemplate := make(map[string]*memory.Fragment, len(gnodes))
+	for _, n := range gnodes {
+		byTemplate[n.Template] = n
+	}
 	for _, p := range grammar.Curriculum() {
 		parts := strings.SplitN(p.Key, ":", 3)
 		if len(parts) != 3 {
 			continue
 		}
+		lang, name := parts[1], parts[2]
 		switch parts[0] {
 		case "syn":
-			if _, err := d.buildDeclSynConcept(parts[1], parts[2], parseDeclSyn(p.Value)); err != nil {
+			if _, err := d.buildDeclSynConcept(lang, name, parseDeclSyn(p.Value)); err != nil {
 				return err
+			}
+		case "lex":
+			// A function word's forms ride on its own fw node, so a word's inflection lives with the
+			// word. A lex entry with no fw node keeps its seed floor: a content example (dog, chase)
+			// whose forms the open-vocabulary minter derives, or a load-bearing orphan (be, may) given
+			// a created lexeme node in a later step.
+			if host := byTemplate["fw:"+lang+":"+name]; host != nil {
+				if err := d.buildDeclLexOnNode(host.ID, lang, name, parseDeclLex(p.Value)); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return d.registerGraphDeclGrammar()
+}
+
+// buildDeclLexOnNode writes a word's lex pole onto its node: a realizer-category edge and an inflected
+// form node per agreement value, each form node carrying the surface form and linked to the value that
+// selects it through a shared key vocabulary. It is the find-or-create used to seed the forms and (later)
+// to teach them, so a word's forms live with the word.
+func (d *Daemon) buildDeclLexOnNode(hostID uint64, lang, name string, lx declLex) error {
+	if cid := d.ensureDeclNode("declcat:"+lx.cat, lx.cat, ""); cid != 0 {
+		if err := d.store.LinkRel(hostID, cid, declCatRel, 1); err != nil {
+			return err
+		}
+	}
+	for key, surface := range lx.forms {
+		fid := d.ensureDeclNode("lexform:"+lang+":"+name+"/"+key, surface, lang)
+		if fid == 0 {
+			continue
+		}
+		if err := d.store.LinkRel(hostID, fid, declFormRel, 1); err != nil {
+			return err
+		}
+		if kid := d.ensureDeclNode("declkey:"+key, key, ""); kid != 0 {
+			if err := d.store.LinkRel(fid, kid, declKeyRel, 1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // buildDeclSynConcept writes one phrase rule's form pole into the graph: a concept holding an ordered
@@ -279,4 +337,97 @@ func serializeDeclSyn(r declSyn) string {
 		flows = append(flows, f.feat+":"+f.from+">"+f.to)
 	}
 	return strings.Join(r.order, " ") + " | " + strings.Join(flows, ",") + " | " + r.head
+}
+
+// deriveDeclLex rewrites each lexical parameter's form pole from the forms the word's own node carries,
+// so the realizer reads a word's category and inflected forms from the graph rather than the seed string.
+// A lex entry whose word node carries no forms (a content example the minter derives, or an orphan not yet
+// given a node) keeps its stored value, the seed standing as the floor. The host node is found by template
+// in the current grammar nodes, so it stays correct when a restore swaps the brain. A grammar node and its
+// parameter line up by index (paramsOf preserves order); a derived pole that disagrees logs a tripwire.
+func (d *Daemon) deriveDeclLex(gnodes []*memory.Fragment, gparams []grammar.Param) {
+	byTemplate := make(map[string]*memory.Fragment, len(gnodes))
+	for _, n := range gnodes {
+		byTemplate[n.Template] = n
+	}
+	g := d.storeView()
+	for i, n := range gnodes {
+		parts := strings.SplitN(n.Template, ":", 3)
+		if len(parts) != 3 || parts[0] != "lex" {
+			continue
+		}
+		host := byTemplate["fw:"+parts[1]+":"+parts[2]]
+		if host == nil {
+			continue // no word node carries the forms: the seed value stands as the floor
+		}
+		lx := d.declLexFromGraph(g, host.ID)
+		if lx.cat == "" || len(lx.forms) == 0 {
+			continue // the node does not carry the lex pole yet
+		}
+		value := serializeDeclLex(lx)
+		if value != serializeDeclLex(parseDeclLex(gparams[i].Value)) {
+			fmt.Fprintf(d.out, "declgrammar lex mismatch: %s graph %q vs seed %q\n", n.Template, value, gparams[i].Value)
+		}
+		gparams[i].Value = value
+	}
+}
+
+// declLexFromGraph reads a word's lex pole back off its node: the realizer category and the inflected
+// forms keyed by their agreement value. It is the inverse of buildDeclLexOnNode, walked through the same
+// node-and-edge view the rest of the dissolution reads.
+func (d *Daemon) declLexFromGraph(g codeGraph, hostID uint64) declLex {
+	lx := declLex{forms: map[string]string{}}
+	if c := g.dests(hostID, declCatRel); len(c) == 1 {
+		lx.cat = g.content(c[0])
+	}
+	for _, fid := range g.dests(hostID, declFormRel) {
+		key := ""
+		if k := g.dests(fid, declKeyRel); len(k) == 1 {
+			key = g.content(k[0])
+		}
+		if key != "" {
+			lx.forms[key] = g.content(fid)
+		}
+	}
+	return lx
+}
+
+// parseDeclLex reads a lexical entry from its seed value ("cat=<c>;<key>=<form>;..."), the daemon-side
+// mirror of the grammar engine's parseLexEntry, so the word's node is seeded from the same string the
+// engine compiles.
+func parseDeclLex(value string) declLex {
+	lx := declLex{forms: map[string]string{}}
+	for _, field := range strings.Split(value, ";") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		key, val, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		if key == "cat" {
+			lx.cat = val
+			continue
+		}
+		lx.forms[key] = val
+	}
+	return lx
+}
+
+// serializeDeclLex writes a lexical entry back into the seed's "cat=<c>;<key>=<form>;..." form, the
+// inverse of parseDeclLex, with the forms in a canonical key order so the comparison the derive makes is
+// structural rather than sensitive to map iteration or the seed's field order.
+func serializeDeclLex(lx declLex) string {
+	keys := make([]string, 0, len(lx.forms))
+	for k := range lx.forms {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys)+1)
+	parts = append(parts, "cat="+lx.cat)
+	for _, k := range keys {
+		parts = append(parts, k+"="+lx.forms[k])
+	}
+	return strings.Join(parts, ";")
 }
