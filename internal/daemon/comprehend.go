@@ -2749,16 +2749,15 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		hedged := belief == beliefInferred
 		if prior := d.recallClaim(rel.Content, agent.ID, patient.ID); prior != nil {
 			if prior.affirmed && !affirm && belief != beliefDenied {
-				// GOLEM affirmed this proposition earlier and nothing told this
-				// exchange overturns it; it stands by its claim rather than quietly
-				// contradict itself, at the confidence it first gave. A told negative
-				// does overturn it, so a denial is exempt from standing by the affirmation.
-				affirm, hedged = true, prior.hedged
-				if hedged {
-					belief = beliefInferred
-				} else {
-					belief = beliefObserved
-				}
+				// GOLEM affirmed this proposition earlier and nothing told this exchange
+				// overturns it; it stands by its claim rather than quietly contradict
+				// itself. But it stands by it as a HEDGE: an affirmation now held only on
+				// memory of having said it, no longer grounded live, is at most "probably",
+				// never restored to a firm "yes". A told negative does overturn it, so a
+				// denial is exempt; a live-grounded upgrade keeps belief at beliefObserved
+				// and never reaches here, so the "probably" -> "yes" path is unaffected.
+				affirm, hedged = true, true
+				belief = beliefInferred
 			}
 			// The same claim again, at the same confidence, is noted as such; a guess
 			// that has firmed into a known fact ("probably" -> "yes") is an upgrade

@@ -931,6 +931,30 @@ func TestPolarRecordsAndStandsByClaim(t *testing.T) {
 	}
 }
 
+// A FIRM affirmation is stood by only as a hedge once the live grounding no longer
+// supports it: a claim held on memory of having said it is not a present fact, so the
+// firm "yes" softens to "probably" rather than being restored firm on memory alone.
+func TestFirmClaimStoodByAsHedge(t *testing.T) {
+	d, _ := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	if got := say(t, d, "did the dog chase the cat").Say; got != "Yes, the dog chased the cat." {
+		t.Fatalf("an observed fact affirms firmly first: %q", got)
+	}
+	rel := d.resolveRelation("chase")
+	if rel == nil {
+		t.Fatal("the chase relation should resolve")
+	}
+	got := strings.ToLower(d.answerPolar("en", dog, rel, cat, true, beliefUnknown, false))
+	if !strings.Contains(got, "probably") {
+		t.Fatalf("a firm claim with no live grounding should soften to a hedge: %q", got)
+	}
+	if strings.Contains(got, "yes,") {
+		t.Fatalf("a firm claim must not be restored to a firm yes on memory alone: %q", got)
+	}
+}
+
 // A wh-question GOLEM holds no observed answer for it answers from inference,
 // hedged, the counterpart of the polar guess and symmetric across the role
 // asked. The wolf was never seen chasing anything, but it resembles the dog,
