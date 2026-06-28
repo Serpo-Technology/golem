@@ -73,7 +73,7 @@ func (d *Daemon) mintNounConcept(phrase, lang string) *memory.Fragment {
 // object names: the foreign word becomes that concept's name in this tongue rather
 // than minting a parallel concept. With no twin to bind, the object is minted fresh,
 // as an unknown noun always was.
-func (d *Daemon) acquirePatient(phrase, lang string, rel *memory.Fragment) *memory.Fragment {
+func (d *Daemon) acquirePatient(phrase, lang string, rel, agent *memory.Fragment) *memory.Fragment {
 	lemma := d.nounLemma(phrase, lang)
 	if lemma == "" || d.gram.IsFunctionWord(lang, lemma) {
 		return nil
@@ -81,24 +81,26 @@ func (d *Daemon) acquirePatient(phrase, lang string, rel *memory.Fragment) *memo
 	if c := d.resolveConcept(lemma); c != nil {
 		return c
 	}
-	if twin := d.crossTonguePatient(rel, lang); twin != nil {
+	if twin := d.crossTonguePatient(rel, agent, lang); twin != nil {
 		d.nameConceptWord(twin.ID, lemma, lang)
 		return twin
 	}
 	return d.mintNounConcept(lemma, lang)
 }
 
-// crossTonguePatient returns the object of the most recent thread proposition over
-// the relation, when that object is a noun this tongue does not yet name: the
-// cross-tongue twin of the object now being read. Speaking the same relation in a new
-// tongue back to back is what keeps the twin warm, so the binding follows the same
-// adjacency the relation's own cross-tongue binding needs.
-func (d *Daemon) crossTonguePatient(rel *memory.Fragment, lang string) *memory.Fragment {
-	if rel == nil {
+// crossTonguePatient returns the object of the most recent thread proposition with
+// the SAME agent AND relation, when that object is a noun this tongue does not yet
+// name: the cross-tongue twin of the object now being read. Matching the whole
+// proposition (agent + relation), not the relation alone, keeps "köpek X kovaladı"
+// from binding X to whatever was last chased by anyone; it binds to what THIS dog
+// chased. Speaking the same proposition in a new tongue back to back keeps that twin
+// the most recent match, so the binding follows the adjacency it relies on.
+func (d *Daemon) crossTonguePatient(rel, agent *memory.Fragment, lang string) *memory.Fragment {
+	if rel == nil || agent == nil {
 		return nil
 	}
 	for _, p := range d.threadProps {
-		if p.rel != rel.Content || p.patient == 0 {
+		if p.rel != rel.Content || p.agent != agent.ID || p.patient == 0 {
 			continue
 		}
 		frags, err := d.store.FragmentsByIDs([]uint64{p.patient})
@@ -314,7 +316,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		// word it predicts as well as the model that predicts it. Where the relation
 		// has already bound across tongues, the object binds to its cross-tongue twin
 		// rather than minting a parallel concept; otherwise it is minted fresh.
-		patient.Concept = d.acquirePatient(patient.Phrase, frame.Lang, rel)
+		patient.Concept = d.acquirePatient(patient.Phrase, frame.Lang, rel, agent.Concept)
 	}
 	if patient.Concept != nil {
 		patientID = patient.Concept.ID

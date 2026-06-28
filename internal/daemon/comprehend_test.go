@@ -2638,3 +2638,34 @@ func TestCrossTongueAbstractNounBinds(t *testing.T) {
 		t.Errorf("the TR query should answer with the bound TR noun: %q", got)
 	}
 }
+
+// The cross-tongue object twin is found by the whole proposition (agent + relation),
+// not the relation alone. With the cat's chase of the mouse the most recent, the dog's
+// twin must still be what the DOG chased, and an agent that chased nothing in the
+// thread has no twin (so its object mints fresh rather than fusing onto another's).
+func TestCrossTonguePatientMatchesAgent(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	deer := groundNoun(t, d, "deer")
+	chase := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "chase",
+		Template: "rel:en:chase", Category: "relation", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(chase); err != nil {
+		t.Fatal(err)
+	}
+	// Newest first: the cat's chase of the mouse is more recent than the dog's of the deer.
+	d.threadProps = []threadProp{
+		{rel: "chase", agent: cat.ID, patient: mouse.ID},
+		{rel: "chase", agent: dog.ID, patient: deer.ID},
+	}
+	if got := d.crossTonguePatient(chase, dog, "tr"); got == nil || got.ID != deer.ID {
+		t.Fatalf("the dog's twin should be the deer it chased, not the more recent mouse: %v", got)
+	}
+	if got := d.crossTonguePatient(chase, cat, "tr"); got == nil || got.ID != mouse.ID {
+		t.Fatalf("the cat's twin should be the mouse it chased: %v", got)
+	}
+	if got := d.crossTonguePatient(chase, mouse, "tr"); got != nil {
+		t.Fatalf("an agent that chased nothing in the thread should have no twin: %v", got)
+	}
+}
