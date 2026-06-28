@@ -1867,6 +1867,51 @@ func TestComparativeConverseDiscovered(t *testing.T) {
 	}
 }
 
+// Two scales that correlate (size and speed both order the horse above the dog)
+// must not have their converse poles conflated. Telling "the dog is slower than the
+// horse" reverses the size pair as well, but slower is the converse of faster, the
+// scale it shares, not of bigger. A scale keeps the one converse its pole-pair
+// claimed, so a speed question is never answered off the size chain.
+func TestConverseDoesNotConflateScales(t *testing.T) {
+	d, s := testDaemon(t)
+	for _, n := range []string{"lion", "horse", "dog", "snail"} {
+		groundNoun(t, d, n)
+	}
+	// Size, with the lion at the top: taught for size only, never for speed.
+	say(t, d, "the lion is bigger than the horse")
+	say(t, d, "the horse is bigger than the dog")
+	say(t, d, "the dog is bigger than the snail")
+	say(t, d, "the snail is smaller than the dog") // size converse: smaller <-> bigger
+	// Speed over the lower animals: the horse above the dog above the snail.
+	say(t, d, "the horse is faster than the dog")
+	say(t, d, "the dog is faster than the snail")
+	say(t, d, "the dog is slower than the horse") // reverses bigger AND faster
+
+	bigger, faster, slower := d.resolveRelation("bigger"), d.resolveRelation("faster"), d.resolveRelation("slower")
+	if bigger == nil || faster == nil || slower == nil {
+		t.Fatal("the three relations should be known after the tellings")
+	}
+	// Slower is the converse of faster (its own scale), not of bigger (a correlate).
+	if edgeWeightRel(t, s, slower.ID, faster.ID, memory.RelOpposite) == 0 {
+		t.Fatal("slower should be discovered as the converse of faster")
+	}
+	if w := edgeWeightRel(t, s, slower.ID, bigger.ID, memory.RelOpposite); w != 0 {
+		t.Fatalf("slower must not become the converse of bigger (scale conflation), got %.2f", w)
+	}
+	// The genuine converses still reason across their whole chains.
+	if got := say(t, d, "is the snail slower than the horse").Say; got != "Yes, the snail is slower than the horse." {
+		t.Fatalf("the speed converse should chain: %q", got)
+	}
+	if got := say(t, d, "is the snail smaller than the lion").Say; got != "Yes, the snail is smaller than the lion." {
+		t.Fatalf("the size converse should chain: %q", got)
+	}
+	// The lion has a size but no speed; a speed question about it must not be
+	// answered off the size chain through a conflated converse.
+	if got := say(t, d, "is the horse slower than the lion").Say; strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the lion's size must not answer a speed question: %q", got)
+	}
+}
+
 // Magnitude is read from the told order: a concept's rank is how many it stands
 // above on the scale, and the gap between two ranks is the ordinal distance, sorted
 // into a qualitative degree. The comparisons are ordinal, so a wide gap reads as

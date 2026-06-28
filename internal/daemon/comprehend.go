@@ -1500,9 +1500,35 @@ func (d *Daemon) discoverConverse(rel, subj, std *memory.Fragment) {
 		if d.propositionHolds(subj, f.rel, std.ID) {
 			continue // it also orders subj above std: a synonym, not a converse
 		}
+		if d.hasOtherConverse(opp.ID, rel.ID) {
+			continue // opp's converse pole is already a different relation: this
+			// reversed pair is a separate scale that merely correlates with opp
+			// (size and speed both order the horse above the dog), not opp's
+			// opposite. A gradable scale has one converse pole, claimed by the
+			// pole-pair taught together; a later cross-scale reversal does not
+			// get to share it, which would conflate the two scales.
+		}
 		d.store.SetLinkRel(rel.ID, opp.ID, memory.RelOpposite, 1)
 		d.store.SetLinkRel(opp.ID, rel.ID, memory.RelOpposite, 1)
 	}
+}
+
+// hasOtherConverse reports whether relID already holds a converse pole that is not
+// other, so a relation keeps the single opposite its scale's pole-pair claimed
+// rather than collecting a converse from every relation that happens to order one
+// pair the other way. A pole may still serve several relations (one smaller for
+// the English and Turkish bigger), so only the already-leading relation is guarded.
+func (d *Daemon) hasOtherConverse(relID, other uint64) bool {
+	links, err := d.store.LinksFromRel([]uint64{relID}, memory.RelOpposite)
+	if err != nil {
+		return false
+	}
+	for _, l := range links {
+		if l.To != other {
+			return true
+		}
+	}
+	return false
 }
 
 // analogize completes a proportion a:b::c:?: it finds the relation that holds from
