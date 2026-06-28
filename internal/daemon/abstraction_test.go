@@ -326,6 +326,82 @@ func TestAbstractionFromBroadNaming(t *testing.T) {
 	}
 }
 
+// A category taught in two tongues has its real members in BOTH tongues' company; a
+// percept the category word merely shared a scene with in one tongue (the eater
+// category warm beside an eaten food) is an incidental scene-mate the night must not
+// promote to membership. The cross-tongue twin (hayvan for animal) corroborates the
+// real animals but not the food, so the food is left out of animal; the same food is
+// KEPT in its own category, whose twin (yiyecek for food) does corroborate it.
+func TestAbstractionDropsCrossTongueUncorroboratedScenemate(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	feed := func(shape string, n int) []recentMoment {
+		return feedShape(t, s, "vision", shape, 4, base.Add(time.Duration(n)*time.Minute))
+	}
+	dog := feed("a small brown dog", 0)
+	cat := feed("a small black cat", 1)
+	mouse := feed("a small gray mouse", 2)
+	carrot := feed("a long orange carrot", 3)
+	cheese := feed("a yellow cheese wedge", 4)
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+
+	// Build every category word's company first, so both twins are present before the
+	// single promotion pass (four abstractions, the night's mint cap).
+	mint := func(word, lang string, momentsets ...[]recentMoment) {
+		for i := range 3 {
+			anchors := make([]recentMoment, 0, len(momentsets))
+			for _, ms := range momentsets {
+				anchors = append(anchors, ms[i])
+			}
+			d.mintWords(word, lang, 0, anchors, false)
+		}
+	}
+	mint("animal", "en", dog, cat, mouse, carrot) // carrot bleeds into animal (one tongue)
+	mint("hayvan", "tr", dog, cat, mouse)         // the twin never kept carrot's company
+	mint("food", "en", carrot, cheese)
+	mint("yiyecek", "tr", carrot, cheese)
+	calm(d)
+	d.growConcepts()
+	d.growAbstractions()
+
+	groundedContents := func(tpl string) map[string]bool {
+		abs, err := s.ConceptByTemplate(tpl)
+		if err != nil || abs == nil {
+			t.Fatalf("the abstraction %s should exist: %v", tpl, err)
+		}
+		gs, err := s.LinksFromRel([]uint64{abs.ID}, memory.RelGrounds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]uint64, 0, len(gs))
+		for _, g := range gs {
+			ids = append(ids, g.To)
+		}
+		frags, _ := s.FragmentsByIDs(ids)
+		out := map[string]bool{}
+		for _, f := range frags {
+			out[f.Content] = true
+		}
+		return out
+	}
+
+	animal := groundedContents("abs:en:animal")
+	if animal["a long orange carrot"] {
+		t.Fatal("carrot kept animal's company in one tongue only; the uncorroborated scene-mate must not be a member")
+	}
+	if !animal["a small brown dog"] || !animal["a small black cat"] || !animal["a small gray mouse"] {
+		t.Fatalf("real members corroborated by the cross-tongue twin must stay: %v", animal)
+	}
+	food := groundedContents("abs:en:food")
+	if !food["a long orange carrot"] || !food["a yellow cheese wedge"] {
+		t.Fatalf("the food's own twin corroborates it, so it stays a food member: %v", food)
+	}
+}
+
 // A basic word does not abstract even when its company spreads like a category's.
 // "cat" kept company with the cat, the dog, and the rabbit (as a chase
 // co-participant would), enough to clear the gate, but it heads the caption of one

@@ -77,6 +77,13 @@ const (
 	absPerNight      = 4    // abstractions mintable in one night
 	absNameWeight    = 0.8  // the word's bond to its own abstraction
 	absRefreshFloor  = 2    // a core smaller than this has dissolved; stop refreshing and let decay take it
+	// crossTongueTwinOverlap is how much of an other-tongue word's percept company
+	// must be shared with a category word before it counts as that word's translation
+	// twin, whose agreement corroborates a candidate member. A real translation names
+	// nearly the same percepts (overlap approaches the whole of the smaller company);
+	// another category that merely shares a stray scene-mate falls well below this, so
+	// it cannot vouch for the scene-mate it dragged in.
+	crossTongueTwinOverlap = 0.7
 )
 
 // growAbstractions runs after naming in the same consolidation pass:
@@ -128,6 +135,75 @@ func (d *Daemon) growAbstractions() (born int) {
 	}
 	sort.Slice(words, func(i, j int) bool { return words[i].ID < words[j].ID })
 
+	// Cross-tongue corroboration of category membership. A category taught in two
+	// tongues over the same percepts has its real members in BOTH tongues' company,
+	// while a percept that kept the category word's company in one tongue only is an
+	// incidental scene-mate the night would otherwise promote to membership (the eater
+	// category warm beside the eaten food). The company a word keeps is the percepts
+	// its lived episodes ground; a cross-tongue twin is an other-tongue word whose
+	// company is mostly the same percepts -- a translation, not another category that
+	// shares a stray member. A candidate no twin corroborates is left out; a word with
+	// no twin keeps every candidate, so a monolingual category is unchanged.
+	conceptIDs := make([]uint64, 0)
+	seenConcept := map[uint64]bool{}
+	for _, ps := range byWord {
+		for _, p := range ps {
+			if !seenConcept[p.Concept] {
+				seenConcept[p.Concept] = true
+				conceptIDs = append(conceptIDs, p.Concept)
+			}
+		}
+	}
+	perceptless := d.perceptlessSet(conceptIDs)
+	company := make(map[uint64]map[uint64]bool, len(words))
+	for _, w := range words {
+		set := make(map[uint64]bool)
+		for _, p := range byWord[w.ID] {
+			if !perceptless[p.Concept] {
+				set[p.Concept] = true
+			}
+		}
+		company[w.ID] = set
+	}
+	corroboratedBy := func(w *memory.Fragment) (map[uint64]bool, bool) {
+		mine := company[w.ID]
+		if len(mine) == 0 {
+			return nil, false
+		}
+		union := map[uint64]bool{}
+		found := false
+		for _, other := range words {
+			if other.ID == w.ID || other.Lang == w.Lang {
+				continue
+			}
+			oc := company[other.ID]
+			// A translation twin of a category is itself a category, naming several
+			// percepts; a basic name names one. Skip a one-percept word, so a member's
+			// own other-tongue name (whose only company is that member) cannot vouch for
+			// it as if it were a category twin.
+			if len(oc) < absRefreshFloor {
+				continue
+			}
+			shared := 0
+			for c := range mine {
+				if oc[c] {
+					shared++
+				}
+			}
+			smaller := len(mine)
+			if len(oc) < smaller {
+				smaller = len(oc)
+			}
+			if float64(shared) >= crossTongueTwinOverlap*float64(smaller) {
+				found = true
+				for c := range oc {
+					union[c] = true
+				}
+			}
+		}
+		return union, found
+	}
+
 	for _, w := range words {
 		type coreShare struct {
 			concept uint64
@@ -152,11 +228,20 @@ func (d *Daemon) growAbstractions() (born int) {
 		if rel := absCoreFraction * maxShare; rel > cut {
 			cut = rel
 		}
+		corrob, hasTwin := corroboratedBy(w)
 		var core []coreShare
 		for _, s := range shares {
-			if s.share >= cut {
-				core = append(core, s)
+			if s.share < cut {
+				continue
 			}
+			// A percept no cross-tongue twin corroborates kept this word's company in
+			// one tongue only: an incidental scene-mate, not a member. Perceptless
+			// co-members (an abstraction reached relationally, not through a tongue's
+			// percepts) are exempt, since they have no percept company to corroborate.
+			if hasTwin && !perceptless[s.concept] && !corrob[s.concept] {
+				continue
+			}
+			core = append(core, s)
 		}
 		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })
 
