@@ -3033,9 +3033,10 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 }
 
 // warmestRelation returns the warmest relation concept held in the workspace
-// above the attention gate, the relation a verb new to a tongue binds to so it
-// names what was just spoken of. Raw warmth is the signal, how present the
-// relation is, regardless of any members it might subsume.
+// above the attention gate AND freshly attended, the relation a verb new to a
+// tongue binds to so it names what was just spoken of. Fresh attention, not raw
+// lingering warmth, is the signal, so a stale relation does not capture a new
+// verb; members it might subsume are ignored, the warmest relation wins.
 func (d *Daemon) warmestRelation() *memory.Fragment {
 	warm := d.ws.warmest(workspaceBudget)
 	ids := make([]uint64, 0, len(warm))
@@ -3055,8 +3056,16 @@ func (d *Daemon) warmestRelation() *memory.Fragment {
 		return nil
 	}
 	var best *memory.Fragment
+	now := time.Now()
 	for _, f := range frags {
 		if f.Category != "relation" {
+			continue
+		}
+		// Warm but not freshly attended: a relation lingering from an earlier scene, or
+		// mulled over, does not take a new tongue's verb as its name; only a relation
+		// genuinely just spoken of does, the same fresh-attention gate a told noun uses.
+		// Otherwise a stale warm relation would fuse a brand-new verb onto the wrong one.
+		if t, ok := d.ws.seenAt(f.ID); !ok || now.Sub(t) > attentionRecency {
 			continue
 		}
 		if best == nil || heat[f.ID] > heat[best.ID] {

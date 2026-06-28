@@ -2693,3 +2693,25 @@ func TestCrossTonguePatientMatchesAgent(t *testing.T) {
 		t.Fatalf("an agent that chased nothing in the thread should have no twin: %v", got)
 	}
 }
+
+// A verb new to a tongue binds to the warm relation only when that relation was
+// FRESHLY attended (genuinely just spoken of), not when it merely lingers warm from
+// an earlier scene; otherwise a stale warm relation would fuse a brand-new verb onto
+// the wrong one. A relation only mulled (warmed internally, never attended) is not
+// offered, so the new verb mints its own relation and reunifies later.
+func TestWarmestRelationNeedsFreshAttention(t *testing.T) {
+	d, s := testDaemon(t)
+	chase := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "chase",
+		Template: "rel:en:chase", Category: "relation", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(chase); err != nil {
+		t.Fatal(err)
+	}
+	d.ws.mull(chase.ID, 1.0) // warm, but not freshly attended
+	if got := d.warmestRelation(); got != nil {
+		t.Fatalf("a relation only internally warm must not be offered to a new tongue's verb: %v", got)
+	}
+	d.ws.excite(chase.ID, 1.0) // freshly attended now
+	if got := d.warmestRelation(); got == nil || got.ID != chase.ID {
+		t.Fatalf("a freshly attended relation should be offered: %v", got)
+	}
+}
