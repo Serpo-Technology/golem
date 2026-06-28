@@ -66,6 +66,25 @@ func TestRememberAsNamesWarmConcept(t *testing.T) {
 	}
 }
 
+// A deliberate label binds only to a FRESHLY ATTENDED referent. A concept that is
+// merely warm from an earlier scene (mulled internally, never attended) must not
+// receive a firm name, or the name would outlive the workspace on the wrong
+// concept; the label declines instead.
+func TestRememberAsDeclinesOnStaleWarmth(t *testing.T) {
+	d, s := testDaemon(t)
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "brass shape",
+		Template: "brass shape", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	d.ws.mull(c.ID, 1.0) // warm, but not freshly attended (no seenAt)
+
+	say(t, d, "remember this as a bell")
+	if named := d.resolveConcept("bell"); named != nil {
+		t.Fatalf("a label must not bind to a merely-warm, unattended concept: %+v", named)
+	}
+}
+
 // "What were you thinking" reads the inner loop, the same report the
 // introspect act and verb give.
 func TestIntrospectIntent(t *testing.T) {

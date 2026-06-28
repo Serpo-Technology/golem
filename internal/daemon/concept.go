@@ -636,6 +636,30 @@ func (d *Daemon) attendedWarmest(n int) []warmEntry {
 	return out
 }
 
+// freshlyAttendedConcept returns the warmest workspace concept that is freshly
+// attended: above the attention gate and seen within the recency window. A
+// deliberate label ("remember this as a bell") binds to what is genuinely present
+// now, not to a concept that merely lingers warm from an earlier scene; lateral
+// inhibition lets an attended category win the slot over the members it subsumes.
+// It returns nil when nothing qualifies, so the label declines rather than bonding
+// firm to a stale referent that outlives the workspace.
+func (d *Daemon) freshlyAttendedConcept() *memory.Fragment {
+	now := time.Now()
+	for _, e := range d.attendedWarmest(attentionConceptCap) {
+		if e.heat < attentionGroundingGate {
+			continue
+		}
+		if t, ok := d.ws.seenAt(e.id); !ok || now.Sub(t) > attentionRecency {
+			continue
+		}
+		frags, err := d.store.FragmentsByIDs([]uint64{e.id})
+		if err == nil && len(frags) == 1 && frags[0].Kind == memory.KindConcept {
+			return frags[0]
+		}
+	}
+	return nil
+}
+
 // attentionAnchors returns the grounded moments of the warmest workspace
 // concepts above the attention gate, newest first and capped, so a told
 // word can keep company with what is held in mind. The moments are the

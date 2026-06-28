@@ -1610,12 +1610,15 @@ func (d *Daemon) planRecall(frame grammar.Frame, chem limbic.State) string {
 	return say
 }
 
-// nameWarmConcept binds a spoken word to the workspace's warm referent,
-// the deliberate half of grounding: "remember this as a bell" makes
-// bell name whatever is most present. The bond is firm because the
-// labeling is explicit, the same standing a mental-teach name gets.
+// nameWarmConcept binds a spoken word to the workspace's freshly attended
+// referent, the deliberate half of grounding: "remember this as a bell" makes
+// bell name whatever is genuinely present now. The bond is firm because the
+// labeling is explicit, the same standing a mental-teach name gets, so the
+// referent must be freshly attended rather than merely lingering warm from an
+// earlier scene; otherwise a firm name would outlive the workspace on the wrong
+// concept. With nothing freshly attended, the label declines.
 func (d *Daemon) nameWarmConcept(phrase, lang string, chem limbic.State) string {
-	c := d.warmConcept(0)
+	c := d.freshlyAttendedConcept()
 	if c == nil {
 		return d.realizeAs(lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Patient: grammar.Term{Phrase: "what you mean"}}, chem)
