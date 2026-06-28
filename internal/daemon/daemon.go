@@ -284,6 +284,14 @@ type Daemon struct {
 	declRules map[uint64]string
 	declParts map[uint64]bool
 
+	// answerConstructions are the answer-template concepts (a definition, a seen-count, a succession),
+	// each carrying its Compose template as the concept's content and linking to the chemistry condition
+	// that selects its variant, so a realization template is a graph fact too. The concept ID maps to its
+	// "cxn:<lang>:<intent>:<variant>" parameter key. answerConstructionParts holds the condition vocabulary
+	// nodes. Both sit outside the grown concept layer.
+	answerConstructions     map[uint64]string
+	answerConstructionParts map[uint64]bool
+
 	// deicticByForm resolves a deictic pronoun to the participant it points at,
 	// built from the graph: each deixis word is linked to its participant concept,
 	// so the mapping is a learnable graph relation, not a hardcoded matcher.
@@ -893,6 +901,12 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if d.declParts[id] {
+		return true
+	}
+	if _, ok := d.answerConstructions[id]; ok {
+		return true
+	}
+	if d.answerConstructionParts[id] {
 		return true
 	}
 	if _, ok := d.commandName[id]; ok {

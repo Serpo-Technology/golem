@@ -87,6 +87,11 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureDeclGrammar(); err != nil {
 		return err
 	}
+	// The answer templates Compose fills live as concepts carrying their template in the graph; ensure
+	// them here too, before the compile, so the derive reads each template from the graph.
+	if err := d.ensureAnswerConstructions(); err != nil {
+		return err
+	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
 	// just seeded are picked up without a second fetch here.
 	return d.recompileGrammar()
@@ -178,6 +183,11 @@ func (d *Daemon) recompileGrammar() error {
 	// A construction taught into the graph as a concept with no construction node is enumerated in
 	// here, so a new argument-structure pattern reaches the engine with no seed edit.
 	cparams = d.enumerateGraphArgConstructions(cnodes, cparams)
+	// The answer templates Compose fills read their template and chemistry condition from the concepts
+	// the graph holds for them; a template taught into the graph with no construction node is enumerated
+	// in too, so a new answer realization reaches Compose with no seed edit.
+	d.deriveAnswerConstructions(cnodes, cparams)
+	cparams = d.enumerateGraphAnswerConstructions(cnodes, cparams)
 	d.gram = grammar.Compile(gparams, mass).
 		SetConstructions(cparams).
 		SetDecl(gparams).
