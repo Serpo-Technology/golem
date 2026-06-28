@@ -2218,6 +2218,25 @@ func (d *Daemon) propositionHoldsCategorically(agent *memory.Fragment, relConten
 			}
 		}
 	}
+	// Both roles are categories: chain two is-a hops. An animal ate a food because the
+	// rabbit (an animal) ate the carrot (a food). It holds when a grounded fact has an
+	// agent that is a member of the agent-category and a co-argument that is a member of
+	// the patient-category. Both hops are grounded, so the conclusion is as sound as the
+	// single-role case. Each agent-member's facts are gathered once and the co-argument
+	// tested for patient-category membership, so no member cross-product is materialised.
+	if d.isCategory(agent) && d.isCategory(patient) {
+		for _, m := range d.categoryMembers(agent.ID) {
+			mf, err := d.fragmentsByIDsTiered([]uint64{m})
+			if err != nil || len(mf) != 1 {
+				continue
+			}
+			for _, f := range d.gatherFacts(mf[0], "agent", relContent) {
+				if f.coID != m && d.isA(f.coID, patient.ID) {
+					return true
+				}
+			}
+		}
+	}
 	return false
 }
 
@@ -2388,30 +2407,26 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	return beliefUnknown, 0, false
 }
 
-// inferRole answers a role question GOLEM holds no observed fact for from
-// resemblance, the wh-question counterpart of the polar guess. The concept the
-// asked one most resembles, that stood in the relation in the questioned role,
-// lends its co-argument: "what did the wolf chase", unobserved, is answered
-// "Probably, the wolf chased the cat" when the wolf resembles the dog and the
-// dog chased the cat. Resemblance proposes the neighbour, the neighbour's
-// gathered facts are spoken back under the asked concept's name, and the hedge
-// marks the guess. The same gather and renderer the observed answer uses, here
-// run over a near neighbour. relContent filters to one relation, "" leaves it
-// open for "what did X do". continuation carries the focus as the tongue's
-// pronoun, for a guess that trails a clause already naming it ("A wolf is a
-// thing. Probably, it chased the cat"). It returns the rendered line and true
-// when a near enough neighbour had such a fact, so the caller offers the gap
-// only when none did.
+// inferRole answers a role question GOLEM holds no observed fact for from a fact
+// the asked concept inherits, the wh-question counterpart of the category-level
+// polar guess. A category the asked one belongs to that stood in the relation in
+// the questioned role lends its co-argument: "what did the rabbit chase" reaches
+// the mouse through the animal the rabbit is, defeasibly. Feature resemblance to a
+// neighbour is deliberately not a source here: borrowing an unrelated neighbour's
+// co-argument would fabricate the very object the question asks for and speak it
+// under the asked concept's name, asserting a proposition the graph does not hold.
+// A wh-object answer must rest on a grounded tie (the concept's own fact, gathered
+// before this is reached, or a category it inherits), not on mere likeness, so an
+// ungrounded subject yields the honest gap rather than an invented object. The same
+// gather and renderer the observed answer uses, here run over an inherited fact.
+// relContent filters to one relation, "" leaves it open for "what did X do".
+// continuation carries the focus as the tongue's pronoun, for a guess that trails a
+// clause already naming it. It returns the rendered line and true when a category
+// supplied such a fact, so the caller offers the gap only when none did.
 func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRole, relContent string, past, continuation bool) (string, bool) {
-	kept, _, ok := d.inferredFacts(known, knownRole, relContent)
+	kept, ok := d.inheritedFacts(known, knownRole, relContent)
 	if !ok {
-		// No near neighbour stood in the relation, but a category the asked concept
-		// belongs to may have: "what did the rabbit chase" reaches the mouse through
-		// the animal the rabbit is, defeasibly, where resemblance fell short.
-		kept, ok = d.inheritedFacts(known, knownRole, relContent)
-		if !ok {
-			return "", false
-		}
+		return "", false
 	}
 	line, ok := d.renderFacts(frame.Lang, d.conceptName(known.ID, known.Content, frame.Lang), kept, past, continuation)
 	if !ok {

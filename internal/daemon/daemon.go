@@ -801,7 +801,11 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		}
 	}
 	for _, r := range refs {
-		id := d.ensureConcept(r.template, r.name)
+		// A refinement concept carries the spared "class" category, not a bare noun's:
+		// it is grammar scaffolding the nightly prune must keep, or the colon-class
+		// taxonomy decays on the first sleep (a pruned "wh:what" reverts Turkish "ne" to
+		// a bare interrogative, so a wh-object question stops routing to its planner).
+		id := d.ensureClassConcept(r.template, r.name)
 		if id == 0 {
 			continue
 		}
@@ -864,9 +868,10 @@ func (d *Daemon) ensureCategoryClasses() error {
 	return nil
 }
 
-// ensureClassConcept is ensureConcept with the distinct "class" category, so a bare
-// grammatical class lives as a graph concept that cannot collide with a grown noun in the
-// naming or hygiene views, on top of being excluded as a system concept.
+// ensureClassConcept is ensureConcept with the distinct "class" category, so a piece of
+// grammar scaffolding (a bare grammatical class or a closed-class refinement) lives as a
+// graph concept that cannot collide with a grown noun in the naming or hygiene views, is
+// excluded as a system concept, and is spared by the nightly prune.
 func (d *Daemon) ensureClassConcept(template, content string) uint64 {
 	if c, err := d.store.ConceptByTemplate(template); err == nil && c != nil {
 		return c.ID

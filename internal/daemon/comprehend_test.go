@@ -955,15 +955,15 @@ func TestFirmClaimStoodByAsHedge(t *testing.T) {
 	}
 }
 
-// A wh-question GOLEM holds no observed answer for it answers from inference,
-// hedged, the counterpart of the polar guess and symmetric across the role
-// asked. The wolf was never seen chasing anything, but it resembles the dog,
-// which chased the cat, so "what did the wolf chase" guesses the cat; and the
-// mouse resembles the cat, which the dog chased, so "who chased the mouse"
-// guesses the dog. The resemblance proposes the neighbour, its co-argument is
-// spoken back under the asked concept's name, and the hedge marks the guess. An
-// observed role still answers plainly.
-func TestRoleQuestionInfersFromResemblance(t *testing.T) {
+// A wh-object question GOLEM holds no observed fact for is not answered by borrowing
+// an unrelated neighbour's co-argument: that would fabricate the very object the
+// question asks for and speak it under the asked concept's name. The wolf chased
+// nothing and belongs to no chasing category, so "what did the wolf chase" admits
+// the gap rather than lending it the dog's cat through feature resemblance; likewise
+// "who chased the mouse". An observed role still answers plainly. A grounded tie does
+// answer a wh-object gap, but only through category inheritance, tested in
+// TestDefeasibleCategoryInheritance.
+func TestRoleQuestionDoesNotFabricateFromResemblance(t *testing.T) {
 	d, s := testDaemon(t)
 	dog := groundNoun(t, d, "dog")
 	cat := groundNoun(t, d, "cat")
@@ -985,11 +985,13 @@ func TestRoleQuestionInfersFromResemblance(t *testing.T) {
 	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
 		t.Fatalf("an observed role should answer plainly: %q", got)
 	}
-	if got := say(t, d, "what did the wolf chase").Say; got != "Probably, the wolf chased the cat." {
-		t.Fatalf("agent-side inference should be a hedged guess: %q", got)
+	// The wolf has no chase fact and no category that chased: resemblance to the dog
+	// must not lend the dog's cat under the wolf's name.
+	if got := say(t, d, "what did the wolf chase").Say; strings.Contains(got, "cat") || strings.HasPrefix(got, "Probably") {
+		t.Fatalf("an ungrounded subject should admit the gap, not fabricate from resemblance: %q", got)
 	}
-	if got := say(t, d, "who chased the mouse").Say; got != "Probably, the dog chased the mouse." {
-		t.Fatalf("patient-side inference should be a hedged guess: %q", got)
+	if got := say(t, d, "who chased the mouse").Say; strings.Contains(got, "dog") || strings.HasPrefix(got, "Probably") {
+		t.Fatalf("an ungrounded patient should admit the gap, not fabricate from resemblance: %q", got)
 	}
 }
 
@@ -1714,6 +1716,86 @@ func TestCategoricalDeduction(t *testing.T) {
 	}
 	if got := say(t, d, "did the cat chase an animal").Say; !strings.HasPrefix(got, "No") {
 		t.Fatalf("the cat chased nothing, so it chased no animal: %q", got)
+	}
+}
+
+// Categorical deduction composes through BOTH roles at once: an animal ate a food
+// because the rabbit (an animal) ate the carrot (a food), two grounded is-a hops
+// chained. The same shape holds when both roles are the one category: an animal
+// chased an animal because the wolf chased the rabbit, both animals. A category pair
+// with no doubly-grounded fact stays a No, so the chain deduces, never fabricates.
+func TestCategoricalDeductionBothRoles(t *testing.T) {
+	d, s := testDaemon(t)
+	rabbit := groundNoun(t, d, "rabbit")
+	carrot := groundNoun(t, d, "carrot")
+	wolf := groundNoun(t, d, "wolf")
+	tree := groundNoun(t, d, "tree")
+	category := func(tpl, word string, members ...*memory.Fragment) {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: word,
+			Template: tpl, Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		w, _, err := s.WordNode(word, "en", d.chem.Snapshot(), time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.SetLinkRel(w.ID, c.ID, memory.RelNames, 0.8)
+		for _, m := range members {
+			s.SetLinkRel(c.ID, m.ID, memory.RelGrounds, 0.5)
+		}
+	}
+	category("abs:en:animal", "animal", rabbit, wolf)
+	category("abs:en:food", "food", carrot)
+	category("abs:en:plant", "plant", tree)
+	say(t, d, "a rabbit ate a carrot")  // a grounded fact, both ends concrete
+	say(t, d, "a wolf chased a rabbit") // a same-category fact, both animals
+
+	// Both roles are categories: the chain composes two is-a hops.
+	if got := say(t, d, "did an animal eat a food").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("a rabbit (an animal) ate a carrot (a food): %q", got)
+	}
+	// Both categories the same: an animal chased an animal because a wolf chased a rabbit.
+	if got := say(t, d, "did an animal chase an animal").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("a wolf chased a rabbit, both animals: %q", got)
+	}
+	// Single-role categorical still holds (no regression from the new branch).
+	if got := say(t, d, "did the rabbit eat a food").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("concrete agent, category patient: %q", got)
+	}
+	if got := say(t, d, "did an animal eat a carrot").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("category agent, concrete patient: %q", got)
+	}
+	// No doubly-grounded fact: an animal ate a plant is not invented.
+	if got := say(t, d, "did an animal eat a plant").Say; !strings.HasPrefix(got, "No") {
+		t.Fatalf("no animal-member ate a plant-member, so the chain must not fabricate: %q", got)
+	}
+}
+
+// A category refinement is grammar scaffolding, so the nightly prune spares it: the
+// colon-class taxonomy must not decay on the first sleep. Before the fix the refinement
+// concepts were bare nouns the prune deleted, which (for "wh:what") reverted Turkish "ne"
+// to a bare interrogative and stopped a wh-object question from routing after a night.
+func TestCategoryRefinementSurvivesSleep(t *testing.T) {
+	d, s := testDaemon(t) // loadGrammar grows the refinements at boot
+	refinements := []string{"wh:what", "speech:know", "fn:locative"}
+	for _, tpl := range refinements {
+		if c, _ := s.ConceptByTemplate(tpl); c == nil {
+			t.Fatalf("%s should exist after boot", tpl)
+		}
+	}
+	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.recompileGrammar(); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately do not re-run ensureCategoryRefinements: the point is that the prune
+	// spared the concept, not that a reboot re-grew it.
+	for _, tpl := range refinements {
+		if c, _ := s.ConceptByTemplate(tpl); c == nil {
+			t.Fatalf("%s should survive the night as scaffolding, got pruned", tpl)
+		}
 	}
 }
 
