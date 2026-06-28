@@ -259,7 +259,15 @@ func (d *Daemon) growAbstractions() (born int) {
 				dom = cs
 			}
 		}
-		if dom.concept != 0 {
+		// Only an abstraction resting on a single core percept inherits that
+		// percept's names: it is essentially one thing under a word too unfaithful to
+		// read as a plain name, so a second tongue that pointed at the same percept
+		// reaches the concept the facts attach to. A category rests on a spread core,
+		// many members in the same league, and there the dominant grounding is just
+		// the densest member, so inheriting its name would bleed a member's name onto
+		// the class (animal acquiring köpek). A per-tongue category keeps only its
+		// own name.
+		if dom.concept != 0 && len(core) == 1 {
 			d.inheritGroundingNames(c, dom.concept, w.ID)
 		}
 	}
