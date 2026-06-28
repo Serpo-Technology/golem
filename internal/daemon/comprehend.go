@@ -249,6 +249,16 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 			m = m2
 		}
 	}
+	// Two arguments whose feature signatures barely differ give role-fit nothing to
+	// read: each resembles the other's past role-fillers about as much as its own, so
+	// a hair's difference in kinship would swap a clause the order stated plainly ("a
+	// wolf chased a rabbit" becoming the rabbit chasing). When the fillers are that
+	// alike, re-read with word order alone, the same recourse a participant clause takes.
+	if d.argsIndistinctForFit(m) {
+		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, nil); ok2 {
+			m = m2
+		}
+	}
 	agent := m.Roles["agent"]
 	if agent.Concept == nil {
 		// Only a transitive content proposition acquires a noun ("a model predicts a
@@ -2223,6 +2233,13 @@ const (
 // an inference about the asked agent; below it, resemblance is too thin to guess on.
 const inferenceFloor = 0.3
 
+// roleFitIndistinctFloor is how alike two arguments must be before role-fit is set
+// aside in favour of word order: above it their feature signatures are too close for
+// kinship to tell which fills which role (the gray wolf and the gray rabbit), so the
+// order that named them is the surer signal. Below it, role-fit still corrects a
+// genuinely misplaced subject, which resembles its own kind, not the co-argument.
+const roleFitIndistinctFloor = 0.6
+
 // categoryInheritConf is the confidence a member inherits from a category-level
 // fact: firmer than a typical resemblance guess, since membership is a surer tie
 // than feature overlap, but still hedged, since a category's doing binds no one
@@ -3111,6 +3128,29 @@ func (d *Daemon) roleFit(c *memory.Fragment, role string) float64 {
 		rel = memory.RelPatient
 	}
 	return d.roleKinship(c, rel)
+}
+
+// argsIndistinctForFit reports whether a transitive meaning's two arguments resemble
+// each other so closely that role-fit cannot tell which fills which role. When they do,
+// the word order that named them is authoritative; role-fit, which reads feature kinship
+// to past role-fillers, would otherwise swap two look-alikes (the gray wolf and the gray
+// rabbit) on a hair's difference. Distinct fillers (a faint or zero mutual resemblance)
+// leave role-fit free to correct a misplaced subject, which resembles its own kind.
+func (d *Daemon) argsIndistinctForFit(m grammar.Meaning) bool {
+	a, p := m.Roles["agent"], m.Roles["patient"]
+	if a.Concept == nil || p.Concept == nil || a.Concept.ID == p.Concept.ID {
+		return false
+	}
+	sibs, err := d.featureSiblings(a.Concept.ID, time.Now())
+	if err != nil {
+		return false
+	}
+	for _, s := range sibs {
+		if s.id == p.Concept.ID {
+			return s.weight >= roleFitIndistinctFloor
+		}
+	}
+	return false
 }
 
 // roleKinship measures how much a concept resembles the concepts that have

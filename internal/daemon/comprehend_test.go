@@ -969,6 +969,61 @@ func TestRoleQuestionInfersFromResemblance(t *testing.T) {
 	}
 }
 
+// Two animals alike enough to resemble each other strongly keep the roles word order
+// gave them: "a wolf chased a rabbit" stays the wolf chasing, not the reverse, even
+// though the wolf resembles the rabbit (a known patient) and the rabbit resembles a
+// known agent. Role-fit reads feature kinship, which two look-alikes give no reliable
+// signal, so the order that named them is authoritative.
+func TestRoleFitDoesNotSwapLookAlikes(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	wolf := groundNoun(t, d, "wolf")
+	rabbit := groundNoun(t, d, "rabbit")
+	share := func(a, b *memory.Fragment, name string) {
+		feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: name,
+			Template: name, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(feat); err != nil {
+			t.Fatal(err)
+		}
+		s.SetLinkRel(a.ID, feat.ID, memory.RelFeature, 1.0)
+		s.SetLinkRel(b.ID, feat.ID, memory.RelFeature, 1.0)
+	}
+	// Role history that would bias a swap: the mouse chases, the rabbit is chased.
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a mouse chased a cat")
+	say(t, d, "a dog chased a rabbit")
+	// The wolf and the rabbit look alike; the rabbit also shares a trait with the
+	// mouse, a known chaser, so role-fit would read the rabbit as the better agent.
+	share(wolf, rabbit, "gray")
+	share(wolf, rabbit, "furry")
+	share(wolf, rabbit, "small")
+	share(rabbit, mouse, "quick")
+
+	m := grammar.Meaning{Roles: map[string]grammar.Term{
+		"agent": {Concept: wolf}, "patient": {Concept: rabbit}}}
+	if !d.argsIndistinctForFit(m) {
+		t.Fatal("the wolf and the rabbit should be too alike for role-fit to separate them")
+	}
+
+	say(t, d, "a wolf chased a rabbit")
+	chasedByWolf := false
+	for _, f := range d.gatherFacts(wolf, "agent", "chase") {
+		if f.coID == rabbit.ID {
+			chasedByWolf = true
+		}
+	}
+	if !chasedByWolf {
+		t.Fatal("the wolf should be stored as the chaser of the rabbit, word order authoritative")
+	}
+	for _, f := range d.gatherFacts(rabbit, "agent", "chase") {
+		if f.coID == wolf.ID {
+			t.Fatal("the rabbit must not be stored as the chaser of the wolf (no role swap)")
+		}
+	}
+}
+
 // A "tell me about X" GOLEM has observed nothing about it answers with a hedged
 // guess at what it does, from the thing it most resembles. The wolf, resembling
 // the dog that chased the cat, is described "A wolf is a thing. Probably, it
