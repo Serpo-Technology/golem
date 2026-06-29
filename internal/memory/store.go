@@ -128,6 +128,21 @@ CREATE TABLE IF NOT EXISTS feature_universal (
 		db.Close()
 		return nil, err
 	}
+	// Secondary indexes, created after migration so the columns they cover exist on an
+	// upgraded brain. The fragments PK is only the id and the links PK leads with
+	// from_id, so a lookup by template (ConceptByTemplate, called per word every
+	// consolidation and on every comprehension) or a walk by to_id (categoriesOf and
+	// the is-a hierarchy, the nightly prune subqueries) was a full table scan. These
+	// turn those hot paths into index lookups, which scales both the night and the
+	// per-utterance reasoning as the graph grows.
+	indexes := `
+CREATE INDEX IF NOT EXISTS idx_fragments_template ON fragments(template);
+CREATE INDEX IF NOT EXISTS idx_fragments_kind ON fragments(kind);
+CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_id, rel);`
+	if _, err := db.Exec(indexes); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
 }
 
