@@ -73,6 +73,15 @@ const (
 	absMinSituations = 3    // a constellation takes several showings to trust
 	absCoreFloor     = 0.05 // below this slice of a word's company a concept is noise, not a member
 	absCoreFraction  = 0.5  // a member must hold this fraction of the strongest member's share, so a broad category whose company spreads thin still gathers a core
+	// absPwcFloor is the size-invariant membership bar. The word-side share (a member's
+	// slice of the category word's whole company) dilutes as ~1/N as a category gains
+	// members, so the absolute absCoreFloor silently dissolves a broad category once it
+	// passes ~20 members. The concept-side share -- how much of THIS percept's naming
+	// company is the category word -- does not dilute with category size (whether "animal"
+	// is a strong namer of the tiger is independent of how many other animals it names), so
+	// a concept whose company is at least this fraction the category word's is a reliable
+	// member however broad the category, while a one-shot co-namer sits an order below.
+	absPwcFloor = 0.10
 	absConcentration = 0.5  // a word this faithful to one concept is a name, an abstraction is not
 	absPerNight      = 4    // abstractions mintable in one night
 	absNameWeight    = 0.8  // the word's bond to its own abstraction
@@ -122,11 +131,15 @@ func (d *Daemon) growAbstractions() (born int) {
 	}
 	byWord := map[uint64][]memory.NamingPair{}
 	wordIDs := make([]uint64, 0, len(pairs))
+	// A concept's total naming company, summed over every word that names it, is the
+	// denominator of the size-invariant concept-side share (mirrors growConcepts).
+	conceptTotal := map[uint64]float64{}
 	for _, p := range pairs {
 		if len(byWord[p.Word]) == 0 {
 			wordIDs = append(wordIDs, p.Word)
 		}
 		byWord[p.Word] = append(byWord[p.Word], p)
+		conceptTotal[p.Concept] += p.Cooc
 	}
 	words, err := d.store.FragmentsByIDs(wordIDs)
 	if err != nil {
@@ -207,13 +220,15 @@ func (d *Daemon) growAbstractions() (born int) {
 	for _, w := range words {
 		type coreShare struct {
 			concept uint64
-			share   float64
+			share   float64 // pcw: this member's slice of the word's whole company
+			pwc     float64 // this word's slice of the member's whole naming company
 		}
 		shares := make([]coreShare, 0, len(byWord[w.ID]))
 		maxShare := 0.0
 		for _, p := range byWord[w.ID] {
 			share := p.Cooc / (p.WordTotal + namesSmoothing)
-			shares = append(shares, coreShare{concept: p.Concept, share: share})
+			pwc := p.Cooc / (conceptTotal[p.Concept] + namesSmoothing)
+			shares = append(shares, coreShare{concept: p.Concept, share: share, pwc: pwc})
 			if share > maxShare {
 				maxShare = share
 			}
@@ -231,7 +246,13 @@ func (d *Daemon) growAbstractions() (born int) {
 		corrob, hasTwin := corroboratedBy(w)
 		var core []coreShare
 		for _, s := range shares {
-			if s.share < cut {
+			// A member is in the strongest's league on EITHER axis: the word-side
+			// share, which a small category's members hold, OR the concept-side
+			// reliability, which a broad category's members keep even as the
+			// word-side share thins to ~1/N. A stray co-namer sits below both. The
+			// concept-side floor is what stops a broad category dissolving the more
+			// faithfully it was taught.
+			if s.share < cut && s.pwc < absPwcFloor {
 				continue
 			}
 			// A percept no cross-tongue twin corroborates kept this word's company in
@@ -319,12 +340,19 @@ func (d *Daemon) growAbstractions() (born int) {
 		case len(core) < absRefreshFloor:
 			continue // dissolved: decay carries the grounding away
 		}
-		// The constellation is the grounding: each edge's weight is the
-		// concept's reliability share in the word's company, written
-		// fresh each night, so the chain to concrete experience stays
-		// auditable and current.
+		// The constellation is the grounding: each edge's weight is the member's
+		// reliability share in the word's company, written fresh each night so the
+		// chain to concrete experience stays auditable and current. It is floored
+		// above the store's link floor so a broad category's thin-spread member,
+		// whose word-side share is a fraction of the floor, is not written at the
+		// noise level and pruned before the next refresh can reground it; a normal
+		// member already sits above the floor and keeps its share.
 		for _, cs := range core {
-			if err := d.store.SetLinkRel(c.ID, cs.concept, memory.RelGrounds, cs.share); err != nil {
+			gw := cs.share
+			if gw < absPwcFloor {
+				gw = absPwcFloor
+			}
+			if err := d.store.SetLinkRel(c.ID, cs.concept, memory.RelGrounds, gw); err != nil {
 				fmt.Fprintf(d.out, "abstraction grounding error: %v\n", err)
 			}
 		}

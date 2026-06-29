@@ -402,6 +402,99 @@ func TestAbstractionDropsCrossTongueUncorroboratedScenemate(t *testing.T) {
 	}
 }
 
+// A broad category survives the night. Past ~20 members the category word's company
+// spreads so thin that each member's word-side share falls below the absolute floor,
+// which used to empty the core, mark the category dissolved, and let its grounds decay
+// away. The size-invariant concept-side reliability keeps a thin-spread member, and the
+// grounds edge is written above the prune floor, so a 24-member category keeps its
+// members at mint AND across a sleep. A one-shot co-namer of a percept that already has
+// its own firm name stays out.
+func TestBroadCategorySurvivesSleep(t *testing.T) {
+	const linkFloor = 0.05 // mirrors memory.linkFloor (unexported): the nightly prune drops edges at/below this
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	shapes := []string{
+		"a small black cat", "a small brown dog", "a gray wolf", "a gray rabbit",
+		"a small gray mouse", "a large brown horse", "a green frog", "a silver fish",
+		"a large black bear", "a golden lion", "a brown owl", "a spotted deer",
+		"a small blue bird", "a tiny gray snail", "a striped orange tiger", "a huge gray elephant",
+		"a tall spotted giraffe", "a black soaring raven", "a slim green vine snake", "a hopping brown kangaroo",
+		"a fierce golden eagle", "a sleek gray dolphin", "a fluffy white arctic fox", "a stocky brown jaguar",
+	}
+	members := make([][]recentMoment, len(shapes))
+	for i, sh := range shapes {
+		members[i] = feedShape(t, s, "vision", sh, 4, base.Add(time.Duration(i)*time.Minute))
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	for r := 0; r < 3; r++ {
+		anchors := make([]recentMoment, 0, len(members))
+		for _, m := range members {
+			anchors = append(anchors, m[r])
+		}
+		d.mintWords("animal", "en", 0, anchors, false)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growAbstractions()
+
+	grounds := func() []memory.LinkEdge {
+		abs, err := s.ConceptByTemplate("abs:en:animal")
+		if err != nil || abs == nil {
+			t.Fatalf("a 24-member category should distil an abstraction, got nil (%v)", err)
+		}
+		g, err := s.LinksFromRel([]uint64{abs.ID}, memory.RelGrounds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g
+	}
+	g0 := grounds()
+	if len(g0) < 20 {
+		t.Fatalf("the broad category kept only %d of 24 members at mint", len(g0))
+	}
+	for _, e := range g0 {
+		if e.Weight <= linkFloor {
+			t.Fatalf("a member grounds at %.3f, at/below the prune floor: it will be deleted on the first sleep", e.Weight)
+		}
+	}
+	// Durability: a night prunes then regrows; the members must persist.
+	if _, err := s.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+	d.growAbstractions()
+	if g1 := grounds(); len(g1) < 20 {
+		t.Fatalf("the broad category lost members across the night: %d remain", len(g1))
+	}
+
+	// A one-shot co-namer stays out: "wagon" names the cart percept firmly, so the
+	// cart's naming company is dominated by "wagon"; a single stray "animal" mention
+	// of it gives "animal" a negligible concept-side share, below the membership floor.
+	cart := feedShape(t, s, "vision", "a red wooden cart", 4, base.Add(40*time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	for r := 0; r < 4; r++ {
+		d.mintWords("wagon", "en", 0, []recentMoment{cart[r]}, true)
+	}
+	d.mintWords("animal", "en", 0, []recentMoment{cart[0]}, false) // one coincidental mention
+	calm(d)
+	d.growConcepts()
+	d.growAbstractions()
+	for _, e := range grounds() {
+		fr, _ := s.FragmentsByIDs([]uint64{e.To})
+		if len(fr) == 1 && fr[0].Content == "a red wooden cart" {
+			t.Fatal("a one-shot co-namer became a category member; the concept-side floor should exclude it")
+		}
+	}
+}
+
 // A basic word does not abstract even when its company spreads like a category's.
 // "cat" kept company with the cat, the dog, and the rabbit (as a chase
 // co-participant would), enough to clear the gate, but it heads the caption of one
