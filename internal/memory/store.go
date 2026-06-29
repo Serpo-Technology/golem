@@ -896,6 +896,36 @@ func (s *Store) SetLinkRel(from, to uint64, rel string, weight float64) error {
 	return err
 }
 
+// SetLinkRelBatch upserts many edges with SetLinkRel's semantics in a single
+// transaction over a prepared statement, so a consolidation pass that rewrites
+// thousands of edges pays one transaction's overhead instead of one per edge. The
+// store is single-connection, so the batch briefly holds the connection; call it
+// only from the single-threaded nightly consolidation, not the live request path.
+func (s *Store) SetLinkRelBatch(edges []LinkEdge) error {
+	if len(edges) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT INTO links (from_id, to_id, rel, weight) VALUES (?,?,?,?)
+		ON CONFLICT(from_id, to_id, rel) DO UPDATE SET weight = excluded.weight`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	for _, e := range edges {
+		if _, err := stmt.Exec(e.From, e.To, e.Rel, e.Weight); err != nil {
+			_ = stmt.Close()
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	_ = stmt.Close()
+	return tx.Commit()
+}
+
 // LinksFrom returns every edge leaving the given fragments, whatever its
 // relation.
 func (s *Store) LinksFrom(ids []uint64) ([]LinkEdge, error) {

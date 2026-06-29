@@ -595,6 +595,7 @@ func (d *Daemon) growConcepts() (born, named int) {
 	}
 	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
 	perceptless := d.perceptlessSet(conceptIDs)
+	nameEdges := make([]memory.LinkEdge, 0, len(pairs))
 	for _, p := range pairs {
 		// Cross-situational reliability: the share of the word's company
 		// that lands on this concept, blended with the share of the
@@ -629,14 +630,17 @@ func (d *Daemon) growConcepts() (born, named int) {
 		if p.Existing == 0 && w < namesWriteFloor {
 			continue
 		}
-		if err := d.store.SetLinkRel(p.Word, p.Concept, memory.RelNames, w); err != nil {
-			fmt.Fprintf(d.out, "naming link error: %v\n", err)
-			continue
-		}
+		nameEdges = append(nameEdges, memory.LinkEdge{From: p.Word, To: p.Concept, Rel: memory.RelNames, Weight: w})
 		if p.Existing == 0 {
 			named++
 			d.event(events.Event{Ev: "name", From: p.Word, To: p.Concept, Rel: memory.RelNames, Weight: w})
 		}
+	}
+	// One transaction for the night's naming, not one commit per pair: the store is
+	// single-connection autocommit, so thousands of per-pair writes paid a transaction
+	// boundary each.
+	if err := d.store.SetLinkRelBatch(nameEdges); err != nil {
+		fmt.Fprintf(d.out, "naming link batch error: %v\n", err)
 	}
 	return born, named
 }
