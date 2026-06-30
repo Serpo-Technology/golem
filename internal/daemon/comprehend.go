@@ -3009,6 +3009,15 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 	if lang == "" {
 		lang = "en"
 	}
+	// The comparative marker names no relation. A "than" ("daha") that reaches this path is a
+	// mis-parsed comparison, not a verb; minting a relation for it (rel:en:than) would then
+	// have the parser read every later comparison as that relation and break comparison
+	// wholesale. Refuse just the marker (locative prepositions like "in"/"on" do name their
+	// relations and must pass), so the malformed proposition binds no relation rather than
+	// entrenching the marker as one.
+	if marker := d.gram.Word(lang, "than"); marker != "" && strings.EqualFold(lemma, marker) {
+		return nil, nil
+	}
 	// A relation this verb already names, in any tongue, is the one to reuse.
 	if c := d.resolveRelation(lemma); c != nil {
 		return c, nil
