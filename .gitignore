@@ -12,3 +12,8 @@
 .idea/
 .vscode/
 .zed/
+
+# Local probe build artifacts and recipe (host-built; see the run-in-docker notes)
+golem-probe-bin
+golem-gme-bin
+Dockerfile.probe
