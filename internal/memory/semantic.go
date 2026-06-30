@@ -74,6 +74,9 @@ func (s *Store) ConceptsByGloss(phrase string, limit int) ([]*Fragment, error) {
 const (
 	utteranceChannel = "tell"
 	thoughtChannel   = "thought"
+	// categoryClass marks a grammatical function concept (a case or topic node), which
+	// names nothing and is kept out of a word's naming company.
+	categoryClass = "class"
 )
 
 // ConceptCandidates lists episodic shapes recurrent enough to deserve a
@@ -298,6 +301,13 @@ type NamingPair struct {
 // keeps company with its own saying, and that says nothing about the
 // world.
 func (s *Store) NamingPairs() ([]NamingPair, error) {
+	// A word names a thing, never a grammatical class. A function node like fn:locative,
+	// minted from a tongue's case morphology ("kediyi", "kediden"), keeps a noun's company
+	// through every cased mention and, reached through the direct branch, would dominate
+	// that noun's naming company and dilute its concentration on the percept it names below
+	// the abstraction threshold, splitting the noun into a parallel abstraction. Class
+	// concepts are excluded from naming company so a noun is named by the percepts and
+	// nouns it co-occurs with, not the cases it inflects through.
 	rows, err := s.db.Query(`
 		WITH company AS (
 			SELECT l1.from_id AS wid, c.id AS cid, l1.weight AS wgt
@@ -305,13 +315,13 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 			JOIN fragments wd ON wd.id = l1.from_id AND wd.kind = ?
 			JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel NOT IN (?, ?)
 			JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
-			JOIN fragments c ON c.id = l2.from_id AND c.kind = ?
+			JOIN fragments c ON c.id = l2.from_id AND c.kind = ? AND c.category <> ?
 			WHERE l1.rel = ?
 			UNION ALL
 			SELECT l.from_id AS wid, l.to_id AS cid, l.weight AS wgt
 			FROM links l
 			JOIN fragments wd ON wd.id = l.from_id AND wd.kind = ?
-			JOIN fragments c ON c.id = l.to_id AND c.kind = ?
+			JOIN fragments c ON c.id = l.to_id AND c.kind = ? AND c.category <> ?
 			WHERE l.rel = ?
 		),
 		wt AS (SELECT wid, SUM(wgt) AS total FROM company GROUP BY wid)
@@ -321,8 +331,8 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 		FROM company
 		JOIN wt ON wt.wid = company.wid
 		GROUP BY company.wid, company.cid`,
-		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelGrounds, KindConcept, RelTemporal,
-		KindWord, KindConcept, RelTemporal,
+		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelGrounds, KindConcept, categoryClass, RelTemporal,
+		KindWord, KindConcept, categoryClass, RelTemporal,
 		RelNames)
 	if err != nil {
 		return nil, err

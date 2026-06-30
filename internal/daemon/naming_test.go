@@ -57,3 +57,36 @@ func TestConceptNameBorrowsNearWord(t *testing.T) {
 		t.Fatalf("a concept with no embedding should keep its gloss, got %q", got)
 	}
 }
+
+// A percept whose own name sits ahead of the caption's head is still read as basic-named:
+// "cheese" names "a yellow cheese wedge" though the head is "wedge". Reading only the
+// trailing word would miss cheese's own percept and, seeing one scene-mate whose name does
+// fall last ("carrot"), cross-tongue bind the word "cheese" onto the carrot percept. Both
+// helpers that gate that binding must read the whole caption.
+func TestPerceptBasicNamedByMidCaptionWord(t *testing.T) {
+	d, s := testDaemon(t)
+	mkNamed := func(content, form, lang string) uint64 {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "test", Content: content, Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		w := &memory.Fragment{Kind: memory.KindWord, Lang: lang, Channel: "test", Content: form, Time: time.Now()}
+		if _, err := s.Encode(w); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(w.ID, c.ID, memory.RelNames, 0.8); err != nil {
+			t.Fatal(err)
+		}
+		return c.ID
+	}
+	wedge := mkNamed("a yellow cheese wedge", "cheese", "en")
+	carrot := mkNamed("a long orange carrot", "carrot", "en")
+	core := []uint64{wedge, carrot}
+
+	if named := d.headNamedPercepts(core); len(named) != 2 {
+		t.Fatalf("both percepts are basic-named (cheese names the wedge mid-caption); got %d: %v", len(named), named)
+	}
+	if !d.headsCorePercept("cheese", core) {
+		t.Fatal("cheese heads its own wedge percept; it must read as a basic name, not a category over the scene")
+	}
+}

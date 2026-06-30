@@ -297,15 +297,39 @@ func (d *Daemon) growAbstractions() (born int) {
 		if d.headsCorePercept(w.Content, coreIDs) {
 			continue
 		}
-		// A word that names a single basic-level percept already named in another
-		// tongue is that thing's name in this tongue, not a category over it:
-		// "kurt" names the wolf that "wolf" already names. Bind it to that concept
-		// so both tongues share one node, rather than splitting a parallel
-		// abs:tr:kurt the propositions never reach. A true superordinate names
-		// several basic percepts (the class it spans) and is left to abstract; a
-		// name spread by junk company over one real percept is caught here.
-		if named := d.headNamedPercepts(coreIDs); len(named) == 1 {
-			if err := d.store.SetLinkRel(w.ID, named[0], memory.RelNames, absNameWeight); err != nil {
+		// A word that names a single basic-level percept is that percept's name in this
+		// tongue, not a category over it. The lone head-named percept in a word's core is
+		// that percept: "kurt" names the wolf "wolf" already names, beside a nameless
+		// shape, so both tongues share one node rather than splitting a parallel
+		// abs:tr:kurt the propositions never reach. When the company spreads across
+		// SEVERAL named percepts -- a cross-tongue name diluted by the scene it shared or
+		// the standards it was compared against ("fil" warm beside tarsier and baboon,
+		// "gergedan" compared against the elephant) -- the percept it ALREADY names, bound
+		// when a telling named it, is its true referent, apart from the company it never
+		// named. A category names many percepts and keeps none as its sole referent, so it
+		// is left to abstract.
+		existing := make(map[uint64]float64, len(byWord[w.ID]))
+		for _, p := range byWord[w.ID] {
+			existing[p.Concept] = p.Existing
+		}
+		named := d.headNamedPercepts(coreIDs)
+		target := uint64(0)
+		switch {
+		case len(named) == 1:
+			target = named[0]
+		case len(named) > 1:
+			owned, ownedN := uint64(0), 0
+			for _, id := range named {
+				if existing[id] >= namesWriteFloor {
+					owned, ownedN = id, ownedN+1
+				}
+			}
+			if ownedN == 1 {
+				target = owned
+			}
+		}
+		if target != 0 {
+			if err := d.store.SetLinkRel(w.ID, target, memory.RelNames, absNameWeight); err != nil {
 				fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
 			}
 			continue
@@ -404,8 +428,15 @@ func (d *Daemon) headsCorePercept(word string, coreIDs []uint64) bool {
 		if _, ok := abstractionLemma(f.Template); ok || f.Category == "relation" {
 			continue
 		}
-		if fields := strings.Fields(f.Content); len(fields) > 0 && strings.EqualFold(fields[len(fields)-1], word) {
-			return true
+		// The word is this percept's basic name when it is a content word of the caption
+		// and names it, wherever it falls ("cheese" in "a yellow cheese wedge"). The
+		// caption membership keeps a category word, absent from any member's caption,
+		// from reading as a basic name; the naming check keeps a shared modifier (a
+		// color the caption carries) from doing so.
+		for _, fld := range strings.Fields(f.Content) {
+			if strings.EqualFold(fld, word) && d.wordNamesConcept(word, f.ID) {
+				return true
+			}
 		}
 	}
 	return false
@@ -428,12 +459,17 @@ func (d *Daemon) headNamedPercepts(coreIDs []uint64) []uint64 {
 		if _, ok := abstractionLemma(f.Template); ok || f.Category == "relation" {
 			continue
 		}
-		fields := strings.Fields(f.Content)
-		if len(fields) == 0 {
-			continue
-		}
-		if d.wordNamesConcept(fields[len(fields)-1], f.ID) {
-			out = append(out, f.ID)
+		// A percept is basic-named when a content word of its caption names it. The
+		// naming word is not always the caption's last token: "a yellow cheese wedge"
+		// is named "cheese", a modifier ahead of its head "wedge". Reading only the
+		// last token would miss such a percept's own name and, with a sibling whose
+		// name does fall last, leave that sibling as the lone head-named core member,
+		// cross-tongue binding a word that has its own percept onto the sibling.
+		for _, fld := range strings.Fields(f.Content) {
+			if d.wordNamesConcept(fld, f.ID) {
+				out = append(out, f.ID)
+				break
+			}
 		}
 	}
 	return out
