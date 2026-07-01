@@ -191,6 +191,23 @@ func TestUsageVectorSynonymsComplementCoReference(t *testing.T) {
 	}
 }
 
+// Colour boundaries are learned, not fixed: a colour that starts as orange comes to
+// classify as red once GOLEM is told, several times, that such a colour is red, because
+// the red category's centre moves toward what it is shown.
+func TestColourBoundaryLearnedFromTelling(t *testing.T) {
+	d, _ := testDaemon(t)
+	border := [3]float64{0.92, 0.42, 0.12} // on the red/orange border, innately orange
+	if cell := d.classifyColour(border); cell != "col:orange" {
+		t.Fatalf("the border colour should start as orange from the born-in prior; got %q", cell)
+	}
+	for i := 0; i < 6; i++ {
+		d.learnColour("col:red", border)
+	}
+	if cell := d.classifyColour(border); cell != "col:red" {
+		t.Fatalf("after being told it is red, the border colour should classify as red; got %q", cell)
+	}
+}
+
 func rectPNG(t *testing.T, w, h, x0, y0, x1, y1 int, fg color.RGBA) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))

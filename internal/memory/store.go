@@ -119,6 +119,12 @@ CREATE TABLE IF NOT EXISTS beliefs (
 CREATE TABLE IF NOT EXISTS feature_universal (
 	feature_id INTEGER PRIMARY KEY,
 	frac       REAL    NOT NULL
+);
+CREATE TABLE IF NOT EXISTS colour_prototypes (
+	cell TEXT PRIMARY KEY,
+	r    REAL NOT NULL,
+	g    REAL NOT NULL,
+	b    REAL NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()

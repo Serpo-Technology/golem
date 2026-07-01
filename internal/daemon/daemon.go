@@ -185,12 +185,14 @@ type Daemon struct {
 	// each turn arrives in.
 	lastRole *roleContext
 
-	// sawCell and sawAt are the eye's short focus: the colour cell of the thing
-	// just seen and when. A colour told right after ("its colour is crimson")
-	// grounds the word to what was measured, so colour is learned by being shown
-	// and told, not by a command. It lapses with the conversational moment.
-	sawCell string
-	sawAt   time.Time
+	// sawCell, sawColor, and sawAt are the eye's short focus: the colour cell and the
+	// raw colour of the thing just seen, and when. A colour told right after ("its
+	// colour is crimson") grounds the word to what was measured and moves that cell's
+	// prototype toward the raw colour, so colour is learned by being shown and told, not
+	// by a command. It lapses with the conversational moment.
+	sawCell  string
+	sawColor [3]float64
+	sawAt    time.Time
 
 	// colourCells are the perceptual colour-sense concepts (percept:col:*), innate
 	// scaffolding a colour word names, kept out of the grown-concept listing the way
@@ -2017,9 +2019,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			return wire.Response{Error: "the image could not be made out"}, false, false
 		}
 		// Hold what was just seen in focus, so a colour told right after ("its colour is
-		// crimson") grounds to the cell the eye measured, learned by being shown and told
-		// rather than by a command.
-		d.sawCell, d.sawAt = sight.cell, time.Now()
+		// crimson") grounds to the cell the eye measured and moves its prototype toward
+		// the raw colour, learned by being shown and told rather than by a command.
+		d.sawCell, d.sawColor, d.sawAt = sight.cell, sight.color, time.Now()
 		caption, mime := d.render(sight, req.Lang), sight.mime
 		res := d.process(senses.Observation{Channel: "vision", Content: caption, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {

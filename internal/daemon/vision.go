@@ -26,6 +26,26 @@ const colourFocusWindow = 2 * time.Minute
 // below a deliberate label (deliberateName 0.9), so a taught colour word speaks over it.
 const innateColourWeight = 0.5
 
+// colourLearnRate is how far a cell's prototype moves toward a colour shown and named:
+// enough to learn a category's centre over a handful of tellings, gently enough that one
+// odd example does not redraw the boundary.
+const colourLearnRate = 0.25
+
+// maxColourDist is how far a colour may sit from the nearest prototype and still be
+// classified by it. The prototypes cover the space, so this only guards against a
+// degenerate reading; beyond it the born-in bands stand in.
+const maxColourDist = 0.6
+
+// innateColourRGB is the born-in centre of each colour category, the prior the learned
+// prototypes start from before experience moves them. It is the one sensory given the eye
+// keeps, seeded into the prototype store at boot and refined thereafter.
+var innateColourRGB = map[string][3]float64{
+	"red": {0.85, 0.12, 0.12}, "orange": {0.95, 0.55, 0.10}, "yellow": {0.92, 0.92, 0.20},
+	"green": {0.15, 0.70, 0.20}, "blue": {0.15, 0.35, 0.85}, "purple": {0.55, 0.20, 0.75},
+	"pink": {0.98, 0.65, 0.78}, "brown": {0.45, 0.28, 0.14}, "black": {0.05, 0.05, 0.05},
+	"gray": {0.50, 0.50, 0.50}, "white": {0.95, 0.95, 0.95},
+}
+
 // innatePalette is the colour vocabulary the eye is born able to say, the outputs of its
 // sensory classifier (colorWord). These are seeded into the graph as names of their colour
 // cells, so naming lives in the graph like any learned word rather than in a fixed table.
@@ -75,6 +95,9 @@ func (d *Daemon) planColorNaming(frame grammar.Frame, raw string) (string, bool)
 	if !d.groundColor(colour, lang, d.sawCell) {
 		return "", false
 	}
+	// The colour just named is an example of its cell: move the cell's prototype toward
+	// it, so the category's centre and its boundaries are learned from what GOLEM is told.
+	d.learnColour(d.sawCell, d.sawColor)
 	return fmt.Sprintf("I see, that colour is %s.", colour), true
 }
 
@@ -122,7 +145,7 @@ func (d *Daemon) measure(data []byte) (sighting, bool) {
 		fg, box, fill = allPixels(px)
 	}
 	c := meanColor(fg)
-	return sighting{color: c, cell: colorCell(c), shape: shapeWord(box, fill), mime: "image/" + format}, true
+	return sighting{color: c, cell: d.classifyColour(c), shape: shapeWord(box, fill), mime: "image/" + format}, true
 }
 
 // render puts GOLEM's own words to a sighting: a noun phrase of the attributes it made
@@ -159,14 +182,42 @@ func (d *Daemon) colorFor(s sighting, lang string) string {
 	return colorWord(s.color)
 }
 
-// colorCell is the perceptual category a colour falls in, the key a name grounds to. The
-// classification of a colour into a category is the eye's sensory given (colorWord, the
-// born-in bands, like the cones a brain does not learn); the NAME for that category lives
-// in the graph, seeded and overridable, so "red" and a taught "crimson" naming the same
-// cell are synonyms by co-reference. The cell is the colour's sense, and the words for it
-// relate through it.
-func colorCell(c [3]float64) string {
+// classifyColour puts a measured colour in a cell by its NEAREST learned prototype, so
+// where one colour category ends and the next begins is learned from experience rather
+// than a fixed table, the way a tongue carves the spectrum its own way. The born-in bands
+// (colorWord) seed the prototypes at boot and stand in only if none is near, so the eye
+// classifies from what it has learned once it has learned anything. The cell is still the
+// colour's sense, the key a name grounds to and synonyms relate through.
+func (d *Daemon) classifyColour(c [3]float64) string {
+	if protos, err := d.store.ColourPrototypes(); err == nil && len(protos) > 0 {
+		best, bestDist := "", maxColourDist
+		for cell, p := range protos {
+			if dist := colorDist(c[0], c[1], c[2], p[0], p[1], p[2]); dist < bestDist {
+				best, bestDist = cell, dist
+			}
+		}
+		if best != "" {
+			return best
+		}
+	}
 	return "col:" + colorWord(c)
+}
+
+// learnColour moves a cell's prototype toward a colour just shown and named, so the
+// category's centre, and with it the boundary to its neighbours, is learned from what
+// GOLEM is told rather than fixed.
+func (d *Daemon) learnColour(cell string, c [3]float64) {
+	p, ok := d.store.ColourPrototype(cell)
+	if !ok {
+		p = c
+	} else {
+		for i := range p {
+			p[i] += colourLearnRate * (c[i] - p[i])
+		}
+	}
+	if err := d.store.SetColourPrototype(cell, p); err != nil {
+		fmt.Fprintf(d.out, "colour prototype error: %v\n", err)
+	}
 }
 
 // groundColor learns a colour word by binding it to the perceptual cell the eye just
@@ -248,6 +299,13 @@ func (d *Daemon) ensureColourSenses() error {
 		}
 		if err := d.store.LinkRel(word.ID, id, memory.RelNames, innateColourWeight); err != nil {
 			return err
+		}
+		// Lay down the born-in centre of the category, only if experience has not already
+		// learned one, so the eye classifies from the prior until it learns better.
+		if rgb, ok := innateColourRGB[w]; ok {
+			if err := d.store.SeedColourPrototype("col:"+w, rgb); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
