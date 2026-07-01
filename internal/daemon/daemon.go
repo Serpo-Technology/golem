@@ -1997,10 +1997,24 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if len(req.Media) == 0 {
 			return wire.Response{Error: "see needs an image"}, false, false
 		}
-		caption, mime, ok := d.perceive(req.Media)
+		sight, ok := d.measure(req.Media)
 		if !ok {
 			return wire.Response{Error: "the image could not be made out"}, false, false
 		}
+		// Shown a thing and told its colour, GOLEM learns the word for what it measured
+		// rather than being born knowing it: the colour term grounds to the perceptual
+		// cell, in whatever tongue it was given.
+		if req.Content != "" {
+			lang := req.Lang
+			if lang == "" {
+				lang = "en"
+			}
+			if !d.groundColor(req.Content, lang, sight.cell) {
+				return wire.Response{Error: "the colour could not be grounded"}, false, false
+			}
+			return wire.Response{OK: true, Say: fmt.Sprintf("I learned that this colour is %s.", req.Content)}, false, false
+		}
+		caption, mime := d.render(sight, req.Lang), sight.mime
 		res := d.process(senses.Observation{Channel: "vision", Content: caption, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
 			return wire.Response{Error: "the percept could not be stored; check the daemon log"}, false, false

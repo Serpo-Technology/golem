@@ -35,6 +35,38 @@ func discPNG(t *testing.T, w, h int, cx, cy, r int, fg color.RGBA) []byte {
 	return buf.Bytes()
 }
 
+// GOLEM names a colour with the innate word at first glance, then, shown the thing and
+// told a colour term, learns to speak that term for what it measured, in whichever
+// tongue it was taught, over the born-in one.
+func TestLearnedColorNameGroundsAndSpeaks(t *testing.T) {
+	d, _ := testDaemon(t)
+	red := discPNG(t, 200, 200, 100, 100, 70, color.RGBA{200, 30, 30, 255})
+
+	if cap0, _, _ := d.perceive(red); !strings.Contains(cap0, "red") {
+		t.Fatalf("the innate eye should say red before anything is taught, got %q", cap0)
+	}
+	s, ok := d.measure(red)
+	if !ok {
+		t.Fatal("the disc should be measurable")
+	}
+	if !d.groundColor("crimson", "en", s.cell) {
+		t.Fatal("the colour word should ground")
+	}
+	if got := d.render(s, "en"); !strings.Contains(got, "crimson") {
+		t.Fatalf("the learned colour word should speak over the innate one, got %q", got)
+	}
+	// Cross-tongue: the Turkish term grounds to the same cell and wins under its tongue.
+	if !d.groundColor("kırmızı", "tr", s.cell) {
+		t.Fatal("the Turkish colour word should ground")
+	}
+	if got := d.render(s, "tr"); !strings.Contains(got, "kırmızı") {
+		t.Fatalf("the tongue of the moment should win, got %q", got)
+	}
+	if got := d.render(s, "en"); !strings.Contains(got, "crimson") {
+		t.Fatalf("English should still say crimson, got %q", got)
+	}
+}
+
 func rectPNG(t *testing.T, w, h, x0, y0, x1, y1 int, fg color.RGBA) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	_ "image/gif"  // register the decoders so a percept can arrive in any common form
 	_ "image/jpeg" // the eye reads the bytes; it does not care which codec wrote them
@@ -9,6 +10,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"golem/internal/memory"
 )
@@ -27,19 +29,27 @@ const (
 	visionSquareCap = 0.90 // above this its box is nearly full, so it is a block, not round
 )
 
-// perceive reads an image and renders it as a percept in GOLEM's own words: a noun
-// phrase of the attributes it made out ("a round red form"), the head left generic
-// because naming the kind is recognition's job, not the eye's. The mime is reported so
-// the raw bytes can be kept content-addressed beside the percept. ok is false when the
-// bytes are not an image it can decode.
-func (d *Daemon) perceive(data []byte) (caption, mime string, ok bool) {
+// sighting is what the eye measured off an image before any word is put to it: the raw
+// colour and the perceptual cell it falls in, the gross shape, and the codec, all plain
+// numbers so naming and learning can work over the same measurement.
+type sighting struct {
+	color [3]float64
+	cell  string // the perceptual colour cell the measurement falls in, the key a learned word grounds to
+	shape string
+	mime  string
+}
+
+// measure reads an image into a sighting: the interpretable attributes worked out from
+// the pixels by plain rule, with no word attached yet. ok is false when the bytes are
+// not an image it can decode.
+func (d *Daemon) measure(data []byte) (sighting, bool) {
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", "", false
+		return sighting{}, false
 	}
 	px := sampleGrid(img, visionGrid)
 	if len(px) == 0 {
-		return "", "", false
+		return sighting{}, false
 	}
 	bg := borderColor(px)
 	fg, box, fill := foreground(px, bg)
@@ -48,13 +58,119 @@ func (d *Daemon) perceive(data []byte) (caption, mime string, ok bool) {
 	if len(fg) == 0 {
 		fg, box, fill = allPixels(px)
 	}
+	c := meanColor(fg)
+	return sighting{color: c, cell: colorCell(c), shape: shapeWord(box, fill), mime: "image/" + format}, true
+}
+
+// render puts GOLEM's own words to a sighting: a noun phrase of the attributes it made
+// out ("a round red form"), the head left generic because naming the kind is
+// recognition's job, not the eye's. The colour word is the one GOLEM has learned for
+// that cell if it has learned one, else the innate word it is born able to say.
+func (d *Daemon) render(s sighting, lang string) string {
 	adjs := make([]string, 0, 3)
-	if s := shapeWord(box, fill); s != "" {
-		adjs = append(adjs, s)
+	if s.shape != "" {
+		adjs = append(adjs, s.shape)
 	}
-	adjs = append(adjs, colorWord(meanColor(fg)))
-	caption = "a " + strings.Join(adjs, " ") + " form"
-	return caption, "image/" + format, true
+	adjs = append(adjs, d.colorFor(s, lang))
+	return "a " + strings.Join(adjs, " ") + " form"
+}
+
+// perceive is the whole eye in one step for callers that just want a caption: measure,
+// then render in GOLEM's own words.
+func (d *Daemon) perceive(data []byte) (caption, mime string, ok bool) {
+	s, ok := d.measure(data)
+	if !ok {
+		return "", "", false
+	}
+	return d.render(s, ""), s.mime, true
+}
+
+// colorFor is the colour word GOLEM puts to a sighting: the word it has learned names
+// this cell, preferring the tongue asked for, and failing that the innate word. So a
+// colour term taught by grounding (in any tongue) speaks over the born-in one, and the
+// born-in one is there from the first glance before anything is taught.
+func (d *Daemon) colorFor(s sighting, lang string) string {
+	if w := d.learnedColorFor(s.cell, lang); w != "" {
+		return w
+	}
+	return colorWord(s.color)
+}
+
+// colorCell is the perceptual cell a colour falls in, the key a learned word grounds
+// to: an unsaturated colour by its lightness, a saturated one by a coarse hue band.
+// The cells are the raw measurement, finer than the innate colour words and prior to
+// them, so a word is learned against what the eye sees, not against another word.
+func colorCell(c [3]float64) string {
+	r, g, b := c[0], c[1], c[2]
+	maxc := math.Max(r, math.Max(g, b))
+	minc := math.Min(r, math.Min(g, b))
+	var sat float64
+	if maxc > 0 {
+		sat = (maxc - minc) / maxc
+	}
+	if sat < 0.16 {
+		switch {
+		case maxc < 0.25:
+			return "shade:dark"
+		case maxc < 0.72:
+			return "shade:gray"
+		default:
+			return "shade:light"
+		}
+	}
+	return fmt.Sprintf("hue:%d", int(hue(r, g, b, maxc, minc))/30)
+}
+
+// groundColor learns a colour word by binding it to the perceptual cell the eye just
+// measured: shown a thing and told its colour, the word comes to name that region of
+// what GOLEM sees. The cell is a spared perceptual class, so the grounding stands
+// across the night, and the bond is at deliberate-label strength, a told colour taken
+// on GOLEM's word.
+func (d *Daemon) groundColor(word, lang, cell string) bool {
+	id := d.ensureClassConcept("percept:"+cell, cell)
+	if id == 0 {
+		return false
+	}
+	w, _, err := d.store.WordNode(word, lang, d.chem.Snapshot(), time.Now())
+	if err != nil {
+		return false
+	}
+	return d.store.LinkRel(w.ID, id, memory.RelNames, deliberateName) == nil
+}
+
+// learnedColorFor is the colour word GOLEM has learned for a cell, the strongest namer
+// of that perceptual class, preferring the tongue asked for so a bilingual eye answers
+// in the tongue of the moment. Empty when nothing has been grounded there yet.
+func (d *Daemon) learnedColorFor(cell, lang string) string {
+	c, err := d.store.ConceptByTemplate("percept:" + cell)
+	if err != nil || c == nil {
+		return ""
+	}
+	namers, err := d.store.LinksToRel([]uint64{c.ID}, memory.RelNames)
+	if err != nil || len(namers) == 0 {
+		return ""
+	}
+	ids := make([]uint64, 0, len(namers))
+	weight := make(map[uint64]float64, len(namers))
+	for _, e := range namers {
+		ids = append(ids, e.From)
+		weight[e.From] = e.Weight
+	}
+	words, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return ""
+	}
+	best, bestScore := "", -1.0
+	for _, w := range words {
+		score := weight[w.ID]
+		if lang != "" && w.Lang == lang {
+			score += 1 // the tongue of the moment wins a tie, and outranks a firmer word of another tongue
+		}
+		if score > bestScore {
+			best, bestScore = w.Content, score
+		}
+	}
+	return best
 }
 
 // pixel is one sampled point: its position on the sampling grid and its colour.
