@@ -82,6 +82,15 @@ const (
 	// string. A speech-act verb marks the discourse move it carries (clarify,
 	// recall), the first colon-class category moved into the graph.
 	RelMarks = "marks"
+	// RelTrust records how far GOLEM trusts a source: a self-edge on a source node
+	// whose weight is the trust, so a telling from that source is weighed by it. It
+	// mirrors RelTransitive and RelLocative, a learned property held in the graph
+	// rather than a field, so trust is auditable and adjustable like any other weight.
+	RelTrust = "trust"
+	// RelSource links a told moment to the source that spoke it, so a proposition is
+	// auditable back to who said it and its weight can be scaled by that source's
+	// trust. A moment with no source edge was the local operator's, trusted.
+	RelSource = "source"
 	// RelOstends links a word to the percept it was pointed at when it was uttered
 	// to name it: the freshly attended episode of an ostensive naming, weighted by
 	// how fresh that percept was. It is the salience the uniform naming company

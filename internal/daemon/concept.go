@@ -121,7 +121,7 @@ func (d *Daemon) grownConcepts() ([]*memory.Fragment, error) {
 	var out []*memory.Fragment
 	for _, c := range concepts {
 		switch c.Category {
-		case "construction", declGrammarCategory, "class", answerCxnCategory:
+		case "construction", declGrammarCategory, "class", answerCxnCategory, sourceCategory:
 			continue
 		}
 		out = append(out, c)

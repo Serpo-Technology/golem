@@ -5,18 +5,21 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"mime"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"golem/internal/config"
+	"golem/internal/daemon"
+	"golem/internal/events"
 	"golem/internal/memory"
 	"golem/wire"
-
-	"golem/internal/daemon"
 )
 
 const usageText = `GOLEM is a daemon that watches event channels, remembers surprises, and
@@ -54,6 +57,14 @@ Usage:
   golem tell --about <query> <words>
                                   bind the words to remembered moments that
                                   match the query instead of to the present
+  golem tell --source <name> <words>
+                                  speak as a named peer (an LLM watching the
+                                  channel); heard at that source's trust, not
+                                  the operator's
+  golem trust <source> [level]    show or set how far GOLEM trusts a source
+                                  (setting needs the master key)
+  golem watch                     stream the talking channel: what GOLEM says
+                                  and what each source says to it
   golem recall [query]            recall memory plus its linked context;
                                   without a query, returns the most
                                   stressful moment
@@ -224,9 +235,22 @@ func main() {
 
 	case "tell":
 		rest := args[1:]
-		lang := ""
-		if len(rest) >= 2 && rest[0] == "--lang" {
-			lang = rest[1]
+		lang, source, key := "", "", ""
+		for len(rest) >= 2 {
+			consumed := true
+			switch rest[0] {
+			case "--lang":
+				lang = rest[1]
+			case "--source":
+				source = rest[1]
+			case "--key":
+				key = rest[1]
+			default:
+				consumed = false
+			}
+			if !consumed {
+				break
+			}
 			rest = rest[2:]
 		}
 		switch {
@@ -235,10 +259,37 @@ func main() {
 		case len(rest) >= 1 && rest[0] == "--about":
 			fail(fmt.Errorf("usage: golem tell [--lang <tag>] --about <query> <words>"))
 		case len(rest) >= 1:
-			tellOnce(home, lang, strings.Join(rest, " "))
+			tellOnce(home, lang, source, key, strings.Join(rest, " "))
 		default:
 			tellSession(home)
 		}
+
+	case "trust":
+		rest := args[1:]
+		if len(rest) < 1 {
+			fail(fmt.Errorf("usage: golem trust <source> [level]"))
+		}
+		cfg, err := config.Load(home)
+		if err != nil {
+			fail(err)
+		}
+		req := wire.Request{Cmd: "trust", Query: rest[0], Key: cfg.MasterKey}
+		if len(rest) >= 2 {
+			lvl, perr := strconv.ParseFloat(rest[1], 64)
+			if perr != nil {
+				fail(fmt.Errorf("level must be a number between 0 and 1"))
+			}
+			req.Command = "set"
+			req.Weight = lvl
+		}
+		resp := call(home, req)
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
+	case "watch":
+		watchStream(home)
 
 	case "name":
 		rest := args[1:]
@@ -487,6 +538,40 @@ if command -v golem >/dev/null 2>&1; then
 fi
 `
 
+// watchStream subscribes to the daemon's event stream and renders the talking
+// channel as a two-sided conversation: what GOLEM says and what each source says to
+// it, labelled by who spoke. It is how the architect opens and observes a GOLEM-LLM
+// exchange live. Any other event is left to the structured trail.
+func watchStream(home string) {
+	conn, err := net.Dial("unix", wire.SocketPath(home))
+	if err != nil {
+		if _, statErr := os.Stat(wire.SocketPath(home)); os.IsNotExist(statErr) {
+			fail(fmt.Errorf("the daemon is not running; start it with: golem run"))
+		}
+		fail(err)
+	}
+	defer conn.Close()
+	fmt.Fprintln(conn, `{"cmd":"subscribe"}`)
+	sc := bufio.NewScanner(conn)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for sc.Scan() {
+		var ev events.Event
+		if json.Unmarshal(sc.Bytes(), &ev) != nil {
+			continue
+		}
+		switch ev.Ev {
+		case "heard":
+			src := ev.Cue
+			if src == "" {
+				src = "someone"
+			}
+			fmt.Printf("%s: %s\n", src, ev.Tpl)
+		case "say":
+			fmt.Printf("golem: %s\n", ev.Tpl)
+		}
+	}
+}
+
 // call performs one IPC round trip and exits with a friendly message when
 // the daemon is not running.
 func call(home string, req wire.Request) wire.Response {
@@ -555,8 +640,8 @@ func printStatus(st *wire.StatusInfo) {
 	}
 }
 
-func tellOnce(home, lang, words string) {
-	resp := call(home, wire.Request{Cmd: "tell", Content: words, Lang: lang})
+func tellOnce(home, lang, source, key, words string) {
+	resp := call(home, wire.Request{Cmd: "tell", Content: words, Lang: lang, Source: source, Key: key})
 	if resp.Error != "" {
 		fail(fmt.Errorf("%s", resp.Error))
 	}

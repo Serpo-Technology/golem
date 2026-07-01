@@ -779,6 +779,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Trust the llm", "I doubt the llm": talking about whom to believe, routed off the
+	// grounded trust verb before the statement path so it moves the trust the graph
+	// holds rather than being written as a fact about a thing called trust.
+	if ans, ok := d.planTrustMove(frame, raw, momentID); ok {
+		return ans, nil
+	}
+
 	// A yes/no question is checked, not asserted: "did the dog chase the cat"
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,

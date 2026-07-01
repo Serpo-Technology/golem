@@ -36,6 +36,14 @@ type Request struct {
 	Query   string `json:"query,omitempty"`
 	Command string `json:"command,omitempty"`
 	Lang    string `json:"lang,omitempty"`    // language tag for tell; empty means English
+	// Source names who is speaking on the channel, so GOLEM can weigh a telling by
+	// that source's trust rather than accepting every voice equally. Empty means the
+	// local operator, trusted; a peer (an LLM watching the channel) declares its name
+	// ("llm") and is heard at that source's trust. Key carries the master key: a
+	// telling that presents it is the architect, trusted outright, and it authorizes
+	// setting another source's trust.
+	Source  string `json:"source,omitempty"`
+	Key     string `json:"key,omitempty"`
 	Mind    bool   `json:"mind,omitempty"`    // teach: ground the word to a thought operation, not a command
 	Say     bool   `json:"say,omitempty"`     // teach: add a construction (Content is the intent, Command the template)
 	Inflect bool   `json:"inflect,omitempty"` // teach: induce an inflection (Content is the feature, Command the base:inflected pairs)

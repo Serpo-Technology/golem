@@ -34,6 +34,7 @@
   },
   "web_poll_sec": 900,
   "untrusted_channels": ["web"],
+  "master_key": "",
 
   "graduation_approvals": 3,
   "conflict_margin": 0.15,

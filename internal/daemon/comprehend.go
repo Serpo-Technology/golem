@@ -187,6 +187,13 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if momentID == 0 {
 		return false
 	}
+	// How far this telling is trusted, from the source it was tagged with: the
+	// architect's is full (an untagged local telling too), a peer's is its own. The
+	// proposition it lays down is written at that trust, so a low-trust claim enters
+	// weak and defeasible, entrenching only by corroboration, never at the firmness a
+	// grounded observation carries.
+	trust := d.momentTrust(momentID)
+	w := comprehendWeight * trust
 	// A comparison is parsed apart from the copular clause, so it is stored from the
 	// frame's roles rather than re-read from the surface, which the argument
 	// splitter would mistake (it has no "than" construction).
@@ -329,16 +336,39 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// patient (an intransitive negative) is acknowledged but not yet stored.
 	if frame.Negate {
 		if patientID != 0 {
-			if err := d.store.LinkRel(agent.Concept.ID, patientID, denyRel(rel.Content), comprehendWeight); err != nil {
+			if err := d.store.LinkRel(agent.Concept.ID, patientID, denyRel(rel.Content), w); err != nil {
 				fmt.Fprintf(d.out, "denial store error: %v\n", err)
 				return false
 			}
-			d.event(events.Event{Ev: "link", From: agent.Concept.ID, To: patientID, Rel: denyRel(rel.Content), Weight: comprehendWeight})
+			d.event(events.Event{Ev: "link", From: agent.Concept.ID, To: patientID, Rel: denyRel(rel.Content), Weight: w})
 		}
 		d.noteFocus(agent.Concept)
 		return true
 	}
-	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patientID, comprehendWeight); err != nil {
+	// Grounded disposes, a low-trust source only proposes: before a peer's claim is
+	// written, if GOLEM already holds a grounded denial that contradicts it, the claim
+	// is doubted rather than accepted, and the grounded belief stands. The architect's
+	// tellings (full trust) are never doubted this way.
+	if trust < architectTrust && patient.Concept != nil {
+		if b, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); b == beliefDenied {
+			// Hold the doubt as memory, not a passing remark: the source claimed this,
+			// GOLEM has grounded otherwise, so it records that it doubts the claim rather
+			// than writing the claim as a fact or forgetting it was made.
+			d.held.add(heldProp{
+				status:       heldDoubted,
+				rel:          rel.Content,
+				agent:        agent.Concept.ID,
+				patient:      patient.Concept.ID,
+				agentGloss:   agent.Concept.Content,
+				patientGloss: patient.Concept.Content,
+				conf:         1,
+			})
+			d.followUp = "I have heard otherwise, so I doubt that."
+			d.noteFocus(agent.Concept)
+			return true
+		}
+	}
+	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patientID, w); err != nil {
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
 	}
@@ -363,10 +393,10 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// auditable like a naming is.
 	d.ws.excite(rel.ID, exciteSpeech)
 	d.ws.exciteRole(agent.Concept.ID, exciteSpeech, "agent")
-	d.event(events.Event{Ev: "link", From: momentID, To: agent.Concept.ID, Rel: memory.RelAgent, Weight: comprehendWeight})
+	d.event(events.Event{Ev: "link", From: momentID, To: agent.Concept.ID, Rel: memory.RelAgent, Weight: w})
 	if patientID != 0 {
 		d.ws.exciteRole(patientID, exciteSpeech, "patient")
-		d.event(events.Event{Ev: "link", From: momentID, To: patientID, Rel: memory.RelPatient, Weight: comprehendWeight})
+		d.event(events.Event{Ev: "link", From: momentID, To: patientID, Rel: memory.RelPatient, Weight: w})
 	}
 	// A role beyond the agent and patient that a construction binds (a recipient, an instrument)
 	// is grounded the same way, written as a role edge labelled by its name, so a clause a learned
@@ -377,12 +407,12 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		if role == "agent" || role == "patient" || t.Concept == nil {
 			continue
 		}
-		if err := d.store.LinkRel(momentID, t.Concept.ID, role, comprehendWeight); err != nil {
+		if err := d.store.LinkRel(momentID, t.Concept.ID, role, w); err != nil {
 			fmt.Fprintf(d.out, "role link error: %v\n", err)
 			continue
 		}
 		d.ws.exciteRole(t.Concept.ID, exciteSpeech, role)
-		d.event(events.Event{Ev: "link", From: momentID, To: t.Concept.ID, Rel: role, Weight: comprehendWeight})
+		d.event(events.Event{Ev: "link", From: momentID, To: t.Concept.ID, Rel: role, Weight: w})
 	}
 
 	// A gap in what was bound is a learning signal, not a failure: a role

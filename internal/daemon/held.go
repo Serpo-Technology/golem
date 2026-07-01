@@ -24,6 +24,7 @@ type propStatus int
 const (
 	heldInferred     propStatus = iota // drawn from resemblance or a relation; a guess
 	heldHypothetical                   // entertained under a supposition; not believed
+	heldDoubted                        // a low-trust source claimed it, but GOLEM has grounded otherwise; held as a doubt, not believed
 )
 
 // heldProp is one proposition held in working memory: a directed relation

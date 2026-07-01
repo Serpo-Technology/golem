@@ -759,6 +759,12 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		words          []string
 	}{
 		{"speech:clarify", "clarify", []string{"mean", "means", "meant", "explain", "explains", "explained", "elaborate", "elaborates", "elaborated", "açıkla", "explica", "significas"}},
+		// Trust moves: talking about whom to believe. A trusting verb raises a source's
+		// trust, a doubting one lowers it, so "trust the llm" and "I doubt the llm" reach
+		// the trust the graph holds through language rather than an out-of-band command.
+		// Believing a source is trusting it; distrusting is doubting it.
+		{"speech:trust", "trust", []string{"trust", "trusts", "trusted", "believe", "believes", "believed", "güven", "güvenirim", "inan", "inanırım", "fido", "confido", "credo"}},
+		{"speech:doubt", "doubt", []string{"doubt", "doubts", "doubted", "distrust", "şüphelen", "şüpheleniyorum", "dubito"}},
 		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told", "söyle", "söyledim", "söyledin", "dedim", "dedin", "dic", "dixi", "dixisti"}},
 		{"speech:describe", "describe", []string{"describe", "describes", "described", "anlat", "narra"}},
 		{"speech:know", "know", []string{"know", "knows", "known", "biliyor", "bilir", "biliyorsun", "bilirsin", "scis", "scisne"}},
@@ -2108,12 +2114,24 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				return wire.Response{OK: true, Say: line}, false, false
 			}
 		}
+		// Who is speaking sets how far this telling is trusted. The exchange is
+		// observable: a `heard` event carries the source and the words, so a watcher
+		// sees both sides of the conversation, GOLEM's `say` and what was said to it.
+		speaker, speakerTrust := d.resolveSpeaker(req)
+		d.event(events.Event{Ev: "heard", Cue: speaker, Tpl: wire.Clip(req.Content, 240)})
 		// What is warm before the utterance is captured now, to ground the words
 		// in once the planner has read the clause.
 		attn := d.attentionAnchors()
 		res := d.process(senses.Observation{Channel: "tell", Content: req.Content, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {
 			return wire.Response{Error: "the words could not be stored; check the daemon log"}, false, false
+		}
+		// Tag the moment with its source, so a proposition comprehension draws from it
+		// is weighed by that source's trust and stays auditable back to who said it. The
+		// architect (master key or an untagged local telling) is left untagged, read at
+		// full trust, so every existing telling is unchanged.
+		if speaker != architectSource {
+			d.tagMomentSource(res.FragmentID, speaker)
 		}
 		resp := wire.Response{OK: true, Observe: &res}
 		// The grammar reads the utterance's force and the planner
@@ -2149,8 +2167,10 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// inflection keys on the lemma comprehension has by now established: a
 		// verb's surface ("kovaladı") reinforces the relation word ("kovala")
 		// instead of minting a node before its lemma is a concept. They keep
-		// company with the recent moments the utterance bound to.
-		words := d.mintWords(req.Content, req.Lang, res.FragmentID, d.recentNaming(time.Now(), res.FragmentID), false)
+		// company with the recent moments the utterance bound to. A peer's words
+		// bond at its trust, so a low-trust source's vocabulary entrenches weakly
+		// and its naming never firms up on one telling; the architect's is full.
+		words := d.mintWordsScaled(req.Content, req.Lang, res.FragmentID, d.recentNaming(time.Now(), res.FragmentID), false, speakerTrust)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
 		// only a declarative naming grounds a word in the attended concept. A
@@ -2184,6 +2204,35 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			}
 		}
 		return resp, false, false
+
+	case "trust":
+		// The architect sets whom GOLEM trusts, so a source it should believe is
+		// vouched for and one it should doubt is held low. Only the master key
+		// authorizes it, so a peer cannot raise its own trust.
+		if d.cfg.MasterKey == "" || req.Key != d.cfg.MasterKey {
+			return wire.Response{Error: "setting trust needs the master key"}, false, false
+		}
+		name := req.Query
+		if name == "" {
+			return wire.Response{Error: "trust needs a source name"}, false, false
+		}
+		if name == architectSource {
+			return wire.Response{OK: true, Say: "The architect is trusted 1.00 by the master key."}, false, false
+		}
+		if req.Command == "set" {
+			if err := d.setSourceTrust(name, req.Weight); err != nil {
+				return wire.Response{Error: err.Error()}, false, false
+			}
+			if err := d.store.Audit(time.Now().Unix(), "trust", name, fmt.Sprintf("%.2f", req.Weight)); err != nil {
+				fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+			}
+			return wire.Response{OK: true, Say: fmt.Sprintf("%q is now trusted %.2f.", name, req.Weight)}, false, false
+		}
+		src, err := d.ensureSource(name)
+		if err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("%q is trusted %.2f.", name, d.sourceTrust(src.ID))}, false, false
 
 	case "name":
 		// Deliberate naming: assert that a word names a grounded concept,

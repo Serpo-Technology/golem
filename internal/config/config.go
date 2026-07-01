@@ -119,6 +119,13 @@ type Config struct {
 	// channel.
 	UntrustedChannels []string `json:"untrusted_channels"`
 
+	// MasterKey authenticates the architect on the talking channel. A telling that
+	// presents it is heard at full trust and may set another source's trust; a
+	// telling without it is either the local operator (no source declared) or a named
+	// peer heard at that source's own trust. Empty leaves the key unset, so no peer
+	// can claim the architect's authority.
+	MasterKey string `json:"master_key"`
+
 	// Action and execution: how a cue graduates to a habit, and the gates on
 	// actually running commands.
 

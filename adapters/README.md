@@ -59,6 +59,27 @@ containerized brain cannot reach itself; the readings and bands match the
 in-binary senses, so the brain sees the same shapes either way. Write your own
 in any language: open the TCP socket, send a line, read a line.
 
+## Talking to GOLEM as an LLM peer
+
+An LLM can learn GOLEM by conversing with it on the same channel a person uses: it
+watches what GOLEM says and answers, and GOLEM weighs the answers by how far it trusts
+that source. GOLEM already asks on its own, so the peer mostly answers its questions.
+
+- Watch the conversation: `golem watch` streams both sides, labelled by who spoke.
+- Speak as the peer: `golem tell --source llm "a zebra is an animal"`. Declaring a
+  source means GOLEM hears it as that peer, not the operator, at that source's trust.
+- Set trust (needs the master key in config): `golem trust llm 0.6`. A newly met
+  source starts low, so its claims enter defeasibly and never overwrite what GOLEM
+  grounded; the architect raises trust for a source to believe more, lowers it to doubt.
+
+Brief for the LLM (the prompt the architect gives the tasked model): you are teaching
+a young learner that only understands simple present-tense statements. Speak only in
+short sentences it can parse: "X is a Y", "X is bigger than Y", or subject-verb-object
+("a zebra eats grass"). Introduce at most one new noun per turn, and tie it to words
+the learner already knows (read its lexicon with `golem concepts`). No abstract prose,
+no lists, no clauses. Answer its questions in that register; when it asks "what is X",
+say what X is with one known category or property.
+
 ## Safety
 
 A reachable brain can be told things and, where a habit is graduated, asked to
