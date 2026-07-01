@@ -92,6 +92,12 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureAnswerConstructions(); err != nil {
 		return err
 	}
+	// The born-in colour words name their colour cells in the graph, so colour naming reads
+	// the graph like any learned word and a taught colour term is a synonym co-referring to
+	// the same cell rather than an isolated token.
+	if err := d.ensureColourSenses(); err != nil {
+		return err
+	}
 	// recompileGrammar reloads both kinds from the store, so the nodes
 	// just seeded are picked up without a second fetch here.
 	return d.recompileGrammar()

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"golem/internal/grammar"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -20,6 +21,15 @@ import (
 // told about it: a conversational moment, so "its colour is crimson" a breath after
 // seeing lands, while a stray colour word much later does not.
 const colourFocusWindow = 2 * time.Minute
+
+// innateColourWeight is how firmly a born-in colour word names its cell: a modest prior,
+// below a deliberate label (deliberateName 0.9), so a taught colour word speaks over it.
+const innateColourWeight = 0.5
+
+// innatePalette is the colour vocabulary the eye is born able to say, the outputs of its
+// sensory classifier (colorWord). These are seeded into the graph as names of their colour
+// cells, so naming lives in the graph like any learned word rather than in a fixed table.
+var innatePalette = []string{"red", "orange", "yellow", "green", "blue", "purple", "pink", "brown", "black", "gray", "white"}
 
 var colourAnchors = map[string]bool{"colour": true, "color": true, "renk": true, "rengi": true, "colorem": true}
 var colourDeictics = map[string]bool{"it": true, "that": true, "this": true, "bu": true, "şu": true, "o": true, "id": true, "hoc": true}
@@ -149,29 +159,14 @@ func (d *Daemon) colorFor(s sighting, lang string) string {
 	return colorWord(s.color)
 }
 
-// colorCell is the perceptual cell a colour falls in, the key a learned word grounds
-// to: an unsaturated colour by its lightness, a saturated one by a coarse hue band.
-// The cells are the raw measurement, finer than the innate colour words and prior to
-// them, so a word is learned against what the eye sees, not against another word.
+// colorCell is the perceptual category a colour falls in, the key a name grounds to. The
+// classification of a colour into a category is the eye's sensory given (colorWord, the
+// born-in bands, like the cones a brain does not learn); the NAME for that category lives
+// in the graph, seeded and overridable, so "red" and a taught "crimson" naming the same
+// cell are synonyms by co-reference. The cell is the colour's sense, and the words for it
+// relate through it.
 func colorCell(c [3]float64) string {
-	r, g, b := c[0], c[1], c[2]
-	maxc := math.Max(r, math.Max(g, b))
-	minc := math.Min(r, math.Min(g, b))
-	var sat float64
-	if maxc > 0 {
-		sat = (maxc - minc) / maxc
-	}
-	if sat < 0.16 {
-		switch {
-		case maxc < 0.25:
-			return "shade:dark"
-		case maxc < 0.72:
-			return "shade:gray"
-		default:
-			return "shade:light"
-		}
-	}
-	return fmt.Sprintf("hue:%d", int(hue(r, g, b, maxc, minc))/30)
+	return "col:" + colorWord(c)
 }
 
 // groundColor learns a colour word by binding it to the perceptual cell the eye just
@@ -184,6 +179,10 @@ func (d *Daemon) groundColor(word, lang, cell string) bool {
 	if id == 0 {
 		return false
 	}
+	if d.colourCells == nil {
+		d.colourCells = map[uint64]bool{}
+	}
+	d.colourCells[id] = true
 	w, _, err := d.store.WordNode(word, lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return false
@@ -224,6 +223,34 @@ func (d *Daemon) learnedColorFor(cell, lang string) string {
 		}
 	}
 	return best
+}
+
+// ensureColourSenses dissolves the born-in colour vocabulary into the graph: each innate
+// word names its colour cell at a modest weight, so the cell is a shared sense concept
+// that word and any taught synonym relate through, and naming reads the graph rather than
+// a fixed table. Idempotent, run at boot, so an existing brain gains it with no migration.
+func (d *Daemon) ensureColourSenses() error {
+	if d.colourCells == nil {
+		d.colourCells = map[uint64]bool{}
+	}
+	for _, w := range innatePalette {
+		id := d.ensureClassConcept("percept:col:"+w, "col:"+w)
+		if id == 0 {
+			continue
+		}
+		d.colourCells[id] = true
+		// A colour word is scaffolding, not a lived moment, so it takes a bare limbic
+		// state rather than the daemon's mood; this also lets the seed run on a chem-less
+		// grammar-only boot.
+		word, _, err := d.store.WordNode(w, "en", limbic.State{}, time.Now())
+		if err != nil {
+			return err
+		}
+		if err := d.store.LinkRel(word.ID, id, memory.RelNames, innateColourWeight); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // pixel is one sampled point: its position on the sampling grid and its colour.

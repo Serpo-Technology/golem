@@ -298,9 +298,10 @@ func TestStatementCuriosity(t *testing.T) {
 func TestWeakNamingIsTentative(t *testing.T) {
 	d, s := testDaemon(t)
 	anchors := feedShape(t, s, "shell", "run: go test ./...", 4, time.Now().Add(-2*time.Hour))
-	// "tests" keeps company every run; "green" only once.
+	// "tests" keeps company every run; "sprocket" only once. (A colour word would not
+	// do here: colours now firmly name their perceptual cell, so they are not tentative.)
 	d.mintWords("tests", "en", 0, anchors, false)
-	d.mintWords("green", "en", 0, anchors[:1], false)
+	d.mintWords("sprocket", "en", 0, anchors[:1], false)
 	if _, err := s.MergeDuplicates(); err != nil {
 		t.Fatal(err)
 	}
@@ -313,8 +314,8 @@ func TestWeakNamingIsTentative(t *testing.T) {
 	if !strings.Contains(firm.Say, "seen it") {
 		t.Fatalf("a firm answer counts the experience: %q", firm.Say)
 	}
-	weak := say(t, d, "what is green")
-	if !strings.HasPrefix(weak.Say, "Green may name go test ./...") {
+	weak := say(t, d, "what is sprocket")
+	if !strings.HasPrefix(weak.Say, "Sprocket may name go test ./...") {
 		t.Fatalf("a weak name should be hedged: %q", weak.Say)
 	}
 	if strings.Contains(weak.Say, "seen it") {

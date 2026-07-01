@@ -29,6 +29,8 @@ const (
 	featureEpisodeCap    = 64   // newest grounded moments mined per concept
 	featureOverlapMin    = 2    // shared features a match needs; one shared word is coincidence
 	featureSeedConcept   = 2    // concepts an overlap recall may land on
+	senseSynonymFloor    = 0.3  // how firmly a word must name a concept for a co-namer to count as its synonym
+	senseSynonymCap      = 6    // synonyms a token expands to, so a loosely-used word cannot pull in a crowd
 	universalFeatureFrac = 0.8  // a feature carried by this fraction of concepts discriminates nothing
 	universalMinConcepts = 10   // below this a shared feature is the signal, not universal noise
 	// A discovered feature is a concept's conceptual company reified: a
@@ -541,14 +543,87 @@ func (d *Daemon) conceptCompany(concepts []*memory.Fragment) (map[uint64][]featu
 // or substring connects them. The matched feature nodes come back as
 // mediators, so the reply shows exactly which shared attributes carried
 // the match.
+// senseSynonyms returns the other words that firmly share a sense with a token: the words
+// that co-name a concept the token itself firmly names. Two words naming one concept are
+// synonyms by co-reference (a colour term and the born-in word for its cell, a noun and its
+// other-tongue name), so recognition can match through the shared sense rather than the
+// surface form. Gated by naming firmness and capped, so a word used loosely across many
+// things does not pull in unrelated company.
+func (d *Daemon) senseSynonyms(token string) []string {
+	words, err := d.store.WordNodesByForms([]string{token})
+	if err != nil || len(words) == 0 {
+		return nil
+	}
+	self := make(map[uint64]bool, len(words))
+	wordIDs := make([]uint64, 0, len(words))
+	for _, w := range words {
+		self[w.ID] = true
+		wordIDs = append(wordIDs, w.ID)
+	}
+	names, err := d.store.LinksFromRel(wordIDs, memory.RelNames)
+	if err != nil {
+		return nil
+	}
+	senses := make([]uint64, 0, len(names))
+	for _, e := range names {
+		if e.Weight >= senseSynonymFloor {
+			senses = append(senses, e.To)
+		}
+	}
+	if len(senses) == 0 {
+		return nil
+	}
+	conamers, err := d.store.LinksToRel(senses, memory.RelNames)
+	if err != nil {
+		return nil
+	}
+	seen := make(map[uint64]bool, len(conamers))
+	ids := make([]uint64, 0, len(conamers))
+	for _, e := range conamers {
+		if e.Weight < senseSynonymFloor || self[e.From] || seen[e.From] {
+			continue
+		}
+		seen[e.From] = true
+		ids = append(ids, e.From)
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, senseSynonymCap)
+	for _, f := range frags {
+		out = append(out, f.Content)
+		if len(out) >= senseSynonymCap {
+			break
+		}
+	}
+	return out
+}
+
 func (d *Daemon) featureSeeds(query string) ([]*memory.Fragment, []*wire.FragmentInfo) {
 	tokens := d.gram.ContentTokens(query)
 	if len(tokens) < featureOverlapMin {
 		return nil, nil
 	}
 	names := make([]string, 0, len(tokens))
+	seenName := map[string]bool{}
+	addName := func(tok string) {
+		key := "tok:" + tok
+		if !seenName[key] {
+			seenName[key] = true
+			names = append(names, key)
+		}
+	}
 	for _, tok := range tokens {
-		names = append(names, "tok:"+tok)
+		addName(tok)
+		// A word and its synonyms share a sense, so a percept described with one word
+		// ("a round crimson form") resembles a concept described with a synonym ("a round
+		// red ball") through the shared sense, not a shared surface token. The synonyms
+		// are read from the graph (co-namers of a sense the word names), so this covers a
+		// taught colour term, a cross-tongue name, and any future shared-sense concept.
+		for _, syn := range d.senseSynonyms(tok) {
+			addName(syn)
+		}
 	}
 	feats, err := d.store.FeaturesByNames(names)
 	if err != nil {

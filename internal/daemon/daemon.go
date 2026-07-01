@@ -192,6 +192,11 @@ type Daemon struct {
 	sawCell string
 	sawAt   time.Time
 
+	// colourCells are the perceptual colour-sense concepts (percept:col:*), innate
+	// scaffolding a colour word names, kept out of the grown-concept listing the way
+	// the participants and grammar classes are.
+	colourCells map[uint64]bool
+
 	// threadProps are the propositions the current exchange has set down, the
 	// discourse memory recall leans toward so what was just said wins over what
 	// is worn deepest into the graph, without changing the long-term weight.
@@ -905,6 +910,9 @@ func (d *Daemon) ensureClassConcept(template, content string) uint64 {
 // participants are.
 func (d *Daemon) isSystemConcept(id uint64) bool {
 	if d.isParticipant(id) {
+		return true
+	}
+	if d.colourCells[id] {
 		return true
 	}
 	if _, ok := d.categoryClasses[id]; ok {

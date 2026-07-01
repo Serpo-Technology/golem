@@ -78,7 +78,7 @@ func TestColorTaughtByTalkingAfterSeeing(t *testing.T) {
 	}
 
 	say(t, d, "its colour is teal") // nothing seen yet
-	if d.learnedColorFor(s.cell, "en") != "" {
+	if d.learnedColorFor(s.cell, "en") == "teal" {
 		t.Fatal("a colour told with nothing in view should ground nothing")
 	}
 
@@ -89,6 +89,58 @@ func TestColorTaughtByTalkingAfterSeeing(t *testing.T) {
 	}
 	if cap := d.render(s, "en"); !strings.Contains(cap, "crimson") {
 		t.Fatalf("the eye should then speak the taught colour; got %q", cap)
+	}
+}
+
+// A learned colour term is a synonym of the born-in word for the same cell, so a percept
+// described with the taught word still recognizes a concept described with the born-in one:
+// recognition matches through the shared colour sense, not the surface token.
+func TestSynonymRecognitionThroughSharedSense(t *testing.T) {
+	d, s := testDaemon(t)
+	feedShape(t, s, "vision", "a round red ball", 5, time.Now().Add(-3*time.Hour))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growFeatures()
+	if err := d.ensureColourSenses(); err != nil { // the born-in colour words name their cells, as at boot
+		t.Fatal(err)
+	}
+	sight, ok := d.measure(discPNG(t, 200, 200, 100, 100, 70, color.RGBA{200, 30, 30, 255}))
+	if !ok {
+		t.Fatal("the disc should be measurable")
+	}
+	if !d.groundColor("crimson", "en", sight.cell) {
+		t.Fatal("crimson should ground to the red cell")
+	}
+
+	syns := d.senseSynonyms("crimson")
+	sharesRed := false
+	for _, w := range syns {
+		if w == "red" {
+			sharesRed = true
+		}
+	}
+	if !sharesRed {
+		t.Fatalf("crimson and red share a colour cell, so they should be sense synonyms; got %v", syns)
+	}
+	if got := d.senseSynonyms("wobblexyz"); len(got) != 0 {
+		t.Fatalf("an ungrounded word has no sense synonyms; got %v", got)
+	}
+
+	cap := d.render(sight, "en")
+	if !strings.Contains(cap, "crimson") {
+		t.Fatalf("the eye should speak the taught colour; got %q", cap)
+	}
+	found := false
+	for _, c := range d.recognize(cap) {
+		if strings.Contains(c.Content, "ball") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a crimson percept should recognize the red ball through the shared colour sense; cap=%q", cap)
 	}
 }
 
