@@ -1988,6 +1988,43 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return wire.Response{OK: true, Observe: &res}, false, false
 
+	case "see":
+		// GOLEM's own eye: it reads the image's pixels and works out the interpretable
+		// attributes its captions are made of, so the percept is described in its own
+		// words rather than handed a caption from outside. The raw bytes are kept beside
+		// the percept, and it says what known thing the attributes it made out resemble,
+		// its own recognition off its own resemblance walk.
+		if len(req.Media) == 0 {
+			return wire.Response{Error: "see needs an image"}, false, false
+		}
+		caption, mime, ok := d.perceive(req.Media)
+		if !ok {
+			return wire.Response{Error: "the image could not be made out"}, false, false
+		}
+		res := d.process(senses.Observation{Channel: "vision", Content: caption, At: time.Now()}, true, true)
+		if res.FragmentID == 0 {
+			return wire.Response{Error: "the percept could not be stored; check the daemon log"}, false, false
+		}
+		if d.media != nil {
+			if hash, err := d.media.Put(req.Media); err != nil {
+				fmt.Fprintf(d.out, "media store error: %v\n", err)
+			} else if err := d.store.SetMedia(res.FragmentID, hash, mime); err != nil {
+				fmt.Fprintf(d.out, "media reference error: %v\n", err)
+			}
+		}
+		say := "I see " + caption + "."
+		if resembled := d.recognize(caption); len(resembled) > 0 {
+			say += " It looks like " + resembled[0].Content + "."
+		}
+		d.speak(say)
+		resp := wire.Response{OK: true, Say: say, Observe: &res}
+		if seeds, err := d.store.FragmentsByIDs([]uint64{res.FragmentID}); err == nil && len(seeds) == 1 {
+			if cloud, err := d.spread(seeds); err == nil {
+				resp.Fragments = cloud
+			}
+		}
+		return resp, false, false
+
 	case "runcode":
 		if req.Content == "" {
 			return wire.Response{Error: "runcode needs a program"}, false, false

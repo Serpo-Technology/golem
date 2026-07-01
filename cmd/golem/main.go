@@ -233,6 +233,20 @@ func main() {
 			fmt.Printf("%.2f bits, predicted away\n", o.Bits)
 		}
 
+	case "see":
+		rest := args[1:]
+		if len(rest) < 1 {
+			fail(fmt.Errorf("usage: golem see <imagefile>"))
+		}
+		data, err := os.ReadFile(rest[0])
+		if err != nil {
+			fail(err)
+		}
+		resp := call(home, wire.Request{Cmd: "see", Media: data, Mime: mime.TypeByExtension(filepath.Ext(rest[0]))})
+		if resp.Say != "" {
+			fmt.Println(resp.Say)
+		}
+
 	case "tell":
 		rest := args[1:]
 		lang, source, key := "", "", ""

@@ -61,27 +61,24 @@ in any language: open the TCP socket, send a line, read a line.
 
 ## Eyes: showing GOLEM a real image
 
-`golem-see.py` turns a real picture into something GOLEM has seen. A vision model out
-here describes the image in the plain caption register the lessons use, and the image
-is observed on the vision channel with its raw bytes kept, so the brain reasons over
-the caption and the features mined from it while the picture it was distilled from
-stays on record, retrievable with `golem recall` (which now shows `saw:` for a percept
-that kept one). The neural perception stays outside; the brain stays a glass box.
+Perception is not an adapter here; it is in the engine. `golem see <imagefile>` sends the
+raw bytes to the brain, and the brain works out for itself, by plain measurement over the
+pixels, the interpretable attributes its captions are made of, the dominant colour, the
+gross shape, the lightness, and renders the percept in its own words:
 
 ```
-export ANTHROPIC_API_KEY=...
-python3 adapters/golem-see.py cat.jpg ball.png
-# ball.png: saw 'a round red ball'
+golem see redball.png
+# I see a round red form. It looks like a round red ball.
 ```
 
-Brief for the captioner (the register `golem-see.py` prompts for, and the one to give
-any vision model or hand-tasked eye): describe the main thing as a lowercase noun
-phrase of one or two plain adjectives and a head noun, like "a small black cat" or "a
-round red ball". One thing, no sentence, no punctuation. That is what lets the percept
-crystallize into a concept and resemble the ones already learned; a rich sentence would
-not ground. The backend is swappable: `golem observe --media <file> vision "<caption>"`
-is the whole daemon-side contract, so a local captioner or a vision-capable model you
-task by hand works the same way.
+No outside model describes the picture: the description is GOLEM's, computed in
+`internal/daemon/vision.go`, so what it sees is a percept it can reason over and
+recognize by resemblance like anything it was shown by hand. The head noun is left
+generic (a "form") because naming the kind is recognition's job, its own resemblance walk
+over the features it made out, not the eye's. The raw image is kept content-addressed
+beside the percept and shown by `golem recall` as a `saw:` line, so a memory is auditable
+back to the actual picture. This is deliberately a first, coarse eye; finer attributes,
+and colour words learned by grounding rather than given, are where it grows.
 
 ## Talking to GOLEM as an LLM peer
 
