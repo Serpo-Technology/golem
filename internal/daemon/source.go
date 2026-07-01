@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"golem/internal/events"
 	"golem/internal/grammar"
 	"golem/internal/memory"
 	"golem/wire"
@@ -35,6 +36,18 @@ const (
 	// full trust, so only the architect (the master key, or the untagged operator) may
 	// vouch, and a peer cannot talk its own trust up.
 	trustAuthorityFloor = architectTrust
+	// The nightly trust-learning rates: a source's trust follows its record. A night of
+	// unchallenged claims restores a little (slow to build), a night of claims GOLEM has
+	// grounded otherwise costs more (fast to lose), each capped so trust is sticky.
+	trustRiseRate       = 0.04
+	trustDropRate       = 0.30
+	maxNightlyTrustRise = 0.05
+	maxNightlyTrustDrop = 0.25
+	// trustFloorLearned keeps a repeatedly-contradicted source recoverable rather than
+	// gone; trustCeilingLearned caps what the record alone earns, so full trust stays an
+	// explicit grant the architect makes, never one a source talks itself into.
+	trustFloorLearned   = 0.05
+	trustCeilingLearned = 0.9
 	// sourceTemplate namespaces source nodes so a source named "llm" never collides
 	// with a content concept of the same name, and consolidation can pass them over.
 	sourceCategory = "source"
@@ -226,4 +239,114 @@ func (d *Daemon) momentTrust(momentID uint64) float64 {
 		return architectTrust
 	}
 	return d.sourceTrust(edges[0].To)
+}
+
+// claimAt reconstructs the proposition a told moment laid down: its agent, its patient,
+// and the relation that grounds it. It is how the trust pass rereads what a source
+// claimed, to judge each claim against what GOLEM has since grounded.
+func (d *Daemon) claimAt(momentID uint64) (agentID, patientID uint64, relContent string, ok bool) {
+	ag, err := d.store.LinksFromRel([]uint64{momentID}, memory.RelAgent)
+	if err != nil || len(ag) == 0 {
+		return 0, 0, "", false
+	}
+	pa, err := d.store.LinksFromRel([]uint64{momentID}, memory.RelPatient)
+	if err != nil || len(pa) == 0 {
+		return 0, 0, "", false
+	}
+	grounds, err := d.store.LinksToRel([]uint64{momentID}, memory.RelGrounds)
+	if err != nil {
+		return 0, 0, "", false
+	}
+	for _, g := range grounds {
+		rf, err := d.store.FragmentsByIDs([]uint64{g.From})
+		if err != nil || len(rf) != 1 {
+			continue
+		}
+		if rf[0].Category == "relation" {
+			return ag[0].To, pa[0].To, rf[0].Content, true
+		}
+	}
+	return 0, 0, "", false
+}
+
+// growSourceTrust moves each source's trust by how its claims have held up, the earned
+// half of the trust model. A claim GOLEM has since grounded a denial of counts against
+// the source; a night of claims it has had no reason to deny restores a little. Trust
+// is sticky (each night's shift is capped and slow to build, quicker to lose), floored
+// so a contradicted source stays recoverable, and ceilinged so full trust remains an
+// explicit grant rather than one a source earns on its own. The architect is no node
+// here, so its trust is never touched. (A grounded confirmation is the strong positive
+// signal; with perception unbuilt it is rare, so an unchallenged record is the gentle
+// positive for now.)
+func (d *Daemon) growSourceTrust() {
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return
+	}
+	for _, s := range concepts {
+		if s.Category != sourceCategory {
+			continue
+		}
+		tags, err := d.store.LinksToRel([]uint64{s.ID}, memory.RelSource)
+		if err != nil || len(tags) == 0 {
+			continue
+		}
+		momIDs := make([]uint64, 0, len(tags))
+		for _, t := range tags {
+			momIDs = append(momIDs, t.From)
+		}
+		moms, err := d.store.FragmentsByIDs(momIDs)
+		if err != nil {
+			continue
+		}
+		total, contradicted := 0, 0
+		for _, m := range moms {
+			// Judge the source on the night's own claims, weighed against what GOLEM
+			// grounds now, rather than re-litigating its whole record every night, which
+			// would keep a once-contradicted source falling forever and never let a clean
+			// stretch restore it.
+			if !m.Time.After(d.lastSleep) {
+				continue
+			}
+			a, p, rel, ok := d.claimAt(m.ID)
+			if !ok {
+				continue
+			}
+			total++
+			ag := &memory.Fragment{ID: a}
+			if d.propositionDenied(ag, rel, p) || d.propositionDeniedCategorically(ag, rel, p) {
+				contradicted++
+			}
+		}
+		if total == 0 {
+			continue
+		}
+		cur := d.sourceTrust(s.ID)
+		badFrac := float64(contradicted) / float64(total)
+		delta := trustRiseRate*(1-badFrac) - trustDropRate*badFrac
+		if delta > maxNightlyTrustRise {
+			delta = maxNightlyTrustRise
+		}
+		if delta < -maxNightlyTrustDrop {
+			delta = -maxNightlyTrustDrop
+		}
+		next := cur + delta
+		if delta >= 0 {
+			if next > trustCeilingLearned {
+				next = trustCeilingLearned
+			}
+			if next < cur { // a clean night never pulls back a source the architect vouched higher
+				next = cur
+			}
+		} else if next < trustFloorLearned {
+			next = trustFloorLearned
+		}
+		if next == cur {
+			continue
+		}
+		if err := d.store.SetLinkRel(s.ID, s.ID, memory.RelTrust, next); err != nil {
+			continue
+		}
+		d.event(events.Event{Ev: "trust", Cue: s.Content, Weight: next})
+	}
 }

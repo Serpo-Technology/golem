@@ -345,15 +345,15 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		d.noteFocus(agent.Concept)
 		return true
 	}
-	// Grounded disposes, a low-trust source only proposes: before a peer's claim is
-	// written, if GOLEM already holds a grounded denial that contradicts it, the claim
-	// is doubted rather than accepted, and the grounded belief stands. The architect's
-	// tellings (full trust) are never doubted this way.
+	// Grounded disposes, a low-trust source only proposes: if GOLEM already holds a
+	// grounded denial that contradicts a peer's claim, the claim is doubted. It is still
+	// written, weak and source-tagged, so GOLEM remembers the claim was made and can
+	// judge the source's track record by it, while the grounded denial keeps standing
+	// over every read. The architect's tellings (full trust) are never doubted this way.
+	doubted := false
 	if trust < architectTrust && patient.Concept != nil {
 		if b, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); b == beliefDenied {
-			// Hold the doubt as memory, not a passing remark: the source claimed this,
-			// GOLEM has grounded otherwise, so it records that it doubts the claim rather
-			// than writing the claim as a fact or forgetting it was made.
+			doubted = true
 			d.held.add(heldProp{
 				status:       heldDoubted,
 				rel:          rel.Content,
@@ -363,9 +363,6 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 				patientGloss: patient.Concept.Content,
 				conf:         1,
 			})
-			d.followUp = "I have heard otherwise, so I doubt that."
-			d.noteFocus(agent.Concept)
-			return true
 		}
 	}
 	if err := d.store.Propose(rel.ID, momentID, agent.Concept.ID, patientID, w); err != nil {
@@ -373,19 +370,25 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		return false
 	}
 	d.noteFocus(agent.Concept) // a told proposition leaves its subject as the topic
-	// If this telling answers a question GOLEM had to leave open, it follows up
-	// with the answer it can now give rather than receiving the fact in silence.
-	d.followUp = d.resolveOpenQuestions(frame.Lang, rel.Content, agent.Concept.ID, patientID)
-	// The proposition is in the graph now; the exchange remembers it set this
-	// down, so a later "what about X" leans on what was just said.
-	if patientID != 0 {
-		d.recordThreadProp(rel.Content, agent.Concept.ID, patientID, agent.Concept.Content, patientGloss)
-		// What was a guess is now seen: retire any inferred belief about the same
-		// proposition, in mind and in long-term memory, so observation supersedes
-		// inference rather than standing beside it.
-		d.held.forget(rel.Content, agent.Concept.ID, patientID)
-		if err := d.store.ForgetBelief(rel.Content, agent.Concept.ID, patientID); err != nil {
-			fmt.Fprintf(d.out, "belief retire error: %v\n", err)
+	if doubted {
+		// The claim is on record and held as a doubt; GOLEM does not take it up as a
+		// fact, so it neither leads the thread nor retires what it already believes.
+		d.followUp = "I have heard otherwise, so I doubt that."
+	} else {
+		// If this telling answers a question GOLEM had to leave open, it follows up
+		// with the answer it can now give rather than receiving the fact in silence.
+		d.followUp = d.resolveOpenQuestions(frame.Lang, rel.Content, agent.Concept.ID, patientID)
+		// The proposition is in the graph now; the exchange remembers it set this
+		// down, so a later "what about X" leans on what was just said.
+		if patientID != 0 {
+			d.recordThreadProp(rel.Content, agent.Concept.ID, patientID, agent.Concept.Content, patientGloss)
+			// What was a guess is now seen: retire any inferred belief about the same
+			// proposition, in mind and in long-term memory, so observation supersedes
+			// inference rather than standing beside it.
+			d.held.forget(rel.Content, agent.Concept.ID, patientID)
+			if err := d.store.ForgetBelief(rel.Content, agent.Concept.ID, patientID); err != nil {
+				fmt.Fprintf(d.out, "belief retire error: %v\n", err)
+			}
 		}
 	}
 	// Warm what it bound, recording the role each filler played so the discourse

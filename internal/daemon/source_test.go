@@ -77,13 +77,18 @@ func TestGroundedDenialDoubtsPeerClaim(t *testing.T) {
 	if !d.propositionDenied(dog, "chase", bird.ID) {
 		t.Fatal("the operator's denial should stand")
 	}
-	// A peer asserts the denied positive: doubted, not written.
+	// A peer asserts the denied positive: it is doubted and voiced.
 	rL := sayAs(t, d, "llm", "", "a dog chased a bird")
 	if rL.Say == "" {
 		t.Fatal("a doubted claim should be voiced, not received in silence")
 	}
-	if d.propositionHolds(dog, "chase", bird.ID) {
-		t.Fatal("a low-trust claim must not overwrite a grounded denial")
+	// The claim is on record now (for the source's track record) and held as a doubt,
+	// but the grounded denial keeps standing over the read: the peer does not overturn it.
+	if b, _, _ := d.assessProposition(dog, "chase", bird); b != beliefDenied {
+		t.Fatalf("the grounded denial should still dominate a doubted claim, got belief %d", b)
+	}
+	if p := d.held.findID("chase", dog.ID, bird.ID, heldDoubted); p == nil {
+		t.Fatal("the doubted claim should be held")
 	}
 }
 
@@ -173,5 +178,56 @@ func TestDoubtHeldAsMemory(t *testing.T) {
 	sayAs(t, d, "llm", "", "a dog chased a bird") // doubted, not written
 	if p := d.held.findID("chase", dog.ID, bird.ID, heldDoubted); p == nil {
 		t.Fatal("the doubt should be held as memory, not only voiced")
+	}
+}
+
+// A source loses trust when its claims turn out to be contradicted by what GOLEM has
+// grounded, the earned half of the model.
+func TestTrustLearningLowersOnContradiction(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "a dog does not chase a bird") // grounded denials
+	say(t, d, "a cat does not chase a fish")
+	sayAs(t, d, "llm", "", "a dog chased a bird") // the peer claims the denied things
+	sayAs(t, d, "llm", "", "a cat chased a fish")
+	llm, _ := d.ensureSource("llm")
+	if err := d.setSourceTrust("llm", 0.6); err != nil { // start mid so a drop is visible
+		t.Fatal(err)
+	}
+	before := d.sourceTrust(llm.ID)
+	d.growSourceTrust()
+	if after := d.sourceTrust(llm.ID); after >= before {
+		t.Fatalf("a source GOLEM has grounded otherwise should lose trust: %.2f then %.2f", before, after)
+	}
+}
+
+// A source whose claims GOLEM has had no reason to deny recovers a little trust: earned
+// slowly, the gentle positive while a grounded confirmation (perception) is still absent.
+func TestTrustLearningRisesOnCleanRecord(t *testing.T) {
+	d, _ := testDaemon(t)
+	sayAs(t, d, "llm", "", "a zebra chased a lion")
+	sayAs(t, d, "llm", "", "a moose chased a wolf")
+	llm, _ := d.ensureSource("llm")
+	if err := d.setSourceTrust("llm", 0.3); err != nil {
+		t.Fatal(err)
+	}
+	before := d.sourceTrust(llm.ID)
+	d.growSourceTrust()
+	if after := d.sourceTrust(llm.ID); after <= before {
+		t.Fatalf("an unchallenged record should restore a little trust: %.2f then %.2f", before, after)
+	}
+}
+
+// The record earns trust but does not undo a grant: a clean night never pulls a source
+// the architect vouched higher back down to the earned ceiling.
+func TestTrustLearningDoesNotUndoAGrant(t *testing.T) {
+	d, _ := testDaemon(t)
+	sayAs(t, d, "llm", "", "a zebra chased a lion")
+	if err := d.setSourceTrust("llm", 1.0); err != nil { // architect grants full trust
+		t.Fatal(err)
+	}
+	llm, _ := d.ensureSource("llm")
+	d.growSourceTrust()
+	if got := d.sourceTrust(llm.ID); got < 1.0 {
+		t.Fatalf("a clean night must not pull a granted source below its grant: got %.2f", got)
 	}
 }
