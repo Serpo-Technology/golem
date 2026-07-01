@@ -276,6 +276,11 @@ type FragmentInfo struct {
 	Activation float64 `json:"activation,omitempty"`
 	LinkCount  int     `json:"links,omitempty"`
 	Edited     bool    `json:"edited,omitempty"` // hand-touched through the editor
+	// Media references the raw bytes a percept was captioned from, so a recalled
+	// percept can show what was actually seen, not only how it was described. The hash
+	// keys the content-addressed store; Mime is the type. Empty when nothing was kept.
+	Media string `json:"media,omitempty"`
+	Mime  string `json:"mime,omitempty"`
 }
 
 type ObserveResult struct {

@@ -796,6 +796,9 @@ func printFragments(frags []*wire.FragmentInfo) {
 		fmt.Printf("#%-3d %s  %-12s %.2f bits  NA=%.2f  weight %.2f%s\n     %q\n",
 			f.ID, time.Unix(f.AtUnix, 0).Format("Jan 02 15:04:05"), head,
 			f.Surprise, f.Limbic.Noradrenaline, f.Weight, extra, f.Content)
+		if f.Media != "" {
+			fmt.Printf("     saw: %s (%s)\n", f.Media, f.Mime)
+		}
 	}
 }
 

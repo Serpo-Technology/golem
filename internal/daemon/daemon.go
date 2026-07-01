@@ -2299,7 +2299,10 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				infos = append(infos, cloud...)
 			}
 		}
-		return wire.Response{OK: true, Fragments: dedupeInfos(infos)}, false, false
+		infos = dedupeInfos(infos)
+		// A recalled percept shows what was actually seen, not only how it was described.
+		d.attachMedia(infos)
+		return wire.Response{OK: true, Fragments: infos}, false, false
 
 	case "dump":
 		frags, err := d.store.Dump()

@@ -59,6 +59,30 @@ containerized brain cannot reach itself; the readings and bands match the
 in-binary senses, so the brain sees the same shapes either way. Write your own
 in any language: open the TCP socket, send a line, read a line.
 
+## Eyes: showing GOLEM a real image
+
+`golem-see.py` turns a real picture into something GOLEM has seen. A vision model out
+here describes the image in the plain caption register the lessons use, and the image
+is observed on the vision channel with its raw bytes kept, so the brain reasons over
+the caption and the features mined from it while the picture it was distilled from
+stays on record, retrievable with `golem recall` (which now shows `saw:` for a percept
+that kept one). The neural perception stays outside; the brain stays a glass box.
+
+```
+export ANTHROPIC_API_KEY=...
+python3 adapters/golem-see.py cat.jpg ball.png
+# ball.png: saw 'a round red ball'
+```
+
+Brief for the captioner (the register `golem-see.py` prompts for, and the one to give
+any vision model or hand-tasked eye): describe the main thing as a lowercase noun
+phrase of one or two plain adjectives and a head noun, like "a small black cat" or "a
+round red ball". One thing, no sentence, no punctuation. That is what lets the percept
+crystallize into a concept and resemble the ones already learned; a rich sentence would
+not ground. The backend is swappable: `golem observe --media <file> vision "<caption>"`
+is the whole daemon-side contract, so a local captioner or a vision-capable model you
+task by hand works the same way.
+
 ## Talking to GOLEM as an LLM peer
 
 An LLM can learn GOLEM by conversing with it on the same channel a person uses: it

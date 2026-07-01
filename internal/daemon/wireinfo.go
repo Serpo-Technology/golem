@@ -28,6 +28,18 @@ func fragmentInfo(f *memory.Fragment) *wire.FragmentInfo {
 	return info
 }
 
+// attachMedia fills in the raw percept behind each info that kept one, so a recalled
+// percept can show what was actually seen and not only how it was described. Most
+// fragments kept nothing, so the lookup is skipped for all but the handful a reply
+// carries.
+func (d *Daemon) attachMedia(infos []*wire.FragmentInfo) {
+	for _, info := range infos {
+		if hash, mime, ok := d.store.Media(info.ID); ok {
+			info.Media, info.Mime = hash, mime
+		}
+	}
+}
+
 // chemWire mirrors the limbic state into its wire form, the levels a client
 // reads.
 func chemWire(s limbic.State) wire.Chem {
