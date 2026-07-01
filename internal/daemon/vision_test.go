@@ -208,6 +208,43 @@ func TestColourBoundaryLearnedFromTelling(t *testing.T) {
 	}
 }
 
+// The eye reads a coarse pattern: a solid surface is plain, bands along one axis are
+// striped, and scatter across both is spotted, all from the pixels.
+func TestTextureWordReadsPattern(t *testing.T) {
+	grid := func(f func(x, y int) float64) []pixel {
+		var px []pixel
+		for y := 0; y < 16; y++ {
+			for x := 0; x < 16; x++ {
+				v := f(x, y)
+				px = append(px, pixel{x: x, y: y, r: v, g: v, b: v})
+			}
+		}
+		return px
+	}
+	solid := grid(func(x, y int) float64 { return 0.5 })
+	stripes := grid(func(x, y int) float64 {
+		if y%2 == 0 {
+			return 0.05
+		}
+		return 0.95
+	})
+	spots := grid(func(x, y int) float64 {
+		if (x+y)%2 == 0 {
+			return 0.05
+		}
+		return 0.95
+	})
+	if got := textureWord(solid); got != "" {
+		t.Fatalf("a solid surface should be plain; got %q", got)
+	}
+	if got := textureWord(stripes); got != "striped" {
+		t.Fatalf("bands along one axis should read striped; got %q", got)
+	}
+	if got := textureWord(spots); got != "spotted" {
+		t.Fatalf("scatter across both axes should read spotted; got %q", got)
+	}
+}
+
 func rectPNG(t *testing.T, w, h, x0, y0, x1, y1 int, fg color.RGBA) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))

@@ -113,16 +113,23 @@ const (
 	visionFgDist    = 0.22 // a sample this far from the background colour belongs to the subject, not the ground
 	visionRoundFill = 0.62 // a subject filling this much of its box but leaving its corners empty reads as round
 	visionSquareCap = 0.90 // above this its box is nearly full, so it is a block, not round
+	// Texture: how varied a surface must be to count as patterned, how much a pattern
+	// must flip to have a direction, and how lopsided the two axes' flip rates must be to
+	// read as bands (striped) rather than scatter (spotted).
+	textureFloor      = 0.02
+	textureTransFloor = 0.15
+	stripeRatio       = 2.5
 )
 
 // sighting is what the eye measured off an image before any word is put to it: the raw
 // colour and the perceptual cell it falls in, the gross shape, and the codec, all plain
 // numbers so naming and learning can work over the same measurement.
 type sighting struct {
-	color [3]float64
-	cell  string // the perceptual colour cell the measurement falls in, the key a learned word grounds to
-	shape string
-	mime  string
+	color   [3]float64
+	cell    string // the perceptual colour cell the measurement falls in, the key a learned word grounds to
+	shape   string
+	texture string // a coarse pattern: striped, spotted, patterned, or none
+	mime    string
 }
 
 // measure reads an image into a sighting: the interpretable attributes worked out from
@@ -145,7 +152,7 @@ func (d *Daemon) measure(data []byte) (sighting, bool) {
 		fg, box, fill = allPixels(px)
 	}
 	c := meanColor(fg)
-	return sighting{color: c, cell: d.classifyColour(c), shape: shapeWord(box, fill), mime: "image/" + format}, true
+	return sighting{color: c, cell: d.classifyColour(c), shape: shapeWord(box, fill), texture: textureWord(fg), mime: "image/" + format}, true
 }
 
 // render puts GOLEM's own words to a sighting: a noun phrase of the attributes it made
@@ -153,11 +160,14 @@ func (d *Daemon) measure(data []byte) (sighting, bool) {
 // recognition's job, not the eye's. The colour word is the one GOLEM has learned for
 // that cell if it has learned one, else the innate word it is born able to say.
 func (d *Daemon) render(s sighting, lang string) string {
-	adjs := make([]string, 0, 3)
+	adjs := make([]string, 0, 4)
 	if s.shape != "" {
 		adjs = append(adjs, s.shape)
 	}
 	adjs = append(adjs, d.colorFor(s, lang))
+	if s.texture != "" {
+		adjs = append(adjs, s.texture)
+	}
 	return "a " + strings.Join(adjs, " ") + " form"
 }
 
@@ -458,6 +468,75 @@ func shapeWord(box [4]int, fill float64) string {
 		return "round"
 	}
 	return ""
+}
+
+// textureWord reads a coarse pattern off the subject. A surface with little contrast is
+// plain and gets no word. A varied one is called striped when its contrast runs in bands
+// along one axis and holds along the other, spotted when it flips along both and so
+// scatters, and patterned when it is varied without a clear direction. It is a rough
+// sense, enough to tell a marked thing from a solid one and lend that difference to
+// recognition, not to read a coat in detail.
+func textureWord(fg []pixel) string {
+	if len(fg) < 16 {
+		return ""
+	}
+	lum := func(p pixel) float64 { return 0.299*p.r + 0.587*p.g + 0.114*p.b }
+	var sum, sumsq float64
+	for _, p := range fg {
+		l := lum(p)
+		sum += l
+		sumsq += l * l
+	}
+	n := float64(len(fg))
+	mean := sum / n
+	if sumsq/n-mean*mean < textureFloor {
+		return "" // plain: too little contrast to call a pattern
+	}
+	byRow := map[int][]pixel{}
+	byCol := map[int][]pixel{}
+	for _, p := range fg {
+		byRow[p.y] = append(byRow[p.y], p)
+		byCol[p.x] = append(byCol[p.x], p)
+	}
+	// The flip rate along an axis: scanning a line of the subject, how often the surface
+	// crosses from lighter to darker than its mean.
+	rate := func(lines map[int][]pixel, byX bool) float64 {
+		trans, pairs := 0, 0
+		for _, line := range lines {
+			if len(line) < 2 {
+				continue
+			}
+			sort.Slice(line, func(i, j int) bool {
+				if byX {
+					return line[i].x < line[j].x
+				}
+				return line[i].y < line[j].y
+			})
+			prev := lum(line[0]) >= mean
+			for _, p := range line[1:] {
+				cur := lum(p) >= mean
+				if cur != prev {
+					trans++
+				}
+				prev = cur
+				pairs++
+			}
+		}
+		if pairs == 0 {
+			return 0
+		}
+		return float64(trans) / float64(pairs)
+	}
+	h := rate(byRow, true)  // flips scanning across a row
+	v := rate(byCol, false) // flips scanning down a column
+	hi, lo := math.Max(h, v), math.Min(h, v)
+	if hi < textureTransFloor {
+		return "patterned" // varied, but no clear bands or scatter
+	}
+	if lo == 0 || hi/lo >= stripeRatio {
+		return "striped" // runs in bands along one axis
+	}
+	return "spotted" // flips along both axes: scattered
 }
 
 // namedColor pairs a colour with the word GOLEM knows it by. The table is a small,
