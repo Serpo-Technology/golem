@@ -67,6 +67,31 @@ func TestLearnedColorNameGroundsAndSpeaks(t *testing.T) {
 	}
 }
 
+// A colour is taught by talking, not a command: GOLEM sees a thing, and a colour told
+// right after ("its colour is crimson") grounds the word to what its eye measured, and
+// the eye then speaks it. With nothing in view, a colour remark grounds nothing.
+func TestColorTaughtByTalkingAfterSeeing(t *testing.T) {
+	d, _ := testDaemon(t)
+	s, ok := d.measure(discPNG(t, 200, 200, 100, 100, 70, color.RGBA{200, 30, 30, 255}))
+	if !ok {
+		t.Fatal("the disc should be measurable")
+	}
+
+	say(t, d, "its colour is teal") // nothing seen yet
+	if d.learnedColorFor(s.cell, "en") != "" {
+		t.Fatal("a colour told with nothing in view should ground nothing")
+	}
+
+	d.sawCell, d.sawAt = s.cell, time.Now() // GOLEM has just seen the red thing
+	say(t, d, "its colour is crimson")
+	if got := d.learnedColorFor(s.cell, "en"); got != "crimson" {
+		t.Fatalf("a colour told after seeing should ground to what was measured; got %q", got)
+	}
+	if cap := d.render(s, "en"); !strings.Contains(cap, "crimson") {
+		t.Fatalf("the eye should then speak the taught colour; got %q", cap)
+	}
+}
+
 func rectPNG(t *testing.T, w, h, x0, y0, x1, y1 int, fg color.RGBA) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))

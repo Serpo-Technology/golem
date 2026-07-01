@@ -235,29 +235,20 @@ func main() {
 
 	case "see":
 		rest := args[1:]
-		learn, lang := "", ""
-		for len(rest) >= 2 {
-			switch rest[0] {
-			case "--learn":
-				learn = rest[1]
-				rest = rest[2:]
-			case "--lang":
-				lang = rest[1]
-				rest = rest[2:]
-			default:
-				goto seeArgs
-			}
+		lang := ""
+		for len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
 		}
-	seeArgs:
 		if len(rest) < 1 {
-			fail(fmt.Errorf("usage: golem see [--learn <colour>] [--lang <lang>] <imagefile>"))
+			fail(fmt.Errorf("usage: golem see [--lang <lang>] <imagefile>"))
 		}
 		data, err := os.ReadFile(rest[0])
 		if err != nil {
 			fail(err)
 		}
 		resp := call(home, wire.Request{Cmd: "see", Media: data,
-			Mime: mime.TypeByExtension(filepath.Ext(rest[0])), Content: learn, Lang: lang})
+			Mime: mime.TypeByExtension(filepath.Ext(rest[0])), Lang: lang})
 		if resp.Say != "" {
 			fmt.Println(resp.Say)
 		}

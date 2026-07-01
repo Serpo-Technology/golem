@@ -185,6 +185,13 @@ type Daemon struct {
 	// each turn arrives in.
 	lastRole *roleContext
 
+	// sawCell and sawAt are the eye's short focus: the colour cell of the thing
+	// just seen and when. A colour told right after ("its colour is crimson")
+	// grounds the word to what was measured, so colour is learned by being shown
+	// and told, not by a command. It lapses with the conversational moment.
+	sawCell string
+	sawAt   time.Time
+
 	// threadProps are the propositions the current exchange has set down, the
 	// discourse memory recall leans toward so what was just said wins over what
 	// is worn deepest into the graph, without changing the long-term weight.
@@ -2001,19 +2008,10 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if !ok {
 			return wire.Response{Error: "the image could not be made out"}, false, false
 		}
-		// Shown a thing and told its colour, GOLEM learns the word for what it measured
-		// rather than being born knowing it: the colour term grounds to the perceptual
-		// cell, in whatever tongue it was given.
-		if req.Content != "" {
-			lang := req.Lang
-			if lang == "" {
-				lang = "en"
-			}
-			if !d.groundColor(req.Content, lang, sight.cell) {
-				return wire.Response{Error: "the colour could not be grounded"}, false, false
-			}
-			return wire.Response{OK: true, Say: fmt.Sprintf("I learned that this colour is %s.", req.Content)}, false, false
-		}
+		// Hold what was just seen in focus, so a colour told right after ("its colour is
+		// crimson") grounds to the cell the eye measured, learned by being shown and told
+		// rather than by a command.
+		d.sawCell, d.sawAt = sight.cell, time.Now()
 		caption, mime := d.render(sight, req.Lang), sight.mime
 		res := d.process(senses.Observation{Channel: "vision", Content: caption, At: time.Now()}, true, true)
 		if res.FragmentID == 0 {

@@ -12,8 +12,61 @@ import (
 	"strings"
 	"time"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
+
+// colourFocusWindow is how long the thing just seen stays in focus for a colour to be
+// told about it: a conversational moment, so "its colour is crimson" a breath after
+// seeing lands, while a stray colour word much later does not.
+const colourFocusWindow = 2 * time.Minute
+
+var colourAnchors = map[string]bool{"colour": true, "color": true, "renk": true, "rengi": true, "colorem": true}
+var colourDeictics = map[string]bool{"it": true, "that": true, "this": true, "bu": true, "şu": true, "o": true, "id": true, "hoc": true}
+
+// planColorNaming grounds a colour word told right after GOLEM has seen something: "its
+// colour is crimson", "it is crimson", "bu renk kırmızı". The word binds to the
+// perceptual cell the eye just measured, so a colour term is learned by being shown a
+// thing and told its colour, dissolving the teaching into conversation rather than a
+// command. It declines when nothing was freshly seen, or when the remark names a known
+// kind ("it is a ball"), leaving those to the ordinary paths.
+func (d *Daemon) planColorNaming(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Force != grammar.ForceStatement || frame.Negate || frame.Comparative {
+		return "", false
+	}
+	if d.sawCell == "" || time.Since(d.sawAt) > colourFocusWindow {
+		return "", false // nothing freshly seen to attach a colour to
+	}
+	words := strings.Fields(strings.ToLower(strings.Trim(raw, " .!?")))
+	if len(words) < 2 {
+		return "", false
+	}
+	colour := words[len(words)-1] // the colour word closes the clause in every form
+	if colourAnchors[colour] || colourDeictics[colour] {
+		return "", false // the clause named no colour, only the anchor or the deictic
+	}
+	anchored := false
+	for _, w := range words {
+		if colourAnchors[w] {
+			anchored = true
+			break
+		}
+	}
+	// An explicit "colour is X" names a colour outright; a deictic "it is X" does when X
+	// is a new word rather than a known kind, so "it is a ball" is left to naming.
+	deictic := colourDeictics[words[0]] && d.resolveConcept(colour) == nil
+	if !anchored && !deictic {
+		return "", false
+	}
+	lang := frame.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	if !d.groundColor(colour, lang, d.sawCell) {
+		return "", false
+	}
+	return fmt.Sprintf("I see, that colour is %s.", colour), true
+}
 
 // GOLEM's own eye. Perception is not a caption handed in from outside; it is measured
 // here, from the pixels, in the same interpretable attributes its lessons are captioned

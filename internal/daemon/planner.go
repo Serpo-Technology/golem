@@ -786,6 +786,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "Its colour is crimson", "it is crimson": a colour told about the thing just seen,
+	// grounded to what the eye measured, before the statement path could write it as a
+	// fact about a thing called crimson. Perception is shown; its words are told.
+	if ans, ok := d.planColorNaming(frame, raw); ok {
+		return ans, nil
+	}
+
 	// A yes/no question is checked, not asserted: "did the dog chase the cat"
 	// reads whether the graph holds the proposition and answers yes or no. It
 	// runs before the force switch so a polar clause is never written as a fact,
