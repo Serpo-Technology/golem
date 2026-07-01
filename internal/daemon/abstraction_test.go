@@ -661,3 +661,153 @@ func TestAbstractionBindsCrossTongueNameToPercept(t *testing.T) {
 		t.Fatal("a superordinate naming several named percepts should still abstract")
 	}
 }
+
+// groundedEpisode returns one surviving episode a concept grounds, the percept a
+// telling could have been pointed at.
+func groundedEpisode(t *testing.T, s *memory.Store, concept uint64) uint64 {
+	t.Helper()
+	g, err := s.LinksFromRel([]uint64{concept}, memory.RelGrounds)
+	if err != nil || len(g) == 0 {
+		t.Fatalf("concept %d should ground at least one episode: %v %v", concept, g, err)
+	}
+	return g[0].To
+}
+
+// dilutedNameSetup builds two named percepts (cat, dog) and a cross-tongue word whose
+// company spreads across both, the dilution a lingering scene-mate causes when nouns are
+// taught back to back. The word names both head-named percepts above the floor, the
+// ambiguous case that splits a phantom. Setup stops just before the abstraction pass so a
+// caller can record ostension first, and returns the word, the two concepts, and one
+// grounded episode of each.
+func dilutedNameSetup(t *testing.T, word string) (d *Daemon, s *memory.Store, wid, catC, dogC, catEp, dogEp uint64) {
+	t.Helper()
+	d, s = testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	cat := feedShape(t, s, "vision", "a small black cat", 4, base)
+	dog := feedShape(t, s, "vision", "a small brown dog", 4, base.Add(time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	mintNamed := func(w, lang string, ms []recentMoment) {
+		for i := range 3 {
+			d.mintWords(w, lang, 0, []recentMoment{ms[i]}, false)
+		}
+	}
+	mintNamed("cat", "en", cat)
+	mintNamed("dog", "en", dog)
+	calm(d)
+	d.growConcepts()
+	d.growAbstractions() // cat names the cat, dog names the dog
+	// The cross-tongue word keeps company with both percepts, so it names both above the
+	// floor: the diluted cross-tongue case the uniform company cannot resolve.
+	for i := range 3 {
+		d.mintWords(word, "tr", 0, []recentMoment{cat[i], dog[i]}, false)
+	}
+	calm(d)
+	d.growConcepts() // names written; the abstraction pass is left to the caller
+	catFrag, dogFrag := d.resolveConcept("cat"), d.resolveConcept("dog")
+	if catFrag == nil || dogFrag == nil {
+		t.Fatalf("cat and dog should resolve to concepts: cat=%v dog=%v", catFrag, dogFrag)
+	}
+	catC, dogC = catFrag.ID, dogFrag.ID
+	wid = wordID(t, s, word)
+	catEp = groundedEpisode(t, s, catC)
+	dogEp = groundedEpisode(t, s, dogC)
+	return
+}
+
+// Without ostension the diluted cross-tongue name splits a phantom: its company is spread
+// evenly across two head-named percepts, so the company-based reading cannot tell which it
+// names and abstracts a parallel node beside them. This is the bug the ostension signal
+// removes; the test guards that the fix is load-bearing, not a no-op.
+func TestDilutedCrossTongueNameSplitsPhantomWithoutOstension(t *testing.T) {
+	d, s, _, _, _, _, _ := dilutedNameSetup(t, "kedi")
+	d.growAbstractions()
+	if abs, _ := s.ConceptByTemplate("abs:tr:kedi"); abs == nil {
+		t.Fatal("without ostension the diluted cross-tongue name should split a phantom abstraction")
+	}
+}
+
+// With ostension concentrated on the percept it was pointed at, the diluted cross-tongue
+// name binds to its referent rather than splitting a phantom: a name points at one thing
+// every telling, so its ostension piles up there even when a lingering scene-mate diluted
+// its company.
+func TestOstensionBindsDilutedCrossTongueNameToPercept(t *testing.T) {
+	d, s, wid, catC, _, catEp, _ := dilutedNameSetup(t, "kedi")
+	// kedi was shown over the cat every time it named, the salience the uniform company
+	// discards.
+	if err := s.SetLinkRel(wid, catEp, memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	d.growAbstractions()
+	if abs, _ := s.ConceptByTemplate("abs:tr:kedi"); abs != nil {
+		t.Fatal("a cross-tongue name whose ostension concentrates on one percept must not split a phantom")
+	}
+	if got := d.resolveConcept("kedi"); got == nil || got.ID != catC {
+		t.Fatalf("kedi should resolve to the cat it was pointed at, got %+v", got)
+	}
+	if w := edgeWeightRel(t, s, wid, catC, memory.RelNames); w != absNameWeight {
+		t.Fatalf("the ostended percept should be named at %.2f, got %.2f", absNameWeight, w)
+	}
+}
+
+// A category whose ostension spreads across the members it was said over still abstracts:
+// pointed at a different member each telling, it names no single referent, so the spread
+// ostension yields none and the company-based reading abstracts as before. This is what
+// keeps the signal from collapsing a real category into one member's name.
+func TestOstensionSpreadStillAbstractsCategory(t *testing.T) {
+	d, s, wid, _, _, catEp, dogEp := dilutedNameSetup(t, "hayvan")
+	if err := s.SetLinkRel(wid, catEp, memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(wid, dogEp, memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	d.growAbstractions()
+	if abs, _ := s.ConceptByTemplate("abs:tr:hayvan"); abs == nil {
+		t.Fatal("a category whose ostension spreads across members should still abstract")
+	}
+}
+
+// A diluted BASIC name binds to the percept it was pointed at, not the scene-mate it
+// shared company with. "cat" keeps company with both the cat and a dog that lingered
+// from the block before, enough to name the dog as firmly, but it was shown over the cat
+// every time it named, so its ostension binds it there. Without the signal the company
+// alone can tip a near-even basic name onto the wrong percept.
+func TestOstensionBindsDilutedBasicNameToPercept(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	cat := feedShape(t, s, "vision", "a small black cat", 4, base)
+	dog := feedShape(t, s, "vision", "a small brown dog", 4, base.Add(time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	catC, _ := s.ConceptByTemplate(attention.Normalize("a small black cat"))
+	dogC, _ := s.ConceptByTemplate(attention.Normalize("a small brown dog"))
+	if catC == nil || dogC == nil {
+		t.Fatalf("cat and dog should distil: cat=%v dog=%v", catC, dogC)
+	}
+	for i := range 3 {
+		d.mintWords("dog", "en", 0, []recentMoment{dog[i]}, false)
+	}
+	for i := range 3 {
+		d.mintWords("cat", "en", 0, []recentMoment{cat[i], dog[i]}, false)
+	}
+	calm(d)
+	d.growConcepts()
+	catEp := groundedEpisode(t, s, catC.ID)
+	if err := s.SetLinkRel(wordID(t, s, "cat"), catEp, memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	d.growAbstractions()
+	if got := d.resolveConcept("cat"); got == nil || got.ID != catC.ID {
+		t.Fatalf("cat should resolve to the cat it was pointed at, not the dog it shared a scene with, got %+v", got)
+	}
+	if w := edgeWeightRel(t, s, wordID(t, s, "cat"), catC.ID, memory.RelNames); w != absNameWeight {
+		t.Fatalf("the ostended percept should be named at %.2f, got %.2f", absNameWeight, w)
+	}
+}

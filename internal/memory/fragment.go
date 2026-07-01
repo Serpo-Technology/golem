@@ -82,6 +82,15 @@ const (
 	// string. A speech-act verb marks the discourse move it carries (clarify,
 	// recall), the first colon-class category moved into the graph.
 	RelMarks = "marks"
+	// RelOstends links a word to the percept it was pointed at when it was uttered
+	// to name it: the freshly attended episode of an ostensive naming, weighted by
+	// how fresh that percept was. It is the salience the uniform naming company
+	// throws away. A word's temporal company spreads to whatever lingered warm in
+	// the scene, so it cannot tell a name said over one constant percept from a
+	// category said over varying members; its ostension does, since only what is
+	// freshly pointed at earns the edge. The abstraction pass reads it to bind a
+	// diluted cross-tongue name to its referent rather than splitting a phantom.
+	RelOstends = "ostends"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."

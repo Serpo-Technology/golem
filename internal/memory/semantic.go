@@ -349,6 +349,49 @@ func (s *Store) NamingPairs() ([]NamingPair, error) {
 	return out, rows.Err()
 }
 
+// OstensionPair is one word-concept pairing the abstraction pass weighs apart from
+// the naming company: the ostensive salience a word accrued toward a concept, summed
+// over the percept episodes the concept grounds. A word points at one percept when it
+// names it, so a name concentrates its ostension on its referent while a category
+// spreads it across the members it was said over.
+type OstensionPair struct {
+	Word    uint64
+	Concept uint64
+	Mass    float64
+}
+
+// OstensionPairs aggregates a word's ostensive salience onto the concepts the pointed-at
+// percepts ground. A word keeps ostension with a concept through a lived episode the
+// concept grounds, the freshly attended percept of the naming that earned the edge.
+// Utterance and thought episodes count for nothing, the same exclusions naming makes,
+// so a word's ostension is its company with what it was shown over, never with its own
+// saying.
+func (s *Store) OstensionPairs() ([]OstensionPair, error) {
+	rows, err := s.db.Query(`
+		SELECT l1.from_id AS wid, c.id AS cid, SUM(l1.weight)
+		FROM links l1
+		JOIN fragments wd ON wd.id = l1.from_id AND wd.kind = ?
+		JOIN fragments e ON e.id = l1.to_id AND e.kind = ? AND e.channel NOT IN (?, ?)
+		JOIN links l2 ON l2.to_id = e.id AND l2.rel = ?
+		JOIN fragments c ON c.id = l2.from_id AND c.kind = ? AND c.category <> ?
+		WHERE l1.rel = ?
+		GROUP BY l1.from_id, c.id`,
+		KindWord, KindEpisodic, utteranceChannel, thoughtChannel, RelGrounds, KindConcept, categoryClass, RelOstends)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []OstensionPair
+	for rows.Next() {
+		var p OstensionPair
+		if err := rows.Scan(&p.Word, &p.Concept, &p.Mass); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // NamesMassByForm sums each word form's naming mass per language: the
 // total weight of the names edges its word nodes carry, keyed
 // "lang:form". The grammar competition reads it as the strength of

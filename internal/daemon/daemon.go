@@ -424,6 +424,7 @@ func (b *tokenBucket) full(now time.Time) bool {
 type recentMoment struct {
 	id       uint64
 	template string
+	channel  string // the sense it came in on, so ostension grounds only in a perceived percept, not a spoken one
 	at       time.Time
 	heat     float64 // how warm the concept lending this moment is, for weighting an attention bond
 }
@@ -1374,7 +1375,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		if linked := d.linkMoment(frag); len(linked) > 0 {
 			fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
 		}
-		d.recent = append(d.recent, recentMoment{id: frag.ID, template: frag.Template, at: frag.Time})
+		d.recent = append(d.recent, recentMoment{id: frag.ID, template: frag.Template, channel: frag.Channel, at: frag.Time})
 		if len(d.recent) > 32 {
 			d.recent = d.recent[len(d.recent)-32:]
 		}
@@ -2161,6 +2162,12 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// (else the dog's word keeps company with the horse and they blur).
 		if frame.Force == grammar.ForceStatement && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) {
 			d.bindAttention(words, attn)
+			// Record what the naming pointed at, the freshest percept, as a salience
+			// the abstraction pass reads apart from the uniform company: a name said
+			// over one constant percept ostends it alone, a category said over varying
+			// members spreads its ostension, so a cross-tongue name diluted by a
+			// lingering scene-mate binds to its referent rather than splitting a phantom.
+			d.recordOstension(words, time.Now(), res.FragmentID)
 		}
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)

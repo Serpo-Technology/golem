@@ -83,6 +83,12 @@ const (
 	// member however broad the category, while a one-shot co-namer sits an order below.
 	absPwcFloor = 0.10
 	absConcentration = 0.5  // a word this faithful to one concept is a name, an abstraction is not
+	// ostensiveDominance is the share of a word's whole ostension one percept must hold
+	// for the word to count as that percept's name. A name points at one thing every
+	// telling, so its ostension piles up there; a clear majority distinguishes it from a
+	// category, whose ostension spreads across the members it was said over, and from a
+	// near-even split, which withholds rather than guessing a referent.
+	ostensiveDominance = 0.6
 	absPerNight      = 4    // abstractions mintable in one night
 	absNameWeight    = 0.8  // the word's bond to its own abstraction
 	absRefreshFloor  = 2    // a core smaller than this has dissolved; stop refreshing and let decay take it
@@ -147,6 +153,25 @@ func (d *Daemon) growAbstractions() (born int) {
 		return 0
 	}
 	sort.Slice(words, func(i, j int) bool { return words[i].ID < words[j].ID })
+
+	// A word's ostensive salience, apart from its naming company: what it was pointed
+	// at when it was uttered to name something. A name concentrates it on one percept,
+	// a category spreads it across the members it was said over, so it tells the two
+	// apart where the uniform company, diluted by a lingering scene-mate, cannot.
+	ostPairs, err := d.store.OstensionPairs()
+	if err != nil {
+		fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+		return 0
+	}
+	ostByWord := map[uint64]map[uint64]float64{}
+	ostTotal := map[uint64]float64{}
+	for _, p := range ostPairs {
+		if ostByWord[p.Word] == nil {
+			ostByWord[p.Word] = map[uint64]float64{}
+		}
+		ostByWord[p.Word][p.Concept] += p.Mass
+		ostTotal[p.Word] += p.Mass
+	}
 
 	// Cross-tongue corroboration of category membership. A category taught in two
 	// tongues over the same percepts has its real members in BOTH tongues' company,
@@ -284,35 +309,44 @@ func (d *Daemon) growAbstractions() (born int) {
 		if d.namesRelation(w.Content, w.Lang) {
 			continue
 		}
+		coreIDs := make([]uint64, 0, len(core))
+		for _, cs := range core {
+			coreIDs = append(coreIDs, cs.concept)
+		}
+		named := d.headNamedPercepts(coreIDs)
+		// What the word was pointed at decides first, a basic name as much as a
+		// cross-tongue one: a word shown over one percept every telling is that percept's
+		// name, however its company spread to a scene-mate that lingered warm from the
+		// block before, so it binds there firmly rather than diluting across both or
+		// splitting a phantom beside them. A category, pointed at a different member each
+		// telling, spreads its ostension and clears no single referent, so it falls
+		// through to the company-based reading and abstracts.
+		if ref := d.ostensiveReferent(w.ID, named, ostByWord[w.ID], ostTotal[w.ID]); ref != 0 {
+			if err := d.store.SetLinkRel(w.ID, ref, memory.RelNames, absNameWeight); err != nil {
+				fmt.Fprintf(d.out, "ostensive name error: %v\n", err)
+			}
+			continue
+		}
 		// A basic word is a name, not a category: it abstracts nothing. When the
 		// word heads the caption of a percept in its own core ("cat" heads "a small
 		// black cat"), the constellation it gathered is its own kind standing among
 		// its neighbours, not a class above them, so no abstraction is minted and a
 		// shadow already grown stops refreshing and decays. A true superordinate
 		// ("animal") heads no member's caption and abstracts as before.
-		coreIDs := make([]uint64, 0, len(core))
-		for _, cs := range core {
-			coreIDs = append(coreIDs, cs.concept)
-		}
 		if d.headsCorePercept(w.Content, coreIDs) {
 			continue
 		}
-		// A word that names a single basic-level percept is that percept's name in this
-		// tongue, not a category over it. The lone head-named percept in a word's core is
-		// that percept: "kurt" names the wolf "wolf" already names, beside a nameless
-		// shape, so both tongues share one node rather than splitting a parallel
-		// abs:tr:kurt the propositions never reach. When the company spreads across
-		// SEVERAL named percepts -- a cross-tongue name diluted by the scene it shared or
-		// the standards it was compared against ("fil" warm beside tarsier and baboon,
-		// "gergedan" compared against the elephant) -- the percept it ALREADY names, bound
-		// when a telling named it, is its true referent, apart from the company it never
-		// named. A category names many percepts and keeps none as its sole referent, so it
-		// is left to abstract.
+		// With no ostension to point the way, a word that names a single basic-level
+		// percept is taken as that percept's name in this tongue, not a category over it:
+		// "kurt" names the wolf "wolf" already names, beside a nameless shape, so both
+		// tongues share one node rather than splitting a parallel abs:tr:kurt the
+		// propositions never reach. When the company spreads across SEVERAL named percepts
+		// and exactly one is already owned, that owned percept is the referent; an even
+		// split with no ostension to break it is left to abstract.
 		existing := make(map[uint64]float64, len(byWord[w.ID]))
 		for _, p := range byWord[w.ID] {
 			existing[p.Concept] = p.Existing
 		}
-		named := d.headNamedPercepts(coreIDs)
 		target := uint64(0)
 		switch {
 		case len(named) == 1:
@@ -473,6 +507,30 @@ func (d *Daemon) headNamedPercepts(coreIDs []uint64) []uint64 {
 		}
 	}
 	return out
+}
+
+// ostensiveReferent returns the head-named percept a word was pointed at when it was
+// uttered to name something, when one clearly dominates the word's ostension. A name
+// concentrates its ostension on its referent, so even a name diluted across several
+// percepts by a scene it shared binds to the one it was actually shown over; a category,
+// pointed at a different member each telling, spreads its ostension and yields none, as
+// does a word never said ostensively. The candidate is sought among the head-named
+// percepts only, so the referent is a thing seen, and it must hold a clear majority of
+// the word's whole ostension, so a near-even split withholds rather than guessing.
+func (d *Daemon) ostensiveReferent(word uint64, named []uint64, ost map[uint64]float64, total float64) uint64 {
+	if total <= 0 || len(ost) == 0 {
+		return 0
+	}
+	best, bestMass := uint64(0), 0.0
+	for _, id := range named {
+		if m := ost[id]; m > bestMass {
+			best, bestMass = id, m
+		}
+	}
+	if best != 0 && bestMass >= ostensiveDominance*total {
+		return best
+	}
+	return 0
 }
 
 // wordNamesConcept reports whether a word form names a concept directly, the test
@@ -977,6 +1035,63 @@ func (d *Daemon) bindAttention(words []*memory.Fragment, anchors []recentMoment)
 			d.store.Link(a.id, word.ID, wa)
 		}
 	}
+}
+
+// recordOstension records what a word was pointed at when it was uttered to name
+// something: the freshest percept of the moment, weighted by how fresh it was. It is
+// the salience the uniform naming company discards. The uniform bonds spread a word
+// across whatever lingered warm in the scene, so they cannot tell a name said over
+// one constant percept from a category said over varying members; what was freshly
+// attended can, and only it earns this edge. The bond grounds in the percept episode,
+// not a concept, so it works at genesis when the percept has no concept yet; the
+// abstraction pass joins it through to the concept the episode grounds. Only the
+// single freshest perceptual moment is taken: a scene-mate lingering from the block
+// before is never what a naming points at, so it never becomes a word's referent.
+func (d *Daemon) recordOstension(words []*memory.Fragment, now time.Time, exclude uint64) {
+	var fresh *recentMoment
+	for i := len(d.recent) - 1; i >= 0; i-- {
+		r := d.recent[i]
+		if now.Sub(r.at) > attentionRecency {
+			break
+		}
+		if r.id == exclude || r.channel == utteranceChannel || r.channel == thoughtChannel {
+			continue
+		}
+		m := r
+		fresh = &m
+		break
+	}
+	if fresh == nil {
+		return
+	}
+	w := linkWeight * ostensiveRecency(now.Sub(fresh.at))
+	if w <= 0 {
+		return
+	}
+	for _, word := range words {
+		if word.ID == fresh.id {
+			continue
+		}
+		if err := d.store.LinkRel(word.ID, fresh.id, memory.RelOstends, w); err != nil {
+			continue
+		}
+	}
+}
+
+// ostensiveRecency maps a percept's age at the moment of a naming to the share of an
+// ostension bond it earns: the whole bond when it is being looked at, nothing once it
+// has left the attention window. The freshest percept is what a naming points at, so a
+// word said over a percept just shown earns a near-full edge and one fading from the
+// scene before earns a faint one.
+func ostensiveRecency(age time.Duration) float64 {
+	w := 1 - age.Seconds()/attentionRecency.Seconds()
+	if w < 0 {
+		return 0
+	}
+	if w > 1 {
+		return 1
+	}
+	return w
 }
 
 // attentionWeight maps a concept's heat to how much of an attention bond it
