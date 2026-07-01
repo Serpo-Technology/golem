@@ -91,6 +91,13 @@ const (
 	// auditable back to who said it and its weight can be scaled by that source's
 	// trust. A moment with no source edge was the local operator's, trusted.
 	RelSource = "source"
+	// RelToldIsA records a membership GOLEM was TOLD but has not grounded: told "a zebra
+	// is an animal", it links the zebra to the animal category so an is-a question reads a
+	// hedged yes. It is kept apart from the grounding edges the categories are built from
+	// (RelGrounds), so a told membership is answered defeasibly without ever pulling a
+	// thing into a category the way a lived grounding does; the grounded machinery never
+	// reads it.
+	RelToldIsA = "toldisa"
 	// RelOstends links a word to the percept it was pointed at when it was uttered
 	// to name it: the freshly attended episode of an ostensive naming, weighted by
 	// how fresh that percept was. It is the salience the uniform naming company

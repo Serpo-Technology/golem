@@ -1325,17 +1325,81 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	if d.isCategory(member) && !d.isCategory(cat) {
 		member, cat = cat, member
 	}
-	yes := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
+	// Grounded membership answers firmly; a membership only TOLD answers a hedged yes,
+	// since it rests on the telling, not on what GOLEM has seen the thing to be.
+	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
+	told := !grounded && d.isCategory(cat) && d.toldIsA(member.ID, cat.ID)
+	yes := grounded || told
 	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
 	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
 	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 		Agent: grammar.Term{Phrase: memberName}, Action: grammar.Term{Phrase: "be"},
 		Patient: grammar.Term{Phrase: catName}, Negate: !yes}, d.chem.Snapshot())
+	if told {
+		return upperFirst(d.gram.Word(frame.Lang, "probably")) + ", " + lowerFirst(clause), true
+	}
 	word := d.gram.Word(frame.Lang, "yes")
 	if !yes {
 		word = d.gram.Word(frame.Lang, "no")
 	}
 	return upperFirst(word) + ", " + lowerFirst(clause), true
+}
+
+// toldIsA reports whether GOLEM was told the member belongs to the category, directly or
+// through a told membership in a category grounded under it (told a zebra is an animal,
+// and an animal grounded under a thing, a zebra is told to be a thing too). It reads the
+// told-membership edges alone, never the groundings the categories are built from, so a
+// told fact answers defeasibly without joining the grounded hierarchy.
+func (d *Daemon) toldIsA(memberID, catID uint64) bool {
+	edges, err := d.store.LinksFromRel([]uint64{memberID}, memory.RelToldIsA)
+	if err != nil {
+		return false
+	}
+	for _, e := range edges {
+		if e.To == catID || d.isA(e.To, catID) {
+			return true
+		}
+	}
+	return false
+}
+
+// planToldIsA records a membership GOLEM is told: "a zebra is an animal" links the zebra
+// to the animal category defeasibly, so an is-a question reads a hedged yes, WITHOUT the
+// told fact feeding the grounded category machinery (a told membership is never a
+// grounding, so it cannot pull a thing into a category the way a lived percept does). It
+// fires only on a copular statement whose subject is a known concept and whose predicate
+// is a category the subject does not already ground under; a naming ("they are fruit"), a
+// comparison, a placement, or an already-grounded membership passes through.
+func (d *Daemon) planToldIsA(frame grammar.Frame) (string, bool) {
+	if frame.Force != grammar.ForceStatement || frame.Action.Phrase != "be" ||
+		frame.Negate || frame.Comparative || frame.LocPrep != "" {
+		return "", false
+	}
+	member, cat := frame.Agent.Concept, frame.Patient.Concept
+	if cat == nil || !d.isCategory(cat) {
+		return "", false // the predicate is not a known category: a naming or a property, not membership
+	}
+	if member != nil && (d.isCategory(member) || member.ID == cat.ID || d.isA(member.ID, cat.ID)) {
+		return "", false // a category subject, an identity, or already grounded: leave it
+	}
+	if member == nil {
+		// The thing is new: introduce it as a concept so the told membership has something
+		// to hold, the way an ordinary told proposition mints an unknown subject.
+		member = d.mintNounConcept(frame.Agent.Phrase, frame.Lang)
+		if member == nil {
+			return "", false
+		}
+	}
+	if err := d.store.LinkRel(member.ID, cat.ID, memory.RelToldIsA, comprehendWeight); err != nil {
+		return "", false
+	}
+	d.noteFocus(member)
+	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
+	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
+	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+		Agent: grammar.Term{Phrase: memberName}, Action: grammar.Term{Phrase: "be"},
+		Patient: grammar.Term{Phrase: catName}}, d.chem.Snapshot())
+	return upperFirst(d.gram.Word(frame.Lang, "isee")) + " " + lowerFirst(clause), true
 }
 
 // planComparative answers a comparison "is the cat bigger than the mouse" against

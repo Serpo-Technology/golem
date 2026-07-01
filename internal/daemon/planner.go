@@ -713,6 +713,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "A zebra is an animal": a told membership, recorded defeasibly so is-a reads a
+	// hedged yes, before the statement path could write it as a plain "be" proposition.
+	// The told fact never joins the grounded categories, so it cannot pull a thing in.
+	if ans, ok := d.planToldIsA(frame); ok {
+		return ans, nil
+	}
+
 	// An elliptical follow-up to a role question inherits its relation and asks
 	// it of a new referent: "what about the dog" after "what did the cat chase"
 	// walks chase from the dog. The thread is read and cleared here; a role
