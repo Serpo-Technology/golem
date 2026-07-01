@@ -31,6 +31,7 @@ const (
 	featureSeedConcept   = 2    // concepts an overlap recall may land on
 	senseSynonymFloor    = 0.3  // how firmly a word must name a concept for a co-namer to count as its synonym
 	senseSynonymCap      = 6    // synonyms a token expands to, so a loosely-used word cannot pull in a crowd
+	synonymUsageFloor    = 0.85 // how alike two concepts' usage must be to count as synonyms in the vector complement: near-identity, not mere kinship
 	universalFeatureFrac = 0.8  // a feature carried by this fraction of concepts discriminates nothing
 	universalMinConcepts = 10   // below this a shared feature is the signal, not universal noise
 	// A discovered feature is a concept's conceptual company reified: a
@@ -543,12 +544,14 @@ func (d *Daemon) conceptCompany(concepts []*memory.Fragment) (map[uint64][]featu
 // or substring connects them. The matched feature nodes come back as
 // mediators, so the reply shows exactly which shared attributes carried
 // the match.
-// senseSynonyms returns the other words that firmly share a sense with a token: the words
-// that co-name a concept the token itself firmly names. Two words naming one concept are
-// synonyms by co-reference (a colour term and the born-in word for its cell, a noun and its
-// other-tongue name), so recognition can match through the shared sense rather than the
-// surface form. Gated by naming firmness and capped, so a word used loosely across many
-// things does not pull in unrelated company.
+// senseSynonyms returns the other words that share a sense with a token: the words that
+// firmly name a concept the token itself firmly names (co-reference), and the words that
+// name a concept whose USAGE is near-identical to one of those (the vector complement).
+// Co-reference catches an exact shared sense (a colour term and the born-in word for its
+// cell, a noun and its other-tongue name); the usage complement catches a synonym the
+// graph never joined but that keeps the same company (model and llm, taught over the same
+// relations), which the graph co-reference cannot see. Gated by naming firmness, a high
+// usage-similarity floor, and capped, so a word used loosely does not pull in a crowd.
 func (d *Daemon) senseSynonyms(token string) []string {
 	words, err := d.store.WordNodesByForms([]string{token})
 	if err != nil || len(words) == 0 {
@@ -573,7 +576,11 @@ func (d *Daemon) senseSynonyms(token string) []string {
 	if len(senses) == 0 {
 		return nil
 	}
-	conamers, err := d.store.LinksToRel(senses, memory.RelNames)
+	// The words to expand to are the namers of the senses (co-reference) and of the
+	// concepts whose usage is near-identical to a sense (the vector complement).
+	related := append([]uint64{}, senses...)
+	related = append(related, d.usageNear(senses)...)
+	conamers, err := d.store.LinksToRel(related, memory.RelNames)
 	if err != nil {
 		return nil
 	}
@@ -595,6 +602,38 @@ func (d *Daemon) senseSynonyms(token string) []string {
 		out = append(out, f.Content)
 		if len(out) >= senseSynonymCap {
 			break
+		}
+	}
+	return out
+}
+
+// usageNear returns the concepts whose usage is near-identical to one of the given
+// senses: the vector complement to graph co-reference, which finds a synonym the graph
+// never joined but that keeps the same company (model and llm fill the same roles of the
+// same relations, so their usage vectors nearly coincide). The floor is high, so this is
+// near-identity rather than the looser kinship the resemblance walk already blends. A
+// sense with no usage vector (a colour cell, a fresh concept) contributes nothing, so the
+// whole-space read is paid only when a sense actually carries usage.
+func (d *Daemon) usageNear(senses []uint64) []uint64 {
+	var out []uint64
+	var all map[uint64][]float32
+	loaded := false
+	for _, s := range senses {
+		vec, ok := d.store.UsageVector(s, usageSelf)
+		if !ok {
+			continue
+		}
+		if !loaded {
+			all, _ = d.store.UsageVectorsByRole(usageSelf)
+			loaded = true
+		}
+		for id, v := range all {
+			if id == s {
+				continue
+			}
+			if memory.Cosine(vec, v) >= synonymUsageFloor {
+				out = append(out, id)
+			}
 		}
 	}
 	return out

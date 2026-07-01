@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golem/internal/limbic"
+	"golem/internal/memory"
 )
 
 // redBall draws a filled red disc on white, the shape and colour "a round red ball" is
@@ -141,6 +144,50 @@ func TestSynonymRecognitionThroughSharedSense(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("a crimson percept should recognize the red ball through the shared colour sense; cap=%q", cap)
+	}
+}
+
+// The vector layer complements graph co-reference: two words the graph never joined but
+// whose concepts keep the same company (model and llm, taught over the same relations)
+// are found as synonyms through their near-identical usage vectors.
+func TestUsageVectorSynonymsComplementCoReference(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(gloss, tmpl string) uint64 {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: gloss, Template: tmpl, Category: "noun", Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c.ID
+	}
+	name := func(form string, cid uint64) {
+		w, _, err := s.WordNode(form, "en", limbic.State{}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(w.ID, cid, memory.RelNames, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	model := mk("model", "concept:en:model")
+	llm := mk("llm", "concept:en:llm")
+	name("model", model)
+	name("llm", llm)
+	// Near-identical usage: they fill the same roles of the same relations.
+	if err := s.SetUsageVector(model, usageSelf, []float32{0.6, 0.5, 0.4, 0.3}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUsageVector(llm, usageSelf, []float32{0.61, 0.49, 0.41, 0.29}); err != nil {
+		t.Fatal(err)
+	}
+	syns := d.senseSynonyms("model")
+	found := false
+	for _, w := range syns {
+		if w == "llm" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("model and llm keep the same company, so vector synonymy should link them; got %v", syns)
 	}
 }
 
