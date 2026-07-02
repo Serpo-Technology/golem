@@ -109,10 +109,11 @@ func (d *Daemon) planColorNaming(frame grammar.Frame, raw string) (string, bool)
 // the way the rest of the substrate is, not a foreign model's verdict.
 
 const (
-	visionGrid      = 48   // the eye samples the image down to a grid this wide, enough for colour and gross shape
-	visionFgDist    = 0.22 // a sample this far from the background colour belongs to the subject, not the ground
-	visionRoundFill = 0.62 // a subject filling this much of its box but leaving its corners empty reads as round
-	visionSquareCap = 0.90 // above this its box is nearly full, so it is a block, not round
+	visionGrid        = 48   // the eye samples the image down to a grid this wide, enough for colour and gross shape
+	visionTextureGrid = 96   // texture is read on a finer grid so marks smaller than a colour cell still register
+	visionFgDist      = 0.22 // a sample this far from the background colour belongs to the subject, not the ground
+	visionRoundFill   = 0.62 // a subject filling this much of its box but leaving its corners empty reads as round
+	visionSquareCap   = 0.90 // above this its box is nearly full, so it is a block, not round
 	// Texture: how varied a surface must be to count as patterned, how much a pattern
 	// must flip to have a direction, and how lopsided the two axes' flip rates must be to
 	// read as bands (striped) rather than scatter (spotted).
@@ -152,7 +153,24 @@ func (d *Daemon) measure(data []byte) (sighting, bool) {
 		fg, box, fill = allPixels(px)
 	}
 	c := meanColor(fg)
-	return sighting{color: c, cell: d.classifyColour(c), shape: shapeWord(box, fill), texture: textureWord(fg), mime: "image/" + format}, true
+	return sighting{color: c, cell: d.classifyColour(c), shape: shapeWord(box, fill), texture: measureTexture(img), mime: "image/" + format}, true
+}
+
+// measureTexture reads the coarse pattern on a grid finer than colour and shape use, so
+// marks smaller than a colour cell, which the coarse sample blurs into a flat mean, still
+// register. The subject is found again at the finer resolution the same way, by standing
+// out from the border colour, and its pattern is read off those samples.
+func measureTexture(img image.Image) string {
+	fine := sampleGrid(img, visionTextureGrid)
+	if len(fine) == 0 {
+		return ""
+	}
+	bg := borderColor(fine)
+	fg, _, _ := foreground(fine, bg)
+	if len(fg) == 0 {
+		fg, _, _ = allPixels(fine)
+	}
+	return textureWord(fg)
 }
 
 // render puts GOLEM's own words to a sighting: a noun phrase of the attributes it made
@@ -544,9 +562,9 @@ func textureWord(fg []pixel) string {
 // way the closed-class words are given; it is the one built-in the eye leans on, and it
 // can be refined by grounding later.
 type namedColor struct {
-	name    string
-	hMin    float64
-	hMax    float64
+	name string
+	hMin float64
+	hMax float64
 }
 
 var hueBands = []namedColor{

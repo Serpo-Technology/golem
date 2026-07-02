@@ -227,7 +227,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	if frame.Lang == "en" && !frame.Comparative && d.comprehendPartWhole(raw, momentID) {
 		return true
 	}
-	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, d.roleFit)
+	m, ok := d.gram.Comprehend(frame.Lang, raw, d.resolveIn(frame.Lang), d.roleFit)
 	if !ok {
 		return false
 	}
@@ -240,7 +240,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// and resolveCasedNoun, differing only in how the construction is selected, so the role spans the
 	// minting reads are the same. So preferring the walk is behaviour-preserving while making it the
 	// source of the read.
-	if walked, wok := d.gram.ComprehendByTraversal(frame.Lang, raw, d.resolveConcept, d.roleFit); wok {
+	if walked, wok := d.gram.ComprehendByTraversal(frame.Lang, raw, d.resolveIn(frame.Lang), d.roleFit); wok {
 		if meaningsAgree(walked, m) {
 			m = walked
 		} else {
@@ -254,7 +254,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// unseat it for whatever featured concept reads as the better agent, storing
 	// the cat as having chased the speaker. Re-read it with word order alone.
 	if d.meaningNamesParticipant(m) {
-		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, nil); ok2 {
+		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveIn(frame.Lang), nil); ok2 {
 			m = m2
 		}
 	}
@@ -264,7 +264,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// wolf chased a rabbit" becoming the rabbit chasing). When the fillers are that
 	// alike, re-read with word order alone, the same recourse a participant clause takes.
 	if d.argsIndistinctForFit(m) {
-		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveConcept, nil); ok2 {
+		if m2, ok2 := d.gram.Comprehend(frame.Lang, raw, d.resolveIn(frame.Lang), nil); ok2 {
 			m = m2
 		}
 	}
@@ -1006,11 +1006,11 @@ func (d *Daemon) patientFocus(frame grammar.Frame) *memory.Fragment {
 // form does. A patient read off a clause keeps its surface case, which the bare resolve does
 // not see through.
 func (d *Daemon) resolveCased(phrase, lang string) *memory.Fragment {
-	if r := d.resolveConcept(phrase); r != nil {
+	if r := d.resolveConceptLang(phrase, lang); r != nil {
 		return r
 	}
 	for _, base := range d.gram.CaseStems(lang, phrase) {
-		if r := d.resolveConcept(base); r != nil {
+		if r := d.resolveConceptLang(base, lang); r != nil {
 			return r
 		}
 	}
@@ -1189,7 +1189,7 @@ func (d *Daemon) planRepairFact(frame grammar.Frame, raw string, momentID uint64
 	// A correction states its direction explicitly, so role-fit is given no say
 	// (as with a polar question): "no, the dog chased the rabbit" means the dog
 	// chased the rabbit, not the order role-fit would prefer on a trained graph.
-	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveIn(frame.Lang), nil)
 	if !ok {
 		return "", false
 	}
@@ -1369,11 +1369,19 @@ func (d *Daemon) toldIsA(memberID, catID uint64) bool {
 // grounding, so it cannot pull a thing into a category the way a lived percept does). It
 // fires only on a copular statement whose subject is a known concept and whose predicate
 // is a category the subject does not already ground under; a naming ("they are fruit"), a
-// comparison, a placement, or an already-grounded membership passes through.
-func (d *Daemon) planToldIsA(frame grammar.Frame) (string, bool) {
+// comparison, a placement, or an already-grounded membership passes through. The record is
+// gated and scaled by the source's trust: a source GOLEM has come to distrust (below the
+// trust a freshly-met peer starts at) cannot inject a category membership at all, and a
+// low-trust source's edge is written weak so it fades unless the standing is earned, the
+// same defeasible treatment every told claim gets.
+func (d *Daemon) planToldIsA(frame grammar.Frame, momentID uint64) (string, bool) {
 	if frame.Force != grammar.ForceStatement || frame.Action.Phrase != "be" ||
 		frame.Negate || frame.Comparative || frame.LocPrep != "" {
 		return "", false
+	}
+	trust := d.momentTrust(momentID)
+	if trust < defaultSourceTrust {
+		return "", false // a distrusted source's category claim is not taken as membership
 	}
 	member, cat := frame.Agent.Concept, frame.Patient.Concept
 	if cat == nil || !d.isCategory(cat) {
@@ -1390,7 +1398,7 @@ func (d *Daemon) planToldIsA(frame grammar.Frame) (string, bool) {
 			return "", false
 		}
 	}
-	if err := d.store.LinkRel(member.ID, cat.ID, memory.RelToldIsA, comprehendWeight); err != nil {
+	if err := d.store.LinkRel(member.ID, cat.ID, memory.RelToldIsA, comprehendWeight*trust); err != nil {
 		return "", false
 	}
 	d.noteFocus(member)
@@ -1976,7 +1984,7 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// the cat. The asker's word order fixes which referent is agent, so role-fit
 	// is given no say here; letting it reorder by learned animacy would answer a
 	// different question than the one asked.
-	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveIn(frame.Lang), nil)
 	if !ok {
 		return gap()
 	}
@@ -2015,7 +2023,7 @@ func (d *Daemon) planSuppose(frame grammar.Frame, raw string) (string, bool) {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 			Action: grammar.Term{Phrase: "know"}, Negate: true, Patient: grammar.Term{Phrase: "that"}}, d.chem.Snapshot()), true
 	}
-	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveConcept, nil)
+	m, ok := d.gram.Comprehend(frame.Lang, clause, d.resolveIn(frame.Lang), nil)
 	if !ok {
 		return cannot()
 	}

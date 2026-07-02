@@ -245,6 +245,51 @@ func TestTextureWordReadsPattern(t *testing.T) {
 	}
 }
 
+// stripedRectPNG draws a subject filled with horizontal bands of a given pitch on white,
+// so the marks can be made finer than the colour/shape grid resolves.
+func stripedRectPNG(t *testing.T, w, h, x0, y0, x1, y1, pitch int, a, b color.RGBA) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			c := color.RGBA{255, 255, 255, 255}
+			if x >= x0 && x < x1 && y >= y0 && y < y1 {
+				if (y/pitch)%2 == 0 {
+					c = a
+				} else {
+					c = b
+				}
+			}
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// The eye reads fine bands as striped end to end: a subject striped at a pitch finer than
+// the colour/shape grid resolves is blurred to a flat mean by that coarse sample, but the
+// finer texture grid still catches the bands. A solid subject stays plain.
+func TestMeasureReadsFineTexture(t *testing.T) {
+	d, _ := testDaemon(t)
+	dark, light := color.RGBA{40, 40, 40, 255}, color.RGBA{160, 160, 160, 255} // both clearly the subject, not the white ground
+	striped := stripedRectPNG(t, 200, 200, 40, 40, 160, 160, 2, dark, light)   // 4px period, below the 48-grid
+	s, ok := d.measure(striped)
+	if !ok {
+		t.Fatal("measure should read the striped subject")
+	}
+	if s.texture != "striped" {
+		t.Fatalf("fine bands should read striped on the finer grid; got %q", s.texture)
+	}
+	solid := rectPNG(t, 200, 200, 40, 40, 160, 160, color.RGBA{40, 40, 40, 255})
+	if s2, ok := d.measure(solid); !ok || s2.texture != "" {
+		t.Fatalf("a solid subject should stay plain; got %q (ok=%v)", s2.texture, ok)
+	}
+}
+
 func rectPNG(t *testing.T, w, h, x0, y0, x1, y1 int, fg color.RGBA) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))

@@ -2628,6 +2628,95 @@ func TestResolveConceptPrefersPerceptOverBasicLevelShadow(t *testing.T) {
 	}
 }
 
+// A colour word that also names a real thing (the fruit "orange") must resolve to
+// the thing, not to the perceptual colour cell the word innately names. The cell
+// edge is immortal (links into a class are decay-spared and re-seeded at boot),
+// while the fruit's name decays after its episodes fade, so late in a long grow the
+// cell edge out-votes the fruit unless it is set aside. A bare colour word that names
+// only its cell must still resolve to the cell, through the fallback.
+func TestResolveConceptPrefersThingOverColourCell(t *testing.T) {
+	d, s := testDaemon(t)
+	mkConcept := func(template, content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision", Content: content,
+			Template: template, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	fruit := mkConcept("a bright dimpled orange", "a bright dimpled orange")
+	cell := mkConcept("percept:col:orange", "col:orange") // the innate colour sense-cell
+	if d.colourCells == nil {
+		d.colourCells = map[uint64]bool{}
+	}
+	d.colourCells[cell.ID] = true
+	orangeW, _, err := s.WordNode("orange", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The immortal cell edge has ratcheted above the fruit's decaying name: the exact
+	// late-grow hijack. Without the set-aside the perceptless cell wins the vote.
+	s.SetLinkRel(orangeW.ID, fruit.ID, memory.RelNames, 0.72)
+	s.SetLinkRel(orangeW.ID, cell.ID, memory.RelNames, 0.85)
+	if got := d.resolveConcept("orange"); got == nil || got.ID != fruit.ID {
+		t.Fatalf("the fruit noun must win over its perceptless colour cell: %+v", got)
+	}
+
+	// A colour word naming only its cell must still resolve to the cell (fallback).
+	redCell := mkConcept("percept:col:red", "col:red")
+	d.colourCells[redCell.ID] = true
+	redW, _, err := s.WordNode("red", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(redW.ID, redCell.ID, memory.RelNames, 0.5)
+	if got := d.resolveConcept("red"); got == nil || got.ID != redCell.ID {
+		t.Fatalf("a bare colour word must still resolve to its cell via fallback: %+v", got)
+	}
+}
+
+// A phrase read in a tongue resolves through that tongue's word node: a spurious
+// cross-language shadow of the same form (an English "kedi" naming a wren, minted when an
+// untagged Turkish clause misdetects) must not pool its votes with the real Turkish "kedi"
+// and win the resolution. With no tongue given, both nodes still pool (the prior behavior).
+func TestResolveConceptPrefersTongue(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(content string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision", Content: content,
+			Template: content, Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	cat := mk("a small black cat")
+	wren := mk("a small gray wren")
+	name := func(form, lang string, cid uint64, w float64) {
+		wn, _, err := s.WordNode(form, lang, d.chem.Snapshot(), time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(wn.ID, cid, memory.RelNames, w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The real Turkish "kedi" names the cat; a spurious English shadow names the wren, at
+	// the same weight, with the wren's higher id so it would win the tongue-blind tie.
+	name("kedi", "tr", cat.ID, 0.784)
+	name("kedi", "en", wren.ID, 0.784)
+
+	if got := d.resolveConceptLang("kedi", "tr"); got == nil || got.ID != cat.ID {
+		t.Fatalf("read in Turkish, kedi must resolve to the cat, not the English shadow's wren: %+v", got)
+	}
+	if got := d.resolveConceptLang("kedi", "en"); got == nil || got.ID != wren.ID {
+		t.Fatalf("read in English, kedi must resolve through the English node: %+v", got)
+	}
+	// Tongue-blind, the higher-id shadow still wins the tie: the prior behavior is unchanged.
+	if got := d.resolveConcept("kedi"); got == nil || got.ID != wren.ID {
+		t.Fatalf("with no tongue, resolution pools both nodes as before: %+v", got)
+	}
+}
+
 // Role-fit reads animacy from resemblance, never a concept's own role-count: a
 // concept that has only ever been a patient must not be locked into that role,
 // because counting its history fed back, a thing once chased reading as never a

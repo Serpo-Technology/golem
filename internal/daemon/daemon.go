@@ -2206,7 +2206,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// Detection reads the tongue from the closed class; the spoken --lang tag is
 		// the fallback, applied during the parse so a tongue's constructions are read
 		// even when the clause carries no function word to detect it by.
-		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveConcept)
+		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveIn(req.Lang))
 		if frame.Lang == "" {
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
@@ -2218,7 +2218,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// and the unresolved words a curiosity follow-up asks after) is carried across. A wh
 		// role-question keeps the coded frame: its roles and that residual are read off the tokens,
 		// so its cutover waits on the planner reading the meaning graph rather than the frame.
-		if walked, wok := d.gram.ParseByTraversal(frame.Lang, req.Content, d.resolveConcept); wok {
+		if walked, wok := d.gram.ParseByTraversal(frame.Lang, req.Content, d.resolveIn(frame.Lang)); wok {
 			if !framesAgree(walked, frame) {
 				fmt.Fprintf(d.out, "parse traversal mismatch: %q\n", req.Content)
 			} else if walked.Wh == "" {

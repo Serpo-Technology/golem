@@ -206,6 +206,17 @@ func (p *Params) parse(lang string, tokens []string, question bool, resolve func
 			f.Patient = resolveTerm(standard, resolve)
 			return f
 		}
+		// Turkish drops the copula and asks an is-a with the interrogative particle
+		// ("kedi bir hayvan mı"), a shape verb-medial subject-auxiliary inversion cannot
+		// reach. The subject fills the patient and the predicate the agent, the post-copula
+		// order the is-a planner reads, so the reasoning is the same once the roles are set.
+		if member, category, ok := p.trCopularQuestionParts(tokens); ok {
+			f.Force = ForceQuestion
+			f.Action = Term{Phrase: "be"}
+			f.Patient = resolveTerm(member, resolve)
+			f.Agent = resolveTerm(category, resolve)
+			return f
+		}
 	}
 
 	type span struct {

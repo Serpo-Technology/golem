@@ -39,10 +39,27 @@ const (
 	animacyBindBonus = 0.5
 )
 
-// resolveConcept maps a surface phrase to its strongest concept: first
-// through words that name one, then by gloss content, the same fallback
-// recall uses for phrases nobody taught yet.
+// resolveConcept maps a surface phrase to its strongest concept, tongue-agnostically:
+// first through words that name one, then by gloss content, the same fallback recall uses
+// for phrases nobody taught yet.
 func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
+	return d.resolveConceptLang(phrase, "")
+}
+
+// resolveIn binds resolveConcept to a tongue, so a clause read in one language resolves its
+// words through that language's word nodes, the closure the grammar's resolver callback wants.
+func (d *Daemon) resolveIn(lang string) func(string) *memory.Fragment {
+	return func(phrase string) *memory.Fragment { return d.resolveConceptLang(phrase, lang) }
+}
+
+// resolveConceptLang is resolveConcept aware of the tongue the phrase was said in. When a
+// form has a word node in that tongue, a same-form node of ANOTHER tongue is set aside for
+// this resolution: a spurious cross-language shadow (an English "kedi" minted when an
+// untagged Turkish clause misdetects, naming whatever was warm) must not pool its votes
+// with the real Turkish "kedi" and tip the answer. A form with no node in the tongue keeps
+// all its nodes, so a word referred to across tongues still resolves. lang "" pools every
+// tongue, the prior behavior.
+func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 	// A deictic pronoun points at a participant, not a thing in the world: from the
 	// speaker's side "I" is the user and "you" is GOLEM, so a clause about the
 	// speakers grounds in them and is reasoned over like any other.
@@ -53,6 +70,9 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 	}
 	tokens, _ := grammar.Tokenize(phrase)
 	words, err := d.store.WordNodesByForms(tokens)
+	if err == nil && lang != "" && len(words) > 1 {
+		words = preferTongue(words, lang)
+	}
 	if err == nil && len(words) > 0 {
 		ids := make([]uint64, 0, len(words))
 		for _, w := range words {
@@ -110,6 +130,15 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 					if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
 						bestAny, bestAnyW = f.ID, w
 					}
+					// A colour sense-cell (percept:col:*) is a perceptual class a
+					// colour word names, not a thing in the world. When the same word
+					// also names a real percept (the fruit "orange" beside the colour),
+					// the thing is the referent, so the innate cell edge, immortal
+					// because links into a class are decay-spared, is set aside. bestAny
+					// still lets a bare colour word that names only its cell resolve.
+					if d.colourCells[f.ID] {
+						continue
+					}
 					if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
 						continue
 					}
@@ -132,6 +161,26 @@ func (d *Daemon) resolveConcept(phrase string) *memory.Fragment {
 		return concepts[0]
 	}
 	return nil
+}
+
+// preferTongue keeps, for each surface form, only the word nodes of the given tongue when
+// that form has one, so a same-form node of another tongue does not vote in a resolution
+// read in this tongue. A form with no node in the tongue keeps all of its nodes, so a word
+// used across tongues still resolves rather than vanishing.
+func preferTongue(words []*memory.Fragment, lang string) []*memory.Fragment {
+	hasSame := map[string]bool{}
+	for _, w := range words {
+		if w.Lang == lang {
+			hasSame[w.Content] = true
+		}
+	}
+	out := words[:0:0]
+	for _, w := range words {
+		if !hasSame[w.Content] || w.Lang == lang {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // abstractionLemma reads the word an abstraction generalizes, the lemma in its
@@ -716,7 +765,7 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// "A zebra is an animal": a told membership, recorded defeasibly so is-a reads a
 	// hedged yes, before the statement path could write it as a plain "be" proposition.
 	// The told fact never joins the grounded categories, so it cannot pull a thing in.
-	if ans, ok := d.planToldIsA(frame); ok {
+	if ans, ok := d.planToldIsA(frame, momentID); ok {
 		return ans, nil
 	}
 

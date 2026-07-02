@@ -506,6 +506,45 @@ func (p *Params) trComparativeParts(tokens []string) (rel, subject, standard str
 	return rel, subject, standard, ask, true
 }
 
+// trCopularQuestionParts reads a Turkish predicate-nominal question, the zero-copula is-a
+// asked with the interrogative particle: "kedi bir hayvan mı" (is a cat an animal). Turkish
+// has no copula word and no subject-auxiliary inversion, so the verb-medial copular parser
+// cannot see this shape; it is two bare nominals (a determiner "bir" optional before the
+// predicate) closed by the particle, with no verb. The guards keep it off the polar SVO
+// question ("kedi fareyi izler mi", a verb), the locative ("yaprak ormanda mı", a cased
+// ground), and possession ("var mı"): the two content words must be bare nominatives and
+// nothing else closed class. It returns the subject and the predicate category.
+func (p *Params) trCopularQuestionParts(tokens []string) (member, cat string, ok bool) {
+	n := len(tokens)
+	if n < 3 {
+		return "", "", false
+	}
+	switch tokens[n-1] {
+	case "mı", "mi", "mu", "mü":
+	default:
+		return "", "", false // not asked with the interrogative particle
+	}
+	var nom []string
+	for _, tok := range tokens[:n-1] {
+		if p.category("tr", tok) == catDet {
+			continue // "bir" and other determiners fill no slot
+		}
+		nom = append(nom, tok)
+	}
+	if len(nom) != 2 {
+		return "", "", false // a predicate nominal is exactly a subject and a complement
+	}
+	for _, tok := range nom {
+		if stripCaseTR(tok) != tok {
+			return "", "", false // a cased word is a locative or possessive ground, not a nominal predicate
+		}
+		if p.category("tr", tok) != "" {
+			return "", "", false // a verb, relator, negator, or particle: not a plain nominal predication
+		}
+	}
+	return nom[0], nom[1], true
+}
+
 // accusativeTR builds the definite object, buffer y after a vowel:
 // "make test'i", "elma'yı".
 func accusativeTR(p *Params, w string) string {
