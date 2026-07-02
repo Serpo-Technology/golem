@@ -2234,7 +2234,22 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// company with the recent moments the utterance bound to. A peer's words
 		// bond at its trust, so a low-trust source's vocabulary entrenches weakly
 		// and its naming never firms up on one telling; the architect's is full.
-		words := d.mintWordsScaled(req.Content, req.Lang, res.FragmentID, d.recentNaming(time.Now(), res.FragmentID), false, speakerTrust)
+		// Only a declarative telling names. A yes/no question parses with statement force
+		// (its clause is checked against the graph by planPolar, not written), so force
+		// alone would read it as a naming; the polar shape is detected the same way planPolar
+		// does and excluded. Without this an untagged question misread in another tongue
+		// ("kedi fareyi izler mi" taken as English) would lay its words as company of a
+		// percept that merely lingered warm, a spurious name the night then entrenches.
+		_, _, polar := polarClause(frame.Lang, req.Content)
+		declarative := frame.Force == grammar.ForceStatement && !polar
+		// A declarative lays the naming company consolidation later reads; a question or a
+		// command lays none, so its words keep no company with what was warm. The word node
+		// may still be created, but inert, with nothing for naming to read.
+		var namingAnchors []recentMoment
+		if declarative {
+			namingAnchors = d.recentNaming(time.Now(), res.FragmentID)
+		}
+		words := d.mintWordsScaled(req.Content, req.Lang, res.FragmentID, namingAnchors, false, speakerTrust)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
 		// only a declarative naming grounds a word in the attended concept. A
@@ -2244,7 +2259,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// comparison names nothing either: "the horse is bigger than the dog" states
 		// an ordering, so its words must not ground in the standard that was warm
 		// (else the dog's word keeps company with the horse and they blur).
-		if frame.Force == grammar.ForceStatement && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) {
+		if declarative && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) {
 			d.bindAttention(words, attn)
 			// Record what the naming pointed at, the freshest percept, as a salience
 			// the abstraction pass reads apart from the uniform company: a name said

@@ -2717,6 +2717,36 @@ func TestResolveConceptPrefersTongue(t *testing.T) {
 	}
 }
 
+// A question lays no naming company. Asked something that mentions a novel word while a
+// percept lingers warm from just being seen, the word must not bond to that percept, a bond
+// the night would read as a name. Only a declarative telling names, so an untagged question
+// misread in another tongue cannot mint a spurious name onto whatever was in view.
+func TestQuestionLaysNoNamingCompany(t *testing.T) {
+	d, s := testDaemon(t)
+	wren := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision",
+		Content: "a small gray wren", Template: "a small gray wren", Time: time.Now()}
+	if _, err := s.Encode(wren); err != nil {
+		t.Fatal(err)
+	}
+	// The percept was just seen, so it sits in the naming-recency window a naming reads.
+	d.recent = append(d.recent, recentMoment{id: wren.ID, channel: "vision", at: time.Now()})
+
+	say(t, d, "does a zosk chase the wren")
+
+	words, err := s.WordNodesByForms([]string{"zosk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range words {
+		links, _ := s.LinksFromRel([]uint64{w.ID}, memory.RelTemporal)
+		for _, e := range links {
+			if e.To == wren.ID {
+				t.Fatal("a question's word must not keep company with a warm percept it merely mentioned near")
+			}
+		}
+	}
+}
+
 // Role-fit reads animacy from resemblance, never a concept's own role-count: a
 // concept that has only ever been a patient must not be locked into that role,
 // because counting its history fed back, a thing once chased reading as never a
