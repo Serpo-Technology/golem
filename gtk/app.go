@@ -6,7 +6,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"gme/client"
+	"gtk/client"
 	"golem/wire"
 )
 

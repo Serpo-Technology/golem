@@ -75,7 +75,7 @@ The build covers the whole loop the design describes, and the self-extension abo
 - GOLEM has a grounded measure of whether a change to itself is an improvement: goal progress (the share of goals satisfied), world-prediction calm (low alarm), and trust (oxytocin), blended into one currency, with a change kept only when the blend rises and no single factor collapses, so a degenerate optimum that buys one outcome by wrecking another is caught.
 - And it can change its own source, under that measure and never live. Given its own source path, GOLEM reads a tuning constant out of its code, proposes a new value, and runs the change through the build-and-deploy pipeline used by hand, compile, test, fitness gate, on an isolated copy, staging a vetted candidate off to the side. It never edits the live tree and never swaps the running binary; the deploy is the operator's. Every stage lands on the audit trail, and the capability is twice gated (the runtime open and a source path set), shipping closed.
 
-The [GOLEM Memory Editor (GME)](#the-memory-editor-gme) is the instrument for reading and shaping this graph by hand. The [known limitations](#known-limitations) near the end mark where each faculty still falls short.
+The [Golem Toolkit (GTK)](#the-golem-toolkit-gtk) is the instrument for working this graph by hand: conversing, feeding senses, watching the inner life, and shaping memory over one connection. The [known limitations](#known-limitations) near the end mark where each faculty still falls short.
 
 ---
 
@@ -292,8 +292,8 @@ internal/
                     runtime, the grounded fitness and self-modification, the
                     audited raw edits, the voice, and the demos (basal
                     ganglia, ACC, hypothalamus, and the global workspace)
-gme/                the memory editor, a separate Go module: a shared wire
-                    client, the gme console, and the GME.app window (Wails
+gtk/                the Golem Toolkit, a separate Go module: a shared signed
+                    wire client, the gtk console, and the desktop window (Wails
                     with a Svelte frontend)
 ```
 
@@ -349,18 +349,18 @@ go build -o golem ./cmd/golem
 
 ### Running the Memory Editor
 
-GME is a separate program that talks to the running daemon over the same socket. See [The Memory Editor (GME)](#the-memory-editor-gme) below for what it does.
+The Golem Toolkit is a separate program that talks to a running brain over its wire protocol. See [The Golem Toolkit (GTK)](#the-golem-toolkit-gtk) below for what it does, and [gtk/README.md](gtk/README.md) for connecting it to a container.
 
 ```bash
 # The console: build it and read or shape the live graph
-go -C gme build -o gme ./cmd/gme
-gme/gme status
-gme/gme search disk
-gme/gme audit
+go -C gtk build -o gtk ./cmd/gtk
+gtk/gtk status
+gtk/gtk search disk
+gtk/gtk audit
 
 # The window: a Wails desktop app (install the Wails CLI once)
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
-cd gme && wails build && open build/bin/GME.app
+cd gtk && wails build && open build/bin/GolemToolkit.app
 ```
 
 ### Configuration
@@ -377,19 +377,17 @@ The daemon reads `~/.golem/config.json` and writes one full of defaults on first
 
 ---
 
-## The Memory Editor (GME)
+## The Golem Toolkit (GTK)
 
-A glass box deserves an instrument to read and shape it. GME is that instrument: a separate program from the daemon and the terminal, talking to it over the same unix socket, so editing memory and conversing with GOLEM stay distinct. It is two faces of one client, and the daemon stays the only process that writes the database.
+A glass box deserves an instrument to work it. The Golem Toolkit is that instrument: a separate program from the daemon and the terminal that talks to a running brain over its wire protocol. The brain it works usually runs in a container, reached over the signed network transport, so every request the toolkit sends is signed with the architect's key; it also speaks to a brain beside it on the unix socket, unsigned, when pointed at one. It is two faces of one client, and the daemon stays the only process that writes the database. Its own directory is `gtk/`, and it lives in its own Go module so the daemon's dependency tree stays small; the webview stack lives only here. See [gtk/README.md](gtk/README.md) for how to build and connect it.
 
-- **`gme`, the console.** A CLI that reads the live graph (`status`, `search`, `concepts`, `audit`, `dump`), authors through grounding (`observe`, `teach`), and performs audited raw surgery (`edit`, `reweight`, `delete`, `mark`).
-- **GME.app, the window.** A desktop app (Go + Wails, with a Svelte frontend) that opens on an **interactive graph** of the live store: the semantic core (concepts, words, and the features that ground them) drawn by default, kind filters to bring in the episodic moments and the grammar scaffold, a find box that lights matching nodes and dims the rest, and a node inspector. Tabs beside the graph search memory by cue, list the distilled concepts, tail the audit trail, and author new memories.
+- **`gtk`, the console.** A CLI that reads the live graph (`status`, `search`, `concepts`, `cognition`, `audit`, `dump`), authors through grounding (`observe`, `teach`), and performs audited raw surgery (`edit`, `reweight`, `delete`, `mark`).
+- **The window.** A desktop app (Go + Wails, with a Svelte frontend) whose panels are one connection to the brain: a chat that speaks and listens through the browser's own voice, senses that observe and show images to see, the memory search, concepts, and interactive graph the editor had, the decision trail beside a live feed of the brain's own events, its cognition and health, identity for setting trust and enrolling a peer's key, controls for the runtime, voice, consolidation, and retuning, and the connection settings.
 
 Two disciplines keep it honest:
 
 - **Authoring goes through teaching.** Filling memory emits the same teaching and perception events the terminal does, so an authored concept is grounded exactly as a narrated one, never a bare declared symbol.
 - **Raw surgery is audited and marked.** A direct splice, reweight, deletion, or hand-touch runs on the brain loop like every other state change, lands on the audit trail, and optionally marks the fragment as editor-touched, so GOLEM can tell a shaped memory from a lived one. A per-fragment provenance flag carries that mark.
-
-GME is its own Go module, so the daemon's dependency tree stays at three direct libraries; the GUI's webview stack lives only in the editor.
 
 ---
 

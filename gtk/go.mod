@@ -1,4 +1,4 @@
-module gme
+module gtk
 
 go 1.26
 

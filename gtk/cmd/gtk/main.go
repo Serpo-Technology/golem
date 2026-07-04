@@ -1,7 +1,7 @@
-// Command gme is the console half of GOLEM's memory editor. It talks to the
-// running daemon over the same unix socket the terminal does and renders what
-// the graph holds, so reading and shaping memory stays distinct from conversing
-// with GOLEM. It shares its client with the GUI; the daemon stays the only
+// Command gtk is the console half of the Golem Toolkit. It talks to the running
+// brain over the same connection the window does and renders what the graph
+// holds, so reading and shaping memory stays distinct from conversing with
+// GOLEM. It shares its client with the window; the daemon stays the only
 // process that writes the database.
 package main
 
@@ -12,29 +12,29 @@ import (
 	"strings"
 	"time"
 
-	"gme/client"
+	"gtk/client"
 	"golem/wire"
 )
 
-const usage = `gme is a console for GOLEM's memory, talking to the running daemon.
+const usage = `gtk is a console for GOLEM's memory, talking to the running daemon.
 
 Read:
-  gme status              the daemon's vital signs and workspace
-  gme search <words>      the moments a cue brings to mind
-  gme concepts            the concepts memory has distilled
-  gme cognition           resemblance, beliefs: is the brain rich enough to reason
-  gme audit [n]           the last n entries of the trail (default 20)
-  gme dump                every fragment the graph holds
+  gtk status              the daemon's vital signs and workspace
+  gtk search <words>      the moments a cue brings to mind
+  gtk concepts            the concepts memory has distilled
+  gtk cognition           resemblance, beliefs: is the brain rich enough to reason
+  gtk audit [n]           the last n entries of the trail (default 20)
+  gtk dump                every fragment the graph holds
 
 Author, grounded through teaching:
-  gme observe <channel> <text>   file a grounded moment
-  gme teach <cue> <command>      ground a cue to a command
+  gtk observe <channel> <text>   file a grounded moment
+  gtk teach <cue> <command>      ground a cue to a command
 
 Surgery, raw and audited:
-  gme edit <id> <text>           splice a fragment's content
-  gme reweight <id> <weight>     set a fragment's weight (0 to 1)
-  gme delete <id>                remove a fragment by id
-  gme mark <id>                  mark a fragment hand-edited
+  gtk edit <id> <text>           splice a fragment's content
+  gtk reweight <id> <weight>     set a fragment's weight (0 to 1)
+  gtk delete <id>                remove a fragment by id
+  gtk mark <id>                  mark a fragment hand-edited
 `
 
 func main() {
@@ -56,7 +56,7 @@ func main() {
 
 	case "search", "recall":
 		if len(args) < 2 {
-			fail(fmt.Errorf("usage: gme search <words>"))
+			fail(fmt.Errorf("usage: gtk search <words>"))
 		}
 		frags, err := c.Search(strings.Join(args[1:], " "))
 		check(c, err)
@@ -98,7 +98,7 @@ func main() {
 
 	case "observe":
 		if len(args) < 3 {
-			fail(fmt.Errorf("usage: gme observe <channel> <text>"))
+			fail(fmt.Errorf("usage: gtk observe <channel> <text>"))
 		}
 		_, err := c.Observe(args[1], strings.Join(args[2:], " "), nil, "", false)
 		check(c, err)
@@ -106,21 +106,21 @@ func main() {
 
 	case "teach":
 		if len(args) < 3 {
-			fail(fmt.Errorf("usage: gme teach <cue> <command>"))
+			fail(fmt.Errorf("usage: gtk teach <cue> <command>"))
 		}
 		check(c, c.Teach(args[1], strings.Join(args[2:], " "), "", false, false, false))
 		fmt.Printf("grounded %q -> %q\n", args[1], strings.Join(args[2:], " "))
 
 	case "edit":
 		if len(args) < 3 {
-			fail(fmt.Errorf("usage: gme edit <id> <text>"))
+			fail(fmt.Errorf("usage: gtk edit <id> <text>"))
 		}
 		check(c, c.Edit(mustID(args[1]), strings.Join(args[2:], " ")))
 		fmt.Printf("edited #%s\n", args[1])
 
 	case "reweight":
 		if len(args) < 3 {
-			fail(fmt.Errorf("usage: gme reweight <id> <weight>"))
+			fail(fmt.Errorf("usage: gtk reweight <id> <weight>"))
 		}
 		w, err := strconv.ParseFloat(args[2], 64)
 		if err != nil {
@@ -131,14 +131,14 @@ func main() {
 
 	case "delete":
 		if len(args) < 2 {
-			fail(fmt.Errorf("usage: gme delete <id>"))
+			fail(fmt.Errorf("usage: gtk delete <id>"))
 		}
 		check(c, c.Delete(mustID(args[1])))
 		fmt.Printf("deleted #%s\n", args[1])
 
 	case "mark":
 		if len(args) < 2 {
-			fail(fmt.Errorf("usage: gme mark <id>"))
+			fail(fmt.Errorf("usage: gtk mark <id>"))
 		}
 		check(c, c.Mark(mustID(args[1])))
 		fmt.Printf("marked #%s edited\n", args[1])
@@ -169,7 +169,7 @@ func check(c *client.Client, err error) {
 }
 
 func fail(err error) {
-	fmt.Fprintln(os.Stderr, "gme:", err)
+	fmt.Fprintln(os.Stderr, "gtk:", err)
 	os.Exit(1)
 }
 
