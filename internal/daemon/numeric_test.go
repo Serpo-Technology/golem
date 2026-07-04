@@ -175,3 +175,60 @@ func TestCountMembersIntrospects(t *testing.T) {
 		t.Fatalf("the tally should count the grounded members: %q", got)
 	}
 }
+
+// A counting question over a relation composes a graph query: the focus's
+// co-arguments, filtered by category when one is asked, distinct concepts
+// counted fresh from the graph.
+func TestRelationCountComposesQuery(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	// A brain past the universal-feature threshold, the state a real one is in
+	// before relations are ever taught: with the shared channel named
+	// universal, a ball resembles a dog by nothing, so role fit reads real
+	// kinship rather than the collapsed likeness of a tiny graph.
+	for _, cap := range []string{
+		"a large brown dog", "a small black cat", "a small gray mouse",
+		"a small brown bird", "a tall green tree", "a bright yellow flower",
+		"a heavy iron key", "a long blue river", "a warm woolen coat",
+		"a sweet ripe apple", "a sharp steel knife", "a soft white cloud"} {
+		feedShape(t, s, "vision", cap, 5, base)
+	}
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growFeatures()
+	abs := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(abs); err != nil {
+		t.Fatal(err)
+	}
+	d.nameConceptWord(abs.ID, "animal", "en")
+	// The nouns are named before the relations mention them, the curriculum
+	// invariant, so each patient resolves to its own percept.
+	for word, cap := range map[string]string{
+		"dog": "a large brown dog", "cat": "a small black cat",
+		"mouse": "a small gray mouse", "bird": "a small brown bird"} {
+		if c, err := s.ConceptByTemplate(cap); err == nil && c != nil {
+			d.nameConceptWord(c.ID, word, "en")
+		}
+	}
+	for _, cap := range []string{"a small black cat", "a small gray mouse"} {
+		if c, err := s.ConceptByTemplate(cap); err == nil && c != nil {
+			s.SetLinkRel(abs.ID, c.ID, memory.RelGrounds, 0.4)
+		}
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog chased a mouse")
+	say(t, d, "a dog chased a bird")
+
+	got := say(t, d, "how many animals did the dog chase").Say
+	if !strings.Contains(got, "2") {
+		t.Fatalf("the filtered tally should count the animal co-arguments: %q", got)
+	}
+	all := say(t, d, "how many things did the dog chase").Say
+	if !strings.Contains(all, "3") {
+		t.Fatalf("the unfiltered tally should count every co-argument: %q", all)
+	}
+}

@@ -1,14 +1,10 @@
 package daemon
 
 import (
-	"fmt"
 	"strconv"
-	"time"
 
 	"golem/internal/code"
-	"golem/internal/events"
 	"golem/internal/grammar"
-	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -195,73 +191,6 @@ func (d *Daemon) magnitudeNumbers(frame grammar.Frame) (string, bool) {
 		diff = -diff
 	}
 	return d.sayMagnitude(frame.Lang, subj, frame.Action.Phrase, std, strconv.Itoa(diff)), true
-}
-
-// countMembers answers a counting question whose topic is a category: the
-// tally of the concepts the category grounds, GOLEM looking at its own graph.
-// The count is derived fresh at each asking and audited, never landed as a
-// fact, since it moves as the brain grows. It declines a topic that is no
-// category, so the episode tally answers as before.
-func (d *Daemon) countMembers(frame grammar.Frame, topic grammar.Term, chem limbic.State) (string, bool) {
-	// The category can sit in any term of the asking ("how many animals do you
-	// know" seats the pronoun as the patient and the animals as the subject),
-	// and its span can carry other words, so every term's tokens are tried
-	// through their lemmas until one names a category.
-	var c *memory.Fragment
-	for _, term := range []grammar.Term{topic, frame.Agent, frame.Patient} {
-		if d.isCategory(term.Concept) {
-			c = term.Concept
-			break
-		}
-		if term.Phrase == "" {
-			continue
-		}
-		toks, _ := grammar.Tokenize(term.Phrase)
-		for _, tok := range toks {
-			lemma := d.gram.Lemma(frame.Lang, tok)
-			if cand := d.resolveConceptLang(lemma, frame.Lang); d.isCategory(cand) {
-				c = cand
-				break
-			}
-		}
-		if c != nil {
-			break
-		}
-	}
-	if c == nil {
-		return "", false
-	}
-	edges, err := d.store.LinksFromRel([]uint64{c.ID}, memory.RelGrounds)
-	if err != nil {
-		return "", false
-	}
-	targets := make([]uint64, 0, len(edges))
-	for _, e := range edges {
-		targets = append(targets, e.To)
-	}
-	frags, err := d.store.FragmentsByIDs(targets)
-	if err != nil {
-		return "", false
-	}
-	n := 0
-	for _, f := range frags {
-		if f.Kind == memory.KindConcept {
-			n++
-		}
-	}
-	name := d.conceptName(c.ID, c.Content, frame.Lang)
-	d.event(events.Event{Ev: "count", Cue: name, Outcome: strconv.Itoa(n)})
-	if err := d.store.Audit(time.Now().Unix(), "count", name, strconv.Itoa(n)+" members"); err != nil {
-		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
-	}
-	d.noteFocus(c)
-	spoken := name
-	if n != 1 {
-		spoken = d.gram.PluralNoun(frame.Lang, name)
-	}
-	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
-		Action:  grammar.Term{Phrase: "know"},
-		Patient: grammar.Term{Phrase: strconv.Itoa(n) + " " + spoken}}, chem), true
 }
 
 // numericDifference reads the difference of two numerals: the landed fact in

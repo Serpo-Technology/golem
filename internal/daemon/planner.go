@@ -1569,14 +1569,21 @@ func (d *Daemon) planWhence(frame grammar.Frame, quals []grammar.Qualifier, chem
 // planCount answers "how many times" and "how often" with the tally of
 // moments behind the anchor, prototype counts included.
 func (d *Daemon) planCount(frame grammar.Frame, quals []grammar.Qualifier, chem limbic.State) string {
-	topic := d.whenceAnchor(frame, quals)
-	// A category topic asks for an introspective tally: "how many animals do
-	// you know" counts the category's grounded members, a fresh look at its
-	// own graph each asking, never a cached fact, since the count moves as
-	// the brain grows. The look is audited like any other derivation.
-	if line, ok := d.countMembers(frame, topic, chem); ok {
-		return line
+	// A count the graph can derive is a composed query run over GOLEM's own
+	// memory: a relation's co-arguments, a category's members, or the filter
+	// of both, one executor for every shape. The look is fresh at each asking
+	// and audited, never cached, since the count moves as the brain grows.
+	if q, ok := d.composeCountQuery(frame); ok {
+		if n, ok := d.runCountQuery(q); ok {
+			if q.focus != nil {
+				d.noteFocus(q.focus)
+			} else if q.category != nil {
+				d.noteFocus(q.category)
+			}
+			return d.sayCount(frame, q, n, chem)
+		}
 	}
+	topic := d.whenceAnchor(frame, quals)
 	ids, face := d.anchorEpisodes(topic)
 	if len(ids) > 0 {
 		if frags, err := d.fragmentsByIDsTiered(ids); err == nil && len(frags) > 0 {
