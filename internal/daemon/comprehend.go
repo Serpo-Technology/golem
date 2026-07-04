@@ -52,6 +52,16 @@ func (d *Daemon) mintNounConcept(phrase, lang string) *memory.Fragment {
 	if head == "" || d.gram.IsFunctionWord(lang, head) {
 		return nil
 	}
+	// A numeral is a number, one concept per value however it arrives, so a
+	// told claim about 17 and a computed fact about 17 meet on the same node.
+	if numericLiteral(head) {
+		if id := d.ensureNumberConcept(head); id != 0 {
+			if frags, err := d.store.FragmentsByIDs([]uint64{id}); err == nil && len(frags) == 1 {
+				return frags[0]
+			}
+		}
+		return nil
+	}
 	if c := d.resolveConcept(head); c != nil {
 		return c
 	}
@@ -530,6 +540,15 @@ func (d *Daemon) meaningNamesParticipant(m grammar.Meaning) bool {
 // returns false when a side grounds in nothing or the relation cannot be reached.
 func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64) bool {
 	subj, std := frame.Agent.Concept, frame.Patient.Concept
+	// A numeral side of a told ordering grounds in its number concept, minted
+	// on first contact, so the claim lands on the same node a computed check
+	// reads and the nightly trust pass can judge the teller against the run.
+	if subj == nil && numericLiteral(frame.Agent.Phrase) {
+		subj = d.mintNounConcept(frame.Agent.Phrase, frame.Lang)
+	}
+	if std == nil && numericLiteral(frame.Patient.Phrase) {
+		std = d.mintNounConcept(frame.Patient.Phrase, frame.Lang)
+	}
 	if subj == nil || std == nil {
 		return false
 	}
@@ -1437,6 +1456,11 @@ func (d *Daemon) planToldIsA(frame grammar.Frame, momentID uint64) (string, bool
 func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
 	if !frame.Comparative || frame.Force != grammar.ForceQuestion {
 		return "", false
+	}
+	// Bare numerals settle by computing when the gradable has a taught pole:
+	// GOLEM's own run outranks any told ordering, so the check runs first.
+	if line, ok := d.compareNumbers(frame); ok {
+		return line, true
 	}
 	subj, std := frame.Agent.Concept, frame.Patient.Concept
 	if subj == nil || std == nil {

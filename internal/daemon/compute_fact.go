@@ -136,12 +136,24 @@ func (d *Daemon) computeAnswer(lang, phrase string) (line string, ran, ok bool) 
 	if !ok0 {
 		return "", false, false
 	}
+	val, ran, ok := d.computeValue(comp, g, root)
+	if !ok {
+		return "", ran, false
+	}
 	connective := "is"
 	if lang == "tr" {
 		connective = "eder"
 	}
+	return upperFirst(phrase) + " " + connective + " " + val + ".", ran, true
+}
+
+// computeValue resolves a comprehended computation to its bare value: the
+// landed fact when one stands, a sandboxed run otherwise, the fresh finding
+// landed with its provenance. It is the shared floor computeAnswer speaks
+// through and the numeric comparison reads its sign from.
+func (d *Daemon) computeValue(comp code.Computation, g *scratchGraph, root uint64) (val string, ran, ok bool) {
 	if val, ok := d.computedFact(comp); ok {
-		return upperFirst(phrase) + " " + connective + " " + val + ".", false, true
+		return val, false, true
 	}
 	src, ok := d.generateCode(comp, g, root)
 	if !ok {
@@ -152,7 +164,7 @@ func (d *Daemon) computeAnswer(lang, phrase string) (line string, ran, ok bool) 
 		return "", true, false
 	}
 	d.groundComputation(comp, res.Value, artifactID)
-	return upperFirst(phrase) + " " + connective + " " + res.Value + ".", true, true
+	return res.Value, true, true
 }
 
 // actComputeNow is the compute faculty's body: it takes the oldest held gap,
