@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import cytoscape from 'cytoscape';
   import { Dump, Edit, Mark, Delete } from '../wailsjs/go/main/App';
-  import { wire } from '../wailsjs/go/models';
+  import { wire, main } from '../wailsjs/go/models';
 
   const NODE_CAP = 600;
   const EDGE_CAP = 2500;
@@ -14,7 +14,7 @@
 
   let container: HTMLDivElement;
   let cy: any = null;
-  let graph: wire.Graph | null = null;
+  let graph: main.Graph | null = null;
   let error = '';
 
   let shown = 0;
@@ -76,20 +76,20 @@
 
   function elements() {
     if (!graph) return [];
-    const all = (graph.fragments || []).filter((f) => enabled.has(kindGroup(f.kind)));
+    const all = (graph.fragments || []).filter((f: wire.FragmentInfo) => enabled.has(kindGroup(f.kind || "")));
     total = all.length;
     const nodes = [...all].sort((a, b) => (b.weight || 0) - (a.weight || 0)).slice(0, NODE_CAP);
     shown = nodes.length;
     const ids = new Set(nodes.map((n) => n.id));
     const edges = (graph.links || [])
-      .filter((l) => ids.has(l.from) && ids.has(l.to))
+      .filter((l: wire.LinkInfo) => ids.has(l.from) && ids.has(l.to))
       .slice(0, EDGE_CAP);
     edgeShown = edges.length;
     return [
       ...nodes.map((f) => ({
-        data: { id: String(f.id), label: clip(f.content, 22), content: f.content, group: kindGroup(f.kind), edited: !!f.edited },
+        data: { id: String(f.id), label: clip(f.content, 22), content: f.content, group: kindGroup(f.kind || ""), edited: !!f.edited },
       })),
-      ...edges.map((l) => ({
+      ...edges.map((l: wire.LinkInfo) => ({
         data: { id: `e${l.from}_${l.to}_${l.rel || 't'}`, source: String(l.from), target: String(l.to), rel: l.rel || 'temporal' },
       })),
     ];
@@ -138,7 +138,7 @@
     matchCount = query ? cy.nodes('.match').length : 0;
     hiddenMatches =
       query && graph
-        ? Math.max(0, (graph.fragments || []).filter((f) => f.content.toLowerCase().includes(query)).length - matchCount)
+        ? Math.max(0, (graph.fragments || []).filter((f: wire.FragmentInfo) => f.content.toLowerCase().includes(query)).length - matchCount)
         : 0;
   }
 
@@ -158,7 +158,7 @@
   }
 
   function selectNode(id: number) {
-    const f = (graph?.fragments || []).find((x) => x.id === id) || null;
+    const f = (graph?.fragments || []).find((x: wire.FragmentInfo) => x.id === id) || null;
     selected = f;
     editText = f ? f.content : '';
     confirmingDelete = false;

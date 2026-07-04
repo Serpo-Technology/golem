@@ -11,17 +11,18 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// GME's window is the visual half of the memory editor: it reads the live graph
-// over the daemon's socket through the same client the console uses, so shaping
-// memory and watching it are one tool.
+// The Golem Toolkit's window is the primary way to work a GOLEM brain: it talks
+// to the running brain over the signed network transport, so conversing with it,
+// feeding its senses, watching its inner life, and shaping its memory are one
+// tool over the same connection the console uses.
 func main() {
 	app := NewApp()
 	err := wails.Run(&options.App{
-		Title:            "GME",
-		Width:            1100,
-		Height:           760,
-		MinWidth:         720,
-		MinHeight:        480,
+		Title:            "Golem Toolkit",
+		Width:            1180,
+		Height:           820,
+		MinWidth:         820,
+		MinHeight:        540,
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 18, G: 20, B: 24, A: 1},
 		OnStartup:        app.startup,

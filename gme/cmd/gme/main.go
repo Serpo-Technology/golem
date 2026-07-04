@@ -100,14 +100,15 @@ func main() {
 		if len(args) < 3 {
 			fail(fmt.Errorf("usage: gme observe <channel> <text>"))
 		}
-		check(c, c.Observe(args[1], strings.Join(args[2:], " ")))
+		_, err := c.Observe(args[1], strings.Join(args[2:], " "), nil, "", false)
+		check(c, err)
 		fmt.Println("observed.")
 
 	case "teach":
 		if len(args) < 3 {
 			fail(fmt.Errorf("usage: gme teach <cue> <command>"))
 		}
-		check(c, c.Teach(args[1], strings.Join(args[2:], " ")))
+		check(c, c.Teach(args[1], strings.Join(args[2:], " "), "", false, false, false))
 		fmt.Printf("grounded %q -> %q\n", args[1], strings.Join(args[2:], " "))
 
 	case "edit":
@@ -164,10 +165,7 @@ func check(c *client.Client, err error) {
 	if err == nil {
 		return
 	}
-	if _, statErr := os.Stat(wire.SocketPath(c.Home)); os.IsNotExist(statErr) {
-		fail(fmt.Errorf("the daemon is not running; start it with: golem run"))
-	}
-	fail(err)
+	fail(fmt.Errorf("%v (connected to %s)", err, c.Info().Addr))
 }
 
 func fail(err error) {
