@@ -269,6 +269,35 @@ func (d *Daemon) claimAt(momentID uint64) (agentID, patientID uint64, relContent
 	return 0, 0, "", false
 }
 
+// propositionTrust reads the firmest trust behind a held proposition: over the moments
+// whose role edges carry this agent and patient under this relation, the highest source
+// trust. A fact the architect taught or GOLEM observed reads full; one heard only from a
+// low-trust peer reads that source's trust, however often the peer repeated it, so the
+// answer built on it stays hedged until a fully trusted telling arrives. A proposition
+// whose carrying moments cannot be found reads full: its support is entrenched or
+// derived, provenance the nightly consolidation already weighed.
+func (d *Daemon) propositionTrust(agentID uint64, relContent string, patientID uint64) float64 {
+	agEdges, err := d.store.LinksToRel([]uint64{agentID}, memory.RelAgent)
+	if err != nil {
+		return architectTrust
+	}
+	best, found := 0.0, false
+	for _, e := range agEdges {
+		a, p, rel, ok := d.claimAt(e.From)
+		if !ok || a != agentID || p != patientID || rel != relContent {
+			continue
+		}
+		found = true
+		if t := d.momentTrust(e.From); t > best {
+			best = t
+		}
+	}
+	if !found {
+		return architectTrust
+	}
+	return best
+}
+
 // growSourceTrust moves each source's trust by how its claims have held up, the earned
 // half of the trust model. A claim GOLEM has since grounded a denial of counts against
 // the source; a night of claims it has had no reason to deny restores a little. Trust

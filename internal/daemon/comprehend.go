@@ -819,6 +819,23 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 	for _, f := range facts {
 		d.ws.excite(f.coID, exciteSpeech)
 	}
+	// A report resting only on tellings below full trust is hedged the way the polar
+	// answer is: the fact is on record, but from a source GOLEM does not fully trust,
+	// so the clause leads with the tongue's hedge rather than reading as witnessed.
+	trusted := false
+	for _, f := range facts {
+		a, p := known.ID, f.coID
+		if f.focusRole == "patient" {
+			a, p = f.coID, known.ID
+		}
+		if d.propositionTrust(a, f.rel, p) >= architectTrust {
+			trusted = true
+			break
+		}
+	}
+	if !trusted {
+		line = upperFirst(d.gram.Word(frame.Lang, "probably")) + ", " + lowerFirst(line)
+	}
 	d.warmSpoken(known.Content)
 	d.claimFacts(known, facts) // record what this answer asserts, so a later question stays consistent with it
 	// A supposition that adds to what was observed trails the observed clause, the
@@ -2417,6 +2434,12 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 		return beliefDenied, 1, false
 	}
 	if d.propositionHolds(agent, relContent, patient.ID) {
+		// A fact heard only from a source below full trust is a proposal on record,
+		// not something GOLEM saw or the architect told: it answers hedged, at the
+		// teller's trust, until a fully trusted telling or entrenchment firms it.
+		if trust := d.propositionTrust(agent.ID, relContent, patient.ID); trust < architectTrust {
+			return beliefInferred, trust, false
+		}
 		return beliefObserved, 1, false
 	}
 	// A category in a role is met by any member that fills it: "did the dog chase

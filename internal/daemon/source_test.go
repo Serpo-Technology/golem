@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"math"
+	"strings"
 	"testing"
+	"time"
 
 	"golem/internal/memory"
 	"golem/wire"
@@ -229,5 +231,42 @@ func TestTrustLearningDoesNotUndoAGrant(t *testing.T) {
 	d.growSourceTrust()
 	if got := d.sourceTrust(llm.ID); got < 1.0 {
 		t.Fatalf("a clean night must not pull a granted source below its grant: got %.2f", got)
+	}
+}
+
+// A fact heard only from a low-trust peer answers hedged, in the polar and the wh
+// alike: the claim is on record at the teller's trust, so GOLEM reports it as
+// probable rather than witnessed. The architect telling the same fact firms it.
+func TestPeerToldFactAnswersHedged(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	feedShape(t, s, "vision", "a striped gray zebra", 5, base)
+	feedShape(t, s, "vision", "a green grass tuft", 5, base)
+	feedShape(t, s, "vision", "a large brown horse", 5, base)
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growFeatures()
+	// The relation itself is architect-taught vocabulary (on another agent), so the
+	// contested FACT is the peer's alone and its patient minted fresh rather than
+	// twin-bound onto the architect's thread.
+	say(t, d, "a horse ate a grass")
+	sayAs(t, d, "llm", "", "a zebra ate a mouse")
+
+	polar := say(t, d, "did a zebra eat a mouse").Say
+	if !strings.Contains(strings.ToLower(polar), "probab") {
+		t.Fatalf("a peer-told fact should answer hedged, got %q", polar)
+	}
+	firm := say(t, d, "did a horse eat a grass").Say
+	if !strings.Contains(strings.ToLower(firm), "yes") {
+		t.Fatalf("an architect-told fact stays firm, got %q", firm)
+	}
+	// The architect confirming the peer's claim firms it.
+	say(t, d, "a zebra ate a mouse")
+	upgraded := say(t, d, "did a zebra eat a mouse").Say
+	if !strings.Contains(strings.ToLower(upgraded), "yes") {
+		t.Fatalf("a fully trusted telling should firm the fact, got %q", upgraded)
 	}
 }
