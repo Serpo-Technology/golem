@@ -284,6 +284,11 @@ const bestFitMargin = 0.2
 // agent role to the dog the order stranded.
 const bestFitAgentFactor = 1.5
 
+// bestFitAgentFloor is the least agent-fit a candidate must show of its own
+// before the rescue considers it: a relative bar alone collapses when the
+// seated agent has no kinship history to measure against.
+const bestFitAgentFloor = 0.2
+
 // Comprehend runs the argument-structure constructions form to meaning, the
 // one engine reversed. The utterance's surface spans fill the
 // construction's slots in the language's word order, the same layout
@@ -613,6 +618,14 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	if ta.Concept == nil || tb.Concept == nil {
 		return
 	}
+	// A filler that has already held the role it was seated in keeps it: the
+	// teller's order is defended by the record, not only by kinship, since a
+	// young relation's habitual agent resembles no other agent (its kinship
+	// excludes itself) and would otherwise be unseated by any subject that
+	// resembles the patients.
+	if p.RoleHeld != nil && p.RoleHeld(ta.Concept, a) {
+		return
+	}
 	asIs := fit(ta.Concept, a) + fit(tb.Concept, b)
 	swapped := fit(tb.Concept, a) + fit(ta.Concept, b)
 	// The word order is overruled only when the filler it seated as agent is no
@@ -636,8 +649,13 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	// agent role without being the right subject. Requiring the order's patient
 	// to out-fit it by half again keeps the order standing in that near tie: the
 	// dog stays the chaser because the order named it, not undone by the cat
-	// nosing ahead as an agent.
-	candidateBetterAgent := fit(tb.Concept, a) > fit(ta.Concept, a)*bestFitAgentFactor
+	// nosing ahead as an agent. The candidate must also show a real agent
+	// signal of its own: when the seated agent's fit is zero for want of
+	// history (the first agent a relation ever had resembles no other), any
+	// trace would clear a purely relative bar, and the rescue would seat an
+	// inanimate as the subject, the very absurdity it exists to prevent.
+	candidateBetterAgent := fit(tb.Concept, a) > fit(ta.Concept, a)*bestFitAgentFactor &&
+		fit(tb.Concept, a) >= bestFitAgentFloor
 	if orderAgentMisplaced && candidateBetterAgent && swapped > asIs+bestFitMargin {
 		m.Roles[a], m.Roles[b] = tb, ta
 	}

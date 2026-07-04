@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"golem/internal/memory"
 )
 
 // The engine is the innate floor and stays in code; its data lives in
@@ -61,6 +63,14 @@ type Params struct {
 	// learnedInfl holds inflection patterns induced from examples rather than
 	// coded, keyed "lang:feature" (the seed of morphology as learned constructions).
 	learnedInfl map[string]inflection
+
+	// RoleHeld reports whether a concept has stood in a thematic role on the
+	// caller's record, the order-defense the best-fit rescue consults: a
+	// filler that has already held the role it was seated in keeps the seat
+	// the teller gave it. A presence, never a count, so the swap feedback the
+	// role-count fit once fed cannot return. Nil leaves the feature fits
+	// alone, the bare-grammar behavior the tests exercise.
+	RoleHeld func(c *memory.Fragment, role string) bool
 }
 
 func sortedKeys[V any](m map[string]V) []string {

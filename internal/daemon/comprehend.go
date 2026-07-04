@@ -3377,3 +3377,20 @@ func (d *Daemon) roleKinship(c *memory.Fragment, rel string) float64 {
 	}
 	return score
 }
+
+// roleHeld reports whether a concept has stood in a thematic role on record,
+// the presence the grammar's order-defense consults: a filler that has
+// already held the role it was seated in keeps the seat the teller gave it.
+// A boolean, never a count, so the swap feedback the role-count fit once fed
+// cannot return.
+func (d *Daemon) roleHeld(c *memory.Fragment, role string) bool {
+	if c == nil {
+		return false
+	}
+	rel := memory.RelAgent
+	if role == "patient" {
+		rel = memory.RelPatient
+	}
+	edges, err := d.store.LinksToRel([]uint64{c.ID}, rel)
+	return err == nil && len(edges) > 0
+}

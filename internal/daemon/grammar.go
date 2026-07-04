@@ -198,6 +198,10 @@ func (d *Daemon) recompileGrammar() error {
 		SetConstructions(cparams).
 		SetDecl(gparams).
 		SetArgConstructions(cparams)
+	// The order-defense the role rescue consults: a filler that has already
+	// held a role on record keeps the seat the teller gave it, read off the
+	// graph as a presence, never a count.
+	d.gram.RoleHeld = d.roleHeld
 	d.code = code.NewEngine(codeOps(cparams))
 	// Which word names an operation is resolved through the grounded concept graph,
 	// not the engine's own English word map: the engine consults this resolver, which
