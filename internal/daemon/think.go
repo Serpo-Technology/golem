@@ -332,6 +332,13 @@ func (d *Daemon) startThinkRound() {
 	if len(d.computeGaps) > 0 {
 		sn.computeGap = d.computeGaps[0].phrase
 		sn.computeReady = d.cfg.RuntimeEnabled && d.computeRuns < computeRunsPerWake
+	} else if d.cfg.RuntimeEnabled && d.computeRuns+len(experimentInputs) <= computeRunsPerWake &&
+		d.chem.Snapshot().Dopamine >= curiosityGate && d.hasConjecture() {
+		// Nothing owed but something to wonder about: the faculty may
+		// experiment, quieter than a debt (the signal, not this readiness,
+		// carries that).
+		sn.computeReady = true
+		sn.computeGap = "an experiment"
 	}
 	seedNameless := false
 	if seed.Kind == memory.KindConcept {

@@ -173,6 +173,11 @@ func (d *Daemon) computeValue(comp code.Computation, g *scratchGraph, root uint6
 // way a satisfied goal is.
 func (d *Daemon) actComputeNow() (string, bool) {
 	if len(d.computeGaps) == 0 {
+		// Nothing owed: a curious mind may experiment instead, testing a
+		// conjecture about its own learned functions by running.
+		if d.chem.Snapshot().Dopamine >= curiosityGate {
+			return d.actExperimentNow()
+		}
 		return "no computation waiting", false
 	}
 	gap := d.computeGaps[0]
