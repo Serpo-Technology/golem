@@ -76,3 +76,39 @@ func TestScaffoldingSealedFromContent(t *testing.T) {
 		t.Fatalf("the answer should speak the taught fact: %q", got)
 	}
 }
+
+// The self carries a told identity and speaks it in its own person: "you are
+// a daemon" is held defeasibly on the participant, read back hedged as
+// "Probably, I am a daemon", and a denial of an untold identity comes back in
+// the first person too, never as the thing-noun surface "an I".
+func TestSelfIdentityToldAndSpokenFirstPerson(t *testing.T) {
+	d, _ := testDaemon(t)
+	ack := say(t, d, "you are a daemon").Say
+	if !strings.Contains(ack, "I am a daemon") {
+		t.Fatalf("the told identity should be acknowledged in the first person: %q", ack)
+	}
+	got := say(t, d, "are you a daemon").Say
+	if !strings.Contains(got, "Probably") || !strings.Contains(got, "I am a daemon") {
+		t.Fatalf("a told identity reads back hedged and first-person: %q", got)
+	}
+	say(t, d, "you run a program") // mints the noun the denial is asked over
+	no := say(t, d, "are you a program").Say
+	if strings.Contains(no, "an I") || !strings.Contains(no, "I am not") {
+		t.Fatalf("an untold identity denies in the first person: %q", no)
+	}
+}
+
+// A deictic role question whose verb surface is closed-class ("run" is a
+// seeded imperative) still finds its learned relation, so the answer is the
+// first-person fact, never a definition lead about the pronoun.
+func TestDeicticRoleQuestionSpeaksFirstPerson(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "you run a program")
+	got := say(t, d, "what do you run").Say
+	if strings.Contains(got, "names") {
+		t.Fatalf("a role question must not open with a definition of the pronoun: %q", got)
+	}
+	if !strings.Contains(got, "I r") || !strings.Contains(got, "program") {
+		t.Fatalf("the answer should be the first-person fact: %q", got)
+	}
+}

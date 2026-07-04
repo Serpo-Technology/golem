@@ -647,7 +647,10 @@ func (d *Daemon) planMultiRoleQuestion(frame grammar.Frame, raw string) (string,
 func (d *Daemon) multiRoleQuestionParts(lang, raw string) (rel *memory.Fragment, knowns []*memory.Fragment) {
 	tokens, _ := grammar.Tokenize(raw)
 	for _, t := range tokens {
-		if !d.gram.IsContentWord(lang, t) && !d.gram.IsDeictic(lang, t) {
+		// A closed-class surface whose lemma names a learned relation is kept,
+		// the same rescue the single-role reader gives a taught verb like "run".
+		if !d.gram.IsContentWord(lang, t) && !d.gram.IsDeictic(lang, t) &&
+			d.resolveRelation(d.gram.Lemma(lang, t)) == nil {
 			continue
 		}
 		if rel == nil {
@@ -1379,10 +1382,23 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 		member, cat = cat, member
 	}
 	// Grounded membership answers firmly; a membership only TOLD answers a hedged yes,
-	// since it rests on the telling, not on what GOLEM has seen the thing to be.
+	// since it rests on the telling, not on what GOLEM has seen the thing to be. A
+	// participant's told identity needs no grown category: "are you a daemon" reads
+	// the defeasible edge the telling laid on the self.
 	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
-	told := !grounded && d.isCategory(cat) && d.toldIsA(member.ID, cat.ID)
+	told := !grounded && (d.isCategory(cat) || d.isParticipant(member.ID)) && d.toldIsA(member.ID, cat.ID)
 	yes := grounded || told
+	// A participant speaks in its own person: "Probably, I am a daemon", never
+	// "an I is a daemon", the article and agreement of a thing-noun.
+	if d.isParticipant(member.ID) {
+		word := upperFirst(d.gram.Word(frame.Lang, "yes"))
+		if told {
+			word = upperFirst(d.gram.Word(frame.Lang, "probably"))
+		} else if !yes {
+			word = upperFirst(d.gram.Word(frame.Lang, "no"))
+		}
+		return word + ", " + lowerFirst(d.sayParticipantIsA(frame.Lang, member.ID, cat, yes, told)), true
+	}
 	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
 	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
 	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
@@ -1437,24 +1453,43 @@ func (d *Daemon) planToldIsA(frame grammar.Frame, momentID uint64) (string, bool
 		return "", false // a distrusted source's category claim is not taken as membership
 	}
 	member, cat := frame.Agent.Concept, frame.Patient.Concept
-	if cat == nil || !d.isCategory(cat) {
-		return "", false // the predicate is not a known category: a naming or a property, not membership
-	}
-	if member != nil && (d.isCategory(member) || member.ID == cat.ID || d.isA(member.ID, cat.ID)) {
-		return "", false // a category subject, an identity, or already grounded: leave it
-	}
-	if member == nil {
-		// The thing is new: introduce it as a concept so the told membership has something
-		// to hold, the way an ordinary told proposition mints an unknown subject.
-		member = d.mintNounConcept(frame.Agent.Phrase, frame.Lang)
-		if member == nil {
+	// A participant can be TOLD an identity over a plain noun: "you are a
+	// daemon" needs no grown category, since the self is one concrete thing
+	// and the predicate names what it is said to be. The membership is held
+	// on the same defeasible edge, so it answers hedged like any telling.
+	selfIdentity := member != nil && d.isParticipant(member.ID)
+	if selfIdentity {
+		if cat == nil {
+			cat = d.mintNounConcept(frame.Patient.Phrase, frame.Lang)
+		}
+		if cat == nil || d.isCategory(cat) && d.isA(member.ID, cat.ID) ||
+			cat.Category == "relation" || d.isParticipant(cat.ID) {
 			return "", false
+		}
+	} else {
+		if cat == nil || !d.isCategory(cat) {
+			return "", false // the predicate is not a known category: a naming or a property, not membership
+		}
+		if member != nil && (d.isCategory(member) || member.ID == cat.ID || d.isA(member.ID, cat.ID)) {
+			return "", false // a category subject, an identity, or already grounded: leave it
+		}
+		if member == nil {
+			// The thing is new: introduce it as a concept so the told membership has something
+			// to hold, the way an ordinary told proposition mints an unknown subject.
+			member = d.mintNounConcept(frame.Agent.Phrase, frame.Lang)
+			if member == nil {
+				return "", false
+			}
 		}
 	}
 	if err := d.store.LinkRel(member.ID, cat.ID, memory.RelToldIsA, comprehendWeight*trust); err != nil {
 		return "", false
 	}
 	d.noteFocus(member)
+	if selfIdentity {
+		return upperFirst(d.gram.Word(frame.Lang, "isee")) + ". " +
+			d.sayParticipantIsA(frame.Lang, member.ID, cat, true, true), true
+	}
 	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
 	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
 	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
@@ -3135,13 +3170,23 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 	for _, t := range tokens {
 		// A deictic pronoun is closed-class but names a participant, so it can be
 		// the known argument of "what did you chase"; keep it beside the open-class
-		// words the question splits into.
-		if d.gram.IsContentWord(lang, t) || d.gram.IsDeictic(lang, t) {
+		// words the question splits into. A closed-class surface whose lemma names
+		// a learned relation is kept too: "run" is a seeded imperative, but once
+		// taught as a verb the graph's relation rescues it, so "what do you run"
+		// still finds its relation.
+		if d.gram.IsContentWord(lang, t) || d.gram.IsDeictic(lang, t) ||
+			d.resolveRelation(d.gram.Lemma(lang, t)) != nil {
 			content = append(content, t)
 		}
 	}
 	verbIdx := -1
 	for i, t := range content {
+		// A pronoun is never the predicate: even where a garbled clause once
+		// minted a relation under a deictic surface, the question's verb is
+		// sought among the content words alone.
+		if d.gram.IsDeictic(lang, t) {
+			continue
+		}
 		if c := d.resolveRelation(d.gram.Lemma(lang, t)); c != nil {
 			verbIdx, rel, verb = i, c, t
 			break
@@ -3188,6 +3233,26 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 	}
 	if lang == "" {
 		lang = "en"
+	}
+	// A deictic pronoun names a participant, never a relation. A clause the parser
+	// garbled can seat "you" as the predicate, and minting rel:en:you would then have
+	// every later deictic question read the pronoun as its verb and break the whole
+	// deictic register, the same wholesale failure the comparative marker would cause.
+	if d.gram.IsDeictic(lang, lemma) {
+		return nil, nil
+	}
+	// The grammatical core never names a relation either: a garbled copular
+	// clause can seat "are" as the predicate, and minting rel:en:are breaks
+	// the copula for the whole brain. The refusal is by grammatical class, so
+	// an imperative-capable surface like "run" stays teachable as a verb and
+	// the locative prepositions keep naming their placement relations.
+	switch d.gram.WordClass(lang, lemma) {
+	case "cop", "wh", "det", "pro", "cnt", "neg":
+		return nil, nil
+	case "fn":
+		if !d.gram.LocativePrep(lang, lemma) {
+			return nil, nil
+		}
 	}
 	// The comparative marker names no relation. A "than" ("daha") that reaches this path is a
 	// mis-parsed comparison, not a verb; minting a relation for it (rel:en:than) would then

@@ -557,3 +557,11 @@ func (p *Params) ContentTokensLang(lang, s string) []string {
 	}
 	return out
 }
+
+// WordClass exposes a form's grammatical class ("cop", "wh", "fn", "imp",
+// ...), empty for an open-class word, so a caller can refuse the grammatical
+// core a role it can never hold (a copula minting as a relation) without
+// carrying its own word list.
+func (p *Params) WordClass(lang, form string) string {
+	return p.get().category(lang, form)
+}
