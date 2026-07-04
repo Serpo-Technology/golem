@@ -1486,6 +1486,11 @@ func (d *Daemon) planMagnitude(frame grammar.Frame) (string, bool) {
 	if !frame.Magnitude || frame.Force != grammar.ForceQuestion {
 		return "", false
 	}
+	// Bare numerals answer with the metric amount their difference computes,
+	// not a rank bucket, when the gradable has a taught pole.
+	if line, ok := d.magnitudeNumbers(frame); ok {
+		return line, true
+	}
 	subj, std := frame.Agent.Concept, frame.Patient.Concept
 	if subj == nil || std == nil {
 		return "", false
@@ -1904,6 +1909,12 @@ func (d *Daemon) sayMagnitude(lang string, subj *memory.Fragment, rel string, st
 	deg := ""
 	if degree != "" {
 		deg = d.gram.Word(lang, degree)
+		// A degree the tongue has no word for stands as itself: a computed
+		// metric amount ("5") speaks literally where "slight" maps to
+		// "slightly".
+		if deg == "" {
+			deg = degree
+		}
 	}
 	than := d.gram.Word(lang, "than")
 	pred := strings.TrimSpace(strings.TrimSpace(deg+" "+rel) + " " + than + " " + def(d.conceptName(std.ID, std.Content, lang)))

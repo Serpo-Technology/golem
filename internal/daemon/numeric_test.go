@@ -3,6 +3,9 @@ package daemon
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"golem/internal/memory"
 )
 
 // What a gradable means in number is taught, trust-gated: the architect's
@@ -112,5 +115,63 @@ func TestUnmarkedGradableFallsThrough(t *testing.T) {
 	}
 	if _, ok := d.numericPole("heavier"); ok {
 		t.Fatal("no pole was taught for heavier")
+	}
+}
+
+// A magnitude question over bare numerals answers with the metric amount the
+// difference computes, from the landed fact, no fresh program for the asking.
+func TestNumericMagnitudeComputed(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "2 is bigger than 1")
+	say(t, d, "bigger is above")
+	say(t, d, "is 17 bigger than 12") // lands the difference
+
+	d.cfg.RuntimeEnabled = false // the magnitude must read the landed fact
+	got := say(t, d, "how much bigger is 17 than 12").Say
+	if !strings.Contains(got, "5") || !strings.Contains(got, "bigger") {
+		t.Fatalf("the magnitude should be the computed amount: %q", got)
+	}
+	no := say(t, d, "how much bigger is 12 than 17").Say
+	if !strings.Contains(strings.ToLower(no), "no") {
+		t.Fatalf("the wrong side takes the plain denial: %q", no)
+	}
+}
+
+// A counting question over a category is an introspective tally: GOLEM looks
+// at its own graph and counts the members, fresh at each asking.
+func TestCountMembersIntrospects(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	feedShape(t, s, "vision", "a small black cat", 5, base)
+	feedShape(t, s, "vision", "a large brown dog", 5, base)
+	feedShape(t, s, "vision", "a small gray mouse", 5, base)
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	d.growFeatures()
+	// A category grounded in three member concepts, the abstraction shape.
+	abs := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(abs); err != nil {
+		t.Fatal(err)
+	}
+	d.nameConceptWord(abs.ID, "animal", "en")
+	n := 0
+	for _, cap := range []string{"a small black cat", "a large brown dog", "a small gray mouse"} {
+		if c, err := s.ConceptByTemplate(cap); err == nil && c != nil {
+			s.SetLinkRel(abs.ID, c.ID, memory.RelGrounds, 0.4)
+			n++
+		}
+	}
+	if n != 3 {
+		t.Fatalf("the three members should ground: %d", n)
+	}
+
+	got := say(t, d, "how many animals do you know").Say
+	if !strings.Contains(got, "3") {
+		t.Fatalf("the tally should count the grounded members: %q", got)
 	}
 }

@@ -247,3 +247,14 @@ func JoinAnd(items []string) string {
 		return strings.Join(items[:len(items)-1], ", ") + ", and " + items[len(items)-1]
 	}
 }
+
+// PluralNoun inflects a noun for number in a tongue that marks it: the
+// English rules and irregulars, other tongues left as they stand until
+// their number morphology is built. A counting answer reads it so a tally
+// speaks "79 animals" rather than the bare lemma.
+func (p *Params) PluralNoun(lang, noun string) string {
+	if lang == "en" {
+		return pluralEN(noun)
+	}
+	return noun
+}

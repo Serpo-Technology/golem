@@ -853,7 +853,11 @@ func (p *Params) Realize(f Frame, chem limbic.State) string {
 		}
 		b.WriteString(" ")
 		b.WriteString(embeddedClause(p, f))
-		b.WriteString(" yet")
+		// The "yet" belongs to the admitted gap, the not-known-so-far; a
+		// positive knowledge claim ("I know 79 animals") carries none.
+		if f.Negate {
+			b.WriteString(" yet")
+		}
 	case "name":
 		b.WriteString(" ")
 		if f.Hedge {

@@ -1,10 +1,14 @@
 package daemon
 
 import (
+	"fmt"
 	"strconv"
+	"time"
 
 	"golem/internal/code"
+	"golem/internal/events"
 	"golem/internal/grammar"
+	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -114,15 +118,14 @@ func (d *Daemon) numericPole(gradable string) (string, bool) {
 	return "", false
 }
 
-// compareNumbers settles a comparative question over bare numerals by
-// computing: the difference of the two, from the landed fact when one stands
-// in either direction, from a run otherwise, the sign deciding the taught
-// pole. The verdict is firm, GOLEM's own observation outranking any telling,
-// and the false direction is denied on record between the number concepts so
-// a source that claimed it is contradicted when the trust pass judges the
-// night. It declines when either side is no numeral or the gradable carries
-// no taught pole, so the told-ordering path stands untouched.
-func (d *Daemon) compareNumbers(frame grammar.Frame) (string, bool) {
+// numericCheck settles a numeric comparative frame by computing: both sides
+// bare numerals, the gradable's taught pole, the difference from the landed
+// fact or a run, the verdict by sign. The refuted direction is denied on
+// record between the number concepts, the defeasible negative every read
+// honours and the nightly trust pass judges a source's claims against. ok is
+// false when either side is no numeral or the gradable carries no pole, so
+// the told-ordering paths stand untouched.
+func (d *Daemon) numericCheck(frame grammar.Frame) (subj, std *memory.Fragment, diff int, holds, ok bool) {
 	a, b := frame.Agent.Phrase, frame.Patient.Phrase
 	if a == "" && frame.Agent.Concept != nil {
 		a = frame.Agent.Concept.Content
@@ -131,33 +134,29 @@ func (d *Daemon) compareNumbers(frame grammar.Frame) (string, bool) {
 		b = frame.Patient.Concept.Content
 	}
 	if !numericLiteral(a) || !numericLiteral(b) {
-		return "", false
+		return nil, nil, 0, false, false
 	}
-	sym, ok := d.numericPole(frame.Action.Phrase)
-	if !ok || (sym != ">" && sym != "<") {
-		return "", false
+	sym, ok0 := d.numericPole(frame.Action.Phrase)
+	if !ok0 || (sym != ">" && sym != "<") {
+		return nil, nil, 0, false, false
 	}
-	diff, ran, ok := d.numericDifference(a, b)
-	if !ok {
-		return "", false
+	diff, _, ok0 = d.numericDifference(a, b)
+	if !ok0 {
+		return nil, nil, 0, false, false
 	}
-	_ = ran
-	holds := (sym == ">" && diff > 0) || (sym == "<" && diff < 0)
+	holds = (sym == ">" && diff > 0) || (sym == "<" && diff < 0)
 	subjID, stdID := d.ensureNumberConcept(a), d.ensureNumberConcept(b)
 	if subjID == 0 || stdID == 0 {
-		return "", false
+		return nil, nil, 0, false, false
 	}
 	frags, err := d.store.FragmentsByIDs([]uint64{subjID, stdID})
 	if err != nil || len(frags) != 2 {
-		return "", false
+		return nil, nil, 0, false, false
 	}
-	subj, std := frags[0], frags[1]
+	subj, std = frags[0], frags[1]
 	if subj.ID != subjID {
 		subj, std = std, subj
 	}
-	// The direction the run refuted is denied on record between the numbers,
-	// the defeasible negative every read honours and the nightly trust pass
-	// judges a source's claims against.
 	if rel := d.resolveRelation(frame.Action.Phrase); rel != nil {
 		from, to := subjID, stdID
 		if holds {
@@ -165,8 +164,104 @@ func (d *Daemon) compareNumbers(frame grammar.Frame) (string, bool) {
 		}
 		d.store.SetLinkRel(from, to, denyRel(rel.Content), computedFactWeight)
 	}
+	return subj, std, diff, holds, true
+}
+
+// compareNumbers answers a comparative question over bare numerals from the
+// check: firm, GOLEM's own observation outranking any telling.
+func (d *Daemon) compareNumbers(frame grammar.Frame) (string, bool) {
+	subj, std, _, holds, ok := d.numericCheck(frame)
+	if !ok {
+		return "", false
+	}
 	d.noteFocus(subj)
 	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
+}
+
+// magnitudeNumbers answers "how much bigger is 17 than 12" over bare numerals
+// with the metric amount the difference computes, where a told ordering could
+// only bucket ranks. A subject not standing on the asked side takes the plain
+// denial, the shape planMagnitude already answers with.
+func (d *Daemon) magnitudeNumbers(frame grammar.Frame) (string, bool) {
+	subj, std, diff, holds, ok := d.numericCheck(frame)
+	if !ok {
+		return "", false
+	}
+	d.noteFocus(subj)
+	if !holds {
+		return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, false), true
+	}
+	if diff < 0 {
+		diff = -diff
+	}
+	return d.sayMagnitude(frame.Lang, subj, frame.Action.Phrase, std, strconv.Itoa(diff)), true
+}
+
+// countMembers answers a counting question whose topic is a category: the
+// tally of the concepts the category grounds, GOLEM looking at its own graph.
+// The count is derived fresh at each asking and audited, never landed as a
+// fact, since it moves as the brain grows. It declines a topic that is no
+// category, so the episode tally answers as before.
+func (d *Daemon) countMembers(frame grammar.Frame, topic grammar.Term, chem limbic.State) (string, bool) {
+	// The category can sit in any term of the asking ("how many animals do you
+	// know" seats the pronoun as the patient and the animals as the subject),
+	// and its span can carry other words, so every term's tokens are tried
+	// through their lemmas until one names a category.
+	var c *memory.Fragment
+	for _, term := range []grammar.Term{topic, frame.Agent, frame.Patient} {
+		if d.isCategory(term.Concept) {
+			c = term.Concept
+			break
+		}
+		if term.Phrase == "" {
+			continue
+		}
+		toks, _ := grammar.Tokenize(term.Phrase)
+		for _, tok := range toks {
+			lemma := d.gram.Lemma(frame.Lang, tok)
+			if cand := d.resolveConceptLang(lemma, frame.Lang); d.isCategory(cand) {
+				c = cand
+				break
+			}
+		}
+		if c != nil {
+			break
+		}
+	}
+	if c == nil {
+		return "", false
+	}
+	edges, err := d.store.LinksFromRel([]uint64{c.ID}, memory.RelGrounds)
+	if err != nil {
+		return "", false
+	}
+	targets := make([]uint64, 0, len(edges))
+	for _, e := range edges {
+		targets = append(targets, e.To)
+	}
+	frags, err := d.store.FragmentsByIDs(targets)
+	if err != nil {
+		return "", false
+	}
+	n := 0
+	for _, f := range frags {
+		if f.Kind == memory.KindConcept {
+			n++
+		}
+	}
+	name := d.conceptName(c.ID, c.Content, frame.Lang)
+	d.event(events.Event{Ev: "count", Cue: name, Outcome: strconv.Itoa(n)})
+	if err := d.store.Audit(time.Now().Unix(), "count", name, strconv.Itoa(n)+" members"); err != nil {
+		fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+	}
+	d.noteFocus(c)
+	spoken := name
+	if n != 1 {
+		spoken = d.gram.PluralNoun(frame.Lang, name)
+	}
+	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+		Action:  grammar.Term{Phrase: "know"},
+		Patient: grammar.Term{Phrase: strconv.Itoa(n) + " " + spoken}}, chem), true
 }
 
 // numericDifference reads the difference of two numerals: the landed fact in

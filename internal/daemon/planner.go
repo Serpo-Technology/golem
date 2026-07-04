@@ -1570,6 +1570,13 @@ func (d *Daemon) planWhence(frame grammar.Frame, quals []grammar.Qualifier, chem
 // moments behind the anchor, prototype counts included.
 func (d *Daemon) planCount(frame grammar.Frame, quals []grammar.Qualifier, chem limbic.State) string {
 	topic := d.whenceAnchor(frame, quals)
+	// A category topic asks for an introspective tally: "how many animals do
+	// you know" counts the category's grounded members, a fresh look at its
+	// own graph each asking, never a cached fact, since the count moves as
+	// the brain grows. The look is audited like any other derivation.
+	if line, ok := d.countMembers(frame, topic, chem); ok {
+		return line
+	}
 	ids, face := d.anchorEpisodes(topic)
 	if len(ids) > 0 {
 		if frags, err := d.fragmentsByIDsTiered(ids); err == nil && len(frags) > 0 {
