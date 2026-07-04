@@ -299,7 +299,7 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	if lang == "" {
 		lang = "en"
 	}
-	spans, ok := p.argSpans(lang, utterance)
+	spans, ok := p.argSpans(lang, utterance, resolve)
 	if !ok {
 		return Meaning{}, false
 	}
@@ -379,7 +379,7 @@ func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(stri
 	if lang == "" {
 		lang = "en"
 	}
-	spans, ok := p.argSpans(lang, utterance)
+	spans, ok := p.argSpans(lang, utterance, resolve)
 	if !ok {
 		return Meaning{}, false
 	}
@@ -621,6 +621,14 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 	// role, so it is not unseated by another that has merely been an agent more
 	// often: "a dog chased a rabbit" stays the dog chasing, not the reverse.
 	orderAgentMisplaced := fit(ta.Concept, a) <= fit(ta.Concept, b)
+	// A filler the features say nothing about, a thing just introduced by the
+	// telling, is unknown rather than misplaced: with no kinship either way
+	// there is no evidence against the teller's order, and any grounded
+	// co-argument would clear the relative bar over a zero baseline, so the
+	// order stands until the new thing has features to weigh.
+	if fit(ta.Concept, a) == 0 && fit(ta.Concept, b) == 0 {
+		orderAgentMisplaced = false
+	}
 	// And the swap must promote a clearly better agent. A heavily grounded
 	// concept fits both roles highly through its feature kin, so on a trained
 	// graph the order's agent can read as fitting the patient role by a hair
@@ -642,8 +650,12 @@ func (p *Params) bestFit(cxn ArgConstruction, m Meaning, fit func(*memory.Fragme
 // clause, the verb taking the slot the order leaves it (between the phrases
 // for SVO, after them for SOV); one opens an intransitive clause with the
 // verb at the close; none falls back to the open-class tokens in order, the
-// canonical bare clause.
-func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
+// canonical bare clause. A single determiner can also open a transitive
+// whose object stands bare (a mass or plural noun: "a zebra ate grass"),
+// which the count alone reads as intransitive; the graph settles it: when a
+// token past the subject resolves to a learned relation, it is the
+// predicate and the trailing content the object.
+func (p *Params) argSpans(lang, utterance string, resolve func(string) *memory.Fragment) ([]string, bool) {
 	tokens, _ := Tokenize(utterance)
 	if len(tokens) == 0 {
 		return nil, false
@@ -693,6 +705,25 @@ func (p *Params) argSpans(lang, utterance string) ([]string, bool) {
 		}
 		return spans, ok
 	case len(anchors) == 1:
+		// Verb-medial with content trailing a token the graph knows as a relation:
+		// the clause is a transitive with a bare object, split at that predicate.
+		// The close-verb intransitive ("a dog sleeps") is untouched: nothing
+		// trails its verb, so the scan finds no object span and falls through.
+		if !verbFinal && resolve != nil {
+			for i := anchors[0] + 1; i < len(tokens); i++ {
+				lemma := p.verbLemma(lang, tokens[i])
+				c := resolve(lemma)
+				if c == nil || c.Category != "relation" {
+					continue
+				}
+				subj := p.contentSpan(tokens[:i])
+				obj := p.contentSpan(tokens[i+1:])
+				if subj != "" && obj != "" {
+					return []string{subj, tokens[i], obj}, true
+				}
+				break
+			}
+		}
 		verb := tokens[len(tokens)-1]
 		np1 := p.contentSpan(tokens[:len(tokens)-1])
 		return []string{np1, verb}, np1 != "" && verb != ""
