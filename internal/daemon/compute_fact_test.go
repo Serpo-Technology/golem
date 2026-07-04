@@ -95,3 +95,57 @@ func TestNumberConceptsSurviveSleep(t *testing.T) {
 		t.Fatal("its numeral should still name it at full weight")
 	}
 }
+
+// A computation asked while the runtime is shut is held as a gap, and the
+// compute faculty closes it at idle once the runtime opens: memory first, the
+// run otherwise, the answer volunteered aloud and the fact landed.
+func TestComputeActClosesHeldGap(t *testing.T) {
+	d, s := testDaemon(t)
+	d.cfg.RuntimeEnabled = false
+
+	say(t, d, "what is the sum of 6 and 7")
+	if len(d.computeGaps) != 1 || d.computeGaps[0].phrase != "the sum of 6 and 7" {
+		t.Fatalf("a comprehended call the runtime refused should be held: %+v", d.computeGaps)
+	}
+	// The same asking again does not queue twice.
+	say(t, d, "what is the sum of 6 and 7")
+	if len(d.computeGaps) != 1 {
+		t.Fatalf("a held gap dedupes: %+v", d.computeGaps)
+	}
+
+	// The signal gates on the runtime: shut means the faculty stays quiet.
+	sn := thoughtSnapshot{seedHeat: 1, computeGap: d.computeGaps[0].phrase}
+	if c := actThought(sn, actOp{name: actCompute}); c.ok {
+		t.Fatal("the compute act should stay quiet while the runtime is shut")
+	}
+	sn.computeReady = true
+	if c := actThought(sn, actOp{name: actCompute}); !c.ok || c.arg != "the sum of 6 and 7" {
+		t.Fatalf("an open runtime and a held gap should call the faculty: %+v", c)
+	}
+
+	// The runtime opens; the faculty closes the gap and lands the fact.
+	d.cfg.RuntimeEnabled = true
+	outcome, fruitful := d.actComputeNow()
+	if !fruitful || !strings.Contains(outcome, "13") {
+		t.Fatalf("the faculty should compute the held gap: %q", outcome)
+	}
+	if len(d.computeGaps) != 0 {
+		t.Fatal("the closed gap should be released")
+	}
+	if f, err := s.FragmentByTemplate("computed:add:6:7"); err != nil || f == nil {
+		t.Fatal("the faculty's finding should land as a fact")
+	}
+	if d.computeRuns != 1 {
+		t.Fatalf("a fresh run should count against the wake budget: %d", d.computeRuns)
+	}
+
+	// A second identical gap prefers the landed memory: no new run is spun.
+	d.recordComputeGap("the sum of 6 and 7", "")
+	outcome, fruitful = d.actComputeNow()
+	if !fruitful || !strings.Contains(outcome, "13") {
+		t.Fatalf("the faculty should answer from memory: %q", outcome)
+	}
+	if d.computeRuns != 1 {
+		t.Fatalf("memory should spare the budget: %d runs", d.computeRuns)
+	}
+}

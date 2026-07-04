@@ -35,6 +35,7 @@ const (
 	actSpeak       = "speak"
 	actPropose     = "propose"
 	actIntrospect  = "introspect"
+	actCompute     = "compute"
 
 	// relAct is the mental-teach face of the act space: teach --mind
 	// <word> act <name> grounds a word to a faculty the way a relation
@@ -42,7 +43,7 @@ const (
 	relAct = "act"
 )
 
-var actNames = []string{actRecall, actGround, actConsolidate, actSpeak, actPropose, actIntrospect}
+var actNames = []string{actRecall, actGround, actConsolidate, actSpeak, actPropose, actIntrospect, actCompute}
 
 // actOp is one faculty as an operation: the innate floor is the hand
 // list of acts, and everything above (worth, naming, selection) is
@@ -89,6 +90,7 @@ var actGains = map[string]float64{
 	actSpeak:       0.35,
 	actPropose:     0.40,
 	actIntrospect:  0.30,
+	actCompute:     0.55,
 }
 
 // actAppetite is the chemistry's pull toward each faculty: alarm calls
@@ -102,7 +104,7 @@ func actAppetite(chem limbic.State, name string) float64 {
 		// Sub-linear in alarm, so full-blown stress still prefers walking
 		// the stressful grounding itself over a broad retrieval.
 		a = 0.4 + 1.2*chem.Noradrenaline
-	case actGround, actPropose:
+	case actGround, actPropose, actCompute:
 		a = 0.5 + 1.5*chem.Dopamine
 	case actConsolidate:
 		a = 0.4 + chem.Serotonin
@@ -126,6 +128,7 @@ var actCooldowns = map[string]time.Duration{
 	actSpeak:       45 * time.Second,
 	actPropose:     60 * time.Second,
 	actIntrospect:  60 * time.Second,
+	actCompute:     45 * time.Second,
 }
 
 // Clutter is the tidiness signal: fresh encodes since the last
@@ -219,6 +222,13 @@ func actThought(sn thoughtSnapshot, op actOp) thoughtCandidate {
 		}
 	case actIntrospect:
 		sig = sn.introRecency
+	case actCompute:
+		// A held computation with the runtime open calls the faculty plainly:
+		// the gap is a question GOLEM already admitted it wanted answered.
+		if sn.computeReady {
+			sig = 1
+			arg = sn.computeGap
+		}
 	}
 	if sig <= 0 {
 		return none
@@ -270,6 +280,8 @@ func (d *Daemon) performAct(name string, winner thoughtCandidate) {
 		d.sayLine(line)
 		fruitful = d.lastThought != ""
 		outcome = line
+	case actCompute:
+		outcome, fruitful = d.actComputeNow()
 	}
 	trigger := "unprompted"
 	if winner.why != "" {

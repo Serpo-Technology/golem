@@ -58,6 +58,16 @@ func (d *Daemon) computeDrives(now time.Time, seedNameless bool) []drive {
 				why: "goal: wants to learn " + d.goal.topic})
 		}
 	}
+	// A held computation is an answer GOLEM owes: the urge starts real and
+	// rises as the oldest gap waits, so the compute faculty outbids idle
+	// association within a calm minute rather than letting the debt sit.
+	if len(d.computeGaps) > 0 && d.cfg.RuntimeEnabled && d.computeRuns < computeRunsPerWake {
+		age := now.Sub(d.computeGaps[0].at)
+		if u := clamp01(0.5 + age.Seconds()/120); u > driveFloor {
+			out = append(out, drive{name: "computation", act: actCompute, urge: u,
+				why: "computation: an answer is owed for " + d.computeGaps[0].phrase})
+		}
+	}
 	return out
 }
 

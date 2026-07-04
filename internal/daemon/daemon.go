@@ -70,6 +70,12 @@ type Daemon struct {
 	// It serves as the hippocampal present.
 	recent []recentMoment
 
+	// computeGaps holds computations comprehended but not yet run (the runtime
+	// was shut), for the compute faculty to close at idle; computeRuns counts
+	// thought-initiated runs since the last sleep, the per-wake budget.
+	computeGaps []computeGap
+	computeRuns int
+
 	// hot is the RAM working set in front of the sqlite archive: recent
 	// encodes and recalls answer from here, and archive hits promote.
 	hot *memory.HotTier
@@ -1711,6 +1717,9 @@ func (d *Daemon) readyToSleep() bool {
 // pressure. The counts come back so the consolidate act can judge its
 // own fruit.
 func (d *Daemon) sleepCycle() (pruned, merged, born int) {
+	// A night restores the compute faculty's run budget, the two-process
+	// counterpart of the adenosine its runs charged.
+	d.computeRuns = 0
 	_, woven := d.replay(d.lastSleep)
 	pruned, err := d.store.Sleep(d.cfg.NightlyDecay, d.cfg.PruneFloor)
 	if err != nil {
@@ -2580,6 +2589,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 
 	case "voice":
 		return d.handleVoice(req), false, false
+
+	case "runtime":
+		return d.handleRuntime(req), false, false
 
 	case "sleep":
 		// Consolidate once on demand and stay running, the same cycle the

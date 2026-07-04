@@ -226,6 +226,8 @@ type thoughtSnapshot struct {
 	canConsolidate bool    // enough time and clutter for an unprompted night
 	pendingHeld    bool    // a proposal is already awaiting the operator
 	introRecency   float64 // closeness of the last committed thought
+	computeReady   bool    // a held computation, the runtime open, budget left
+	computeGap     string  // the oldest held computation's phrase
 
 	// Drives bias the act gate: per-act multipliers with the reasons
 	// that earned them, and the held goal's topic for the recall act to
@@ -326,6 +328,10 @@ func (d *Daemon) startThinkRound() {
 	sn.pendingHeld = d.pending != nil
 	if d.lastThought != "" {
 		sn.introRecency = recencyOf(time.Now(), d.lastThoughtAt)
+	}
+	if len(d.computeGaps) > 0 {
+		sn.computeGap = d.computeGaps[0].phrase
+		sn.computeReady = d.cfg.RuntimeEnabled && d.computeRuns < computeRunsPerWake
 	}
 	seedNameless := false
 	if seed.Kind == memory.KindConcept {

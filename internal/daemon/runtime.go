@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"golem/internal/attention"
+	"golem/internal/config"
 	"golem/internal/events"
 	"golem/internal/memory"
 	"golem/internal/runtime"
@@ -64,6 +65,34 @@ func (d *Daemon) runProgram(source string) (runtime.Result, uint64) {
 		d.process(senses.Observation{Channel: "code", Content: percept, At: now}, true, true)
 	}
 	return res, artifact.ID
+}
+
+// handleRuntime is the operator's live gate on the code runtime, the voice
+// toggle's shape: on opens the sandboxed runner, off shuts it, and the setting
+// persists so a restart keeps the operator's choice. Opening it also lets the
+// compute faculty come back for the gaps it recorded while shut.
+func (d *Daemon) handleRuntime(req wire.Request) wire.Response {
+	state := func() string {
+		if d.cfg.RuntimeEnabled {
+			return "runtime on"
+		}
+		return "runtime off"
+	}
+	switch req.Arg {
+	case "", "status":
+		return wire.Response{OK: true, Say: state()}
+	case "on":
+		d.cfg.RuntimeEnabled = true
+	case "off":
+		d.cfg.RuntimeEnabled = false
+	default:
+		return wire.Response{Error: "runtime takes status, on, or off"}
+	}
+	if err := config.Save(d.home, d.cfg); err != nil {
+		fmt.Fprintf(d.out, "runtime setting not persisted: %v\n", err)
+	}
+	d.event(events.Event{Ev: "runtime", Tpl: req.Arg})
+	return wire.Response{OK: true, Say: state()}
 }
 
 // runSummary renders a run's outcome for the trail and the reply: the error

@@ -110,6 +110,7 @@ Usage:
   golem voice [on|off|status]     control whether replies are spoken
   golem voice use [NAME]          pick the speaking voice; omit NAME for
                                   the system default (say -v ? lists them)
+  golem runtime [on|off|status]   open or shut the sandboxed code runtime
   golem dump                      list every fragment held in memory
   golem dump --dot                export the memory graph as graphviz dot
   golem forget <what>             truly delete a remembered shape and its
@@ -504,6 +505,21 @@ func main() {
 			state = "on"
 		}
 		fmt.Printf("voice: %s (%s)\n", state, name)
+
+	case "runtime":
+		req := wire.Request{Cmd: "runtime", Arg: "status"}
+		if len(args) > 1 {
+			switch args[1] {
+			case "on", "off", "status":
+				req.Arg = args[1]
+			default:
+				fail(fmt.Errorf("usage: golem runtime [on|off|status]"))
+			}
+		}
+		resp := call(home, req)
+		if resp.Say != "" {
+			fmt.Println(resp.Say)
+		}
 
 	case "sleep":
 		call(home, wire.Request{Cmd: "sleep"})

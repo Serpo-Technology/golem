@@ -1209,31 +1209,19 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if !ok {
 		return "", false
 	}
-	comp, g, root, ok := d.comprehendCall(frame.Lang, phrase)
-	if !ok {
-		return "", false
+	// Memory before the machine, the run landed as a walkable fact after: the
+	// shared body the compute faculty also thinks through.
+	line, _, ok := d.computeAnswer(frame.Lang, phrase)
+	if ok {
+		return line, true
 	}
-	connective := "is"
-	if frame.Lang == "tr" {
-		connective = "eder"
+	// Comprehended but unanswerable with the runtime shut: the computation is
+	// held as a gap idle thought comes back for once the runtime opens, the
+	// same courtesy an open question earns.
+	if !d.cfg.RuntimeEnabled {
+		d.recordComputeGap(phrase, frame.Lang)
 	}
-	// Memory before the machine: a computation already grounded by a prior run
-	// answers from the fact it landed, firm, with no program spun.
-	if val, ok := d.computedFact(comp); ok {
-		return upperFirst(phrase) + " " + connective + " " + val + ".", true
-	}
-	src, ok := d.generateCode(comp, g, root)
-	if !ok {
-		return "", false
-	}
-	res, artifactID := d.runProgram(src)
-	if res.Err != "" || res.Value == "" {
-		return "", false
-	}
-	// The finding lands as a walkable fact carrying its provenance, so the next
-	// asking reads memory and the value is auditable back to the run.
-	d.groundComputation(comp, res.Value, artifactID)
-	return upperFirst(phrase) + " " + connective + " " + res.Value + ".", true
+	return "", false
 }
 
 // computationSpan finds the computation a question wraps by dropping leading words
