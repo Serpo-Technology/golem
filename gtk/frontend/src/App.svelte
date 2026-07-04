@@ -27,7 +27,7 @@
   let lastReplyAt = 0;
 
   // --- chat ---
-  type Turn = { who: 'me' | 'golem'; text: string; unprompted?: boolean };
+  type Turn = { who: 'me' | 'golem'; text: string; unprompted?: boolean; note?: boolean };
   let turns: Turn[] = [];
   let chatInput = '';
   let chatLang = '';
@@ -60,6 +60,15 @@
       const resp = await Tell(text, chatLang);
       const say = (resp?.say ?? '').trim();
       if (say) { pushTurn({ who: 'golem', text: say }); lastReply = say; lastReplyAt = Date.now(); speak(say); }
+      else {
+        // GOLEM had nothing to answer: it files a word or a statement it cannot
+        // ground silently. Acknowledge it so the chat is never dead, and hint
+        // what draws a reply.
+        const n = resp?.fragments?.length ?? 0;
+        pushTurn({ who: 'golem', note: true,
+          text: n ? `filed; it brought ${n} thing${n > 1 ? 's' : ''} to mind. Ask a question ("what is X", "is X a Y") to get an answer.`
+                  : 'filed as a memory, nothing to answer. Ask a question ("what is X", "is X a Y") to get an answer.' });
+      }
       clearErr();
       refresh();
     } catch (e) { fail(e); }
@@ -248,8 +257,8 @@
         <div class="chat">
           <div class="transcript">
             {#each turns as t}
-              <div class="turn {t.who}" class:unprompted={t.unprompted}>
-                <span class="who">{t.who === 'me' ? 'you' : 'golem'}{t.unprompted ? ' (aloud)' : ''}</span>
+              <div class="turn {t.who}" class:unprompted={t.unprompted} class:note={t.note}>
+                {#if !t.note}<span class="who">{t.who === 'me' ? 'you' : 'golem'}{t.unprompted ? ' (aloud)' : ''}</span>{/if}
                 <span class="text">{t.text}</span>
               </div>
             {/each}
@@ -523,6 +532,8 @@
   .turn .text { padding: 8px 12px; border-radius: 10px; background: #1b1e24; }
   .turn.me .text { background: #223247; color: #dfe8f2; }
   .turn.unprompted .text { background: #1a2019; color: #bcd6c6; font-style: italic; }
+  .turn.note { align-self: center; max-width: 92%; }
+  .turn.note .text { background: none; padding: 2px 0; color: #6b727e; font-size: 11px; font-style: italic; text-align: center; }
   .composer { display: flex; gap: 6px; padding-top: 10px; border-top: 1px solid #23262d; }
   .composer input { flex: 1; }
   .composer select { width: 56px; }
