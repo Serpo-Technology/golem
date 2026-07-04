@@ -65,8 +65,6 @@ Usage:
                                   the operator's
   golem trust <source> [level]    show or set how far GOLEM trusts a source
                                   (setting needs the architect's signature)
-  golem keygen                    make a keypair: the public key to register,
-                                  the private key to keep and sign with
   golem enroll <source> <pubkey>  register a peer's public key so it can prove
                                   its identity (needs the architect's signature;
                                   omit the key to revoke)
@@ -560,9 +558,6 @@ func main() {
 		}
 		fmt.Println(resp.Say)
 
-	case "keygen":
-		runKeygen()
-
 	case "sign":
 		runSign()
 
@@ -678,20 +673,6 @@ func signAuthority(req *wire.Request) {
 	if err := wire.SignRequest(priv, req); err != nil {
 		fail(err)
 	}
-}
-
-// runKeygen makes a fresh architect keypair and prints both halves: the public
-// key to place in the daemon's config (or GOLEM_ARCHITECT_PUBKEY), the private
-// key to keep and hand the signer through GOLEM_PRIVATE_KEY. The daemon never
-// sees the private half.
-func runKeygen() {
-	pub, priv, err := authkey.Generate()
-	if err != nil {
-		fail(err)
-	}
-	fmt.Println("# architect keypair. keep the private key secret; the daemon holds only the public key.")
-	fmt.Printf("architect_pubkey (config / GOLEM_ARCHITECT_PUBKEY):\n%s\n\n", pub)
-	fmt.Printf("private key (GOLEM_PRIVATE_KEY, or a file for GOLEM_PRIVATE_KEY_FILE):\n%s\n", priv)
 }
 
 // runSign reads a request as JSON on stdin, signs it with the private key from

@@ -6,8 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"gtk/client"
 	"golem/wire"
+	"gtk/client"
 )
 
 // App is the bridge the window calls into: each method is one request to the
@@ -70,6 +70,24 @@ func (a *App) Connect(net, addr, keySource string) (client.Info, error) {
 	}
 	a.startFeed()
 	return info, nil
+}
+
+// Keypair is a freshly minted architect keypair for the window to show: the
+// public half to register with a brain, the private half for the architect to
+// keep. GOLEM never mints one.
+type Keypair struct {
+	Public  string `json:"public"`
+	Private string `json:"private"`
+}
+
+// GenerateKeypair mints an architect keypair in the toolkit, the architect's
+// own instrument, so the brain never produces the confidential half.
+func (a *App) GenerateKeypair() (*Keypair, error) {
+	pub, priv, err := client.GenerateKeypair()
+	if err != nil {
+		return nil, err
+	}
+	return &Keypair{Public: pub, Private: priv}, nil
 }
 
 // ConnInfo reports where the toolkit points and whether a key is loaded.

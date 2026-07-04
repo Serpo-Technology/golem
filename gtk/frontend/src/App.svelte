@@ -4,7 +4,7 @@
     Status, Concepts, Cognition, Health, Audit, Search,
     Tell, See, Observe, Trust, Enroll,
     Retune, Runtime, Voice, Sleep, Forget,
-    Edit, Mark, Delete, Connect, ConnInfo,
+    Edit, Mark, Delete, Connect, ConnInfo, GenerateKeypair,
   } from '../wailsjs/go/main/App';
   import { EventsOn } from '../wailsjs/runtime/runtime';
   import { wire, client } from '../wailsjs/go/models';
@@ -164,8 +164,12 @@
 
   // --- settings ---
   let sNet = 'tcp', sAddr = '127.0.0.1:7777', sKey = '';
+  let newPub = '', newPriv = '';
   async function doConnect() {
     try { conn = await Connect(sNet, sAddr, sKey); clearErr(); refresh(); } catch (e) { fail(e); }
+  }
+  async function doKeygen() {
+    try { const k = await GenerateKeypair(); newPub = k?.public ?? ''; newPriv = k?.private ?? ''; clearErr(); } catch (e) { fail(e); }
   }
 
   function pick(p: Panel) {
@@ -456,6 +460,17 @@
             </div>
             {#if conn}<div class="say">now on {conn.net} {conn.addr}{conn.signed ? ', signed' : ', unsigned'}</div>{/if}
           </div>
+          <div class="card">
+            <h3>Architect keypair</h3>
+            <p class="muted">Mint your own keypair here, in your own instrument. Register the public key with the brain (its <code>architect_pubkey</code>); keep the private key and sign with it. The brain never mints one.</p>
+            <button on:click={doKeygen}>generate</button>
+            {#if newPub}
+              <div class="klabel">public key (register with the brain)</div>
+              <textarea readonly rows="2">{newPub}</textarea>
+              <div class="klabel">private key (keep secret; GOLEM_PRIVATE_KEY or a key file)</div>
+              <textarea readonly rows="3">{newPriv}</textarea>
+            {/if}
+          </div>
         </div>
       {/if}
     </section>
@@ -528,6 +543,9 @@
   .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 13px; color: #b9c0cb; }
   .grid b { color: #e6e8ec; }
   .thumb { max-width: 200px; max-height: 160px; border-radius: 6px; margin: 10px 0; display: block; border: 1px solid #23262d; }
+  .card .klabel { display: block; font-size: 11px; color: #8a919c; margin: 10px 0 4px; }
+  .card textarea[readonly] { width: 100%; box-sizing: border-box; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #a7d8bf; resize: none; }
+  .card code { background: #1f2630; color: #8fb4d6; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
   .subnav { display: flex; gap: 4px; margin-bottom: 12px; }
   .subnav button { padding: 5px 12px; font-size: 12px; }

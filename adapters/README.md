@@ -37,7 +37,7 @@ the architect's own transducers rather than an open door. Make a keypair once,
 put the public key in the brain's config, and keep the private key on the host.
 
 ```
-golem keygen
+gtk keygen
 # prints the public key (config / GOLEM_ARCHITECT_PUBKEY) and the private key
 # put the public key in runtime/config.json as "architect_pubkey", or pass it
 # to the container as GOLEM_ARCHITECT_PUBKEY; keep the private key secret
@@ -63,7 +63,7 @@ docker run -d --name golem-brain -p 127.0.0.1:7777:7777 \
   -v "$PWD/runtime:/root/.golem" golem:latest golem run
 
 # the adapters need the private key to sign; keep it out of the container
-export GOLEM_PRIVATE_KEY='<the private key from golem keygen>'
+export GOLEM_PRIVATE_KEY='<the private key from gtk keygen>'
 
 # ears + console: type, or pipe a recognizer in
 python3 adapters/golem-listen.py --lang tr

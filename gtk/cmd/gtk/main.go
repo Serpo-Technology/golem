@@ -12,11 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"gtk/client"
 	"golem/wire"
+	"gtk/client"
 )
 
 const usage = `gtk is a console for GOLEM's memory, talking to the running daemon.
+
+Keys, the architect's own (the brain never mints one):
+  gtk keygen              make an architect keypair: register the public key
+                          with the brain, keep the private key to sign with
 
 Read:
   gtk status              the daemon's vital signs and workspace
@@ -41,6 +45,13 @@ func main() {
 	args := os.Args[1:]
 	if len(args) == 0 {
 		fmt.Print(usage)
+		return
+	}
+	// Key generation needs no brain: it is the architect minting their own
+	// keypair, done here rather than in GOLEM, which only ever holds the
+	// public half.
+	if args[0] == "keygen" {
+		runKeygen()
 		return
 	}
 	c, err := client.New()
@@ -171,6 +182,21 @@ func check(c *client.Client, err error) {
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "gtk:", err)
 	os.Exit(1)
+}
+
+// runKeygen mints an architect keypair and prints both halves: the public key
+// to register with a brain (its config's architect_pubkey, or
+// GOLEM_ARCHITECT_PUBKEY), the private key to keep and sign with
+// (GOLEM_PRIVATE_KEY, or a file for GOLEM_PRIVATE_KEY_FILE). GOLEM never sees
+// the private half; the architect mints it here.
+func runKeygen() {
+	pub, priv, err := client.GenerateKeypair()
+	if err != nil {
+		fail(err)
+	}
+	fmt.Println("# architect keypair. keep the private key secret; the brain holds only the public key.")
+	fmt.Printf("architect_pubkey (config / GOLEM_ARCHITECT_PUBKEY):\n%s\n\n", pub)
+	fmt.Printf("private key (GOLEM_PRIVATE_KEY, or a file for GOLEM_PRIVATE_KEY_FILE):\n%s\n", priv)
 }
 
 // recent keeps the n most recent entries of the trail. The daemon returns it

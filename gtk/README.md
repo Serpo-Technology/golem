@@ -18,11 +18,12 @@ It ships in two faces of one client:
 ## Generating the keypair
 
 The brain authenticates the architect by an Ed25519 signature. You hold the
-private key; the brain holds only the matching public key. Make a keypair once
-with the `golem` binary:
+private key; the brain holds only the matching public key. The toolkit mints the
+keypair, not the brain: a confidential key should never be produced by GOLEM.
+Make one once with the console (or the **Settings** panel in the window):
 
 ```bash
-golem keygen
+gtk keygen
 ```
 
 It prints two things:
