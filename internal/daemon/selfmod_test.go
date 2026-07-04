@@ -1,12 +1,14 @@
 package daemon
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"golem/internal/selfbuild"
+	"golem/wire"
 )
 
 // selfModModule writes a tiny module to stand in for GOLEM's own source, so a
@@ -180,5 +182,72 @@ func TestRetuneGatedShut(t *testing.T) {
 	res := d.proposeRetune("main.go", "threshold", "4", "tighten", improvedFitness)
 	if res.Accepted || res.Stage != "gate" {
 		t.Fatalf("a retune should be closed by default: %+v", res)
+	}
+}
+
+// The off-loop entry hands the build to a goroutine and returns at once: the
+// verdict must not land until the loop settles it through execDone, the build
+// holds a run slot while it works, a second self-change is refused while one
+// builds, and the settled verdict matches the in-line pipeline's.
+// drainActions plays the Run loop's part here.
+func TestSelfChangeBuildsOffTheLoop(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.home = t.TempDir()
+	d.cfg.RuntimeEnabled = true
+	d.cfg.SourcePath = selfModModule(t)
+	d.cfg.MainPackage = "."
+
+	var got *selfbuild.Result
+	refusal := d.beginSelfChange(rename(`"hello"`, `"howdy"`), improvedFitness,
+		func(res selfbuild.Result) { got = &res })
+	if refusal != "" {
+		t.Fatalf("an open gate should launch the build: %s", refusal)
+	}
+	if got != nil {
+		t.Fatal("the verdict must not land before the loop settles it")
+	}
+	if len(d.running) != 1 {
+		t.Fatalf("the build should hold a run slot while it works: %d", len(d.running))
+	}
+	if r := d.beginSelfChange(rename(`"hello"`, `"hiya"`), improvedFitness,
+		func(selfbuild.Result) {}); !strings.Contains(r, "already building") {
+		t.Fatalf("a second self-change should be refused while one builds: %q", r)
+	}
+	d.drainActions()
+	if got == nil || !got.Accepted {
+		t.Fatalf("the settled verdict should accept the clean change: %+v", got)
+	}
+	if !strings.HasPrefix(got.Candidate, d.home) {
+		t.Fatalf("the candidate must stage under home: %q", got.Candidate)
+	}
+	if len(d.running) != 0 {
+		t.Fatal("the run slot should be released when the build settles")
+	}
+}
+
+// The conversational retune replies before the toolchain runs and speaks the
+// verdict when the build lands: the reply promises the outcome, and after the
+// loop settles the build the spoken line says where the candidate waits.
+func TestRetuneEntryRepliesBeforeTheBuild(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.home = t.TempDir()
+	d.cfg.RuntimeEnabled = true
+	d.cfg.SourcePath = tunableModule(t)
+	d.cfg.MainPackage = "."
+	var out bytes.Buffer
+	d.out = &out
+
+	resp := d.handleRetune(wire.Request{Query: "main.go", Arg: "threshold", Content: "4"})
+	if !strings.Contains(resp.Say, "building") {
+		t.Fatalf("the reply should promise the build, not wait for it: %q", resp.Say)
+	}
+	if strings.Contains(out.String(), "deploy") {
+		t.Fatalf("the verdict must not be spoken before the build lands: %q", out.String())
+	}
+	d.drainActions()
+	said := out.String()
+	if !strings.Contains(said, "built and tested clean") ||
+		!strings.Contains(said, "for the architect to deploy") {
+		t.Fatalf("the settled verdict should be spoken with where the candidate waits: %q", said)
 	}
 }

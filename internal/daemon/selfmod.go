@@ -27,39 +27,41 @@ import (
 // tree is not a snippet, and the pipeline runs off the loop.
 const selfBuildBudget = 5 * time.Minute
 
-// proposeSelfChange runs a proposed change to GOLEM's own source through the
-// pipeline and the fitness gate. It is gated twice, the runtime open and a
-// source path set, and never touches the original tree or the live binary: it
-// builds and tests on a copy, and on a passing fitness verdict leaves a
-// candidate staged for the operator to deploy. A change that fails to compile,
-// to test, or to improve is rejected and the prior stands, the whole event on
-// the trail.
-func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVerdict) selfbuild.Result {
+// selfModShut is the refusal both entries give while the gates are down: it
+// takes the runtime open and a source path set, two opt-ins, to build.
+const selfModShut = "self-modification is closed; set runtime_enabled and source_path inside the sandbox"
+
+// selfChangeGrounds checks the gates and prepares the staging ground, handing
+// back the paths a build needs. The refusal carries the stage it died at, so
+// the in-line and the off-loop entries decline the same way.
+func (d *Daemon) selfChangeGrounds() (src, stage, main string, refuse selfbuild.Result) {
 	if !d.cfg.RuntimeEnabled || d.cfg.SourcePath == "" {
-		return selfbuild.Result{Stage: "gate",
-			Err: "self-modification is closed; set runtime_enabled and source_path inside the sandbox"}
+		return "", "", "", selfbuild.Result{Stage: "gate", Err: selfModShut}
 	}
-	stage := filepath.Join(d.home, "stage")
+	stage = filepath.Join(d.home, "stage")
 	if err := os.MkdirAll(stage, 0o755); err != nil {
-		return selfbuild.Result{Stage: "stage", Err: err.Error()}
+		return "", "", "", selfbuild.Result{Stage: "stage", Err: err.Error()}
 	}
-	main := d.cfg.MainPackage
+	main = d.cfg.MainPackage
 	if main == "" {
 		main = "./cmd/golem"
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), selfBuildBudget)
-	defer cancel()
+	return d.cfg.SourcePath, stage, main, selfbuild.Result{}
+}
 
-	res := selfbuild.Build(ctx, d.cfg.SourcePath, stage, main, "golem-candidate", ch)
+// settleSelfChange absorbs a finished build single-threaded: the trail event,
+// the audit, and the fitness gate all touch daemon state, so the loop runs
+// them whether the build ran in line or off to the side. The candidate built
+// and tested clean before fitness judges whether it improves a grounded
+// outcome; a change that does not is reverted by discarding the candidate, so
+// a valid-but-pointless change never reaches deploy.
+func (d *Daemon) settleSelfChange(ch selfbuild.Change, res selfbuild.Result,
+	fitness func() fitnessVerdict) selfbuild.Result {
 	d.event(events.Event{Ev: "selfmod", Tpl: ch.File, Outcome: res.Stage})
 	d.auditSelfmod(ch, res.Stage, res.Err)
 	if !res.Accepted {
 		return res // a compile or test failure: the prior binary stands
 	}
-
-	// The candidate built and tested clean; fitness judges whether it improves
-	// a grounded outcome. A change that does not is reverted by discarding the
-	// candidate, so a valid-but-pointless change never reaches deploy.
 	v := fitness()
 	if !keepOrRevert(v, func() { os.Remove(res.Candidate) }) {
 		d.auditSelfmod(ch, "fitness", v.reason)
@@ -69,14 +71,63 @@ func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVe
 	return res
 }
 
+// proposeSelfChange runs a proposed change to GOLEM's own source through the
+// pipeline and the fitness gate, in line: the caller waits out the build. It
+// is gated twice, the runtime open and a source path set, and never touches
+// the original tree or the live binary: it builds and tests on a copy, and on
+// a passing fitness verdict leaves a candidate staged for the operator to
+// deploy. A change that fails to compile, to test, or to improve is rejected
+// and the prior stands, the whole event on the trail.
+func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVerdict) selfbuild.Result {
+	src, stage, main, refuse := d.selfChangeGrounds()
+	if refuse.Err != "" {
+		return refuse
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), selfBuildBudget)
+	defer cancel()
+	res := selfbuild.Build(ctx, src, stage, main, "golem-candidate", ch)
+	return d.settleSelfChange(ch, res, fitness)
+}
+
+// beginSelfChange runs the same pipeline off the brain loop. The gates and the
+// staging ground are checked here for an immediate refusal; the copy, build,
+// and test run in a goroutine that touches no daemon state; and the outcome
+// marshals back through execDone, where the loop settles it single-threaded
+// and hands the verdict to done. The build holds a run slot while it works,
+// and only one self-build runs at a time: the toolchain is too heavy to race
+// against itself.
+func (d *Daemon) beginSelfChange(ch selfbuild.Change, fitness func() fitnessVerdict,
+	done func(selfbuild.Result)) (refusal string) {
+	src, stage, main, refuse := d.selfChangeGrounds()
+	if refuse.Err != "" {
+		return refuse.Err
+	}
+	for _, run := range d.running {
+		if strings.HasPrefix(run.cmd, "selfbuild ") {
+			return "a self-change is already building; its outcome lands on the trail first"
+		}
+	}
+	d.nextRunID++
+	id := d.nextRunID
+	d.running[id] = &actionRun{cmd: "selfbuild " + ch.File}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), selfBuildBudget)
+		defer cancel()
+		res := selfbuild.Build(ctx, src, stage, main, "golem-candidate", ch)
+		d.execDone <- execResult{id: id, ran: true, ok: res.Accepted, outcome: res.Stage,
+			finish: func(bool, bool, string) { done(d.settleSelfChange(ch, res, fitness)) }}
+	}()
+	return ""
+}
+
 // handleRetune is the operator's conversational entry to the retune pipeline:
-// golem retune <file> <constant> <value>. The gates stay proposeRetune's own
-// (the runtime open and a source path set), and the fitness for an
-// operator-asked change is the operator's judgment at deploy time, so a
-// candidate that built and tested clean is kept staged and the reply says
-// where it waits. The build compiles and tests the whole tree, so the daemon
-// is busy for its duration; the pipeline never touches the original tree or
-// the live binary.
+// golem retune <file> <constant> <value>. The gates and the constant reading
+// stay on the loop, so a shut gate, an absent constant, or a build already
+// running is refused in the reply; the build and test run beside the mind,
+// which keeps sensing and answering, and the verdict is spoken and audited
+// when it lands. The fitness for an operator-asked change is the operator's
+// judgment at deploy time, so a candidate that built and tested clean is kept
+// staged.
 func (d *Daemon) handleRetune(req wire.Request) wire.Response {
 	file := strings.TrimSpace(req.Query)
 	name := strings.TrimSpace(req.Arg)
@@ -84,40 +135,59 @@ func (d *Daemon) handleRetune(req wire.Request) wire.Response {
 	if file == "" || name == "" || value == "" {
 		return wire.Response{Error: "retune needs a file, a constant, and a value"}
 	}
-	res := d.proposeRetune(file, name, value, "the architect asked", func() fitnessVerdict {
+	ch, refuse := d.retuneChange(file, name, value, "the architect asked")
+	if refuse.Err != "" {
+		return wire.Response{OK: true, Say: "retune " + refuse.Stage + ": " + refuse.Err}
+	}
+	fitness := func() fitnessVerdict {
 		return fitnessVerdict{improved: true,
 			reason: "the architect asked; the deploy stays the architect's"}
-	})
-	if res.Err != "" {
-		return wire.Response{OK: true, Say: "retune " + res.Stage + ": " + res.Err}
 	}
-	return wire.Response{OK: true, Say: "I built and tested a candidate with " + name +
-		" retuned to " + value + ". It waits at " + res.Candidate + " for the architect to deploy."}
+	asked := "the retune of " + name + " to " + value
+	if busy := d.beginSelfChange(ch, fitness, func(res selfbuild.Result) {
+		if res.Err != "" {
+			d.sayLine(asked + " died at " + res.Stage + ": " + res.Err)
+			return
+		}
+		d.sayLine(asked + " built and tested clean. The candidate waits at " +
+			res.Candidate + " for the architect to deploy.")
+	}); busy != "" {
+		return wire.Response{OK: true, Say: "retune: " + busy}
+	}
+	return wire.Response{OK: true, Say: "I am building and testing a candidate with " + name +
+		" retuned to " + value + ". I stay awake while it runs and will say the outcome."}
 }
 
-// proposeRetune is a self-change born of reading the source: GOLEM reads a
-// tuning constant out of its own source, sees what it is now, and proposes a new
-// value for it. The edit is an AST-located splice of that one declaration, so
-// the change comes from understanding what is there rather than a transform
-// handed in, and it runs the same pipeline and fitness gate as any self-change.
-// A constant that is not there is declined at the reading, before any build.
-func (d *Daemon) proposeRetune(file, name, newValue, why string, fitness func() fitnessVerdict) selfbuild.Result {
+// retuneChange reads a tuning constant out of the source and shapes the edit:
+// an AST-located splice of that one declaration, so the change comes from
+// understanding what is there rather than a transform handed in. A shut gate
+// or a constant that is not there is declined at the reading, before any
+// build.
+func (d *Daemon) retuneChange(file, name, newValue, why string) (selfbuild.Change, selfbuild.Result) {
 	if !d.cfg.RuntimeEnabled || d.cfg.SourcePath == "" {
-		return selfbuild.Result{Stage: "gate",
-			Err: "self-modification is closed; set runtime_enabled and source_path inside the sandbox"}
+		return selfbuild.Change{}, selfbuild.Result{Stage: "gate", Err: selfModShut}
 	}
 	src, err := os.ReadFile(filepath.Join(d.cfg.SourcePath, file))
 	if err != nil {
-		return selfbuild.Result{Stage: "read", Err: err.Error()}
+		return selfbuild.Change{}, selfbuild.Result{Stage: "read", Err: err.Error()}
 	}
 	old, err := code.ConstValue(string(src), name)
 	if err != nil {
-		return selfbuild.Result{Stage: "read", Err: err.Error()}
+		return selfbuild.Change{}, selfbuild.Result{Stage: "read", Err: err.Error()}
 	}
-	ch := selfbuild.Change{
+	return selfbuild.Change{
 		File:  file,
 		Why:   fmt.Sprintf("%s: retune %s from %s to %s", why, name, old, newValue),
 		Apply: func(s string) (string, error) { return code.SetConst(s, name, newValue) },
+	}, selfbuild.Result{}
+}
+
+// proposeRetune is the in-line twin: the same reading and the same pipeline,
+// with the caller waiting out the build.
+func (d *Daemon) proposeRetune(file, name, newValue, why string, fitness func() fitnessVerdict) selfbuild.Result {
+	ch, refuse := d.retuneChange(file, name, newValue, why)
+	if refuse.Err != "" {
+		return refuse
 	}
 	return d.proposeSelfChange(ch, fitness)
 }
