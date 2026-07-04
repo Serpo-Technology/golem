@@ -79,6 +79,13 @@ type Daemon struct {
 	computeRuns      int
 	triedConjectures map[string]bool
 
+	// statementAbandoned marks that the current telling was read as a
+	// proposition and yielded none (a misparse: a clausal shape whose roles
+	// never bound). Such a telling lays no naming company and no attention
+	// binding: an utterance the grammar could not understand must be inert,
+	// not grounded into whatever happened to be warm. Reset before each plan.
+	statementAbandoned bool
+
 	// hot is the RAM working set in front of the sqlite archive: recent
 	// encodes and recalls answer from here, and archive hits promote.
 	hot *memory.HotTier
@@ -971,6 +978,36 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 	}
 	_, ok := d.refinements[id]
 	return ok
+}
+
+// scaffoldingConcept reports whether a concept is grammar living in the graph
+// rather than a thing talk can be about: an answer or argument construction,
+// a declarative rule or its parts, or a bare grammatical class. Such a node
+// shares the graph's namespace but must never resolve as the referent of an
+// ordinary word, bind a proposition's role, or be spoken as a noun phrase.
+// Participants, operations, and colour cells are system concepts too, but
+// words legitimately resolve to them (deixis, "+", "red"), so they stay out
+// of this seal.
+func (d *Daemon) scaffoldingConcept(id uint64) bool {
+	if _, ok := d.categoryClasses[id]; ok {
+		return true
+	}
+	if _, ok := d.argConstructions[id]; ok {
+		return true
+	}
+	if d.argConstructionParts[id] {
+		return true
+	}
+	if _, ok := d.declRules[id]; ok {
+		return true
+	}
+	if d.declParts[id] {
+		return true
+	}
+	if _, ok := d.answerConstructions[id]; ok {
+		return true
+	}
+	return d.answerConstructionParts[id]
 }
 
 // Run blocks until the daemon is stopped by a signal or a stop command.
@@ -2243,6 +2280,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				frame = walked
 			}
 		}
+		d.statementAbandoned = false
 		resp.Say, resp.Decision = d.plan(frame, req.Content, res.FragmentID)
 		// The words enter the lexicon only after the clause is read, so an
 		// inflection keys on the lemma comprehension has by now established: a
@@ -2262,8 +2300,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// A declarative lays the naming company consolidation later reads; a question or a
 		// command lays none, so its words keep no company with what was warm. The word node
 		// may still be created, but inert, with nothing for naming to read.
+		// A telling comprehension read as a proposition and then abandoned (a
+		// misparse) names nothing either: its words must stay inert rather than
+		// keep company with whatever lingered warm.
 		var namingAnchors []recentMoment
-		if declarative {
+		if declarative && !d.statementAbandoned {
 			namingAnchors = d.recentNaming(time.Now(), res.FragmentID)
 		}
 		words := d.mintWordsScaled(req.Content, req.Lang, res.FragmentID, namingAnchors, false, speakerTrust)
@@ -2276,7 +2317,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// comparison names nothing either: "the horse is bigger than the dog" states
 		// an ordering, so its words must not ground in the standard that was warm
 		// (else the dog's word keeps company with the horse and they blur).
-		if declarative && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) {
+		if declarative && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) && !d.statementAbandoned {
 			d.bindAttention(words, attn)
 			// Record what the naming pointed at, the freshest percept, as a salience
 			// the abstraction pass reads apart from the uniform company: a name said

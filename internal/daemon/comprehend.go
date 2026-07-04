@@ -48,21 +48,25 @@ func nounHead(phrase string) string {
 // never minted, so a determiner or particle that slipped into a span is left alone.
 // It returns the existing concept when the noun already names one.
 func (d *Daemon) mintNounConcept(phrase, lang string) *memory.Fragment {
-	head := nounHead(phrase)
-	if head == "" || d.gram.IsFunctionWord(lang, head) {
-		return nil
-	}
 	// A numeral is a number, one concept per value however it arrives, so a
 	// told claim about 17 and a computed fact about 17 meet on the same node.
-	if numericLiteral(head) {
-		if id := d.ensureNumberConcept(head); id != 0 {
+	// It is read off the whole phrase before the head extraction, which reads
+	// word heads and drops a bare digit.
+	if n := strings.TrimSpace(phrase); numericLiteral(n) {
+		if id := d.ensureNumberConcept(n); id != 0 {
 			if frags, err := d.store.FragmentsByIDs([]uint64{id}); err == nil && len(frags) == 1 {
 				return frags[0]
 			}
 		}
 		return nil
 	}
-	if c := d.resolveConcept(head); c != nil {
+	head := nounHead(phrase)
+	if head == "" || d.gram.IsFunctionWord(lang, head) {
+		return nil
+	}
+	// A head that resolves only to grammar scaffolding is unresolved: the real
+	// noun is minted so the teaching lands on a thing, not on a form pole.
+	if c := d.resolveConcept(head); c != nil && !d.scaffoldingConcept(c.ID) {
 		return c
 	}
 	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: head,
@@ -88,7 +92,7 @@ func (d *Daemon) acquirePatient(phrase, lang string, rel, agent *memory.Fragment
 	if lemma == "" || d.gram.IsFunctionWord(lang, lemma) {
 		return nil
 	}
-	if c := d.resolveConcept(lemma); c != nil {
+	if c := d.resolveConcept(lemma); c != nil && !d.scaffoldingConcept(c.ID) {
 		return c
 	}
 	if twin := d.crossTonguePatient(rel, agent, lang); twin != nil {
@@ -279,13 +283,25 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		}
 	}
 	agent := m.Roles["agent"]
+	// A role that resolved to grammar scaffolding is unresolved: the clause is
+	// about a thing, and the mint below gives it one, rather than binding the
+	// proposition onto a form pole a substring happened to hit.
+	if agent.Concept != nil && d.scaffoldingConcept(agent.Concept.ID) {
+		agent.Concept = nil
+	}
+	if p := m.Roles["patient"]; p.Concept != nil && d.scaffoldingConcept(p.Concept.ID) {
+		p.Concept = nil
+		m.Roles["patient"] = p
+	}
 	if agent.Concept == nil {
 		// Only a transitive content proposition acquires a noun ("a model predicts a
 		// word"): a clause with no object is a copula predication ("the gizmo is
 		// broken") or an intransitive, not a proposition to mint a subject from, so
 		// its unknown is left to curiosity, as it was before acquisition reached the
-		// noun side.
+		// noun side. The clause was read as a proposition and yielded none, so it
+		// lays no naming either: the abandonment is marked for the tell handler.
 		if m.Roles["patient"].Phrase == "" {
+			d.statementAbandoned = true
 			return false
 		}
 		// An unknown noun subject is minted as its own concept, the same acquisition
@@ -293,6 +309,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 		// names no percept enters the graph and the usage space places it. A subject
 		// that is no mintable noun (a stray particle) is still no proposition.
 		if agent.Concept = d.mintNounConcept(agent.Phrase, frame.Lang); agent.Concept == nil {
+			d.statementAbandoned = true
 			return false
 		}
 	}
@@ -3137,7 +3154,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		if i == verbIdx {
 			continue
 		}
-		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+		if c := d.resolveConcept(t); c != nil && c.Category != "relation" && !d.scaffoldingConcept(c.ID) {
 			known = c
 			break
 		}

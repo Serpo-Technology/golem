@@ -363,8 +363,15 @@ func (d *Daemon) growAbstractions() (born int) {
 			}
 		}
 		if target != 0 {
-			if err := d.store.SetLinkRel(w.ID, target, memory.RelNames, absNameWeight); err != nil {
-				fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
+			// The bind must land on something real: a percept, or a concept this
+			// word already names outright (an abstract noun refreshing its own
+			// name). A perceptless stranger the word never named is a stray
+			// attention edge, not a referent; promoting it would launder one
+			// mis-binding into a firm name, the guard growConcepts already keeps.
+			if existing[target] > 0 || !d.isPerceptless(target) {
+				if err := d.store.SetLinkRel(w.ID, target, memory.RelNames, absNameWeight); err != nil {
+					fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
+				}
 			}
 			continue
 		}
@@ -922,8 +929,11 @@ func (d *Daemon) attentionAnchors() []recentMoment {
 		// has no episodic moment to lend even though it is what is held in
 		// mind. Bind the word to the concept itself, so a name taught
 		// across several attended categories grounds in those categories
-		// rather than falling through to one of their members.
-		if n == 0 {
+		// rather than falling through to one of their members. Only a
+		// concept that grounds SOMETHING earns this: a bare perceptless
+		// mint, merely warm from the previous telling, has no standing to
+		// become the referent of an unrelated word.
+		if n == 0 && len(epIDs) > 0 {
 			out = append(out, recentMoment{id: frags[0].ID, template: frags[0].Template, at: frags[0].Time, heat: e.heat})
 		}
 	}

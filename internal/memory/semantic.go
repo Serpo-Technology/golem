@@ -69,13 +69,20 @@ func (s *Store) EpisodesByExactShape(phrase string, limit int) ([]*Fragment, err
 // the phrase. This is how a spoken phrase reaches a concept no word names
 // yet: by content, the way episodic recall already works.
 func (s *Store) ConceptsByGloss(phrase string, limit int) ([]*Fragment, error) {
-	q := strings.ToLower(phrase)
+	q := strings.ToLower(strings.TrimSpace(phrase))
 	if q == "" {
 		return nil, nil
 	}
+	// The match is on whole words of the CONTENT, never a raw substring and
+	// never the template key: "edge" must not hit a template whose form pole
+	// contains "vp_hedge", nor a template keyed ":hedge". Scaffolding
+	// categories are excluded outright, the same set the nightly decay spares:
+	// grammar living in the graph is not a thing a gloss can refer to.
 	return s.query(`SELECT `+fragmentCols+` FROM fragments
-		WHERE kind = ? AND (instr(lower(content), ?) > 0 OR instr(lower(template), ?) > 0)
-		ORDER BY id LIMIT ?`, KindConcept, q, q, limit)
+		WHERE kind = ?
+		AND category NOT IN ('construction', 'declgrammar', 'class', 'answer', 'source')
+		AND instr(' ' || lower(content) || ' ', ' ' || ? || ' ') > 0
+		ORDER BY id LIMIT ?`, KindConcept, q, limit)
 }
 
 // Internal channels carry the mind rather than the world: speech is

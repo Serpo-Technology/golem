@@ -136,7 +136,10 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 					// the thing is the referent, so the innate cell edge, immortal
 					// because links into a class are decay-spared, is set aside. bestAny
 					// still lets a bare colour word that names only its cell resolve.
-					if d.colourCells[f.ID] {
+					// Grammar scaffolding (a construction, a rule, a bare class) is
+					// set aside the same way: it lives in the graph but is never
+					// the referent of an ordinary word.
+					if d.colourCells[f.ID] || d.scaffoldingConcept(f.ID) {
 						continue
 					}
 					if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
@@ -157,8 +160,15 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 			}
 		}
 	}
-	if concepts, err := d.store.ConceptsByGloss(phrase, 1); err == nil && len(concepts) > 0 {
-		return concepts[0]
+	if concepts, err := d.store.ConceptsByGloss(phrase, 3); err == nil {
+		// The gloss fallback matches content by whole word, but the store cannot
+		// know the daemon's scaffolding maps, so the seal is applied here: a
+		// construction or rule node is never the referent of an ordinary word.
+		for _, c := range concepts {
+			if !d.scaffoldingConcept(c.ID) {
+				return c
+			}
+		}
 	}
 	return nil
 }
