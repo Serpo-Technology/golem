@@ -111,6 +111,8 @@ Usage:
   golem voice use [NAME]          pick the speaking voice; omit NAME for
                                   the system default (say -v ? lists them)
   golem runtime [on|off|status]   open or shut the sandboxed code runtime
+  golem retune FILE CONST VALUE   build and test a candidate with one
+                                  constant changed; deploy stays yours
   golem dump                      list every fragment held in memory
   golem dump --dot                export the memory graph as graphviz dot
   golem forget <what>             truly delete a remembered shape and its
@@ -520,6 +522,17 @@ func main() {
 		if resp.Say != "" {
 			fmt.Println(resp.Say)
 		}
+
+	case "retune":
+		if len(args) < 4 {
+			fail(fmt.Errorf("usage: golem retune FILE CONSTANT VALUE"))
+		}
+		resp := call(home, wire.Request{Cmd: "retune",
+			Query: args[1], Arg: args[2], Content: strings.Join(args[3:], " ")})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
 
 	case "sleep":
 		call(home, wire.Request{Cmd: "sleep"})

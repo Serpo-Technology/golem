@@ -111,6 +111,12 @@ func copyTree(src, dst string) error {
 			}
 			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
 		}
+		// A live tree carries more than source: the runtime folder holds the
+		// daemon's own socket, and sockets and pipes cannot be read as files.
+		// Only regular files take part in a build, so only they are copied.
+		if !entry.Type().IsRegular() {
+			return nil
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

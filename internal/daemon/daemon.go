@@ -2640,6 +2640,9 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 	case "runtime":
 		return d.handleRuntime(req), false, false
 
+	case "retune":
+		return d.handleRetune(req), false, false
+
 	case "sleep":
 		// Consolidate once on demand and stay running, the same cycle the
 		// homeostasis tick fires when the daemon falls quiet. It runs on the

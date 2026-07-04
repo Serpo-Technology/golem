@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"golem/internal/memory"
+	"golem/wire"
 )
 
 // A statement comprehension read as a proposition and then abandoned (a
@@ -110,5 +111,19 @@ func TestDeicticRoleQuestionSpeaksFirstPerson(t *testing.T) {
 	}
 	if !strings.Contains(got, "I r") || !strings.Contains(got, "program") {
 		t.Fatalf("the answer should be the first-person fact: %q", got)
+	}
+}
+
+// The retune entry keeps its gates: with the runtime shut or no source path,
+// the pipeline refuses and says why, and a malformed ask is refused outright.
+func TestRetuneEntryGated(t *testing.T) {
+	d, _ := testDaemon(t)
+	resp := d.handleRetune(wire.Request{Query: "internal/daemon/act.go", Arg: "opWeightCeil", Content: "2.5"})
+	if !strings.Contains(resp.Say, "closed") {
+		t.Fatalf("a shut gate should refuse with the reason: %q", resp.Say)
+	}
+	resp = d.handleRetune(wire.Request{Query: "", Arg: "x", Content: "1"})
+	if resp.Error == "" {
+		t.Fatal("a malformed retune should be refused")
 	}
 }

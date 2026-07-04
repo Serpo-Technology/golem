@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golem/internal/code"
 	"golem/internal/events"
 	"golem/internal/selfbuild"
+	"golem/wire"
 )
 
 // Self-modification is the keystone of the self-extending GOLEM, and it earns
@@ -65,6 +67,32 @@ func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVe
 	}
 	d.auditSelfmod(ch, "staged", "candidate awaiting operator deploy: "+v.reason)
 	return res
+}
+
+// handleRetune is the operator's conversational entry to the retune pipeline:
+// golem retune <file> <constant> <value>. The gates stay proposeRetune's own
+// (the runtime open and a source path set), and the fitness for an
+// operator-asked change is the operator's judgment at deploy time, so a
+// candidate that built and tested clean is kept staged and the reply says
+// where it waits. The build compiles and tests the whole tree, so the daemon
+// is busy for its duration; the pipeline never touches the original tree or
+// the live binary.
+func (d *Daemon) handleRetune(req wire.Request) wire.Response {
+	file := strings.TrimSpace(req.Query)
+	name := strings.TrimSpace(req.Arg)
+	value := strings.TrimSpace(req.Content)
+	if file == "" || name == "" || value == "" {
+		return wire.Response{Error: "retune needs a file, a constant, and a value"}
+	}
+	res := d.proposeRetune(file, name, value, "the architect asked", func() fitnessVerdict {
+		return fitnessVerdict{improved: true,
+			reason: "the architect asked; the deploy stays the architect's"}
+	})
+	if res.Err != "" {
+		return wire.Response{OK: true, Say: "retune " + res.Stage + ": " + res.Err}
+	}
+	return wire.Response{OK: true, Say: "I built and tested a candidate with " + name +
+		" retuned to " + value + ". It waits at " + res.Candidate + " for the architect to deploy."}
 }
 
 // proposeRetune is a self-change born of reading the source: GOLEM reads a
