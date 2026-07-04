@@ -16,14 +16,29 @@ captioner, or a keyboard into that text.
 """
 import argparse
 import json
+import os
 import socket
+import subprocess
 import sys
+
+
+def sign(req):
+    """Sign a request through the golem CLI, which reads the private key from
+    GOLEM_PRIVATE_KEY. Every request over the network transport must be signed;
+    the CLI holds the one signing implementation so an adapter needs no crypto
+    of its own. Set GOLEM_BIN to point at the binary if it is not on PATH."""
+    binary = os.environ.get("GOLEM_BIN", "golem")
+    out = subprocess.run([binary, "sign"], input=json.dumps(req).encode(),
+                         capture_output=True)
+    if out.returncode != 0:
+        raise OSError(out.stderr.decode().strip() or "golem sign failed")
+    return out.stdout.strip()
 
 
 def call(addr, req):
     host, port = addr.rsplit(":", 1)
     with socket.create_connection((host, int(port)), timeout=120) as sock:
-        sock.sendall((json.dumps(req) + "\n").encode())
+        sock.sendall(sign(req) + b"\n")
         return json.loads(sock.makefile("rb").readline())
 
 

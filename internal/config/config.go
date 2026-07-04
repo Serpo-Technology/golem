@@ -119,12 +119,15 @@ type Config struct {
 	// channel.
 	UntrustedChannels []string `json:"untrusted_channels"`
 
-	// MasterKey authenticates the architect on the talking channel. A telling that
-	// presents it is heard at full trust and may set another source's trust; a
-	// telling without it is either the local operator (no source declared) or a named
-	// peer heard at that source's own trust. Empty leaves the key unset, so no peer
-	// can claim the architect's authority.
-	MasterKey string `json:"master_key"`
+	// ArchitectPubKey is the architect's Ed25519 public key, base64. The daemon
+	// holds only this public half and verifies the architect's signature against
+	// it; the private key never touches the daemon. A request that carries
+	// authority (setting trust, retuning the source) must bear a signature this
+	// key verifies, and every request over the network transport must too. Empty
+	// leaves it unset, so no signed authority is accepted and the network
+	// transport refuses every request. Set it from the environment with
+	// GOLEM_ARCHITECT_PUBKEY, which overrides the file.
+	ArchitectPubKey string `json:"architect_pubkey"`
 
 	// Action and execution: how a cue graduates to a habit, and the gates on
 	// actually running commands.
@@ -313,6 +316,9 @@ func Load(home string) (Config, error) {
 		if wrErr := os.WriteFile(path, append(pretty, '\n'), 0o644); wrErr != nil {
 			return cfg, wrErr
 		}
+		// The environment overlays even a first-run default, so a container
+		// handed its key and port by env is configured on its very first boot.
+		applyEnv(&cfg)
 		return cfg, nil
 	}
 	if err != nil {
@@ -321,14 +327,95 @@ func Load(home string) (Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return cfg, err
 	}
+	applyEnv(&cfg)
 	return cfg, nil
+}
+
+// loadRaw reads the config file without the environment overlay, so Save can
+// tell a file setting from a runtime env override.
+func loadRaw(home string) (Config, error) {
+	cfg := Default()
+	data, err := os.ReadFile(filepath.Join(home, "config.json"))
+	if err != nil {
+		return cfg, err
+	}
+	err = json.Unmarshal(data, &cfg)
+	return cfg, err
+}
+
+// applyEnv overlays the environment onto the loaded config for the fields it
+// is plausible to set per deployment or to keep out of a copied file: the
+// architect's public key and the network bind address. The environment wins
+// over the file, so a container can be handed its key and port without editing
+// the JSON.
+func applyEnv(cfg *Config) {
+	if v := strings.TrimSpace(os.Getenv("GOLEM_ARCHITECT_PUBKEY")); v != "" {
+		cfg.ArchitectPubKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv("GOLEM_LISTEN_TCP")); v != "" {
+		cfg.ListenTCP = v
+	}
+}
+
+// envSet reports whether an environment variable carries a real value, the same
+// test applyEnv uses to decide an override.
+func envSet(key string) bool {
+	return strings.TrimSpace(os.Getenv(key)) != ""
+}
+
+// LoadDotenv reads a .env file into the process environment before the config
+// is loaded, so secrets and per-machine settings live in a file that is never
+// committed rather than in the config JSON. It looks in the home directory
+// first, then the working directory, and never overrides a variable already
+// set in the real environment. A missing file is not an error; a malformed
+// line is skipped.
+func LoadDotenv(home string) {
+	for _, path := range []string{filepath.Join(home, ".env"), ".env"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			line = strings.TrimPrefix(line, "export ")
+			key, val, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			key = strings.TrimSpace(key)
+			val = strings.Trim(strings.TrimSpace(val), `"'`)
+			if key == "" {
+				continue
+			}
+			// An unset or empty variable takes the file's value; a real value
+			// already in the environment wins.
+			if v, set := os.LookupEnv(key); !set || strings.TrimSpace(v) == "" {
+				os.Setenv(key, val)
+			}
+		}
+	}
 }
 
 // Save writes the configuration back to <home>/config.json atomically,
 // so a kill mid-write cannot leave the file torn. The daemon calls this
 // when an operator command (golem voice) changes a setting that should
-// survive a restart.
+// survive a restart. A field the environment overrode is a runtime overlay,
+// not a file setting: Save keeps the file's own value for it, so a voice or
+// runtime toggle never bakes an env-only key or bind address into the file.
 func Save(home string, cfg Config) error {
+	if envSet("GOLEM_ARCHITECT_PUBKEY") || envSet("GOLEM_LISTEN_TCP") {
+		if disk, err := loadRaw(home); err == nil {
+			if envSet("GOLEM_ARCHITECT_PUBKEY") {
+				cfg.ArchitectPubKey = disk.ArchitectPubKey
+			}
+			if envSet("GOLEM_LISTEN_TCP") {
+				cfg.ListenTCP = disk.ListenTCP
+			}
+		}
+	}
 	pretty, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

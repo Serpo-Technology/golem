@@ -18,7 +18,9 @@ only things you swap.
 ## The wire
 
 The daemon serves newline-delimited JSON over the unix socket and, when
-`listen_tcp` is set, over TCP. One request per line, one reply per line.
+`listen_tcp` is set, over TCP. One request per line, one reply per line. Every
+request over TCP must carry the architect's Ed25519 signature (see Signing
+below); the local unix socket trusts the operator by locality and needs none.
 
 - Tell it something: `{"cmd":"tell","content":"did the dog chase the cat"}` or
   with a language tag `{"cmd":"tell","content":"kopek ne kovaladi","lang":"tr"}`.
@@ -27,6 +29,25 @@ The daemon serves newline-delimited JSON over the unix socket and, when
 - Hear it speak: `{"cmd":"subscribe"}` holds the connection open and streams every
   event as a JSON line. The `"ev":"say"` events carry sentences GOLEM speaks,
   including the ones it says on its own, not only replies to a request.
+
+## Signing
+
+The TCP transport accepts only signed requests, so an open port is a channel for
+the architect's own transducers rather than an open door. Make a keypair once,
+put the public key in the brain's config, and keep the private key on the host.
+
+```
+golem keygen
+# prints the public key (config / GOLEM_ARCHITECT_PUBKEY) and the private key
+# put the public key in runtime/config.json as "architect_pubkey", or pass it
+# to the container as GOLEM_ARCHITECT_PUBKEY; keep the private key secret
+export GOLEM_PRIVATE_KEY='<the printed private key>'   # or GOLEM_PRIVATE_KEY_FILE
+```
+
+The adapters sign each request by piping it through `golem sign`, which reads
+`GOLEM_PRIVATE_KEY`, so the one signing implementation lives in the binary and an
+adapter needs no crypto of its own. Point them at the binary with `GOLEM_BIN` if
+it is not on `PATH`.
 
 ## Running
 
@@ -38,7 +59,11 @@ cp teaching/clean-room-code.json runtime/config.json
 # cp <a snapshot>.db runtime/memory.db
 
 docker run -d --name golem-brain -p 127.0.0.1:7777:7777 \
+  -e GOLEM_ARCHITECT_PUBKEY="$(cat architect.pub)" \
   -v "$PWD/runtime:/root/.golem" golem:latest golem run
+
+# the adapters need the private key to sign; keep it out of the container
+export GOLEM_PRIVATE_KEY='<the private key from golem keygen>'
 
 # ears + console: type, or pipe a recognizer in
 python3 adapters/golem-listen.py --lang tr
@@ -89,9 +114,10 @@ that source. GOLEM already asks on its own, so the peer mostly answers its quest
 - Watch the conversation: `golem watch` streams both sides, labelled by who spoke.
 - Speak as the peer: `golem tell --source llm "a zebra is an animal"`. Declaring a
   source means GOLEM hears it as that peer, not the operator, at that source's trust.
-- Set trust (needs the master key in config): `golem trust llm 0.6`. A newly met
-  source starts low, so its claims enter defeasibly and never overwrite what GOLEM
-  grounded; the architect raises trust for a source to believe more, lowers it to doubt.
+- Set trust (needs the architect's signature, so `GOLEM_PRIVATE_KEY` is set):
+  `golem trust llm 0.6`. A newly met source starts low, so its claims enter
+  defeasibly and never overwrite what GOLEM grounded; the architect raises trust
+  for a source to believe more, lowers it to doubt.
 
 Brief for the LLM (the prompt the architect gives the tasked model): you are teaching
 a young learner that only understands simple present-tense statements. Speak only in

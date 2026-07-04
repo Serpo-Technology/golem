@@ -21,11 +21,23 @@ import threading
 import time
 
 
+def sign(req):
+    """Sign a request through the golem CLI (reads GOLEM_PRIVATE_KEY). Every
+    request over the network transport must be signed; GOLEM_BIN points at the
+    binary when it is not on PATH."""
+    binary = os.environ.get("GOLEM_BIN", "golem")
+    out = subprocess.run([binary, "sign"], input=json.dumps(req).encode(),
+                         capture_output=True)
+    if out.returncode != 0:
+        raise OSError(out.stderr.decode().strip() or "golem sign failed")
+    return out.stdout.strip()
+
+
 def observe(addr, channel, text):
     host, port = addr.rsplit(":", 1)
     try:
         with socket.create_connection((host, int(port)), timeout=10) as s:
-            s.sendall((json.dumps({"cmd": "observe", "channel": channel, "content": text}) + "\n").encode())
+            s.sendall(sign({"cmd": "observe", "channel": channel, "content": text}) + b"\n")
             s.makefile("rb").readline()
     except OSError as err:
         print("send failed:", err)

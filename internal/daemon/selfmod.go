@@ -141,11 +141,11 @@ func (d *Daemon) beginSelfChange(ch selfbuild.Change, binName string,
 // judgment at deploy time, so a candidate that built and tested clean is kept
 // staged.
 func (d *Daemon) handleRetune(req wire.Request) wire.Response {
-	// Only the master key authorizes a retune, the same authority the trust
-	// verb demands: a change to the source is the architect's ask, and over
-	// an open transport no peer may stage one by asking nicely.
-	if d.cfg.MasterKey == "" || req.Key != d.cfg.MasterKey {
-		return wire.Response{Error: "retuning the source needs the master key"}
+	// Only the architect's signature authorizes a retune, the same authority
+	// the trust verb demands: a change to the source is the architect's ask,
+	// and over an open transport no peer may stage one by asking nicely.
+	if !d.reqPrincipal.architectSigned {
+		return wire.Response{Error: "retuning the source needs the architect's signature"}
 	}
 	file := strings.TrimSpace(req.Query)
 	name := strings.TrimSpace(req.Arg)
@@ -153,7 +153,11 @@ func (d *Daemon) handleRetune(req wire.Request) wire.Response {
 	if file == "" || name == "" || value == "" {
 		return wire.Response{Error: "retune needs a file, a constant, and a value"}
 	}
-	ch, refuse := d.retuneChange(file, name, value, "the architect asked")
+	why := "the architect asked"
+	if d.reqPrincipal.sigFingerprint != "" {
+		why += " (signed " + d.reqPrincipal.sigFingerprint + ")"
+	}
+	ch, refuse := d.retuneChange(file, name, value, why)
 	if refuse.Err != "" {
 		return wire.Response{OK: true, Say: "retune " + refuse.Stage + ": " + refuse.Err}
 	}

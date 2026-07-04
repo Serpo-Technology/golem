@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -10,11 +9,11 @@ import (
 	"golem/wire"
 )
 
-// sayAs speaks as a named peer (or, with a key, as the architect), the way a source
-// other than the local operator reaches the channel.
-func sayAs(t *testing.T, d *Daemon, source, key, words string) wire.Response {
+// sayAs speaks as a named peer, the way a source other than the local operator
+// reaches the channel. The words are that peer's, heard at its trust.
+func sayAs(t *testing.T, d *Daemon, source, words string) wire.Response {
 	t.Helper()
-	resp, _, _ := d.handle(wire.Request{Cmd: "tell", Content: words, Source: source, Key: key}, nil)
+	resp, _, _ := d.handle(wire.Request{Cmd: "tell", Content: words, Source: source}, nil)
 	if !resp.OK {
 		t.Fatalf("tell %q as %q failed: %s", words, source, resp.Error)
 	}
@@ -45,7 +44,7 @@ func TestPeerTellIsSourceTaggedAndDefeasible(t *testing.T) {
 		t.Fatal("an untagged operator telling must carry no source tag")
 	}
 
-	rL := sayAs(t, d, "llm", "", "a bear chased a fish")
+	rL := sayAs(t, d, "llm", "a bear chased a fish")
 	wL := agentWeight(t, d, s, rL, "bear")
 	if wL >= wA {
 		t.Fatalf("a low-trust peer telling (%.2f) must write weaker than the operator's (%.2f)", wL, wA)
@@ -80,7 +79,7 @@ func TestGroundedDenialDoubtsPeerClaim(t *testing.T) {
 		t.Fatal("the operator's denial should stand")
 	}
 	// A peer asserts the denied positive: it is doubted and voiced.
-	rL := sayAs(t, d, "llm", "", "a dog chased a bird")
+	rL := sayAs(t, d, "llm", "a dog chased a bird")
 	if rL.Say == "" {
 		t.Fatal("a doubted claim should be voiced, not received in silence")
 	}
@@ -95,42 +94,38 @@ func TestGroundedDenialDoubtsPeerClaim(t *testing.T) {
 }
 
 // Trust is monotonic in how firmly a telling is written: a default peer weakest, a
-// vouched source firmer, the operator and the master key firmest. Vouching for a source
-// raises acceptance; the master key confers full trust regardless of a declared source.
-func TestDelegatedAndMasterKeyTrust(t *testing.T) {
+// vouched source firmer, the operator (an untagged local telling) firmest. Vouching
+// for a source raises how firmly its claims are written.
+func TestDelegatedTrust(t *testing.T) {
 	d, s := testDaemon(t)
-	d.cfg.MasterKey = "open-sesame"
 
 	// Same clause shape throughout, so the practice bump is uniform and only trust varies.
 	wOperator := agentWeight(t, d, s, say(t, d, "a wolf chased a rabbit"), "wolf")
-	wDefault := agentWeight(t, d, s, sayAs(t, d, "llm", "", "a bear chased a fish"), "bear")
+	wDefault := agentWeight(t, d, s, sayAs(t, d, "llm", "a bear chased a fish"), "bear")
 
 	if err := d.setSourceTrust("llm", 0.9); err != nil {
 		t.Fatal(err)
 	}
-	wVouched := agentWeight(t, d, s, sayAs(t, d, "llm", "", "a cat chased a mouse"), "cat")
-
-	rK := sayAs(t, d, "llm", "open-sesame", "a lion chased a deer")
-	wKey := agentWeight(t, d, s, rK, "lion")
+	wVouched := agentWeight(t, d, s, sayAs(t, d, "llm", "a cat chased a mouse"), "cat")
 
 	if !(wDefault < wVouched && wVouched < wOperator) {
 		t.Fatalf("trust should raise write strength monotonically: default %.2f, vouched %.2f, operator %.2f", wDefault, wVouched, wOperator)
 	}
-	if math.Abs(wKey-wOperator) > 1e-9 {
-		t.Fatalf("a master-key telling should write as firmly as the operator: key %.2f, operator %.2f", wKey, wOperator)
-	}
-	if edges, _ := s.LinksFromRel([]uint64{rK.Observe.FragmentID}, memory.RelSource); len(edges) != 0 {
-		t.Fatal("a master-key telling is the architect, left untagged")
-	}
 }
 
-// A keyless client cannot borrow the architect's trust by declaring the name.
+// A declared source is always heard as that peer, never as the architect: the
+// architect speaks untagged, so a telling that declares the name "architect"
+// resolves to a low-seeded peer node, not to full trust. The signature that
+// authenticates a network transducer authorizes injection; it never turns a
+// declared peer's words into the architect's.
 func TestArchitectNameCannotBeSpoofed(t *testing.T) {
 	d, _ := testDaemon(t)
-	d.cfg.MasterKey = "open-sesame"
-	name, trust := d.resolveSpeaker(wire.Request{Source: architectSource}) // no key
+	// Even with a valid architect signature on the connection, a declared source
+	// is the peer: the transducer relays the peer's words at the peer's trust.
+	d.reqPrincipal = principal{architectSigned: true}
+	name, trust := d.resolveSpeaker(wire.Request{Source: architectSource})
 	if trust >= architectTrust {
-		t.Fatalf("a keyless claim to be the architect must not earn full trust, got %.2f", trust)
+		t.Fatalf("a declared claim to be the architect must not earn full trust, got %.2f", trust)
 	}
 	if name != architectSource {
 		t.Fatalf("the declared name is kept, heard low: %q", name)
@@ -141,7 +136,7 @@ func TestArchitectNameCannotBeSpoofed(t *testing.T) {
 // llm" lowers it, and only a trusted speaker may do so, so a peer cannot vouch for itself.
 func TestConversationalTrustMove(t *testing.T) {
 	d, _ := testDaemon(t)
-	sayAs(t, d, "llm", "", "a bear chased a fish") // introduce the llm source (low trust)
+	sayAs(t, d, "llm", "a bear chased a fish") // introduce the llm source (low trust)
 	llm, err := d.ensureSource("llm")
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +156,7 @@ func TestConversationalTrustMove(t *testing.T) {
 
 	// A low-trust peer cannot move trust by talking, not even its own.
 	held := d.sourceTrust(llm.ID)
-	sayAs(t, d, "llm", "", "trust the llm")
+	sayAs(t, d, "llm", "trust the llm")
 	if now := d.sourceTrust(llm.ID); now != held {
 		t.Fatalf("a peer must not move trust by talking: %.2f then %.2f", held, now)
 	}
@@ -177,7 +172,7 @@ func TestDoubtHeldAsMemory(t *testing.T) {
 	if dog == nil || bird == nil {
 		t.Fatal("dog and bird should be grounded")
 	}
-	sayAs(t, d, "llm", "", "a dog chased a bird") // doubted, not written
+	sayAs(t, d, "llm", "a dog chased a bird") // doubted, not written
 	if p := d.held.findID("chase", dog.ID, bird.ID, heldDoubted); p == nil {
 		t.Fatal("the doubt should be held as memory, not only voiced")
 	}
@@ -189,8 +184,8 @@ func TestTrustLearningLowersOnContradiction(t *testing.T) {
 	d, _ := testDaemon(t)
 	say(t, d, "a dog does not chase a bird") // grounded denials
 	say(t, d, "a cat does not chase a fish")
-	sayAs(t, d, "llm", "", "a dog chased a bird") // the peer claims the denied things
-	sayAs(t, d, "llm", "", "a cat chased a fish")
+	sayAs(t, d, "llm", "a dog chased a bird") // the peer claims the denied things
+	sayAs(t, d, "llm", "a cat chased a fish")
 	llm, _ := d.ensureSource("llm")
 	if err := d.setSourceTrust("llm", 0.6); err != nil { // start mid so a drop is visible
 		t.Fatal(err)
@@ -206,8 +201,8 @@ func TestTrustLearningLowersOnContradiction(t *testing.T) {
 // slowly, the gentle positive while a grounded confirmation (perception) is still absent.
 func TestTrustLearningRisesOnCleanRecord(t *testing.T) {
 	d, _ := testDaemon(t)
-	sayAs(t, d, "llm", "", "a zebra chased a lion")
-	sayAs(t, d, "llm", "", "a moose chased a wolf")
+	sayAs(t, d, "llm", "a zebra chased a lion")
+	sayAs(t, d, "llm", "a moose chased a wolf")
 	llm, _ := d.ensureSource("llm")
 	if err := d.setSourceTrust("llm", 0.3); err != nil {
 		t.Fatal(err)
@@ -223,7 +218,7 @@ func TestTrustLearningRisesOnCleanRecord(t *testing.T) {
 // the architect vouched higher back down to the earned ceiling.
 func TestTrustLearningDoesNotUndoAGrant(t *testing.T) {
 	d, _ := testDaemon(t)
-	sayAs(t, d, "llm", "", "a zebra chased a lion")
+	sayAs(t, d, "llm", "a zebra chased a lion")
 	if err := d.setSourceTrust("llm", 1.0); err != nil { // architect grants full trust
 		t.Fatal(err)
 	}
@@ -253,7 +248,7 @@ func TestPeerToldFactAnswersHedged(t *testing.T) {
 	// contested FACT is the peer's alone and its patient minted fresh rather than
 	// twin-bound onto the architect's thread.
 	say(t, d, "a horse ate a grass")
-	sayAs(t, d, "llm", "", "a zebra ate a mouse")
+	sayAs(t, d, "llm", "a zebra ate a mouse")
 
 	polar := say(t, d, "did a zebra eat a mouse").Say
 	if !strings.Contains(strings.ToLower(polar), "probab") {

@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"golem/internal/authkey"
 )
 
 // Chem is the wire form of the limbic chemistry: the four levels a client reads,
@@ -35,15 +37,20 @@ type Request struct {
 	Content string `json:"content,omitempty"`
 	Query   string `json:"query,omitempty"`
 	Command string `json:"command,omitempty"`
-	Lang    string `json:"lang,omitempty"`    // language tag for tell; empty means English
+	Lang    string `json:"lang,omitempty"` // language tag for tell; empty means English
 	// Source names who is speaking on the channel, so GOLEM can weigh a telling by
 	// that source's trust rather than accepting every voice equally. Empty means the
 	// local operator, trusted; a peer (an LLM watching the channel) declares its name
-	// ("llm") and is heard at that source's trust. Key carries the master key: a
-	// telling that presents it is the architect, trusted outright, and it authorizes
-	// setting another source's trust.
-	Source  string `json:"source,omitempty"`
-	Key     string `json:"key,omitempty"`
+	// ("llm") and is heard at that source's trust.
+	Source string `json:"source,omitempty"`
+	// Sig is the architect's Ed25519 signature over this request, base64. Ts is
+	// the moment it was signed, unix nanoseconds, folded into the signed bytes
+	// so a captured request cannot be replayed once its timestamp goes stale. A
+	// request carrying authority (setting trust, retuning the source) must be
+	// signed, and every request over the network transport must be signed; the
+	// local unix socket trusts the operator by locality and needs neither.
+	Sig     string `json:"sig,omitempty"`
+	Ts      int64  `json:"ts,omitempty"`
 	Mind    bool   `json:"mind,omitempty"`    // teach: ground the word to a thought operation, not a command
 	Say     bool   `json:"say,omitempty"`     // teach: add a construction (Content is the intent, Command the template)
 	Inflect bool   `json:"inflect,omitempty"` // teach: induce an inflection (Content is the feature, Command the base:inflected pairs)
@@ -124,8 +131,8 @@ type DupConcept struct {
 // gathers when it bonds to whatever it merely kept company with. The targets carry
 // their bond weight so a strong true name reads apart from a weak strayed one.
 type LooseWord struct {
-	Word    string       `json:"word"`
-	Lang    string       `json:"lang"`
+	Word    string        `json:"word"`
+	Lang    string        `json:"lang"`
 	Targets []*NameTarget `json:"targets"`
 }
 
@@ -305,6 +312,37 @@ func Home() (string, error) {
 
 // SocketPath is where a home directory keeps its daemon socket.
 func SocketPath(home string) string { return filepath.Join(home, "golem.sock") }
+
+// CanonicalBytes is the exact byte string a request is signed over: the request
+// with its signature blanked, marshaled the one deterministic way the Go json
+// encoder marshals a struct. The signer blanks Sig before signing and the
+// verifier blanks it before checking, so the signature binds every other field,
+// the timestamp included, and any tampering breaks it. Only Go ever produces
+// this form, so signer and verifier are always byte-identical.
+func CanonicalBytes(req Request) []byte {
+	req.Sig = ""
+	b, _ := json.Marshal(req)
+	return b
+}
+
+// SignRequest stamps a request with the signing moment and the architect's
+// signature over its canonical bytes. A caller that has not set Ts gets the
+// current time; the private key is base64.
+func SignRequest(privB64 string, req *Request) error {
+	if req.Ts == 0 {
+		req.Ts = time.Now().UnixNano()
+	}
+	msg := CanonicalBytes(*req)
+	if len(msg) == 0 {
+		return fmt.Errorf("the request cannot be canonicalized for signing")
+	}
+	sig, err := authkey.Sign(privB64, msg)
+	if err != nil {
+		return err
+	}
+	req.Sig = sig
+	return nil
+}
 
 // Call performs one request round trip against the daemon's socket.
 func Call(home string, req Request) (Response, error) {

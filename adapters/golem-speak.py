@@ -11,6 +11,7 @@ so the same brain speaks on any machine by swapping the adapter, not the brain.
 """
 import argparse
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -24,6 +25,18 @@ def detect_tts():
     return None
 
 
+def sign(req):
+    """Sign a request through the golem CLI (reads GOLEM_PRIVATE_KEY). Even a
+    subscription is a request over the network transport and must be signed;
+    GOLEM_BIN points at the binary when it is not on PATH."""
+    binary = os.environ.get("GOLEM_BIN", "golem")
+    out = subprocess.run([binary, "sign"], input=json.dumps(req).encode(),
+                         capture_output=True)
+    if out.returncode != 0:
+        raise OSError(out.stderr.decode().strip() or "golem sign failed")
+    return out.stdout.strip()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--addr", default="127.0.0.1:7777", help="brain TCP address")
@@ -34,9 +47,15 @@ def main():
     if not tts:
         sys.exit("no text-to-speech command found; install one or pass --cmd")
 
+    try:
+        signed_subscribe = sign({"cmd": "subscribe"}) + b"\n"
+    except OSError as err:
+        sys.exit("cannot sign the subscription: " + str(err) +
+                 "\n(set GOLEM_PRIVATE_KEY and put golem on PATH, or GOLEM_BIN)")
+
     host, port = args.addr.rsplit(":", 1)
     with socket.create_connection((host, int(port))) as sock:
-        sock.sendall(b'{"cmd":"subscribe"}\n')
+        sock.sendall(signed_subscribe)
         for line in sock.makefile("rb"):
             try:
                 ev = json.loads(line)

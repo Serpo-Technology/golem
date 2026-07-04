@@ -256,12 +256,11 @@ func TestRetuneEntryRepliesBeforeTheBuild(t *testing.T) {
 	d.cfg.RuntimeEnabled = true
 	d.cfg.SourcePath = tunableModule(t)
 	d.cfg.MainPackage = "."
-	d.cfg.MasterKey = "the-architects-key"
+	d.reqPrincipal = principal{architectSigned: true}
 	var out bytes.Buffer
 	d.out = &out
 
-	resp := d.handleRetune(wire.Request{Key: "the-architects-key",
-		Query: "main.go", Arg: "threshold", Content: "4"})
+	resp := d.handleRetune(wire.Request{Query: "main.go", Arg: "threshold", Content: "4"})
 	if !strings.Contains(resp.Say, "building") {
 		t.Fatalf("the reply should promise the build, not wait for it: %q", resp.Say)
 	}

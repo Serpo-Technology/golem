@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"golem/internal/authkey"
 	"golem/internal/config"
 	"golem/internal/daemon"
 	"golem/internal/events"
@@ -62,7 +64,11 @@ Usage:
                                   channel); heard at that source's trust, not
                                   the operator's
   golem trust <source> [level]    show or set how far GOLEM trusts a source
-                                  (setting needs the master key)
+                                  (setting needs the architect's signature)
+  golem keygen                    make an architect keypair: the public key for
+                                  the daemon's config, the private key to keep
+  golem sign                      sign a request read as JSON on stdin (for a
+                                  transducer talking over the network transport)
   golem watch                     stream the talking channel: what GOLEM says
                                   and what each source says to it
   golem recall [query]            recall memory plus its linked context;
@@ -147,6 +153,10 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	// A .env in the home or working directory feeds secrets and per-machine
+	// settings (the signing key, the bind address) into the environment before
+	// anything reads them, so they need not live in the config JSON.
+	config.LoadDotenv(home)
 
 	switch args[0] {
 	case "demo":
@@ -258,7 +268,7 @@ func main() {
 
 	case "tell":
 		rest := args[1:]
-		lang, source, key := "", "", ""
+		lang, source := "", ""
 		for len(rest) >= 2 {
 			consumed := true
 			switch rest[0] {
@@ -266,8 +276,6 @@ func main() {
 				lang = rest[1]
 			case "--source":
 				source = rest[1]
-			case "--key":
-				key = rest[1]
 			default:
 				consumed = false
 			}
@@ -282,7 +290,7 @@ func main() {
 		case len(rest) >= 1 && rest[0] == "--about":
 			fail(fmt.Errorf("usage: golem tell [--lang <tag>] --about <query> <words>"))
 		case len(rest) >= 1:
-			tellOnce(home, lang, source, key, strings.Join(rest, " "))
+			tellOnce(home, lang, source, strings.Join(rest, " "))
 		default:
 			tellSession(home)
 		}
@@ -292,11 +300,7 @@ func main() {
 		if len(rest) < 1 {
 			fail(fmt.Errorf("usage: golem trust <source> [level]"))
 		}
-		cfg, err := config.Load(home)
-		if err != nil {
-			fail(err)
-		}
-		req := wire.Request{Cmd: "trust", Query: rest[0], Key: cfg.MasterKey}
+		req := wire.Request{Cmd: "trust", Query: rest[0]}
 		if len(rest) >= 2 {
 			lvl, perr := strconv.ParseFloat(rest[1], 64)
 			if perr != nil {
@@ -305,6 +309,7 @@ func main() {
 			req.Command = "set"
 			req.Weight = lvl
 		}
+		signAuthority(&req)
 		resp := call(home, req)
 		if resp.Error != "" {
 			fail(fmt.Errorf("%s", resp.Error))
@@ -527,16 +532,20 @@ func main() {
 		if len(args) < 4 {
 			fail(fmt.Errorf("usage: golem retune FILE CONSTANT VALUE"))
 		}
-		cfg, err := config.Load(home)
-		if err != nil {
-			fail(err)
-		}
-		resp := call(home, wire.Request{Cmd: "retune", Key: cfg.MasterKey,
-			Query: args[1], Arg: args[2], Content: strings.Join(args[3:], " ")})
+		req := wire.Request{Cmd: "retune",
+			Query: args[1], Arg: args[2], Content: strings.Join(args[3:], " ")}
+		signAuthority(&req)
+		resp := call(home, req)
 		if resp.Error != "" {
 			fail(fmt.Errorf("%s", resp.Error))
 		}
 		fmt.Println(resp.Say)
+
+	case "keygen":
+		runKeygen()
+
+	case "sign":
+		runSign()
 
 	case "sleep":
 		call(home, wire.Request{Cmd: "sleep"})
@@ -638,6 +647,61 @@ func call(home string, req wire.Request) wire.Response {
 	return resp
 }
 
+// signAuthority signs a request that carries architect authority (setting
+// trust, retuning the source), reading the private key from the environment.
+// It fails with a clear message when no key is available, since these commands
+// are the architect's alone and the daemon will refuse an unsigned one.
+func signAuthority(req *wire.Request) {
+	priv, err := authkey.PrivateFromEnv()
+	if err != nil {
+		fail(err)
+	}
+	if err := wire.SignRequest(priv, req); err != nil {
+		fail(err)
+	}
+}
+
+// runKeygen makes a fresh architect keypair and prints both halves: the public
+// key to place in the daemon's config (or GOLEM_ARCHITECT_PUBKEY), the private
+// key to keep and hand the signer through GOLEM_PRIVATE_KEY. The daemon never
+// sees the private half.
+func runKeygen() {
+	pub, priv, err := authkey.Generate()
+	if err != nil {
+		fail(err)
+	}
+	fmt.Println("# architect keypair. keep the private key secret; the daemon holds only the public key.")
+	fmt.Printf("architect_pubkey (config / GOLEM_ARCHITECT_PUBKEY):\n%s\n\n", pub)
+	fmt.Printf("private key (GOLEM_PRIVATE_KEY, or a file for GOLEM_PRIVATE_KEY_FILE):\n%s\n", priv)
+}
+
+// runSign reads a request as JSON on stdin, signs it with the private key from
+// the environment, and prints the signed request as JSON. It is the one signing
+// path for clients that are not the Go CLI: a transducer builds its request,
+// pipes it through here, and sends the signed form over the network.
+func runSign() {
+	priv, err := authkey.PrivateFromEnv()
+	if err != nil {
+		fail(err)
+	}
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fail(err)
+	}
+	var req wire.Request
+	if err := json.Unmarshal(data, &req); err != nil {
+		fail(fmt.Errorf("stdin is not a request: %w", err))
+	}
+	if err := wire.SignRequest(priv, &req); err != nil {
+		fail(err)
+	}
+	out, err := json.Marshal(req)
+	if err != nil {
+		fail(err)
+	}
+	fmt.Println(string(out))
+}
+
 func printStatus(st *wire.StatusInfo) {
 	fmt.Printf("golem daemon, pid %d, up %s\n", st.PID, time.Duration(st.UptimeSec*float64(time.Second)).Round(time.Second))
 	fmt.Printf("  fragments held: %d (%d in the hot working set)\n", st.Fragments, st.HotFragments)
@@ -693,8 +757,8 @@ func printStatus(st *wire.StatusInfo) {
 	}
 }
 
-func tellOnce(home, lang, source, key, words string) {
-	resp := call(home, wire.Request{Cmd: "tell", Content: words, Lang: lang, Source: source, Key: key})
+func tellOnce(home, lang, source, words string) {
+	resp := call(home, wire.Request{Cmd: "tell", Content: words, Lang: lang, Source: source})
 	if resp.Error != "" {
 		fail(fmt.Errorf("%s", resp.Error))
 	}

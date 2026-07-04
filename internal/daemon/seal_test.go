@@ -114,31 +114,24 @@ func TestDeicticRoleQuestionSpeaksFirstPerson(t *testing.T) {
 	}
 }
 
-// The retune entry keeps its gates, and the master key stands before all of
-// them: a keyless daemon refuses every ask, a wrong key is refused, and only
-// the architect's key reaches the sandbox gates, where a shut runtime still
-// refuses with the reason and a malformed ask is refused outright.
+// The retune entry keeps its gates, and the architect's signature stands before
+// all of them: an unsigned ask is refused outright, and only a signed ask
+// reaches the sandbox gates, where a shut runtime still refuses with the reason
+// and a malformed ask is refused too.
 func TestRetuneEntryGated(t *testing.T) {
 	d, _ := testDaemon(t)
 	ask := wire.Request{Query: "internal/daemon/act.go", Arg: "opWeightCeil", Content: "2.5"}
-	if resp := d.handleRetune(ask); !strings.Contains(resp.Error, "master key") {
-		t.Fatalf("a keyless daemon must refuse every retune: %+v", resp)
+	d.reqPrincipal = principal{local: true}
+	if resp := d.handleRetune(ask); !strings.Contains(resp.Error, "signature") {
+		t.Fatalf("an unsigned retune must be refused: %+v", resp)
 	}
-	d.cfg.MasterKey = "the-architects-key"
-	if resp := d.handleRetune(ask); !strings.Contains(resp.Error, "master key") {
-		t.Fatalf("an ask without the key must be refused: %+v", resp)
+	// Signed as the architect: past the authority gate, the shut sandbox refuses
+	// with its own reason.
+	d.reqPrincipal = principal{architectSigned: true}
+	if resp := d.handleRetune(ask); !strings.Contains(resp.Say, "closed") {
+		t.Fatalf("with the signature, a shut gate should refuse with the reason: %q", resp.Say)
 	}
-	wrong := ask
-	wrong.Key = "a-guess"
-	if resp := d.handleRetune(wrong); !strings.Contains(resp.Error, "master key") {
-		t.Fatalf("a wrong key must be refused: %+v", resp)
-	}
-	keyed := ask
-	keyed.Key = "the-architects-key"
-	if resp := d.handleRetune(keyed); !strings.Contains(resp.Say, "closed") {
-		t.Fatalf("with the key, a shut gate should refuse with the reason: %q", resp.Say)
-	}
-	resp := d.handleRetune(wire.Request{Key: "the-architects-key", Query: "", Arg: "x", Content: "1"})
+	resp := d.handleRetune(wire.Request{Query: "", Arg: "x", Content: "1"})
 	if resp.Error == "" {
 		t.Fatal("a malformed retune should be refused")
 	}

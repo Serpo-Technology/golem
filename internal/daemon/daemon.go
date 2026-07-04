@@ -6,6 +6,7 @@ package daemon
 
 import (
 	"bufio"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"golem/internal/attention"
+	"golem/internal/authkey"
 	"golem/internal/code"
 	"golem/internal/config"
 	"golem/internal/events"
@@ -83,6 +85,16 @@ type Daemon struct {
 	// at a time: formed from the experiment trail, built by the retune act
 	// at idle, cleared when the build is handed off.
 	pendingRetune *retuneProposal
+
+	// architectPub is the architect's public key, decoded once at boot; nil
+	// when none is configured. reqPrincipal carries who the current request
+	// was authenticated as, set on the loop just before each handle so the
+	// single-threaded handlers can read it. sigMu guards seenSigs, the cache
+	// of recently accepted signatures that makes a captured request one-shot.
+	architectPub ed25519.PublicKey
+	reqPrincipal principal
+	sigMu        sync.Mutex
+	seenSigs     map[string]int64
 
 	// statementAbandoned marks that the current telling was read as a
 	// proposition and yielded none (a misparse: a clausal shape whose roles
@@ -508,6 +520,95 @@ const (
 type ipcReq struct {
 	req   wire.Request
 	reply chan wire.Response
+	pr    principal
+}
+
+// principal is who a request was authenticated as by the time it reaches the
+// loop: whether a valid architect signature was verified, whether it arrived
+// on the local unix socket, and a short fingerprint of the signature for the
+// trail. Authority (setting trust, retuning the source) takes architectSigned;
+// the local operator is trusted for telling by locality alone.
+type principal struct {
+	architectSigned bool
+	local           bool
+	sigFingerprint  string
+}
+
+// sigWindow bounds how far a signature's timestamp may sit from now, absorbing
+// clock skew while keeping a captured request replayable only within it.
+const sigWindow = 2 * time.Minute
+
+// verifyArchitect checks a request's signature. It returns whether a valid
+// architect signature was present, and an error when a signature was presented
+// but does not hold up: no key configured, a bad signature, a stale timestamp,
+// or a signature already spent. An unsigned request returns (false, nil), which
+// the caller allows only on the local socket. The seen-signature cache makes a
+// captured request one-shot; it is swept of expired entries on each pass and
+// needs no persistence, since a signature older than the window fails the
+// timestamp check anyway.
+func (d *Daemon) verifyArchitect(req wire.Request) (bool, error) {
+	if req.Sig == "" {
+		return false, nil
+	}
+	if d.architectPub == nil {
+		return false, errors.New("a signature was presented but no architect key is configured")
+	}
+	msg := wire.CanonicalBytes(req)
+	if len(msg) == 0 {
+		return false, errors.New("the request cannot be canonicalized")
+	}
+	// The cache key is the signature's canonical form, so a whitespace- or
+	// padding-permuted copy of an accepted signature is the same key and is
+	// caught as a replay rather than slipping through as a new string.
+	sigKey, ok := authkey.NormalizeSig(req.Sig)
+	if !ok || !authkey.Verify(d.architectPub, msg, req.Sig) {
+		return false, errors.New("the signature does not verify")
+	}
+	now := time.Now().UnixNano()
+	skew := now - req.Ts
+	if skew < 0 {
+		skew = -skew
+	}
+	if skew > int64(sigWindow) {
+		return false, errors.New("the signature is stale")
+	}
+	d.sigMu.Lock()
+	defer d.sigMu.Unlock()
+	if d.seenSigs == nil {
+		d.seenSigs = make(map[string]int64)
+	}
+	for k, exp := range d.seenSigs {
+		if exp < now {
+			delete(d.seenSigs, k)
+		}
+	}
+	if _, seen := d.seenSigs[sigKey]; seen {
+		return false, errors.New("the signature was already used")
+	}
+	// The entry must outlive the whole interval the signature stays fresh,
+	// which ends at Ts + sigWindow, so a forward-skewed signature cannot be
+	// replayed in the gap between the cache expiring and the freshness deadline.
+	d.seenSigs[sigKey] = req.Ts + int64(sigWindow)
+	return true, nil
+}
+
+// principalOf authenticates a request arriving on a transport and returns who
+// it speaks as, or an error to refuse it. A bad signature is always refused; an
+// unsigned request is refused on the network transport and allowed on the local
+// socket as the operator.
+func (d *Daemon) principalOf(req wire.Request, transport string) (principal, error) {
+	signed, err := d.verifyArchitect(req)
+	if err != nil {
+		return principal{}, err
+	}
+	if transport == "tcp" && !signed {
+		return principal{}, errors.New("this brain accepts only signed requests over the network")
+	}
+	pr := principal{architectSigned: signed, local: transport == "unix"}
+	if signed && len(req.Sig) >= 12 {
+		pr.sigFingerprint = req.Sig[:12]
+	}
+	return pr, nil
 }
 
 // New opens a daemon over the given home directory: store, models,
@@ -549,7 +650,17 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		held:         newHeldStore(),
 		voiceOn:      cfg.Channels.Voice,
 		voiceName:    cfg.Channels.VoiceName,
+		seenSigs:     make(map[string]int64),
 	}
+	// The architect's public key is decoded once; a malformed key is a
+	// misconfiguration worth refusing at boot rather than failing every
+	// signature later.
+	pub, err := authkey.DecodePublic(cfg.ArchitectPubKey)
+	if err != nil {
+		store.Close()
+		return nil, fmt.Errorf("architect_pubkey: %w", err)
+	}
+	d.architectPub = pub
 	if err := d.loadModels(); err != nil {
 		store.Close()
 		return nil, err
@@ -1028,10 +1139,12 @@ func (d *Daemon) Run() error {
 		d.store.Close()
 		return err
 	}
-	go d.acceptLoop(listener)
+	go d.acceptLoop(listener, "unix")
 
 	// A TCP transport, when configured, serves the same protocol across a
 	// container boundary so external senses and a speaker can reach the brain.
+	// Every request over it must be signed, so the port is a channel for the
+	// architect's own signed transducers, not an open door.
 	if addr := strings.TrimSpace(d.cfg.ListenTCP); addr != "" {
 		tcp, err := net.Listen("tcp", addr)
 		if err != nil {
@@ -1041,8 +1154,14 @@ func (d *Daemon) Run() error {
 			return err
 		}
 		d.netListeners = append(d.netListeners, tcp)
-		go d.acceptLoop(tcp)
+		go d.acceptLoop(tcp, "tcp")
 		fmt.Fprintf(d.out, "golem also listening on tcp %s\n", tcp.Addr())
+		if !loopbackAddr(addr) {
+			fmt.Fprintf(d.out, "note: %s is not loopback; the port is reachable off-host and every request must be signed.\n", addr)
+		}
+		if d.architectPub == nil {
+			fmt.Fprintf(d.out, "warning: no architect_pubkey is set, so the tcp transport will refuse every request.\n")
+		}
 	}
 
 	sigc := make(chan os.Signal, 1)
@@ -1072,6 +1191,9 @@ func (d *Daemon) Run() error {
 			}
 
 		case r := <-d.reqs:
+			// The request's authenticated identity is set on the loop, single
+			// threaded, so every handler reads a consistent principal.
+			d.reqPrincipal = r.pr
 			resp, deferred, quit := d.handle(r.req, r.reply)
 			if !deferred {
 				r.reply <- resp
@@ -1234,6 +1356,11 @@ func (d *Daemon) drainActions() {
 // it starts (or parks) before returning. It is the entry point for demos
 // and tests that drive the daemon without its Run loop.
 func (d *Daemon) handleNow(req wire.Request) (wire.Response, bool) {
+	// A loopless driver speaks as the local operator unless a test set the
+	// principal itself (an authority path exercises architectSigned directly).
+	if !d.reqPrincipal.local && !d.reqPrincipal.architectSigned {
+		d.reqPrincipal = principal{local: true}
+	}
 	reply := make(chan wire.Response, 1)
 	resp, deferred, quit := d.handle(req, reply)
 	if !deferred {
@@ -1311,17 +1438,17 @@ func claimSocket(sock string) error {
 	return os.Remove(sock)
 }
 
-func (d *Daemon) acceptLoop(l net.Listener) {
+func (d *Daemon) acceptLoop(l net.Listener, transport string) {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			return // listener closed during shutdown
 		}
-		go d.serveConn(conn)
+		go d.serveConn(conn, transport)
 	}
 }
 
-func (d *Daemon) serveConn(conn net.Conn) {
+func (d *Daemon) serveConn(conn net.Conn, transport string) {
 	defer conn.Close()
 	// The deadline must outlast a command that waits out a conflicting
 	// run before taking its own full time, or the client would give up
@@ -1336,24 +1463,58 @@ func (d *Daemon) serveConn(conn net.Conn) {
 	resp := wire.Response{}
 	if err := json.Unmarshal(line, &req); err != nil {
 		resp.Error = "bad request: " + err.Error()
-	} else if req.Cmd == "subscribe" {
+		writeResponse(conn, resp)
+		return
+	}
+	// Every request is authenticated before it does anything: a bad signature
+	// is refused, and the network transport refuses an unsigned request. This
+	// is the one choke point that sees both the transport and the parsed
+	// request, so the gate lives here.
+	pr, err := d.principalOf(req, transport)
+	if err != nil {
+		resp.Error = err.Error()
+		writeResponse(conn, resp)
+		return
+	}
+	if req.Cmd == "subscribe" {
 		// A subscription holds the connection open and streams events as they
 		// happen, the output channel a speaker reads; it never goes through the
 		// request queue and outlasts the request deadline.
 		conn.SetDeadline(time.Time{})
 		d.streamEvents(conn)
 		return
-	} else {
-		reply := make(chan wire.Response, 1)
-		select {
-		case d.reqs <- ipcReq{req: req, reply: reply}:
-			resp = <-reply
-		case <-time.After(5 * time.Second):
-			resp.Error = "daemon busy"
-		}
 	}
+	reply := make(chan wire.Response, 1)
+	select {
+	case d.reqs <- ipcReq{req: req, reply: reply, pr: pr}:
+		resp = <-reply
+	case <-time.After(5 * time.Second):
+		resp.Error = "daemon busy"
+	}
+	writeResponse(conn, resp)
+}
+
+// writeResponse marshals one reply and writes it newline-delimited, the single
+// form every connection ends with.
+func writeResponse(conn net.Conn, resp wire.Response) {
 	payload, _ := json.Marshal(resp)
 	conn.Write(append(payload, '\n'))
+}
+
+// loopbackAddr reports whether a bind address stays on the host's loopback, so
+// the daemon can note when a port is reachable off-host.
+func loopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if host == "" || host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 // process runs one observation through the full loop: normalize, score,
@@ -2353,10 +2514,10 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 
 	case "trust":
 		// The architect sets whom GOLEM trusts, so a source it should believe is
-		// vouched for and one it should doubt is held low. Only the master key
-		// authorizes it, so a peer cannot raise its own trust.
-		if d.cfg.MasterKey == "" || req.Key != d.cfg.MasterKey {
-			return wire.Response{Error: "setting trust needs the master key"}, false, false
+		// vouched for and one it should doubt is held low. Only the architect's
+		// signature authorizes it, so a peer cannot raise its own trust.
+		if !d.reqPrincipal.architectSigned {
+			return wire.Response{Error: "setting trust needs the architect's signature"}, false, false
 		}
 		name := req.Query
 		if name == "" {
@@ -2369,7 +2530,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			if err := d.setSourceTrust(name, req.Weight); err != nil {
 				return wire.Response{Error: err.Error()}, false, false
 			}
-			if err := d.store.Audit(time.Now().Unix(), "trust", name, fmt.Sprintf("%.2f", req.Weight)); err != nil {
+			note := fmt.Sprintf("%.2f", req.Weight)
+			if d.reqPrincipal.sigFingerprint != "" {
+				note += " (signed " + d.reqPrincipal.sigFingerprint + ")"
+			}
+			if err := d.store.Audit(time.Now().Unix(), "trust", name, note); err != nil {
 				fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 			}
 			return wire.Response{OK: true, Say: fmt.Sprintf("%q is now trusted %.2f.", name, req.Weight)}, false, false

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"golem/internal/attention"
+	"golem/internal/authkey"
 	"golem/internal/config"
 	"golem/internal/limbic"
 	"golem/internal/memory"
@@ -72,14 +74,20 @@ func TestDaemonListensOnTCP(t *testing.T) {
 	cfg.SleepIntervalSec = 3600
 	cfg.Channels = config.ChannelsConfig{}
 	cfg.ListenTCP = addr
+	pub, priv, err := authkey.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ArchitectPubKey = pub // the network transport now requires a signature
 	startTestDaemonWith(t, t.TempDir(), cfg)
 
-	// The TCP listener comes up just after the unix socket; retry briefly.
+	// The TCP listener comes up just after the unix socket; retry briefly, with
+	// a fresh signature each time so a retry is never a replay.
 	deadline := time.Now().Add(2 * time.Second)
 	var resp wire.Response
 	for time.Now().Before(deadline) {
-		if _, err = wire.CallAddr("tcp", addr, wire.Request{Cmd: "observe",
-			Channel: "testlog", Content: "hello over tcp"}); err == nil {
+		if _, err = wire.CallAddr("tcp", addr, signed(t, priv, wire.Request{Cmd: "observe",
+			Channel: "testlog", Content: "hello over tcp"})); err == nil {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -87,7 +95,7 @@ func TestDaemonListensOnTCP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("observe over tcp never succeeded: %v", err)
 	}
-	resp, err = wire.CallAddr("tcp", addr, wire.Request{Cmd: "status"})
+	resp, err = wire.CallAddr("tcp", addr, signed(t, priv, wire.Request{Cmd: "status"}))
 	if err != nil {
 		t.Fatalf("status over tcp failed: %v", err)
 	}
@@ -112,6 +120,11 @@ func TestDaemonStreamsEvents(t *testing.T) {
 	cfg.SleepIntervalSec = 3600
 	cfg.Channels = config.ChannelsConfig{}
 	cfg.ListenTCP = addr
+	pub, priv, err := authkey.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ArchitectPubKey = pub
 	startTestDaemonWith(t, t.TempDir(), cfg)
 
 	var conn net.Conn
@@ -126,7 +139,9 @@ func TestDaemonStreamsEvents(t *testing.T) {
 		t.Fatalf("dial tcp: %v", err)
 	}
 	defer conn.Close()
-	if _, err := conn.Write([]byte(`{"cmd":"subscribe"}` + "\n")); err != nil {
+	// Even a subscription over the network transport must be signed.
+	subReq, _ := json.Marshal(signed(t, priv, wire.Request{Cmd: "subscribe"}))
+	if _, err := conn.Write(append(subReq, '\n')); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +161,9 @@ func TestDaemonStreamsEvents(t *testing.T) {
 				arg = "on"
 			}
 			on = !on
-			wire.CallAddr("tcp", addr, wire.Request{Cmd: "voice", Arg: arg})
+			req := wire.Request{Cmd: "voice", Arg: arg}
+			wire.SignRequest(priv, &req)
+			wire.CallAddr("tcp", addr, req)
 			time.Sleep(50 * time.Millisecond)
 		}
 	}()

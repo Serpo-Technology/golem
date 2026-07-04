@@ -112,24 +112,19 @@ func (d *Daemon) setSourceTrust(name string, level float64) error {
 	return d.store.SetLinkRel(c.ID, c.ID, memory.RelTrust, level)
 }
 
-// resolveSpeaker reads who is speaking from a request and returns the source name and
-// its trust. A telling that presents the master key is the architect, trusted
-// outright. A telling that declares a source is that peer, heard at its stored trust.
-// A telling with neither is the local operator, trusted, so the existing teaching
-// path is unchanged.
+// resolveSpeaker reads who is speaking from a request and returns the source name
+// and its trust. A declared source is that peer, heard at its stored trust,
+// whatever transport carried it: a transducer relaying an LLM's words signs the
+// connection, but the words are still the peer's. A source-less request is the
+// architect, whether the local operator on the socket or a signed request from
+// afar; an unsigned source-less request over the network never reaches here,
+// having been refused at the transport. A peer cannot borrow the architect's
+// trust by declaring the name "architect": that resolves to a low-seeded peer
+// node below, not to the architect.
 func (d *Daemon) resolveSpeaker(req wire.Request) (name string, trust float64) {
-	// The master key is the only way to be heard as the architect, at full trust.
-	if d.cfg.MasterKey != "" && req.Key == d.cfg.MasterKey {
-		return architectSource, architectTrust
-	}
-	// An untagged local telling is the operator, trusted, so every existing telling
-	// (the whole curriculum) is unchanged.
 	if req.Source == "" {
 		return architectSource, architectTrust
 	}
-	// A declared peer is heard at its own trust. It cannot borrow the architect's
-	// trust by declaring the name: without the key, "architect" is just another peer
-	// node seeded low, so the claim earns nothing.
 	src, err := d.ensureSource(req.Source)
 	if err != nil {
 		return req.Source, defaultSourceTrust

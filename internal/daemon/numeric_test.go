@@ -18,7 +18,7 @@ func TestNumericPoleTaughtAndTrustGated(t *testing.T) {
 	say(t, d, "2 is bigger than 1")
 
 	// A peer cannot set the pole.
-	r := sayAs(t, d, "llm", "", "bigger is above")
+	r := sayAs(t, d, "llm", "bigger is above")
 	if !strings.Contains(r.Say, "architect") {
 		t.Fatalf("a low-trust speaker should be refused the pole: %q", r.Say)
 	}
@@ -81,7 +81,7 @@ func TestComputedRefutationErodesTrust(t *testing.T) {
 	say(t, d, "bigger is above")
 
 	// The peer claims a falsehood; the claim lands on the number concepts.
-	sayAs(t, d, "llm", "", "12 is bigger than 17")
+	sayAs(t, d, "llm", "12 is bigger than 17")
 	llm, err := d.ensureSource("llm")
 	if err != nil {
 		t.Fatal(err)

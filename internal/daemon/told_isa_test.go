@@ -152,7 +152,7 @@ func TestTrustGatesToldIsA(t *testing.T) {
 	if err := d.setSourceTrust("llm", 0.1); err != nil {
 		t.Fatal(err)
 	}
-	sayAs(t, d, "llm", "", "a zebra is an animal")
+	sayAs(t, d, "llm", "a zebra is an animal")
 	if got := say(t, d, "is a zebra an animal").Say; strings.Contains(strings.ToLower(got), "probably") || strings.Contains(strings.ToLower(got), "yes") {
 		t.Fatalf("a distrusted source must not inject a told membership; got %q", got)
 	}

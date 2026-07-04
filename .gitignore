@@ -17,3 +17,7 @@
 golem-probe-bin
 golem-gme-bin
 Dockerfile.probe
+
+# Secrets and per-machine settings: signing keys and the dotenv that holds them
+.env
+*.key
