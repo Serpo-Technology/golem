@@ -185,6 +185,28 @@ func TestRetuneGatedShut(t *testing.T) {
 	}
 }
 
+// The file named in a retune must live inside the source tree: a path that
+// climbs out is refused at the reading, before anything is opened.
+func TestRetuneRefusesPathsOutsideTheTree(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.home = t.TempDir()
+	d.cfg.RuntimeEnabled = true
+	d.cfg.SourcePath = tunableModule(t)
+	d.cfg.MainPackage = "."
+	// A real file outside the tree, reachable only by climbing.
+	outside := filepath.Join(filepath.Dir(d.cfg.SourcePath), "outside.go")
+	if err := os.WriteFile(outside, []byte("package x\n\nconst threshold = 3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"../outside.go", "..", "a/../../outside.go"} {
+		res := d.proposeRetune(file, "threshold", "4", "climb out", improvedFitness)
+		if res.Accepted || res.Stage != "read" ||
+			!strings.Contains(res.Err, "inside the source tree") {
+			t.Fatalf("a climbing path %q should be refused at read: %+v", file, res)
+		}
+	}
+}
+
 // The off-loop entry hands the build to a goroutine and returns at once: the
 // verdict must not land until the loop settles it through execDone, the build
 // holds a run slot while it works, a second self-change is refused while one
@@ -234,10 +256,12 @@ func TestRetuneEntryRepliesBeforeTheBuild(t *testing.T) {
 	d.cfg.RuntimeEnabled = true
 	d.cfg.SourcePath = tunableModule(t)
 	d.cfg.MainPackage = "."
+	d.cfg.MasterKey = "the-architects-key"
 	var out bytes.Buffer
 	d.out = &out
 
-	resp := d.handleRetune(wire.Request{Query: "main.go", Arg: "threshold", Content: "4"})
+	resp := d.handleRetune(wire.Request{Key: "the-architects-key",
+		Query: "main.go", Arg: "threshold", Content: "4"})
 	if !strings.Contains(resp.Say, "building") {
 		t.Fatalf("the reply should promise the build, not wait for it: %q", resp.Say)
 	}

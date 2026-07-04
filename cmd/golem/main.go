@@ -527,7 +527,11 @@ func main() {
 		if len(args) < 4 {
 			fail(fmt.Errorf("usage: golem retune FILE CONSTANT VALUE"))
 		}
-		resp := call(home, wire.Request{Cmd: "retune",
+		cfg, err := config.Load(home)
+		if err != nil {
+			fail(err)
+		}
+		resp := call(home, wire.Request{Cmd: "retune", Key: cfg.MasterKey,
 			Query: args[1], Arg: args[2], Content: strings.Join(args[3:], " ")})
 		if resp.Error != "" {
 			fail(fmt.Errorf("%s", resp.Error))

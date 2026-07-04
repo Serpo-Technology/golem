@@ -141,6 +141,12 @@ func (d *Daemon) beginSelfChange(ch selfbuild.Change, binName string,
 // judgment at deploy time, so a candidate that built and tested clean is kept
 // staged.
 func (d *Daemon) handleRetune(req wire.Request) wire.Response {
+	// Only the master key authorizes a retune, the same authority the trust
+	// verb demands: a change to the source is the architect's ask, and over
+	// an open transport no peer may stage one by asking nicely.
+	if d.cfg.MasterKey == "" || req.Key != d.cfg.MasterKey {
+		return wire.Response{Error: "retuning the source needs the master key"}
+	}
 	file := strings.TrimSpace(req.Query)
 	name := strings.TrimSpace(req.Arg)
 	value := strings.TrimSpace(req.Content)
@@ -179,7 +185,16 @@ func (d *Daemon) retuneChange(file, name, newValue, why string) (selfbuild.Chang
 	if !d.cfg.RuntimeEnabled || d.cfg.SourcePath == "" {
 		return selfbuild.Change{}, selfbuild.Result{Stage: "gate", Err: selfModShut}
 	}
-	src, err := os.ReadFile(filepath.Join(d.cfg.SourcePath, file))
+	// The file is a path inside the source tree, nothing else: a name that
+	// climbs out is refused at the reading, so no ask can splice a file the
+	// sandbox does not own.
+	root := filepath.Clean(d.cfg.SourcePath)
+	full := filepath.Join(d.cfg.SourcePath, file)
+	if full != root && !strings.HasPrefix(full, root+string(filepath.Separator)) {
+		return selfbuild.Change{}, selfbuild.Result{Stage: "read",
+			Err: "the file must live inside the source tree"}
+	}
+	src, err := os.ReadFile(full)
 	if err != nil {
 		return selfbuild.Change{}, selfbuild.Result{Stage: "read", Err: err.Error()}
 	}
