@@ -96,6 +96,14 @@ type Daemon struct {
 	sigMu        sync.Mutex
 	seenSigs     map[string]int64
 
+	// sourceKeys holds each enrolled peer's public key, so a peer signs its
+	// own requests and is heard as exactly that source. The architect enrolls
+	// a key (a signed authority action) and the map is decoded from the store
+	// at boot; keyMu guards it, since it is read off the loop in principalOf
+	// and written on the loop by an enroll.
+	sourceKeys map[string]ed25519.PublicKey
+	keyMu      sync.RWMutex
+
 	// statementAbandoned marks that the current telling was read as a
 	// proposition and yielded none (a misparse: a clausal shape whose roles
 	// never bound). Such a telling lays no naming company and no attention
@@ -530,6 +538,7 @@ type ipcReq struct {
 // the local operator is trusted for telling by locality alone.
 type principal struct {
 	architectSigned bool
+	peerSource      string // the source a peer proved with its own key, empty otherwise
 	local           bool
 	sigFingerprint  string
 }
@@ -546,23 +555,45 @@ const sigWindow = 2 * time.Minute
 // captured request one-shot; it is swept of expired entries on each pass and
 // needs no persistence, since a signature older than the window fails the
 // timestamp check anyway.
-func (d *Daemon) verifyArchitect(req wire.Request) (bool, error) {
+// signer names whose key verified a request's signature: the architect, or a
+// named peer that proved its own identity, or neither (unsigned).
+type signer struct {
+	architect bool
+	peer      string
+}
+
+// authenticate verifies a request's signature against the architect's key or a
+// registered peer's key, and enforces freshness and the one-shot cache once the
+// signature is known genuine. It returns who signed (a zero signer for an
+// unsigned request) and an error only when a presented signature does not hold
+// up: malformed, verified by no known key, stale, or already used.
+func (d *Daemon) authenticate(req wire.Request) (signer, error) {
 	if req.Sig == "" {
-		return false, nil
-	}
-	if d.architectPub == nil {
-		return false, errors.New("a signature was presented but no architect key is configured")
+		return signer{}, nil
 	}
 	msg := wire.CanonicalBytes(req)
 	if len(msg) == 0 {
-		return false, errors.New("the request cannot be canonicalized")
+		return signer{}, errors.New("the request cannot be canonicalized")
 	}
 	// The cache key is the signature's canonical form, so a whitespace- or
 	// padding-permuted copy of an accepted signature is the same key and is
 	// caught as a replay rather than slipping through as a new string.
 	sigKey, ok := authkey.NormalizeSig(req.Sig)
-	if !ok || !authkey.Verify(d.architectPub, msg, req.Sig) {
-		return false, errors.New("the signature does not verify")
+	if !ok {
+		return signer{}, errors.New("the signature is malformed")
+	}
+	// Whose signature is it? The architect's key, or the key enrolled for the
+	// source it declares. A signature that verifies under neither is refused,
+	// and a declared source can be proved only by its own key, so a peer can
+	// neither borrow another source's name nor claim the architect.
+	var who signer
+	switch {
+	case d.architectPub != nil && authkey.Verify(d.architectPub, msg, req.Sig):
+		who = signer{architect: true}
+	case req.Source != "" && d.verifyPeer(req.Source, msg, req.Sig):
+		who = signer{peer: req.Source}
+	default:
+		return signer{}, errors.New("the signature does not verify")
 	}
 	now := time.Now().UnixNano()
 	skew := now - req.Ts
@@ -570,7 +601,7 @@ func (d *Daemon) verifyArchitect(req wire.Request) (bool, error) {
 		skew = -skew
 	}
 	if skew > int64(sigWindow) {
-		return false, errors.New("the signature is stale")
+		return signer{}, errors.New("the signature is stale")
 	}
 	d.sigMu.Lock()
 	defer d.sigMu.Unlock()
@@ -583,32 +614,109 @@ func (d *Daemon) verifyArchitect(req wire.Request) (bool, error) {
 		}
 	}
 	if _, seen := d.seenSigs[sigKey]; seen {
-		return false, errors.New("the signature was already used")
+		return signer{}, errors.New("the signature was already used")
 	}
 	// The entry must outlive the whole interval the signature stays fresh,
 	// which ends at Ts + sigWindow, so a forward-skewed signature cannot be
 	// replayed in the gap between the cache expiring and the freshness deadline.
 	d.seenSigs[sigKey] = req.Ts + int64(sigWindow)
-	return true, nil
+	return who, nil
+}
+
+// verifyPeer reports whether a message carries a valid signature from the key
+// enrolled for a source. It reads the key map under the lock, since an enroll
+// may be writing it on the loop.
+func (d *Daemon) verifyPeer(source string, msg []byte, sigB64 string) bool {
+	d.keyMu.RLock()
+	pub, ok := d.sourceKeys[source]
+	d.keyMu.RUnlock()
+	return ok && authkey.Verify(pub, msg, sigB64)
+}
+
+// verifyArchitect reports whether the architect signed a request, the narrow
+// question the authority gates and the replay tests ask. A peer signature is
+// genuine but not the architect's, so it returns false with no error.
+func (d *Daemon) verifyArchitect(req wire.Request) (bool, error) {
+	who, err := d.authenticate(req)
+	if err != nil {
+		return false, err
+	}
+	return who.architect, nil
 }
 
 // principalOf authenticates a request arriving on a transport and returns who
 // it speaks as, or an error to refuse it. A bad signature is always refused; an
 // unsigned request is refused on the network transport and allowed on the local
-// socket as the operator.
+// socket as the operator. A peer that signed with its enrolled key is carried
+// as that source.
 func (d *Daemon) principalOf(req wire.Request, transport string) (principal, error) {
-	signed, err := d.verifyArchitect(req)
+	who, err := d.authenticate(req)
 	if err != nil {
 		return principal{}, err
 	}
-	if transport == "tcp" && !signed {
+	authenticated := who.architect || who.peer != ""
+	if transport == "tcp" && !authenticated {
 		return principal{}, errors.New("this brain accepts only signed requests over the network")
 	}
-	pr := principal{architectSigned: signed, local: transport == "unix"}
-	if signed && len(req.Sig) >= 12 {
+	pr := principal{architectSigned: who.architect, peerSource: who.peer, local: transport == "unix"}
+	if authenticated && len(req.Sig) >= 12 {
 		pr.sigFingerprint = req.Sig[:12]
 	}
 	return pr, nil
+}
+
+// loadSourceKeys decodes every enrolled peer key from the store into the map
+// principalOf checks, so a peer's identity survives a restart.
+func (d *Daemon) loadSourceKeys() error {
+	raw, err := d.store.SourceKeys()
+	if err != nil {
+		return err
+	}
+	keys := make(map[string]ed25519.PublicKey, len(raw))
+	for name, pubB64 := range raw {
+		pub, err := authkey.DecodePublic(pubB64)
+		if err != nil || pub == nil {
+			fmt.Fprintf(d.out, "skipping malformed enrolled key for %q: %v\n", name, err)
+			continue
+		}
+		keys[name] = pub
+	}
+	d.keyMu.Lock()
+	d.sourceKeys = keys
+	d.keyMu.Unlock()
+	return nil
+}
+
+// setSourceKey enrolls or rotates a peer's public key (an empty key revokes it),
+// updating both the store and the in-memory map. It mints the source node so a
+// trust level can be set for it too. It runs on the loop, from an enroll.
+func (d *Daemon) setSourceKey(name, pubB64 string) error {
+	if _, err := d.ensureSource(name); err != nil {
+		return err
+	}
+	if strings.TrimSpace(pubB64) == "" {
+		if err := d.store.DeleteSourceKey(name); err != nil {
+			return err
+		}
+		d.keyMu.Lock()
+		delete(d.sourceKeys, name)
+		d.keyMu.Unlock()
+		return nil
+	}
+	pub, err := authkey.DecodePublic(pubB64)
+	if err != nil || pub == nil {
+		return fmt.Errorf("the public key is not valid: %v", err)
+	}
+	if err := d.store.SetSourceKey(name, pubB64); err != nil {
+		return err
+	}
+	d.keyMu.Lock()
+	if d.sourceKeys == nil {
+		d.sourceKeys = map[string]ed25519.PublicKey{}
+	}
+	d.sourceKeys[name] = pub
+	d.keyMu.Unlock()
+	return nil
 }
 
 // New opens a daemon over the given home directory: store, models,
@@ -661,6 +769,10 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		return nil, fmt.Errorf("architect_pubkey: %w", err)
 	}
 	d.architectPub = pub
+	if err := d.loadSourceKeys(); err != nil {
+		store.Close()
+		return nil, err
+	}
 	if err := d.loadModels(); err != nil {
 		store.Close()
 		return nil, err
@@ -2544,6 +2656,37 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 			return wire.Response{Error: err.Error()}, false, false
 		}
 		return wire.Response{OK: true, Say: fmt.Sprintf("%q is trusted %.2f.", name, d.sourceTrust(src.ID))}, false, false
+
+	case "enroll":
+		// The architect binds a peer's public key to its source name, so the
+		// peer can sign its own tellings and be heard as exactly that source.
+		// Only the architect's signature authorizes it, so no peer can enroll
+		// itself. An empty key revokes.
+		if !d.reqPrincipal.architectSigned {
+			return wire.Response{Error: "enrolling a source key needs the architect's signature"}, false, false
+		}
+		name := strings.TrimSpace(req.Query)
+		if name == "" || name == architectSource {
+			return wire.Response{Error: "enroll needs a peer source name"}, false, false
+		}
+		pubB64 := strings.TrimSpace(req.Content)
+		if err := d.setSourceKey(name, pubB64); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		note := "enrolled"
+		if pubB64 == "" {
+			note = "revoked"
+		}
+		if d.reqPrincipal.sigFingerprint != "" {
+			note += " (signed " + d.reqPrincipal.sigFingerprint + ")"
+		}
+		if err := d.store.Audit(time.Now().Unix(), "enroll", name, note); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		if pubB64 == "" {
+			return wire.Response{OK: true, Say: fmt.Sprintf("%q can no longer prove its identity; its key is revoked.", name)}, false, false
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("%q can now prove its identity with its own key.", name)}, false, false
 
 	case "name":
 		// Deliberate naming: assert that a word names a grounded concept,

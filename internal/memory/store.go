@@ -125,6 +125,10 @@ CREATE TABLE IF NOT EXISTS colour_prototypes (
 	r    REAL NOT NULL,
 	g    REAL NOT NULL,
 	b    REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_keys (
+	name   TEXT PRIMARY KEY,
+	pubkey TEXT NOT NULL
 );`
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
@@ -1196,6 +1200,40 @@ func (s *Store) AuditTail(limit int) ([]AuditEntry, error) {
 			return nil, err
 		}
 		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// SetSourceKey binds a source name to its base64 public key, so a peer's
+// identity is provable across restarts. Replacing an existing key rotates it.
+func (s *Store) SetSourceKey(name, pubkey string) error {
+	_, err := s.db.Exec(`INSERT INTO source_keys (name, pubkey) VALUES (?, ?)
+		ON CONFLICT(name) DO UPDATE SET pubkey = excluded.pubkey`, name, pubkey)
+	return err
+}
+
+// DeleteSourceKey removes a source's enrolled key, revoking its ability to
+// prove that identity.
+func (s *Store) DeleteSourceKey(name string) error {
+	_, err := s.db.Exec(`DELETE FROM source_keys WHERE name = ?`, name)
+	return err
+}
+
+// SourceKeys reads every enrolled source key, the map the daemon decodes at
+// boot so a peer's signature can be checked against its own key.
+func (s *Store) SourceKeys() (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT name, pubkey FROM source_keys`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var name, pubkey string
+		if err := rows.Scan(&name, &pubkey); err != nil {
+			return nil, err
+		}
+		out[name] = pubkey
 	}
 	return out, rows.Err()
 }

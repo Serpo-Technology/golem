@@ -65,10 +65,13 @@ Usage:
                                   the operator's
   golem trust <source> [level]    show or set how far GOLEM trusts a source
                                   (setting needs the architect's signature)
-  golem keygen                    make an architect keypair: the public key for
-                                  the daemon's config, the private key to keep
+  golem keygen                    make a keypair: the public key to register,
+                                  the private key to keep and sign with
+  golem enroll <source> <pubkey>  register a peer's public key so it can prove
+                                  its identity (needs the architect's signature;
+                                  omit the key to revoke)
   golem sign                      sign a request read as JSON on stdin (for a
-                                  transducer talking over the network transport)
+                                  transducer or peer talking over the network)
   golem watch                     stream the talking channel: what GOLEM says
                                   and what each source says to it
   golem recall [query]            recall memory plus its linked context;
@@ -308,6 +311,22 @@ func main() {
 			}
 			req.Command = "set"
 			req.Weight = lvl
+		}
+		signAuthority(&req)
+		resp := call(home, req)
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
+	case "enroll":
+		rest := args[1:]
+		if len(rest) < 1 {
+			fail(fmt.Errorf("usage: golem enroll <source> <pubkey>   (omit the key to revoke)"))
+		}
+		req := wire.Request{Cmd: "enroll", Query: rest[0]}
+		if len(rest) >= 2 {
+			req.Content = rest[1]
 		}
 		signAuthority(&req)
 		resp := call(home, req)
