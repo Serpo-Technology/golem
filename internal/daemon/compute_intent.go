@@ -220,5 +220,6 @@ func (d *Daemon) computeSay(src string) (string, bool) {
 	if generated, ok := d.generateCode(comp, g, root); ok {
 		out = generated
 	}
-	return runSummary(d.runProgram(out)), true
+	res, _ := d.runProgram(out)
+	return runSummary(res), true
 }

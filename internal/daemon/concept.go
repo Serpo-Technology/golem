@@ -81,17 +81,17 @@ const (
 	// is a strong namer of the tiger is independent of how many other animals it names), so
 	// a concept whose company is at least this fraction the category word's is a reliable
 	// member however broad the category, while a one-shot co-namer sits an order below.
-	absPwcFloor = 0.10
-	absConcentration = 0.5  // a word this faithful to one concept is a name, an abstraction is not
+	absPwcFloor      = 0.10
+	absConcentration = 0.5 // a word this faithful to one concept is a name, an abstraction is not
 	// ostensiveDominance is the share of a word's whole ostension one percept must hold
 	// for the word to count as that percept's name. A name points at one thing every
 	// telling, so its ostension piles up there; a clear majority distinguishes it from a
 	// category, whose ostension spreads across the members it was said over, and from a
 	// near-even split, which withholds rather than guessing a referent.
 	ostensiveDominance = 0.6
-	absPerNight      = 4    // abstractions mintable in one night
-	absNameWeight    = 0.8  // the word's bond to its own abstraction
-	absRefreshFloor  = 2    // a core smaller than this has dissolved; stop refreshing and let decay take it
+	absPerNight        = 4   // abstractions mintable in one night
+	absNameWeight      = 0.8 // the word's bond to its own abstraction
+	absRefreshFloor    = 2   // a core smaller than this has dissolved; stop refreshing and let decay take it
 	// crossTongueTwinOverlap is how much of an other-tongue word's percept company
 	// must be shared with a category word before it counts as that word's translation
 	// twin, whose agreement corroborates a candidate member. A real translation names
@@ -121,7 +121,7 @@ func (d *Daemon) grownConcepts() ([]*memory.Fragment, error) {
 	var out []*memory.Fragment
 	for _, c := range concepts {
 		switch c.Category {
-		case "construction", declGrammarCategory, "class", answerCxnCategory, sourceCategory:
+		case "construction", declGrammarCategory, "class", answerCxnCategory, sourceCategory, "number":
 			continue
 		}
 		out = append(out, c)

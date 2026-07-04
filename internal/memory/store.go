@@ -278,7 +278,7 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// disuse. So it is spared the nightly decay and stands at full weight, which keeps a taught
 	// grammar pattern intact across nights instead of thinning toward the link floor.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
-		WHERE to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source'))`, linkNightlyKeep); err != nil {
+		WHERE to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number'))`, linkNightlyKeep); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {
@@ -320,7 +320,7 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// is spared the grounding test. This is what lets a grammar pattern taught into the graph
 	// survive the night as a fluid weight rather than fade and re-grow only from the seed.
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
-		AND category NOT IN ('construction', 'declgrammar', 'class', 'answer', 'source')
+		AND category NOT IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number')
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
 			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)`, KindConcept, RelGrounds, RelAgent, RelPatient); err != nil {
 		return int(pruned), err

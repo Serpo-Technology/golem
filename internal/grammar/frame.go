@@ -118,15 +118,32 @@ func Tokenize(s string) (tokens []string, question bool) {
 	return tokens, question
 }
 
+// symbolRunes are the operator marks that stand as tokens of their own: the
+// arithmetic and comparison symbols the graph can name the way it names any
+// word, so "+" is teachable as a name of an operation. Sentence punctuation
+// stays outside the set, consumed as before, so "?" never becomes a token and
+// keeps carrying force alone.
+const symbolRunes = "+-*/<>="
+
 // cleanToken strips the surrounding punctuation off a field down to its content,
 // keeping a leading minus on a negative number so "-8" is not read as 8. The
 // general trim drops both ends, so the sign is restored when the field is a minus
-// then digits after any surrounding punctuation.
+// then digits after any surrounding punctuation. A field that is nothing but
+// operator symbols survives whole as a symbol token.
 func cleanToken(field string) string {
 	content := func(r rune) bool {
 		return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r > 127
 	}
 	tok := strings.TrimFunc(field, func(r rune) bool { return !content(r) })
+	if tok == "" {
+		// A field of hyphens alone is a prose dash, punctuation as before; the
+		// subtraction symbol's citizenship waits on the punctuation work that
+		// can tell the two apart. Every other operator field is a token.
+		if field != "" && strings.Trim(field, symbolRunes) == "" && strings.Trim(field, "-") != "" {
+			return field
+		}
+		return tok
+	}
 	if isDigits(tok) {
 		if inner := strings.TrimFunc(field, func(r rune) bool { return r != '-' && !content(r) }); inner == "-"+tok {
 			return inner

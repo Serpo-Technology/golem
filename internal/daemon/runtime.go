@@ -25,11 +25,13 @@ import (
 const runtimeBudget = 5 * time.Second
 
 // runProgram runs a program GOLEM composed, grounds its result, and leaves the
-// program as a readable artifact in the graph and on the trail. It refuses
-// while the gate is shut, so the capability exists but waits for the container.
-func (d *Daemon) runProgram(source string) runtime.Result {
+// program as a readable artifact in the graph and on the trail, returning the
+// artifact's id so a fact grounded on the run can carry its provenance. It
+// refuses while the gate is shut, so the capability exists but waits for the
+// container.
+func (d *Daemon) runProgram(source string) (runtime.Result, uint64) {
 	if !d.cfg.RuntimeEnabled {
-		return runtime.Result{Err: "the code runtime is closed; the operator opens it inside the sandbox"}
+		return runtime.Result{Err: "the code runtime is closed; the operator opens it inside the sandbox"}, 0
 	}
 	runner := d.runner
 	if runner == nil {
@@ -61,7 +63,7 @@ func (d *Daemon) runProgram(source string) runtime.Result {
 	if percept := runPercept(res); percept != "" {
 		d.process(senses.Observation{Channel: "code", Content: percept, At: now}, true, true)
 	}
-	return res
+	return res, artifact.ID
 }
 
 // runSummary renders a run's outcome for the trail and the reply: the error

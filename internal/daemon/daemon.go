@@ -2069,7 +2069,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				if out, ok := d.generateCode(comp, g, root); ok {
 					src = out
 				}
-				return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
+				res, _ := d.runProgram(src)
+				return wire.Response{OK: true, Say: runSummary(res)}, false, false
 			}
 			// It did not comprehend. A computation that names an operation GOLEM
 			// has not learned, or is otherwise ill-formed, has its gap admitted
@@ -2087,7 +2088,8 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 				return wire.Response{OK: true, Say: "I could not work that out."}, false, false
 			}
 		}
-		return wire.Response{OK: true, Say: runSummary(d.runProgram(src))}, false, false
+		rawRes, _ := d.runProgram(src)
+		return wire.Response{OK: true, Say: runSummary(rawRes)}, false, false
 
 	case "tell":
 		if req.Content == "" {

@@ -8,7 +8,7 @@ import (
 // operator to open the gate inside the sandbox.
 func TestRunProgramGatedShut(t *testing.T) {
 	d, _ := testDaemon(t)
-	res := d.runProgram("6 * 7")
+	res, _ := d.runProgram("6 * 7")
 	if res.OK || res.Err == "" {
 		t.Fatalf("the runtime should be closed by default: %+v", res)
 	}
@@ -20,7 +20,7 @@ func TestRunProgramComputesGroundsAndRecords(t *testing.T) {
 	d, s := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
 
-	res := d.runProgram("6 * 7")
+	res, _ := d.runProgram("6 * 7")
 	if !res.OK || res.Value != "42" {
 		t.Fatalf("the runtime should compute the program: %+v", res)
 	}
@@ -39,7 +39,7 @@ func TestRunProgramComputesGroundsAndRecords(t *testing.T) {
 func TestRunProgramContainsFailure(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
-	res := d.runProgram(`panic("boom")`)
+	res, _ := d.runProgram(`panic("boom")`)
 	if res.OK || res.Err == "" {
 		t.Fatalf("a failing program should be contained to an error: %+v", res)
 	}

@@ -103,6 +103,14 @@ func (d *Daemon) ensureOperations() {
 		if op.Word != "" {
 			d.nameConceptWord(id, op.Word, "en")
 		}
+		// The operator symbol names the operation the way its words do: a graph
+		// citizen ("+" naming op:add) resolved by the ordinary naming walk, so
+		// written arithmetic reads through the same grounded lookup as speech
+		// and a taught alternative can outweigh it. No symbol table stands
+		// between the surface and the concept.
+		if op.Symbol != "" {
+			d.nameConceptWord(id, op.Symbol, "en")
+		}
 		for lang, words := range operationWords[op.Name] {
 			for _, w := range words {
 				d.nameConceptWord(id, w, lang)
@@ -356,6 +364,12 @@ func (d *Daemon) comprehendCall(lang, phrase string) (code.Computation, *scratch
 	// leading word and applies it to the operands that follow, the same call without
 	// the genitive scaffolding.
 	if app, ok := d.gram.ParseBareCall(lang, phrase, d.opHead); ok {
+		return d.comprehendApplication(app)
+	}
+	// The operator register "3 + 4" / "3 plus 4" stands the operation between its
+	// operands; the head resolves through the same grounded naming, so a symbol
+	// reads as a call exactly when the graph names an operation with it.
+	if app, ok := d.gram.ParseInfixCall(lang, phrase, d.opHead); ok {
 		return d.comprehendApplication(app)
 	}
 	comp, ok := d.code.Comprehend(phrase)

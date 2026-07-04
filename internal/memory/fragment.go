@@ -107,6 +107,14 @@ const (
 	// freshly pointed at earns the edge. The abstraction pass reads it to bind a
 	// diluted cross-tongue name to its referent rather than splitting a phantom.
 	RelOstends = "ostends"
+	// RelValue links a computed fact to the number its computation evaluated to,
+	// the result half of "6 + 7 = 13" held apart from the operand roles so the
+	// value reads off the fact directly.
+	RelValue = "value"
+	// RelComputedBy links a computed fact to the program artifact whose run
+	// grounded it, so a value GOLEM computed is auditable back to the very code
+	// and the run record that produced it.
+	RelComputedBy = "computedby"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."

@@ -1213,21 +1213,26 @@ func (d *Daemon) planComputation(frame grammar.Frame, raw string) (string, bool)
 	if !ok {
 		return "", false
 	}
-	src, ok := d.generateCode(comp, g, root)
-	if !ok {
-		return "", false
-	}
-	res := d.runProgram(src)
-	if res.Err != "" || res.Value == "" {
-		return "", false
-	}
-	// The value is spoken back against the phrase asked, and the run itself is
-	// already recorded on the trail, so the answer reads as a grounded act and
-	// not a stored fact.
 	connective := "is"
 	if frame.Lang == "tr" {
 		connective = "eder"
 	}
+	// Memory before the machine: a computation already grounded by a prior run
+	// answers from the fact it landed, firm, with no program spun.
+	if val, ok := d.computedFact(comp); ok {
+		return upperFirst(phrase) + " " + connective + " " + val + ".", true
+	}
+	src, ok := d.generateCode(comp, g, root)
+	if !ok {
+		return "", false
+	}
+	res, artifactID := d.runProgram(src)
+	if res.Err != "" || res.Value == "" {
+		return "", false
+	}
+	// The finding lands as a walkable fact carrying its provenance, so the next
+	// asking reads memory and the value is auditable back to the run.
+	d.groundComputation(comp, res.Value, artifactID)
 	return upperFirst(phrase) + " " + connective + " " + res.Value + ".", true
 }
 

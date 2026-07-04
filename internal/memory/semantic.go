@@ -27,6 +27,18 @@ func (s *Store) ConceptByTemplate(tpl string) (*Fragment, error) {
 	return frags[0], nil
 }
 
+// FragmentByTemplate finds the newest fragment of any kind carrying a template,
+// the lookup a computed fact is recalled through ("computed:add:6:7"). The
+// template index serves it the way it serves the concept lookup.
+func (s *Store) FragmentByTemplate(tpl string) (*Fragment, error) {
+	frags, err := s.query(`SELECT `+fragmentCols+` FROM fragments
+		WHERE template = ? ORDER BY id DESC LIMIT 1`, tpl)
+	if err != nil || len(frags) == 0 {
+		return nil, err
+	}
+	return frags[0], nil
+}
+
 // WordByTemplate returns the word node a template keys, or nil if none.
 // A closed-class lexeme that names no concept (the copula, a modal) is held
 // as a word node under a "lexeme:" template; this finds it by that template

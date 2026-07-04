@@ -166,6 +166,45 @@ func (p *Params) ParseBareCall(lang, utterance string, head HeadFunc) (Applicati
 	return Application{Head: name, Args: args}, true
 }
 
+// ParseInfixCall reads the operator-register call "<A> <op> <B>": a binary
+// operation word or symbol standing between its two operands, the register
+// arithmetic is written in ("3 + 4", "3 plus 4"). The head resolves through the
+// same grounded callback as every call form, so a symbol reads as a call head
+// only when the graph names an operation with it, and each side reads as a full
+// operand, so a nested of-construction still sits where a number would. It is
+// all-or-nothing like the other call forms: one head, a whole operand on each
+// side, every token consumed.
+func (p *Params) ParseInfixCall(lang, utterance string, head HeadFunc) (Application, bool) {
+	p = p.get()
+	if lang == "" {
+		lang = "en"
+	}
+	c := p.callCtx(lang, nil, head)
+	if c == nil {
+		return Application{}, false
+	}
+	toks, _ := Tokenize(utterance)
+	if len(toks) < 3 {
+		return Application{}, false
+	}
+	for i := 1; i < len(toks)-1; i++ {
+		name, arity, ok := head(toks[i])
+		if !ok || arity != 2 {
+			continue
+		}
+		left, ln, lok := c.operand(toks[:i])
+		if !lok || ln != i {
+			continue
+		}
+		right, rn, rok := c.operand(toks[i+1:])
+		if !rok || rn != len(toks)-i-1 {
+			continue
+		}
+		return Application{Head: name, Args: []Application{left, right}}, true
+	}
+	return Application{}, false
+}
+
 // operand reads one operand from the front of the tokens and reports how many it
 // spanned: a bare token is a literal; "the <param>" inside a body is a reference
 // to a parameter in scope; "the list of A and B and ..." is a variadic list
