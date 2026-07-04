@@ -83,26 +83,29 @@ func (d *Daemon) hasConjecture() bool {
 // runExperiment tests one conjecture by running: for each probe input, the
 // composed program f(g(x)), the pair holding when every output returns its
 // input. Each run is the ordinary grounded run, budgeted and auditable, its
-// program an artifact like any other.
-func (d *Daemon) runExperiment(f, g code.Op) (holds bool, tried int) {
+// program an artifact like any other. Only a completed run that comes back
+// wrong refutes; a test the budget or the composer cut short says nothing
+// about the rule, and stopped reports that so the trail never calls an
+// unfinished test a refutation.
+func (d *Daemon) runExperiment(f, g code.Op) (holds bool, tried int, stopped bool) {
 	for _, x := range experimentInputs {
 		if d.computeRuns >= computeRunsPerWake {
-			return false, tried
+			return false, tried, true
 		}
 		comp := code.Computation{Op: f.Name, Args: []code.Computation{
 			{Op: g.Name, Args: []code.Computation{{Lit: x}}}}}
 		src, ok := d.generateCode(comp, nil, 0)
 		if !ok {
-			return false, tried
+			return false, tried, true
 		}
 		res, _ := d.runProgram(src)
 		d.computeRuns++
 		tried++
 		if res.Err != "" || res.Value != x {
-			return false, tried
+			return false, tried, false
 		}
 	}
-	return tried == len(experimentInputs), tried
+	return tried == len(experimentInputs), tried, false
 }
 
 // actExperimentNow is the compute faculty's idle mode: it takes the next
@@ -119,15 +122,20 @@ func (d *Daemon) actExperimentNow() (string, bool) {
 		d.triedConjectures = map[string]bool{}
 	}
 	d.triedConjectures[f.Name+"|"+g.Name] = true
-	holds, tried := d.runExperiment(f, g)
+	holds, tried, stopped := d.runExperiment(f, g)
 	what := experimentRel + "(" + f.Name + ", " + g.Name + ")"
 	if !holds {
 		outcome := fmt.Sprintf("refuted after %d run(s)", tried)
+		fruitful := true
+		if stopped {
+			outcome = fmt.Sprintf("stopped after %d run(s)", tried)
+			fruitful = false
+		}
 		d.event(events.Event{Ev: "experiment", Cue: what, Outcome: outcome})
 		if err := d.store.Audit(time.Now().Unix(), "experiment", what, outcome); err != nil {
 			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 		}
-		return what + " " + outcome, true
+		return what + " " + outcome, fruitful
 	}
 	fc, err1 := d.store.ConceptByTemplate("op:" + f.Name)
 	gc, err2 := d.store.ConceptByTemplate("op:" + g.Name)

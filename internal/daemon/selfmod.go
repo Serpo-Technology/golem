@@ -85,9 +85,14 @@ func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVe
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), selfBuildBudget)
 	defer cancel()
-	res := selfbuild.Build(ctx, src, stage, main, "golem-candidate", ch)
+	res := selfbuild.Build(ctx, src, stage, main, operatorCandidate, ch)
 	return d.settleSelfChange(ch, res, fitness)
 }
+
+// operatorCandidate is the staged binary an operator's retune produces; the
+// autonomous review stages under its own name so the two never overwrite each
+// other's vetted candidate at the shared stage path.
+const operatorCandidate = "golem-candidate"
 
 // beginSelfChange runs the same pipeline off the brain loop. The gates and the
 // staging ground are checked here for an immediate refusal; the copy, build,
@@ -95,17 +100,17 @@ func (d *Daemon) proposeSelfChange(ch selfbuild.Change, fitness func() fitnessVe
 // marshals back through execDone, where the loop settles it single-threaded
 // and hands the verdict to done. The build holds a run slot while it works,
 // and only one self-build runs at a time: the toolchain is too heavy to race
-// against itself.
-func (d *Daemon) beginSelfChange(ch selfbuild.Change, fitness func() fitnessVerdict,
-	done func(selfbuild.Result)) (refusal string) {
+// against itself. binName sets which staged candidate the build produces, so
+// distinct producers keep distinct candidates. The build context cancels when
+// the daemon stops, so a shutdown is not held for the length of a compile.
+func (d *Daemon) beginSelfChange(ch selfbuild.Change, binName string,
+	fitness func() fitnessVerdict, done func(selfbuild.Result)) (refusal string) {
 	src, stage, main, refuse := d.selfChangeGrounds()
 	if refuse.Err != "" {
 		return refuse.Err
 	}
-	for _, run := range d.running {
-		if strings.HasPrefix(run.cmd, "selfbuild ") {
-			return "a self-change is already building; its outcome lands on the trail first"
-		}
+	if d.selfBuildRunning() {
+		return "a self-change is already building; its outcome lands on the trail first"
 	}
 	d.nextRunID++
 	id := d.nextRunID
@@ -113,7 +118,14 @@ func (d *Daemon) beginSelfChange(ch selfbuild.Change, fitness func() fitnessVerd
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), selfBuildBudget)
 		defer cancel()
-		res := selfbuild.Build(ctx, src, stage, main, "golem-candidate", ch)
+		go func() {
+			select {
+			case <-d.stop:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+		res := selfbuild.Build(ctx, src, stage, main, binName, ch)
 		d.execDone <- execResult{id: id, ran: true, ok: res.Accepted, outcome: res.Stage,
 			finish: func(bool, bool, string) { done(d.settleSelfChange(ch, res, fitness)) }}
 	}()
@@ -144,7 +156,7 @@ func (d *Daemon) handleRetune(req wire.Request) wire.Response {
 			reason: "the architect asked; the deploy stays the architect's"}
 	}
 	asked := "the retune of " + name + " to " + value
-	if busy := d.beginSelfChange(ch, fitness, func(res selfbuild.Result) {
+	if busy := d.beginSelfChange(ch, operatorCandidate, fitness, func(res selfbuild.Result) {
 		if res.Err != "" {
 			d.sayLine(asked + " died at " + res.Stage + ": " + res.Err)
 			return
@@ -190,6 +202,17 @@ func (d *Daemon) proposeRetune(file, name, newValue, why string, fitness func() 
 		return refuse
 	}
 	return d.proposeSelfChange(ch, fitness)
+}
+
+// selfBuildRunning reports whether a self-change currently holds the build
+// slot, so a second one waits its turn.
+func (d *Daemon) selfBuildRunning() bool {
+	for _, run := range d.running {
+		if strings.HasPrefix(run.cmd, "selfbuild ") {
+			return true
+		}
+	}
+	return false
 }
 
 // auditSelfmod records one stage of a self-change on the trail, so the system's

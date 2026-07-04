@@ -68,6 +68,16 @@ func (d *Daemon) computeDrives(now time.Time, seedNameless bool) []drive {
 				why: "computation: an answer is owed for " + d.computeGaps[0].phrase})
 		}
 	}
+	// A pending self-tuning wish wants building while the sandbox is open.
+	// The urge starts moderate and rises over ten calm minutes: the change
+	// waits on evidence already weighed, so it presses, gently.
+	if d.pendingRetune != nil && d.cfg.RuntimeEnabled && d.cfg.SourcePath != "" {
+		age := now.Sub(d.pendingRetune.at)
+		if u := clamp01(0.4 + age.Seconds()/600); u > driveFloor {
+			out = append(out, drive{name: "selftune", act: actRetune, urge: u,
+				why: "selftune: " + d.pendingRetune.reason})
+		}
+	}
 	return out
 }
 

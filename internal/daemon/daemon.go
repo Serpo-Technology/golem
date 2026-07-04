@@ -79,6 +79,11 @@ type Daemon struct {
 	computeRuns      int
 	triedConjectures map[string]bool
 
+	// pendingRetune is the one self-tuning wish the nightly review may hold
+	// at a time: formed from the experiment trail, built by the retune act
+	// at idle, cleared when the build is handed off.
+	pendingRetune *retuneProposal
+
 	// statementAbandoned marks that the current telling was read as a
 	// proposition and yielded none (a misparse: a clausal shape whose roles
 	// never bound). Such a telling lays no naming company and no attention
@@ -1787,6 +1792,10 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// counts against it, an unchallenged night restores a little, so a voice earns or
 	// loses standing by how its tellings hold up rather than by decree alone.
 	d.growSourceTrust()
+	// The experiment organ reads its own record the same way: rules that
+	// betrayed or kept faith argue for retuning the confidence they are held
+	// at, and the review may form one proposal for the idle mind to build.
+	d.reviewExperimentTuning()
 	// A relation told often enough, its slots filled by varied concepts,
 	// induces an argument-structure construction grown from that usage.
 	born += d.growConstructions()

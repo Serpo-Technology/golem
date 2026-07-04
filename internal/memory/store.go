@@ -1200,6 +1200,26 @@ func (s *Store) AuditTail(limit int) ([]AuditEntry, error) {
 	return out, rows.Err()
 }
 
+// AuditByCue returns one cue's whole trail, oldest first, so a reader can
+// fold its history forward: what was recorded, in the order it happened.
+func (s *Store) AuditByCue(cue string) ([]AuditEntry, error) {
+	rows, err := s.db.Query(`SELECT at, cue, action, outcome FROM audit
+		WHERE cue = ? ORDER BY at ASC, rowid ASC`, cue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AuditEntry
+	for rows.Next() {
+		var e AuditEntry
+		if err := rows.Scan(&e.At, &e.Cue, &e.Action, &e.Outcome); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // CalibState is one channel's persisted saliency calibration.
 type CalibState struct {
 	N    int

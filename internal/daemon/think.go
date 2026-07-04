@@ -228,6 +228,8 @@ type thoughtSnapshot struct {
 	introRecency   float64 // closeness of the last committed thought
 	computeReady   bool    // a held computation, the runtime open, budget left
 	computeGap     string  // the oldest held computation's phrase
+	retuneReady    bool    // a pending self-tuning wish, the sandbox open, pipeline free
+	retuneWhat     string  // the constant the wish names
 
 	// Drives bias the act gate: per-act multipliers with the reasons
 	// that earned them, and the held goal's topic for the recall act to
@@ -339,6 +341,11 @@ func (d *Daemon) startThinkRound() {
 		// carries that).
 		sn.computeReady = true
 		sn.computeGap = "an experiment"
+	}
+	if d.pendingRetune != nil && d.cfg.RuntimeEnabled && d.cfg.SourcePath != "" &&
+		!d.selfBuildRunning() {
+		sn.retuneReady = true
+		sn.retuneWhat = d.pendingRetune.name
 	}
 	seedNameless := false
 	if seed.Kind == memory.KindConcept {

@@ -36,6 +36,7 @@ const (
 	actPropose     = "propose"
 	actIntrospect  = "introspect"
 	actCompute     = "compute"
+	actRetune      = "retune"
 
 	// relAct is the mental-teach face of the act space: teach --mind
 	// <word> act <name> grounds a word to a faculty the way a relation
@@ -43,7 +44,7 @@ const (
 	relAct = "act"
 )
 
-var actNames = []string{actRecall, actGround, actConsolidate, actSpeak, actPropose, actIntrospect, actCompute}
+var actNames = []string{actRecall, actGround, actConsolidate, actSpeak, actPropose, actIntrospect, actCompute, actRetune}
 
 // actOp is one faculty as an operation: the innate floor is the hand
 // list of acts, and everything above (worth, naming, selection) is
@@ -91,6 +92,7 @@ var actGains = map[string]float64{
 	actPropose:     0.40,
 	actIntrospect:  0.30,
 	actCompute:     0.55,
+	actRetune:      0.50,
 }
 
 // actAppetite is the chemistry's pull toward each faculty: alarm calls
@@ -129,6 +131,7 @@ var actCooldowns = map[string]time.Duration{
 	actPropose:     60 * time.Second,
 	actIntrospect:  60 * time.Second,
 	actCompute:     45 * time.Second,
+	actRetune:      5 * time.Minute,
 }
 
 // Clutter is the tidiness signal: fresh encodes since the last
@@ -229,6 +232,14 @@ func actThought(sn thoughtSnapshot, op actOp) thoughtCandidate {
 			sig = 1
 			arg = sn.computeGap
 		}
+	case actRetune:
+		// A wish the nightly review formed, with the pipeline free: the
+		// evidence already argued the change, so readiness is the whole
+		// signal and the build itself stays off the loop.
+		if sn.retuneReady {
+			sig = 1
+			arg = sn.retuneWhat
+		}
 	}
 	if sig <= 0 {
 		return none
@@ -282,6 +293,8 @@ func (d *Daemon) performAct(name string, winner thoughtCandidate) {
 		outcome = line
 	case actCompute:
 		outcome, fruitful = d.actComputeNow()
+	case actRetune:
+		outcome, fruitful = d.actRetuneNow()
 	}
 	trigger := "unprompted"
 	if winner.why != "" {

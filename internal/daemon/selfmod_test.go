@@ -198,7 +198,7 @@ func TestSelfChangeBuildsOffTheLoop(t *testing.T) {
 	d.cfg.MainPackage = "."
 
 	var got *selfbuild.Result
-	refusal := d.beginSelfChange(rename(`"hello"`, `"howdy"`), improvedFitness,
+	refusal := d.beginSelfChange(rename(`"hello"`, `"howdy"`), operatorCandidate, improvedFitness,
 		func(res selfbuild.Result) { got = &res })
 	if refusal != "" {
 		t.Fatalf("an open gate should launch the build: %s", refusal)
@@ -209,7 +209,7 @@ func TestSelfChangeBuildsOffTheLoop(t *testing.T) {
 	if len(d.running) != 1 {
 		t.Fatalf("the build should hold a run slot while it works: %d", len(d.running))
 	}
-	if r := d.beginSelfChange(rename(`"hello"`, `"hiya"`), improvedFitness,
+	if r := d.beginSelfChange(rename(`"hello"`, `"hiya"`), operatorCandidate, improvedFitness,
 		func(selfbuild.Result) {}); !strings.Contains(r, "already building") {
 		t.Fatalf("a second self-change should be refused while one builds: %q", r)
 	}
