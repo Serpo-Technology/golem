@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"golem/internal/attention"
 	"golem/internal/events"
 	"golem/internal/grammar"
 	"golem/internal/memory"
@@ -47,9 +48,12 @@ func (d *Daemon) planBecause(frame grammar.Frame, raw string, momentID uint64) (
 		return "", false
 	}
 	// The cause clause grounds in a moment of its own, so its proposition has a
-	// fragment to ride and the cause edge two distinct ends.
+	// fragment to ride and the cause edge two distinct ends. The moment carries
+	// its normalized template like any heard moment: without one, the merge
+	// pass keys every cause moment as one duplicate shape and folds them onto a
+	// single prototype, re-targeting their cause edges wholesale.
 	causeMoment := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "tell", Content: cause,
-		Limbic: d.chem.Snapshot(), Time: time.Now()}
+		Template: attention.Normalize(cause), Limbic: d.chem.Snapshot(), Time: time.Now()}
 	if _, err := d.store.Encode(causeMoment); err != nil {
 		return d.ackStatement(frame.Lang), true
 	}

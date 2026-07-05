@@ -447,6 +447,17 @@ func TestBecauseTeachesAndWhyReads(t *testing.T) {
 	if got := say(t, d, "why did the dog chase the cat").Say; got != "Because the cat grabbed the bone." {
 		t.Fatalf("why should answer the told cause: %q", got)
 	}
+	// A second compound and a night: each cause stays on its own moment (an
+	// untemplated cause moment once merged into another compound's and answered
+	// with its cause), and the told causes survive the consolidation.
+	say(t, d, "a cat chased a mouse because the mouse grabbed a cheese")
+	d.sleepCycle()
+	if got := say(t, d, "why did the dog chase the cat").Say; got != "Because the cat grabbed the bone." {
+		t.Fatalf("the first cause should hold its own moment across the night: %q", got)
+	}
+	if got := say(t, d, "why did the cat chase the mouse").Say; got != "Because the mouse grabbed the cheese." {
+		t.Fatalf("the second cause should hold its own moment across the night: %q", got)
+	}
 	// A fact with no told cause keeps the old succession answer.
 	say(t, d, "a dog fetched a ball")
 	if got := say(t, d, "why did the dog fetch the ball").Say; strings.HasPrefix(got, "Because") {
