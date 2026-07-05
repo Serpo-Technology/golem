@@ -169,7 +169,7 @@ func (d *Daemon) knowsPropositionTR(tokens []string) (string, bool) {
 		return "", false
 	}
 	echo := strings.Join(tokens, " ")
-	if belief, _, _ := d.assessProposition(subject, rel.Content, patient); belief == beliefObserved {
+	if belief, _, _, _ := d.assessProposition(subject, rel.Content, patient); belief == beliefObserved {
 		return "Evet, " + echo + " biliyorum.", true
 	}
 	return "Hayır, " + echo + " bilmiyorum.", true
@@ -248,7 +248,7 @@ func (d *Daemon) knowsPropositionLA(clause string) (string, bool) {
 	if agent.Concept == nil || patient.Concept == nil || rel == nil {
 		return "", false
 	}
-	if belief, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); belief == beliefObserved {
+	if belief, _, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); belief == beliefObserved {
 		return "Ita, scio quod " + clause + ".", true
 	}
 	return "Minime, nescio quod " + clause + ".", true
@@ -282,7 +282,7 @@ func (d *Daemon) knowsProposition(clause string) (string, bool) {
 	}); spoke {
 		echo = lowerFirst(strings.TrimSuffix(strings.TrimSpace(line), "."))
 	}
-	belief, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	belief, _, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
 	if belief == beliefObserved {
 		return "Yes, I know that " + echo + ".", true
 	}

@@ -121,6 +121,22 @@ const (
 	// grounded it, so a value GOLEM computed is auditable back to the very code
 	// and the run record that produced it.
 	RelComputedBy = "computedby"
+	// RelSaidRel, RelSaidAgent, and RelSaidPatient identify the proposition a
+	// spoken claim asserted: a trace moment points at the relation and at the
+	// concepts that filled its roles. They are deliberately not the proposition
+	// shape (grounds into the moment, agent and patient out of it), so a trace
+	// of a guess can never be read back as an observed fact by the walks that
+	// look for that shape.
+	RelSaidRel     = "saidrel"
+	RelSaidAgent   = "saidagent"
+	RelSaidPatient = "saidpatient"
+	// RelDrewOn points a trace moment at a fragment that supported the claim
+	// when it was spoken: the moment that holds the proposition, the telling it
+	// rests on, or the concept whose resemblance or membership lent the guess.
+	// The support's own nature says how it justifies (a told moment carries its
+	// source, a percept its channel), so the edge carries no evidence kind. It
+	// appears in no prune predicate: a trace never keeps its evidence alive.
+	RelDrewOn = "drewon"
 )
 
 // Fragment is the atomic unit of GOLEM's memory: one "moment."

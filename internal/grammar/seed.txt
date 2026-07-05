@@ -409,6 +409,35 @@ surface:tr:lost	bunu anlamadım	tr
 surface:la:lost	non intellexi	la
 surface:en:whichmean	do you mean	en
 surface:en:or	or	en
+# the epistemic probe and its answers: the ask phrases the justify reader
+# matches whole, and the provenance surfaces a proof speaks with.
+surface:en:justifyask	why do you say that	en
+surface:tr:justifyask	neden öyle diyorsun	tr
+surface:la:justifyask	cur ita dicis	la
+surface:en:justifyask2	how do you know	en
+surface:tr:justifyask2	nereden biliyorsun	tr
+surface:la:justifyask2	unde scis	la
+surface:en:justifysaw	I saw it	en
+surface:tr:justifysaw	gördüm	tr
+surface:la:justifysaw	vidi	la
+surface:en:justifytoldyou	you told me	en
+surface:tr:justifytoldyou	sen söyledin	tr
+surface:la:justifytoldyou	tu mihi dixisti	la
+surface:en:justifytold	told me	en
+surface:tr:justifytold	söyledi	tr
+surface:la:justifytold	mihi dixit	la
+surface:en:justifytoldso	I was told so	en
+surface:tr:justifytoldso	öyle söylendi	tr
+surface:la:justifytoldso	ita dictum est	la
+surface:en:justifyreason	I reasoned so	en
+surface:tr:justifyreason	öyle akıl yürüttüm	tr
+surface:la:justifyreason	ita colligo	la
+surface:en:justifylost	I no longer remember why	en
+surface:tr:justifylost	artık nedenini hatırlamıyorum	tr
+surface:la:justifylost	non iam memini	la
+surface:en:justifynone	I cannot say why	en
+surface:tr:justifynone	nedenini söyleyemem	tr
+surface:la:justifynone	cur nescio	la
 surface:en:firstperson	I	en
 surface:tr:firstperson	ben	tr
 surface:en:addressee	you	en

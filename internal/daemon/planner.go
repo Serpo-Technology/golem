@@ -770,6 +770,16 @@ func (d *Daemon) realizeAs(lang string, f grammar.Frame, chem limbic.State) stri
 // workspace warmth, the pending proposal slot, and a comprehended
 // proposition written into the graph.
 func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string, *wire.DecisionInfo) {
+	// A turn that asserts nothing traceable drops the last answer's proofs, so
+	// the probe never justifies a fresh reply with a stale trace. The first
+	// trace a turn writes displaces the set instead; the probe itself marks
+	// the turn so it can be asked again.
+	d.turnTraced = false
+	defer func() {
+		if !d.turnTraced {
+			d.lastTrace = nil
+		}
+	}()
 	terms := []grammar.Term{frame.Agent, frame.Patient}
 	for _, q := range frame.Quals {
 		terms = append(terms, q.Anchor)
@@ -807,6 +817,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		if ans, ok := d.planReferentReply(frame, raw, pendingRef); ok {
 			return ans, nil
 		}
+	}
+
+	// "Why do you say that", "how do you know": the epistemic probe reads the
+	// trace of the last assertion and speaks its actual support. Caught on the
+	// seeded ask phrases before any path could read the words as content.
+	if ans, ok := d.planJustify(frame, raw); ok {
+		return ans, nil
 	}
 
 	// "And then" is a move on the warm proposition, not a clause: walk its

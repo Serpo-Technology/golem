@@ -927,7 +927,7 @@ func TestPolarRecordsAndStandsByClaim(t *testing.T) {
 	if rel == nil {
 		t.Fatal("the chase relation should resolve")
 	}
-	if got := d.answerPolar("en", wolf, rel, cat, true, beliefUnknown, false); got != "As I said, probably, the wolf chased the cat." {
+	if got := d.answerPolar("en", wolf, rel, cat, true, beliefUnknown, false, 0); got != "As I said, probably, the wolf chased the cat." {
 		t.Fatalf("GOLEM should hold its prior affirmation, not contradict it: %q", got)
 	}
 }
@@ -947,7 +947,7 @@ func TestFirmClaimStoodByAsHedge(t *testing.T) {
 	if rel == nil {
 		t.Fatal("the chase relation should resolve")
 	}
-	got := strings.ToLower(d.answerPolar("en", dog, rel, cat, true, beliefUnknown, false))
+	got := strings.ToLower(d.answerPolar("en", dog, rel, cat, true, beliefUnknown, false, 0))
 	if !strings.Contains(got, "probably") {
 		t.Fatalf("a firm claim with no live grounding should soften to a hedge: %q", got)
 	}

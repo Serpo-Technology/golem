@@ -173,8 +173,11 @@ func (d *Daemon) planPartWholePolar(frame grammar.Frame, raw string) (string, bo
 	partName := d.conceptName(part.ID, part.Content, frame.Lang)
 	wholeName := d.conceptName(whole.ID, whole.Content, frame.Lang)
 	if d.propositionHolds(part, partWholeRelation, whole.ID) {
-		return upperFirst(d.gram.Word(frame.Lang, "yes")) + ", the " + partName +
-			" is part of the " + wholeName + ".", true
+		answer := upperFirst(d.gram.Word(frame.Lang, "yes")) + ", the " + partName +
+			" is part of the " + wholeName + "."
+		d.traceClaim(partWholeRelation, part.ID, whole.ID, answer,
+			d.polarEvidence(partWholeRelation, part.ID, whole.ID, 0))
+		return answer, true
 	}
 	return upperFirst(d.gram.Word(frame.Lang, "no")) + ", the " + partName +
 		" is not part of the " + wholeName + ".", true
@@ -328,8 +331,8 @@ func (d *Daemon) planLocativePolar(frame grammar.Frame) (string, bool) {
 		// The preposition has never placed anything, so the proposition cannot hold.
 		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
 	}
-	belief, _, supposed := d.assessProposition(figure, rel.Content, ground)
-	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed), true
+	belief, _, supposed, lender := d.assessProposition(figure, rel.Content, ground)
+	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender), true
 }
 
 // comprehendLocativeTR reads a Turkish locative clause, which marks place by the
@@ -416,8 +419,8 @@ func (d *Daemon) planLocativePolarTR(frame grammar.Frame, raw string) (string, b
 		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
 	}
 	d.noteFocus(figure)
-	belief, _, supposed := d.assessProposition(figure, containmentPrep, ground)
-	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed), true
+	belief, _, supposed, lender := d.assessProposition(figure, containmentPrep, ground)
+	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender), true
 }
 
 // storeLocative writes a locative proposition (the figure at the ground

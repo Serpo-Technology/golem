@@ -267,6 +267,14 @@ type Daemon struct {
 	// and not quietly contradict itself. Cleared at sleep with the rest.
 	claims []claim
 
+	// lastTrace holds the justification traces of the turn's assertions, so
+	// "why do you say that" reads the proof of the last answer. turnTraced
+	// marks that this turn has already displaced the previous set; a turn that
+	// asserts nothing traceable drops the set instead, so a stale proof is
+	// never spoken over a fresh claim. Cleared at sleep with the discourse.
+	lastTrace  []uint64
+	turnTraced bool
+
 	// openQuestions are the questions raised this exchange that GOLEM could not
 	// answer, held so it can follow up when the answer later arrives. Cleared at
 	// sleep. followUp carries a resolution back to the planner: when a told
@@ -2133,6 +2141,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.topicTrail = nil
 	d.turnFocus = 0
 	d.claims = nil
+	d.lastTrace = nil
 	d.openQuestions = nil
 	d.followUp = ""
 	d.proposedKinds = nil

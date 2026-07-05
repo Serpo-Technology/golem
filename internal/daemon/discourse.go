@@ -237,6 +237,9 @@ func (d *Daemon) claimFacts(focus *memory.Fragment, facts []focusFact) (allPrior
 			allPrior = false
 		}
 		d.recordClaim(f.rel, agent, patient, true, false)
+		// Each asserted fact leaves its proof beside the claim: the moment that
+		// holds it, found from the tuple, so the probe can name where it came from.
+		d.traceClaim(f.rel, agent, patient, "", d.polarEvidence(f.rel, agent, patient, 0))
 	}
 	return allPrior
 }

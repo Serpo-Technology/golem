@@ -129,6 +129,10 @@ func (d *Daemon) planWhyCause(frame grammar.Frame, raw string) (string, bool) {
 		return "", false
 	}
 	d.noteFocus(knowns[0]) // the asked-about subject stays the topic
+	// The why answer asserts the cause clause, so the telling that laid the
+	// cause is its proof: the trace points at that moment, and the probe will
+	// name its teller.
+	d.traceClaim(relContent, agentID, patientID, line, []uint64{edges[0].To})
 	because := d.gram.Word(frame.Lang, "because")
 	if because == "" {
 		return line, true

@@ -379,7 +379,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// over every read. The architect's tellings (full trust) are never doubted this way.
 	doubted := false
 	if trust < architectTrust && patient.Concept != nil {
-		if b, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); b == beliefDenied {
+		if b, _, _, _ := d.assessProposition(agent.Concept, rel.Content, patient.Concept); b == beliefDenied {
 			doubted = true
 			d.held.add(heldProp{
 				status:       heldDoubted,
@@ -1291,9 +1291,17 @@ func (d *Daemon) planRepairFact(frame grammar.Frame, raw string, momentID uint64
 		if err := d.store.ForgetBelief(c.rel, c.agent, c.patient); err != nil {
 			fmt.Fprintf(d.out, "belief retire error: %v\n", err)
 		}
-		d.retractProposition(c.rel, c.agent, c.patient)
+		retracted := d.retractProposition(c.rel, c.agent, c.patient)
 		d.removeThreadProp(c.rel, c.agent, c.patient)
 		d.removeClaim(c.rel, c.agent, c.patient)
+		// The retracted claim's own proof goes with it, and every claim that
+		// drew on the retracted moments is cut at its support: the guesses
+		// that leaned on the overturned fact retract too, not only the claims
+		// that named it.
+		for _, t := range d.claimTraces(c.rel, c.agent, c.patient) {
+			d.dropTrace(t)
+		}
+		d.cutSupport(retracted)
 	}
 	// Write the corrected fact in the asked direction, and remember the exchange
 	// set it down; any guess about it retires, now that it is observed.
@@ -1328,15 +1336,15 @@ func (d *Daemon) planRepairFact(frame grammar.Frame, raw string, momentID uint64
 
 // retractProposition removes a proposition from the graph: it finds the moments in
 // which the agent acted on the patient under the relation and drops their role
-// edges, so a fact corrected away no longer reads back. It returns whether any
-// moment was retracted.
-func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
+// edges, so a fact corrected away no longer reads back. It returns the moments it
+// retracted, so the claims that drew on them can be cut with the fact.
+func (d *Daemon) retractProposition(rel string, agent, patient uint64) []uint64 {
 	relC := d.resolveRelation(rel)
 	moments, err := d.store.LinksToRel([]uint64{agent}, memory.RelAgent)
 	if err != nil {
-		return false
+		return nil
 	}
-	retracted := false
+	var retracted []uint64
 	for _, mm := range moments {
 		pats, err := d.store.LinksFromRel([]uint64{mm.From}, memory.RelPatient)
 		if err != nil {
@@ -1353,13 +1361,17 @@ func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
 			continue
 		}
 		if relC != nil {
-			grounds, err := d.store.LinksFromRel([]uint64{mm.From}, memory.RelGrounds)
+			// The relation grounds INTO the moment (Propose lays rel -> moment),
+			// so the moment's grounding is read from its incoming edges; read
+			// outgoing, this check matched nothing and the retraction was a
+			// silent no-op the discourse thread masked within the exchange.
+			grounds, err := d.store.LinksToRel([]uint64{mm.From}, memory.RelGrounds)
 			if err != nil {
 				continue
 			}
 			matches := false
 			for _, g := range grounds {
-				if g.To == relC.ID {
+				if g.From == relC.ID {
 					matches = true
 					break
 				}
@@ -1370,7 +1382,7 @@ func (d *Daemon) retractProposition(rel string, agent, patient uint64) bool {
 		}
 		d.store.DropRelFrom([]uint64{mm.From}, memory.RelAgent)
 		d.store.DropRelFrom([]uint64{mm.From}, memory.RelPatient)
-		retracted = true
+		retracted = append(retracted, mm.From)
 	}
 	return retracted
 }
@@ -1412,6 +1424,13 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
 	told := !grounded && (d.isCategory(cat) || d.isParticipant(member.ID)) && d.toldIsA(member.ID, cat.ID)
 	yes := grounded || told
+	// An affirmed membership leaves a bare trace: the membership machinery is
+	// its own record, so the probe re-reads it live (the tally, or the telling)
+	// rather than a stored copy. The "isa" word keys the claim, since no
+	// relation concept carries a membership.
+	if yes {
+		d.traceClaim("isa", member.ID, cat.ID, "", nil)
+	}
 	// A participant speaks in its own person: "Probably, I am a daemon", never
 	// "an I is a daemon", the article and agreement of a thing-noun.
 	if d.isParticipant(member.ID) {
@@ -1551,7 +1570,15 @@ func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
 			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
 	}
 	holds := subj.ID != std.ID && d.comparesTransitively(rel, subj.ID, std.ID)
-	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
+	line := d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds)
+	// An affirmed ordering leaves its proof: the told ordering's moment when
+	// the pair was compared directly, a bare trace when the order was chained,
+	// which the probe owns as GOLEM's own reasoning.
+	if holds {
+		d.traceClaim(rel.Content, subj.ID, std.ID, line,
+			d.polarEvidence(rel.Content, subj.ID, std.ID, 0))
+	}
+	return line, true
 }
 
 // planMagnitude answers "how much bigger is X than Y" with the degree read from the
@@ -2130,8 +2157,8 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// English carries the tense on the auxiliary it led with; Turkish on the verb
 	// the particle trailed, read back by Comprehend. Either way the answer matches.
 	past := pastAux || m.Past
-	belief, _, supposed := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
-	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief, supposed), true
+	belief, _, supposed, lender := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief, supposed, lender), true
 }
 
 // planSuppose entertains a supposition without asserting it: "suppose the wolf
@@ -2537,27 +2564,30 @@ func (d *Daemon) propositionSupport(agentID uint64, relContent string, patientID
 // less sure. GOLEM's own standing conclusion about the very proposition counts as
 // evidence for it, so a re-ask is consistent and the belief stays warm. The
 // confidence is the resemblance the guess rode in on, attenuated once per hop.
-func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (belief propBelief, conf float64, supposed bool) {
+// lender is the concept whose membership or resemblance carried an inferred
+// answer (zero elsewhere), surfaced so the claim's trace can point at the very
+// basis used rather than one re-derived later.
+func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, patient *memory.Fragment) (belief propBelief, conf float64, supposed bool, lender uint64) {
 	// A told negative is authoritative: "the cat does not eat plants" denies the proposition even
 	// where the cat would inherit it as an animal. So a standing denial is honoured before any
 	// positive is weighed, the defeasible exception overriding the default.
 	if d.propositionDenied(agent, relContent, patient.ID) {
-		return beliefDenied, 1, false
+		return beliefDenied, 1, false, 0
 	}
 	if d.propositionHolds(agent, relContent, patient.ID) {
 		// A fact heard only from a source below full trust is a proposal on record,
 		// not something GOLEM saw or the architect told: it answers hedged, at the
 		// teller's trust, until a fully trusted telling or entrenchment firms it.
 		if trust := d.propositionTrust(agent.ID, relContent, patient.ID); trust < architectTrust {
-			return beliefInferred, trust, false
+			return beliefInferred, trust, false, 0
 		}
-		return beliefObserved, 1, false
+		return beliefObserved, 1, false, 0
 	}
 	// A category in a role is met by any member that fills it: "did the dog chase
 	// an animal" holds because the dog chased a cat and a cat is an animal. The
 	// deduction is sound, so it answers as firmly as the fact it rests on.
 	if d.propositionHoldsCategorically(agent, relContent, patient) {
-		return beliefObserved, 1, false
+		return beliefObserved, 1, false, 0
 	}
 	// A transitive relation chains its told orderings: told "before is transitive",
 	// A before B and B before C entail A before C. The relation must have been told
@@ -2568,7 +2598,7 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	if agent.ID != patient.ID {
 		if rel := d.resolveRelation(relContent); rel != nil && d.relationIsTransitive(rel.ID) &&
 			d.comparesTransitively(rel, agent.ID, patient.ID) {
-			return beliefObserved, 1, false
+			return beliefObserved, 1, false, 0
 		}
 	}
 	// Containment composes across placements of different kinds: a thing on or in something
@@ -2577,36 +2607,36 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 	// containment query; the deduction is sound, so it answers as firmly as the placements.
 	if agent.ID != patient.ID && relContent == containmentPrep {
 		if d.locativelyInside(agent.ID, patient.ID, locativeChainDepth) {
-			return beliefObserved, 1, false
+			return beliefObserved, 1, false, 0
 		}
 	}
 	// A thing standing in a relation to itself is not a claim worth guessing, so
 	// a self-proposition is left unknown rather than inferred from a neighbour.
 	if agent.ID == patient.ID {
-		return beliefUnknown, 0, false
+		return beliefUnknown, 0, false, 0
 	}
 	// A category the agent belongs to was told it does not stand in the relation: told "mammals do
 	// not eat the plant", a cow (a mammal) denies it. The category-level negative overrides the
 	// inherited default below, the defeasible exception inherited the way the default would be, but
 	// it is weighed after the firm positives above, so an observed fact about the member still wins.
 	if d.propositionDeniedCategorically(agent, relContent, patient.ID) {
-		return beliefDenied, 1, false
+		return beliefDenied, 1, false, 0
 	}
 	// A category the agent belongs to standing in the relation lends it, hedged:
 	// the cat is an animal, and the animal chased the mouse, so probably the cat
 	// did. Membership is a firmer tie than resemblance, so it is tried first, but a
 	// category's doing binds no one member, so the conclusion is held as a guess.
-	if _, ok := d.categoryInherits(agent, relContent, patient.ID); ok {
+	if catID, ok := d.categoryInherits(agent, relContent, patient.ID); ok {
 		d.held.add(heldProp{rel: relContent, agent: agent.ID, patient: patient.ID,
 			agentGloss: agent.Content, patientGloss: patient.Content,
 			status: heldInferred, conf: categoryInheritConf, depth: 0, voiced: true})
-		return beliefInferred, categoryInheritConf, false
+		return beliefInferred, categoryInheritConf, false, catID
 	}
 	sibs, err := d.featureSiblings(agent.ID, time.Now())
 	if err != nil {
-		return beliefUnknown, 0, false
+		return beliefUnknown, 0, false, 0
 	}
-	best, bestDepth, bestFrom, bestSupposed := 0.0, 0, uint64(0), false
+	best, bestDepth, bestFrom, bestSupposed, bestSib := 0.0, 0, uint64(0), false, uint64(0)
 	// A standing conclusion about this very proposition is evidence for it,
 	// whether GOLEM believes it or is only supposing it.
 	if p := d.held.findID(relContent, agent.ID, patient.ID, heldInferred); p != nil {
@@ -2625,7 +2655,7 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 			continue
 		}
 		if cand := sib.weight * conf; cand > best {
-			best, bestDepth, bestFrom, bestSupposed = cand, depth, from, supposed
+			best, bestDepth, bestFrom, bestSupposed, bestSib = cand, depth, from, supposed, sib.id
 		}
 	}
 	if best >= inferenceFloor {
@@ -2641,9 +2671,9 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 				agentGloss: agent.Content, patientGloss: patient.Content,
 				status: heldInferred, conf: best, depth: bestDepth, from: from, voiced: true})
 		}
-		return beliefInferred, best, bestSupposed
+		return beliefInferred, best, bestSupposed, bestSib
 	}
-	return beliefUnknown, 0, false
+	return beliefUnknown, 0, false, 0
 }
 
 // inferRole answers a role question GOLEM holds no observed fact for from a fact
@@ -2993,7 +3023,7 @@ func (d *Daemon) kindGuessClause(frame grammar.Frame, c *memory.Fragment, action
 // supposition is marked contingent on it ("If so, probably the cat chased the
 // dog"), so it is never mistaken for something GOLEM believes outright. Word and
 // clause both come from the tongue's data.
-func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool) string {
+func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool, lender uint64) string {
 	// What GOLEM is about to commit to, weighed against what it has already said
 	// this exchange. A supposition is contingent, so it is neither recorded nor
 	// held against: it never becomes a claim GOLEM stands by.
@@ -3073,6 +3103,14 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 		answer = clause
 	default:
 		answer = upperFirst(word) + ", " + lowerFirst(clause)
+	}
+	// An affirmed claim leaves its proof: the moment that holds it, or the
+	// lender the guess rode in on, as they stood at this speaking, so the
+	// probe reads the actual support rather than a basis re-derived later. A
+	// supposition is contingent and leaves no durable record.
+	if !supposed && (belief == beliefObserved || belief == beliefInferred) {
+		d.traceClaim(rel.Content, agent.ID, patient.ID, answer,
+			d.polarEvidence(rel.Content, agent.ID, patient.ID, lender))
 	}
 	// Asked again, GOLEM notes it has already answered rather than replaying it cold.
 	return d.ackIfSaid(lang, answer, acked)

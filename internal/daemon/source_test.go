@@ -85,7 +85,7 @@ func TestGroundedDenialDoubtsPeerClaim(t *testing.T) {
 	}
 	// The claim is on record now (for the source's track record) and held as a doubt,
 	// but the grounded denial keeps standing over the read: the peer does not overturn it.
-	if b, _, _ := d.assessProposition(dog, "chase", bird); b != beliefDenied {
+	if b, _, _, _ := d.assessProposition(dog, "chase", bird); b != beliefDenied {
 		t.Fatalf("the grounded denial should still dominate a doubted claim, got belief %d", b)
 	}
 	if p := d.held.findID("chase", dog.ID, bird.ID, heldDoubted); p == nil {
