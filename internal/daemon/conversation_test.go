@@ -492,3 +492,74 @@ func TestIdentitySurvivesSleep(t *testing.T) {
 		t.Fatalf("the given name should survive consolidation: %q", got)
 	}
 }
+
+// A participant asked about with any interrogative answers its identity:
+// "what are you" is the who-question in other clothes, never the pointer
+// shape "You names GOLEM".
+func TestWhatAreYouAnswersIdentity(t *testing.T) {
+	d, _ := testDaemon(t)
+	if got := say(t, d, "what are you").Say; !strings.HasPrefix(got, "I do not know who yet.") {
+		t.Fatalf("an unnamed self should admit the identity gap: %q", got)
+	}
+	say(t, d, "you are golem")
+	if got := say(t, d, "what are you").Say; got != "I am golem." {
+		t.Fatalf("the what-question should answer identity: %q", got)
+	}
+}
+
+// A definition leads with the grounded kind and closes on what the thing
+// does, so "what is X" reads the knowledge the graph holds and not only the
+// caption pointer or the vacuous kind.
+func TestDefinitionLeadsWithKindAndFacts(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(animal.ID, dog.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	say(t, d, "a dog chased a cat")
+	d.sleepCycle() // the fresh fact entrenches; the appendix reads the graph
+	got := say(t, d, "what is a dog").Say
+	if !strings.Contains(got, "Dog is an animal") {
+		t.Fatalf("the definition should lead with the grounded kind: %q", got)
+	}
+	if !strings.Contains(got, "chase") {
+		t.Fatalf("the definition should close on what the dog does: %q", got)
+	}
+}
+
+// A clause the grammar cannot frame is admitted and the missing word asked,
+// never met with silence: incomprehension is audible.
+func TestUnframedClauseAdmitsAndAsks(t *testing.T) {
+	d, _ := testDaemon(t)
+	if got := say(t, d, "take it down").Say; got != "I did not understand that. What is take?" {
+		t.Fatalf("an unframed clause should admit and ask: %q", got)
+	}
+}
+
+// A pro-form two referents fit equally is asked about, the conflict veto
+// applied to reference, and the next turn naming one settles the parked
+// question.
+func TestAmbiguousReferentAskedAndSettled(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, n := range []string{"dog", "cat", "fox", "rabbit"} {
+		groundNoun(t, d, n)
+	}
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a fox chased a rabbit")
+	got := say(t, d, "what did it chase").Say
+	if !strings.Contains(got, "Do you mean the ") || !strings.Contains(got, "fox") || !strings.Contains(got, "dog") {
+		t.Fatalf("two equally warm chasers should be asked about: %q", got)
+	}
+	if got := say(t, d, "the fox").Say; got != "The fox chased the rabbit." {
+		t.Fatalf("naming a candidate should answer the parked question: %q", got)
+	}
+	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
+		t.Fatalf("ordinary questions should be untouched after the reply: %q", got)
+	}
+}

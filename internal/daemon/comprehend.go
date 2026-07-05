@@ -728,8 +728,16 @@ func (d *Daemon) planRoleQuestion(frame grammar.Frame, raw string) (string, bool
 	if frame.Wh != "what" && frame.Wh != "who" && frame.Wh != "which" {
 		return "", false
 	}
-	rel, known, knownRole, verb := d.analyzeRoleQuestion(frame.Lang, raw)
+	rel, known, rival, knownRole, verb := d.analyzeRoleQuestion(frame.Lang, raw)
 	if rel != nil && known != nil {
+		// Two referents fit the pro-form equally: ask which was meant rather
+		// than write an answer on a hair's margin. The question is parked so
+		// the next turn naming one of them answers it.
+		if rival != nil {
+			if ask, ok := d.askWhichReferent(frame, rel, known, rival, knownRole, verb); ok {
+				return ask, true
+			}
+		}
 		return d.answerRole(frame, rel, known, knownRole, verb)
 	}
 	// The verb names no relation. Read the question through the relation its known
@@ -3165,7 +3173,7 @@ func (d *Daemon) namesRelation(content, lang string) bool {
 // argument is the patient ("who chased the cat"), while a verb after an
 // intervening noun makes the wh-word the object, so the known argument is the
 // agent ("what did the dog chase").
-func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragment, knownRole, verb string) {
+func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known, rival *memory.Fragment, knownRole, verb string) {
 	tokens, _ := grammar.Tokenize(raw)
 	var content []string
 	proIdx := -1
@@ -3203,7 +3211,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		}
 	}
 	if verbIdx < 0 {
-		return nil, nil, "", ""
+		return nil, nil, nil, "", ""
 	}
 	for i, t := range content {
 		if i == verbIdx || i == proIdx {
@@ -3221,13 +3229,15 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 	// A question whose only argument is the pro-form reads its referent from
 	// working memory: the warm concept that lately played the role the pronoun
 	// stands in, so "what did it chase" asks after the fox that just chased.
+	// A rival that fits within the conflict margin rides along, so the caller
+	// can ask which was meant.
 	if known == nil && proIdx >= 0 {
-		known = d.roleReferent(knownRole, rel.ID)
+		known, rival = d.roleReferent(knownRole, rel.ID)
 	}
 	if known == nil {
-		return nil, nil, "", ""
+		return nil, nil, nil, "", ""
 	}
-	return rel, known, knownRole, verb
+	return rel, known, rival, knownRole, verb
 }
 
 // relationConcept resolves the relation a proposition binds into, minting it

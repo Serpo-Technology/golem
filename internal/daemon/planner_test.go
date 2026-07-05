@@ -276,19 +276,18 @@ func TestDoItAgainWithColdWorkspace(t *testing.T) {
 	}
 }
 
-// Statements stay quiet at baseline, and curiosity asks about the first
-// unknown when dopamine is high.
+// A statement the grammar cannot frame is admitted and its first unknown
+// word asked, at any drive: incomprehension is audible, never silent.
 func TestStatementCuriosity(t *testing.T) {
 	d, _ := testDaemon(t)
-
 	resp := say(t, d, "that gizmo is broken")
-	if resp.Say != "" {
-		t.Fatalf("a statement at baseline drive should stay quiet: %q", resp.Say)
+	if resp.Say != "I did not understand that. What is gizmo?" {
+		t.Fatalf("an unframed statement should admit and ask: %q", resp.Say)
 	}
 	d.chem.SpikeDopamine(0.5)
 	resp = say(t, d, "that gizmo is broken")
-	if resp.Say != "What is gizmo?" {
-		t.Fatalf("high dopamine should ask about the unknown: %q", resp.Say)
+	if resp.Say != "I did not understand that. What is gizmo?" {
+		t.Fatalf("the admission should not depend on drive: %q", resp.Say)
 	}
 }
 

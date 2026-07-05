@@ -37,6 +37,15 @@ const (
 	// one cut by it, enough to overtake an equally warm rival without
 	// overriding a far warmer one.
 	animacyBindBonus = 0.5
+	// definitionFactCap bounds the salient appendix a definition closes on, so
+	// "what is X" reads a couple of the things X does without becoming the
+	// full description the describe move gives.
+	definitionFactCap = 2
+	// referentConflictMargin is the conflict veto applied to reference: when
+	// the two warmest fitting referents for a pro-form sit within this share
+	// of each other, GOLEM asks which was meant instead of writing an answer
+	// on a hair's difference. The same discipline the action proposals use.
+	referentConflictMargin = 0.15
 )
 
 // resolveConcept maps a surface phrase to its strongest concept, tongue-agnostically:
@@ -504,11 +513,13 @@ func (d *Daemon) warmReferent(skip int, animacy string) *memory.Fragment {
 // the same field a bare pro-form does, with the lean keyed to the role the
 // question's own syntax gives the pronoun rather than to animacy, and it
 // passes over relations, participants, and scaffolding: "it" points at a thing
-// in the talk, never at the predicate itself.
-func (d *Daemon) roleReferent(role string, skip uint64) *memory.Fragment {
+// in the talk, never at the predicate itself. When a second referent fits
+// within the conflict margin of the first, it is returned as the rival, so
+// the caller can ask instead of picking on a hair's difference.
+func (d *Daemon) roleReferent(role string, skip uint64) (best, rival *memory.Fragment) {
 	entries := d.ws.warmest(workspaceBudget)
 	if len(entries) == 0 {
-		return nil
+		return nil, nil
 	}
 	ids := make([]uint64, 0, len(entries))
 	for _, e := range entries {
@@ -516,14 +527,14 @@ func (d *Daemon) roleReferent(role string, skip uint64) *memory.Fragment {
 	}
 	frags, err := d.store.FragmentsByIDs(ids)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	byID := make(map[uint64]*memory.Fragment, len(frags))
 	for _, f := range frags {
 		byID[f.ID] = f
 	}
-	var best *memory.Fragment
-	bestScore := 0.0
+	var second *memory.Fragment
+	bestScore, secondScore := 0.0, 0.0
 	for _, e := range entries {
 		f := byID[e.id]
 		if f == nil || f.Kind != memory.KindConcept || f.Category == "relation" ||
@@ -539,11 +550,19 @@ func (d *Daemon) roleReferent(role string, skip uint64) *memory.Fragment {
 			lean = -1
 		}
 		score := e.heat * (1 + animacyBindBonus*lean)
-		if best == nil || score > bestScore {
+		switch {
+		case best == nil || score > bestScore:
+			second, secondScore = best, bestScore
 			best, bestScore = f, score
+		case second == nil || score > secondScore:
+			second, secondScore = f, score
 		}
 	}
-	return best
+	if best != nil && second != nil && bestScore > 0 &&
+		(bestScore-secondScore)/bestScore < referentConflictMargin {
+		rival = second
+	}
+	return best, rival
 }
 
 // animacyLean scores how well a concept fits a wanted animacy, from the role
@@ -777,6 +796,17 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	// when the clause carries nothing else.
 	if ans, ok := d.planGreeting(frame); ok {
 		return ans, nil
+	}
+
+	// A turn after an ambiguity question may settle it: "the fox" answers the
+	// role question the pro-form parked. Read once and cleared, so an
+	// unanswered clarification drops rather than lingering over the talk.
+	pendingRef := d.pendingReferent
+	d.pendingReferent = nil
+	if pendingRef != nil {
+		if ans, ok := d.planReferentReply(frame, raw, pendingRef); ok {
+			return ans, nil
+		}
 	}
 
 	// "And then" is a move on the warm proposition, not a clause: walk its
@@ -1027,14 +1057,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		if line, handled := d.routeFacultyFallback(frame, raw); handled {
 			return line, nil
 		}
-		// A statement teaches; GOLEM only speaks up when curiosity about
-		// an unknown word wins, and an asked question is held as a goal.
-		if len(frame.Unknown) > 0 && d.chem.Snapshot().Dopamine >= curiosityGate {
-			d.adoptGoal("learn", frame.Unknown[0])
-			return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceQuestion, Action: grammar.Term{Phrase: "be"},
-				Patient: grammar.Term{Phrase: frame.Unknown[0]}}, d.chem.Snapshot()), nil
-		}
-		return "", nil
+		// A clause that neither taught nor routed is admitted, so failure to
+		// understand is audible instead of silent, and the first unknown word
+		// is asked after, the missing word usually being why the clause did
+		// not frame.
+		return d.admitLost(frame), nil
 	}
 }
 
@@ -1196,6 +1223,16 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	if topic.Concept != nil {
 		c := topic.Concept
 		d.noteFocus(c) // "what is X" keeps X the topic, not a neighbour the answer reached for
+		// A participant asked about answers its identity whatever the
+		// interrogative: "what are you" is the who-question in other clothes,
+		// so the pointer shape ("You names GOLEM") is never the answer to it.
+		if d.isParticipant(c.ID) {
+			if line, ok := d.planWhoIdentity(frame); ok {
+				return line
+			}
+			return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+				Negate: true, Patient: grammar.Term{Phrase: "who"}}, chem))
+		}
 		tally, _ := d.store.GroundingTally()
 		// A relation reified as a concept is an action, the same kind a verb
 		// names, so "what is chase" answers that chase is an action and not a
@@ -1212,12 +1249,36 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 				kindWord = "bir eylem"
 			}
 		}
+		// The grounded kind speaks over the generic one: a concept a category
+		// grounds under is defined by that category, the same knowledge is-a
+		// answers from, so "what is a zebra" reads "an animal" and only a
+		// concept the hierarchy holds nothing for stays "a thing".
+		var groundedCat *memory.Fragment
+		if !action {
+			if groundedCat = d.groundedKindOf(c.ID); groundedCat != nil {
+				catName := d.conceptName(groundedCat.ID, groundedCat.Content, frame.Lang)
+				if frame.Lang == "tr" {
+					kindWord = "bir " + catName
+				} else {
+					kindWord = grammar.Indefinite(catName)
+				}
+			}
+		}
 		// A definition carries a fresh fact when the exchange just set one down:
 		// what the concept did or had done to it this turn is appended, read from
 		// the thread so the generator only reports what was established.
 		withFact := func(answer string) string {
 			if fact, ok := d.threadFactClause(frame.Lang, c); ok {
 				return answer + " " + fact
+			}
+			return answer
+		}
+		// The definition closes on the concept's place in the world: up to two
+		// of the things it does, so the answer reads its knowledge and not only
+		// its caption or kind.
+		withFacts := func(answer string) string {
+			if facts, ok := d.definitionFacts(frame, c); ok {
+				return answer + " " + facts
 			}
 			return answer
 		}
@@ -1247,14 +1308,22 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			// word's own.
 			asked, top := d.namingContrast(topic.Phrase, c.ID)
 			tentative := asked > 0 && top-asked > namesContrastGap
-			parts := []string{d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			var parts []string
+			// The grounded kind leads the pointer: "A zebra is an animal."
+			// before "Zebra names a striped black zebra."
+			if groundedCat != nil && !tentative {
+				parts = append(parts, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+					Agent:  grammar.Term{Phrase: grammar.Indefinite(topic.Phrase)},
+					Action: grammar.Term{Phrase: "be"}, Patient: grammar.Term{Phrase: kindWord}}, chem))
+			}
+			parts = append(parts, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 				Agent:  grammar.Term{Phrase: topic.Phrase},
 				Action: grammar.Term{Phrase: "name"}, Patient: grammar.Term{Phrase: c.Content},
-				Hedge: tentative}, chem)}
+				Hedge: tentative}, chem))
 			if n := tally[c.ID]; n > 0 && !tentative {
 				parts = append(parts, d.countClause(frame.Lang, n, chem))
 			}
-			return withFact(strings.Join(parts, " "))
+			return withFacts(withFact(strings.Join(parts, " ")))
 		}
 		// A firm definition, composed: the definition clause, and when
 		// experience stands behind the concept the count clause nests beside
@@ -1270,7 +1339,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 				Slots: grammar.TextSlots(map[string]string{"object": "it", "count": grammar.TimesWord(n)})}}
 		}
 		if line, ok := d.compose(frame.Lang, msg); ok {
-			return withKind(withFact(line))
+			return withFacts(withKind(withFact(line)))
 		}
 		// With no constructions the innate realizer assembles the same
 		// answer, so the engine stays the floor under the learned patterns.
@@ -1278,7 +1347,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		if n := tally[c.ID]; n > 0 {
 			parts = append(parts, d.countClause(frame.Lang, n, chem))
 		}
-		return withKind(withFact(strings.Join(parts, " ")))
+		return withFacts(withKind(withFact(strings.Join(parts, " "))))
 	}
 	if topic.Phrase != "" {
 		// An unknown word is admitted and the admission invites the telling that
@@ -1288,6 +1357,62 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 	}
 	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 		Negate: true, Patient: grammar.Term{Phrase: "that"}}, chem)
+}
+
+// groundedKindOf is the category a concept most firmly grounds under, nil
+// when it belongs to none: the kind its definition leads with. Only genuine
+// abstractions count, so a percept or a moment on the same edge kind never
+// stands in as a definition's category.
+func (d *Daemon) groundedKindOf(id uint64) *memory.Fragment {
+	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelGrounds)
+	if err != nil || len(edges) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(edges))
+	weight := map[uint64]float64{}
+	for _, e := range edges {
+		ids = append(ids, e.From)
+		if e.Weight > weight[e.From] {
+			weight[e.From] = e.Weight
+		}
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	var best *memory.Fragment
+	for _, f := range frags {
+		if !d.isCategory(f) || d.isSystemConcept(f.ID) {
+			continue
+		}
+		if best == nil || weight[f.ID] > weight[best.ID] {
+			best = f
+		}
+	}
+	return best
+}
+
+// definitionFacts is the salient appendix a definition closes on: up to two of
+// the things the concept does, spoken in the generic present with the focus as
+// a pronoun, so "what is a zebra" reads its place in the world and not only
+// its caption. The states the comparison and place questions own are left out,
+// as the activity answer leaves them.
+func (d *Daemon) definitionFacts(frame grammar.Frame, c *memory.Fragment) (string, bool) {
+	facts := d.gatherFacts(c, "agent", "")
+	actions := facts[:0]
+	for _, f := range facts {
+		// A fact this exchange just set down is the thread clause's to speak,
+		// in its own tense; the appendix reads the entrenched graph.
+		if f.fromThread || d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
+			continue
+		}
+		actions = append(actions, f)
+	}
+	if len(actions) == 0 {
+		return "", false
+	}
+	return d.renderFactsCapped(frame.Lang, d.conceptName(c.ID, c.Content, frame.Lang),
+		salientFacts(actions, definitionFactCap), false, true, definitionFactCap)
 }
 
 // planComputation answers a computation posed as a question: "what is the sum

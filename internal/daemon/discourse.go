@@ -92,6 +92,93 @@ func (d *Daemon) ackStatement(lang string) string {
 	return upperFirst(word) + "."
 }
 
+// admitLost is the admission for a clause the grammar could not frame: the
+// failure is spoken rather than silent, and the first unknown word is asked
+// after, since a missing word is usually why the clause did not frame. The
+// ask is not gated on curiosity here: total incomprehension is the one place
+// a question back is always the right reply. A tongue without the seeded
+// surface keeps the old silence.
+func (d *Daemon) admitLost(frame grammar.Frame) string {
+	word := d.gram.Word(frame.Lang, "lost")
+	if word == "" {
+		return ""
+	}
+	line := upperFirst(word) + "."
+	for _, unknown := range frame.Unknown {
+		if unknown == "" || !hasLetter(unknown) {
+			continue
+		}
+		d.adoptGoal("learn", unknown)
+		return line + " " + d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceQuestion,
+			Action: grammar.Term{Phrase: "be"}, Patient: grammar.Term{Phrase: unknown}}, d.chem.Snapshot())
+	}
+	return line
+}
+
+// pendingReferent is a role question parked on an ambiguous pro-form: the
+// relation and role it asked, and the referents that fit equally well. The
+// next turn naming one of them answers the question it settles; any other
+// turn drops it, a clarification unanswered being a topic changed.
+type pendingReferent struct {
+	rel        *memory.Fragment
+	knownRole  string
+	verb       string
+	wh         string
+	lang       string
+	past       bool
+	candidates []uint64
+}
+
+// askWhichReferent asks the speaker to settle a pro-form two referents fit
+// equally well, the conflict veto applied to reference: picking on a hair's
+// margin writes the wrong answer silently, and asking is what a listener
+// does. The parked question is held for the reply. It declines in a tongue
+// whose ask surfaces are not seeded, so the caller falls back to the pick.
+func (d *Daemon) askWhichReferent(frame grammar.Frame, rel, a, b *memory.Fragment, knownRole, verb string) (string, bool) {
+	lead := d.gram.Word(frame.Lang, "whichmean")
+	or := d.gram.Word(frame.Lang, "or")
+	if lead == "" || or == "" {
+		return "", false
+	}
+	d.pendingReferent = &pendingReferent{rel: rel, knownRole: knownRole, verb: verb,
+		wh: frame.Wh, lang: frame.Lang, past: frame.Past, candidates: []uint64{a.ID, b.ID}}
+	return upperFirst(lead) + " the " + d.conceptName(a.ID, a.Content, frame.Lang) +
+		" " + or + " the " + d.conceptName(b.ID, b.Content, frame.Lang) + "?", true
+}
+
+// planReferentReply reads the turn after an ambiguity question: a clause
+// naming one of the parked candidates answers the role question the pro-form
+// left open. Anything else lets the turn take its ordinary course.
+func (d *Daemon) planReferentReply(frame grammar.Frame, raw string, p *pendingReferent) (string, bool) {
+	chosen := frame.Agent.Concept
+	if chosen == nil {
+		chosen = frame.Patient.Concept
+	}
+	if chosen == nil {
+		for _, t := range strings.Fields(strings.ToLower(strings.Trim(raw, " ?.!"))) {
+			if c := d.resolveConceptLang(t, p.lang); c != nil && c.Kind == memory.KindConcept {
+				chosen = c
+				break
+			}
+		}
+	}
+	if chosen == nil {
+		return "", false
+	}
+	match := false
+	for _, id := range p.candidates {
+		if chosen.ID == id {
+			match = true
+			break
+		}
+	}
+	if !match {
+		return "", false
+	}
+	synth := grammar.Frame{Force: grammar.ForceQuestion, Lang: p.lang, Wh: p.wh, Past: p.past}
+	return d.answerRole(synth, p.rel, chosen, p.knownRole, p.verb)
+}
+
 // withInvite trails a teaching invitation after an admitted gap, so an unknown
 // closes with an opening: the speaker is invited to fill it. The curiosity
 // follow-up never asks after a word the admission already speaks, so when both

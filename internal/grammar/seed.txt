@@ -404,6 +404,11 @@ surface:la:invite	dic mihi, si scis	la
 surface:en:because	because	en
 surface:tr:because	çünkü	tr
 surface:la:because	quia	la
+surface:en:lost	I did not understand that	en
+surface:tr:lost	bunu anlamadım	tr
+surface:la:lost	non intellexi	la
+surface:en:whichmean	do you mean	en
+surface:en:or	or	en
 surface:en:firstperson	I	en
 surface:tr:firstperson	ben	tr
 surface:en:addressee	you	en

@@ -226,6 +226,11 @@ type Daemon struct {
 	// each turn arrives in.
 	lastRole *roleContext
 
+	// pendingReferent is a role question parked on an ambiguous pro-form,
+	// waiting for the turn that names which referent was meant. Read once and
+	// cleared each turn, so an unanswered clarification drops.
+	pendingReferent *pendingReferent
+
 	// sawCell, sawColor, and sawAt are the eye's short focus: the colour cell and the
 	// raw colour of the thing just seen, and when. A colour told right after ("its
 	// colour is crimson") grounds the word to what was measured and moves that cell's
@@ -2123,6 +2128,7 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.topic = 0
 	d.lastDrewTopic = 0
 	d.lastRole = nil
+	d.pendingReferent = nil
 	d.threadProps = nil
 	d.topicTrail = nil
 	d.turnFocus = 0
