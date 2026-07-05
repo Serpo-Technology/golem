@@ -85,19 +85,28 @@ func (d *Daemon) planBecause(frame grammar.Frame, raw string, momentID uint64) (
 func (d *Daemon) planWhyCause(frame grammar.Frame, raw string) (string, bool) {
 	rel, knowns := d.multiRoleQuestionParts(frame.Lang, raw)
 	if rel == nil || len(knowns) < 2 {
-		return "", false
+		return "", false // not a proposition why; the succession walk owns the event shapes
+	}
+	// A why about a proposition with no told cause is a gap, admitted and
+	// inviting: the succession walk below would recite scene order (which
+	// telling happened to precede which) in the why register, noise a listener
+	// reads as nonsense.
+	admit := func() (string, bool) {
+		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true,
+			Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot())), true
 	}
 	moment, ok := d.propositionMoment(rel, knowns[0].ID, knowns[1].ID)
 	if !ok {
-		return "", false
+		return admit()
 	}
 	edges, err := d.store.LinksFromRel([]uint64{moment}, memory.RelCause)
 	if err != nil || len(edges) == 0 {
-		return "", false
+		return admit()
 	}
 	agentID, patientID, relContent, ok := d.claimAt(edges[0].To)
 	if !ok {
-		return "", false
+		return admit()
 	}
 	pair, err := d.store.FragmentsByIDs([]uint64{agentID, patientID})
 	if err != nil || len(pair) != 2 {

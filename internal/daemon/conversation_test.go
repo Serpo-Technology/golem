@@ -563,3 +563,32 @@ func TestAmbiguousReferentAskedAndSettled(t *testing.T) {
 		t.Fatalf("ordinary questions should be untouched after the reply: %q", got)
 	}
 }
+
+// A why about a proposition with no told cause is admitted and invites, never
+// answered with scene order; the event-succession why is untouched.
+func TestWhyWithoutCauseAdmits(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	if got := say(t, d, "why did the dog chase the cat").Say; got != "I do not know why yet. Tell me, if you know." {
+		t.Fatalf("an uncaused proposition why should admit and invite: %q", got)
+	}
+}
+
+// A description opens with the grounded kind the way a definition does.
+func TestDescribeLeadsWithKind(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(animal.ID, dog.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if got := say(t, d, "tell me about the dog").Say; !strings.Contains(got, "Dog is an animal") {
+		t.Fatalf("the description should open with the grounded kind: %q", got)
+	}
+}

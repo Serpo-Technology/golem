@@ -1107,12 +1107,27 @@ func sortalWord(lang, kind string) string {
 
 func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) string {
 	chem := d.chem.Snapshot()
+	action := focus.Category == "verb" || focus.Category == "relation"
 	kind := "thing"
-	if focus.Category == "verb" || focus.Category == "relation" {
+	if action {
 		kind = "action"
 	}
+	kindWord := sortalWord(frame.Lang, kind)
+	// The grounded kind speaks over the bare sortal here as it does in the
+	// definition: a description of the fox opens "Fox is an animal", and only
+	// a concept the hierarchy holds nothing for stays a thing.
+	if !action {
+		if cat := d.groundedKindOf(focus.ID); cat != nil {
+			catName := d.conceptName(cat.ID, cat.Content, frame.Lang)
+			if frame.Lang == "tr" {
+				kindWord = "bir " + catName
+			} else {
+				kindWord = grammar.Indefinite(catName)
+			}
+		}
+	}
 	name := d.conceptName(focus.ID, focus.Content, frame.Lang)
-	parts := []string{d.definitionClause(frame.Lang, name, sortalWord(frame.Lang, kind), chem)}
+	parts := []string{d.definitionClause(frame.Lang, name, kindWord, chem)}
 	// What is observed about the focus, elaborated across more of its relations than a focused
 	// question answers, the firm part of the description.
 	observed := map[string]bool{}
