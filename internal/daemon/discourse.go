@@ -663,6 +663,21 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 			return
 		}
 		seen[k] = true
+		// A denied proposition is no fact to speak: the told negative stands
+		// over the stored positive here as it does on the polar path, so a
+		// retracted or denied fact stops surfacing in role and describe answers.
+		agent, patientID := focus, id
+		if frole == "patient" {
+			if frags, err := d.fragmentsByIDsTiered([]uint64{id}); err == nil && len(frags) == 1 {
+				agent, patientID = frags[0], focus.ID
+			} else {
+				agent = nil // unreadable co-argument: keep the fact rather than judge it
+			}
+		}
+		if agent != nil && (d.propositionDenied(agent, rl, patientID) ||
+			d.propositionDeniedCategorically(agent, rl, patientID)) {
+			return
+		}
 		out = append(out, focusFact{rel: rl, focusRole: frole, coGloss: gloss, coID: id, weight: weight, fromThread: thread})
 	}
 	for _, p := range d.threadProps {

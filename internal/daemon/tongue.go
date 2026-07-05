@@ -40,6 +40,11 @@ func (d *Daemon) sniffTurkish(content string) bool {
 		if lemma := d.gram.Lemma("tr", t); lemma != t && d.resolveRelation(lemma) != nil {
 			return true
 		}
+		for _, stem := range d.gram.StemCandidates("tr", t) {
+			if stem != t && d.resolveRelation(stem) != nil {
+				return true // an inflected Turkish verb whose stem names a known relation
+			}
+		}
 	}
 	return false
 }

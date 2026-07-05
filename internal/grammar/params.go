@@ -265,6 +265,28 @@ func (p *Params) propertyName(lang, form string) string {
 	return ""
 }
 
+// WhSurface names the tongue's interrogative for a wh type ("what" -> Turkish
+// "ne"), the reverse of the refinement that maps a form to its type, so an
+// admission speaks the asked word in the asked tongue rather than leaking the
+// type's English name. With several forms the shortest, then the first
+// alphabetically, keeps the choice stable; it falls back to the type itself.
+func (p *Params) WhSurface(lang, whType string) string {
+	p = p.get()
+	best := ""
+	for form, cat := range p.categories[lang] {
+		if cat != "wh:"+whType && !(cat == "wh" && form == whType) {
+			continue
+		}
+		if best == "" || len(form) < len(best) || (len(form) == len(best) && form < best) {
+			best = form
+		}
+	}
+	if best == "" {
+		return whType
+	}
+	return best
+}
+
 // LocativePrep reports whether a form is a seeded locative preposition (on, in,
 // under), the closed class whose use as a copula's complement marks its relation
 // locative. The locative refinement rides on the function-word category ("fn:
@@ -543,6 +565,14 @@ func (p *Params) StemCandidates(lang, surface string) []string {
 	add(p.verbLemma(lang, surface))
 	for _, s := range p.caseStems(lang, surface) {
 		add(s)
+	}
+	// The Turkish aorist is not in the lemma's single answer (its strip is
+	// ambiguous between a consonant and a vowel stem), so both readings join
+	// the candidates for the caller's resolution to settle.
+	if lang == "tr" {
+		for _, s := range aoristStemsTR(surface) {
+			add(s)
+		}
 	}
 	return out
 }

@@ -337,8 +337,7 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	for i, slot := range order {
 		span := spans[i]
 		if slot.Role == cxn.Pred {
-			lemma := p.verbLemma(lang, span)
-			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
+			m.Relation = p.relationTerm(lang, span, resolve)
 			m.Past = p.verbPast(lang, span)
 			continue
 		}
@@ -346,6 +345,38 @@ func (p *Params) Comprehend(lang, utterance string, resolve func(string) *memory
 	}
 	p.bestFit(cxn, m, fit)
 	return m, true
+}
+
+// relationTerm grounds a predicate span to its relation: the lemma first, then
+// the tongue's further stem candidates when the lemma names nothing, so a
+// Turkish aorist ("yer", "kovalar") reaches the stem a past telling grounded
+// ("ye", "kovala") instead of minting a parallel relation. Only a candidate
+// resolving to a relation is taken; a span nothing resolves keeps the lemma,
+// so a genuinely new verb still mints under it. Both comprehension paths
+// share it.
+func (p *Params) relationTerm(lang, span string, resolve func(string) *memory.Fragment) Term {
+	// Only a relation may fill the predicate: a noun sharing the surface (the
+	// Turkish place-noun "yer" beside the aorist of "ye") must not be seated
+	// as the verb, or the fallback mints a junk relation in its shadow.
+	asRelation := func(s string) *memory.Fragment {
+		if c := resolve(s); c != nil && c.Category == "relation" {
+			return c
+		}
+		return nil
+	}
+	lemma := p.verbLemma(lang, span)
+	if c := asRelation(lemma); c != nil {
+		return Term{Concept: c, Phrase: lemma}
+	}
+	for _, s := range p.StemCandidates(lang, span) {
+		if s == lemma {
+			continue
+		}
+		if c := asRelation(s); c != nil {
+			return Term{Concept: c, Phrase: s}
+		}
+	}
+	return Term{Phrase: lemma}
 }
 
 // resolveCasedNoun grounds a noun span to its concept: the surface first, then its case-stripped
@@ -412,8 +443,7 @@ func (p *Params) ComprehendByTraversal(lang, utterance string, resolve func(stri
 	for i, slot := range order {
 		span := spans[i]
 		if slot.Role == cxn.Pred {
-			lemma := p.verbLemma(lang, span)
-			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
+			m.Relation = p.relationTerm(lang, span, resolve)
 			m.Past = p.verbPast(lang, span)
 			continue
 		}

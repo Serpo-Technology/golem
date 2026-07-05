@@ -133,6 +133,53 @@ func (d *Daemon) comprehendPartWhole(raw string, momentID uint64) bool {
 	return true
 }
 
+// planPartWholePolar answers "is the wing part of the bird" from the stored
+// part-whole proposition, read before the is-a path would misread the clause
+// as a membership question ("is a wing a bird") and deny it. The marker is the
+// same "part of" surface the told construction reads. It declines when either
+// noun is unknown, so the ordinary paths stand.
+func (d *Daemon) planPartWholePolar(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Force != grammar.ForceQuestion || frame.Wh != "" {
+		return "", false // a told part-of clause teaches; only the inverted question reads
+	}
+	tokens, _ := grammar.Tokenize(raw)
+	mark := -1
+	for i := 0; i+1 < len(tokens); i++ {
+		if tokens[i] == "part" && tokens[i+1] == "of" {
+			mark = i
+			break
+		}
+	}
+	if mark < 1 || mark+2 >= len(tokens) {
+		return "", false
+	}
+	resolveNoun := func(toks []string) *memory.Fragment {
+		for _, t := range toks {
+			if !d.gram.IsContentWord("en", t) {
+				continue
+			}
+			if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+				return c
+			}
+		}
+		return nil
+	}
+	part := resolveNoun(tokens[:mark])
+	whole := resolveNoun(tokens[mark+2:])
+	if part == nil || whole == nil || part.ID == whole.ID {
+		return "", false
+	}
+	d.noteFocus(part)
+	partName := d.conceptName(part.ID, part.Content, frame.Lang)
+	wholeName := d.conceptName(whole.ID, whole.Content, frame.Lang)
+	if d.propositionHolds(part, partWholeRelation, whole.ID) {
+		return upperFirst(d.gram.Word(frame.Lang, "yes")) + ", the " + partName +
+			" is part of the " + wholeName + ".", true
+	}
+	return upperFirst(d.gram.Word(frame.Lang, "no")) + ", the " + partName +
+		" is not part of the " + wholeName + ".", true
+}
+
 // locativeClause renders "FIGURE is PREP GROUND" ("the leaf is on the tree")
 // through the copula construction, the preposition and ground riding as the
 // complement the way an is-a answer's category does. The figure and ground are

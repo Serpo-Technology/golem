@@ -592,3 +592,94 @@ func TestDescribeLeadsWithKind(t *testing.T) {
 		t.Fatalf("the description should open with the grounded kind: %q", got)
 	}
 }
+
+// The Turkish aorist reaches its relation: a present-tense fact joins the stem
+// a past telling grounded instead of minting a parallel relation, and the
+// present-tense role question resolves and answers the same way.
+func TestTurkishAoristReachesRelation(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNounLang(t, d, "aslan", "tr")
+	groundNounLang(t, d, "et", "tr")
+	sayLang(t, d, "tr", "aslan eti yedi")
+	sayLang(t, d, "tr", "aslan eti yer")
+	if c, _ := s.ConceptByTemplate("rel:tr:yer"); c != nil {
+		t.Fatal("the aorist must not mint a parallel relation")
+	}
+	if got := sayLang(t, d, "tr", "aslan ne yer").Say; got != "Aslan eti yer." {
+		t.Fatalf("the aorist role question should answer in the present: %q", got)
+	}
+}
+
+// A denied proposition stops surfacing in role answers: the walk reads the
+// told negative the way the polar answer does.
+func TestRoleAnswerSkipsDenied(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "bird")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog chased a bird")
+	say(t, d, "the dog does not chase the bird")
+	got := say(t, d, "what did the dog chase").Say
+	if !strings.Contains(got, "cat") || strings.Contains(got, "bird") {
+		t.Fatalf("the denied chase must not be spoken: %q", got)
+	}
+}
+
+// A kind told of a participant survives the night: the perceptless concept it
+// minted is spared the grounding prune while a participant vouches for it.
+func TestToldKindOnParticipantSurvivesSleep(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "you are a daemon")
+	d.sleepCycle()
+	d.sleepCycle()
+	if got := say(t, d, "are you a daemon").Say; !strings.Contains(got, "I am a daemon") {
+		t.Fatalf("the told kind should survive consolidation: %q", got)
+	}
+}
+
+// An aorist beside a same-surface noun still reaches its relation: the
+// predicate slot takes only a relation, so the noun cannot shadow the verb
+// and no junk relation mints under it.
+func TestAoristBesideNounShadow(t *testing.T) {
+	d, s := testDaemon(t)
+	groundNounLang(t, d, "aslan", "tr")
+	groundNounLang(t, d, "et", "tr")
+	groundNounLang(t, d, "yer", "tr") // the place-noun sharing the aorist surface
+	sayLang(t, d, "tr", "aslan eti yedi")
+	sayLang(t, d, "tr", "aslan eti yer")
+	if c, _ := s.ConceptByTemplate("rel:tr:yer"); c != nil {
+		t.Fatal("the place-noun must not shadow the verb into a junk relation")
+	}
+	if got := sayLang(t, d, "tr", "aslan ne yer").Say; got != "Aslan eti yer." {
+		t.Fatalf("the aorist question should still reach the relation: %q", got)
+	}
+}
+
+// A Turkish role gap speaks its own interrogative, never the English type name.
+func TestTurkishGapAdmissionSpeaksTurkish(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "aslan", "tr")
+	groundNounLang(t, d, "et", "tr")
+	sayLang(t, d, "tr", "aslan eti yedi")
+	got := sayLang(t, d, "tr", "et ne yedi").Say
+	if strings.Contains(got, "What") || !strings.Contains(got, "bilmiyorum") {
+		t.Fatalf("the Turkish admission should speak Turkish: %q", got)
+	}
+}
+
+// A part-whole question reads the stored proposition instead of being
+// misread as a membership question and denied.
+func TestPartWholePolar(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "wing")
+	groundNoun(t, d, "bird")
+	groundNoun(t, d, "fish")
+	say(t, d, "the wing is part of the bird")
+	if got := say(t, d, "is the wing part of the bird").Say; got != "Yes, the wing is part of the bird." {
+		t.Fatalf("the stored part-whole should affirm: %q", got)
+	}
+	if got := say(t, d, "is the wing part of the fish").Say; got != "No, the wing is not part of the fish." {
+		t.Fatalf("an untold part-whole should deny: %q", got)
+	}
+}

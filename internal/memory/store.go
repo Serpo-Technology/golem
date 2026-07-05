@@ -326,7 +326,10 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
 		AND category NOT IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant')
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
-			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)`, KindConcept, RelGrounds, RelAgent, RelPatient); err != nil {
+			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)
+			AND id NOT IN (SELECT to_id FROM links WHERE rel = ?
+				AND from_id IN (SELECT id FROM fragments WHERE category = 'participant'))`,
+		KindConcept, RelGrounds, RelAgent, RelPatient, RelToldIsA); err != nil {
 		return int(pruned), err
 	}
 	// A feature no concept carries describes nothing; it follows its

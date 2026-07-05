@@ -976,6 +976,11 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planLocativePolarTR(frame, raw); ok {
 		return ans, nil
 	}
+	// "Is the wing part of the bird": a part-whole question, read off its own
+	// marker before the is-a path would misread it as a membership question.
+	if ans, ok := d.planPartWholePolar(frame, raw); ok {
+		return ans, nil
+	}
 	// "Is a cat an animal": an is-a question, recognized from its comprehended
 	// frame (a copular question over two concepts) and settled against the category
 	// hierarchy rather than the relation graph a polar question reads.
@@ -1181,7 +1186,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 			return ans
 		}
 		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem))
+			Negate: true, Patient: grammar.Term{Phrase: d.gram.WhSurface(frame.Lang, frame.Wh)}}, chem))
 	case frame.Counting:
 		return d.planCount(frame, quals, chem)
 	case frame.Wh == "where":

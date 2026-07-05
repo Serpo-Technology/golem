@@ -650,11 +650,11 @@ func (d *Daemon) multiRoleQuestionParts(lang, raw string) (rel *memory.Fragment,
 		// A closed-class surface whose lemma names a learned relation is kept,
 		// the same rescue the single-role reader gives a taught verb like "run".
 		if !d.gram.IsContentWord(lang, t) && !d.gram.IsDeictic(lang, t) &&
-			d.resolveRelation(d.gram.Lemma(lang, t)) == nil {
+			d.resolveRelationSurface(lang, t) == nil {
 			continue
 		}
 		if rel == nil {
-			if r := d.resolveRelation(d.gram.Lemma(lang, t)); r != nil {
+			if r := d.resolveRelationSurface(lang, t); r != nil {
 				rel = r
 				continue
 			}
@@ -862,7 +862,7 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 		// that fills it can be followed up.
 		d.recordOpenQuestion(rel.Content, known.ID, knownRole)
 		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot())), true
+			Negate: true, Past: past, Patient: grammar.Term{Phrase: d.gram.WhSurface(frame.Lang, frame.Wh)}}, d.chem.Snapshot())), true
 	}
 	for _, f := range facts {
 		d.ws.excite(f.coID, exciteSpeech)
@@ -908,7 +908,7 @@ func (d *Daemon) planMultiHop(frame grammar.Frame, raw string) (string, bool) {
 	}
 	dontKnow := func() (string, bool) {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
+			Negate: true, Patient: grammar.Term{Phrase: d.gram.WhSurface(frame.Lang, frame.Wh)}}, d.chem.Snapshot()), true
 	}
 	all, _ := grammar.Tokenize(raw)
 	inner, _ := grammar.Tokenize(frame.Inner)
@@ -3188,6 +3188,22 @@ func (d *Daemon) namesRelation(content, lang string) bool {
 // argument is the patient ("who chased the cat"), while a verb after an
 // intervening noun makes the wh-word the object, so the known argument is the
 // agent ("what did the dog chase").
+// resolveRelationSurface resolves the relation an inflected verb surface
+// names, trying the lemma then the tongue's further stem candidates, so a
+// Turkish aorist question verb ("yer") reaches the relation its stem names
+// the way the past form does.
+func (d *Daemon) resolveRelationSurface(lang, t string) *memory.Fragment {
+	if c := d.resolveRelation(d.gram.Lemma(lang, t)); c != nil {
+		return c
+	}
+	for _, s := range d.gram.StemCandidates(lang, t) {
+		if c := d.resolveRelation(s); c != nil {
+			return c
+		}
+	}
+	return nil
+}
+
 func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known, rival *memory.Fragment, knownRole, verb string) {
 	tokens, _ := grammar.Tokenize(raw)
 	var content []string
@@ -3200,7 +3216,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known, rival *memor
 		// taught as a verb the graph's relation rescues it, so "what do you run"
 		// still finds its relation.
 		if d.gram.IsContentWord(lang, t) || d.gram.IsDeictic(lang, t) ||
-			d.resolveRelation(d.gram.Lemma(lang, t)) != nil {
+			d.resolveRelationSurface(lang, t) != nil {
 			content = append(content, t)
 			continue
 		}
@@ -3220,7 +3236,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known, rival *memor
 		if d.gram.IsDeictic(lang, t) || i == proIdx {
 			continue
 		}
-		if c := d.resolveRelation(d.gram.Lemma(lang, t)); c != nil {
+		if c := d.resolveRelationSurface(lang, t); c != nil {
 			verbIdx, rel, verb = i, c, t
 			break
 		}

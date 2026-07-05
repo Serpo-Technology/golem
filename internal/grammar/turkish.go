@@ -132,6 +132,37 @@ func turkishVerbStem(surface string) string {
 	return s
 }
 
+// aoristStemsTR lists the stems a Turkish aorist surface may reduce to: the
+// consonant stem under -Ar/-Ir ("içer" -> "iç", "bilir" -> "bil") and the
+// vowel stem under bare -r ("yer" -> "ye", "kovalar" -> "kovala"). Reverse
+// morphology over-generates, so the caller keeps only a candidate that
+// resolves to something the graph holds.
+func aoristStemsTR(surface string) []string {
+	r := []rune(strings.ToLower(surface))
+	if len(r) < 3 || r[len(r)-1] != 'r' {
+		return nil
+	}
+	vowelFinal := func(s []rune) bool {
+		if len(s) == 0 {
+			return false
+		}
+		_, ok := vowelsTR[s[len(s)-1]]
+		return ok
+	}
+	var out []string
+	// -Ar/-Ir: the vowel belongs to the suffix and the stem ends in a consonant.
+	if _, ok := vowelsTR[r[len(r)-2]]; ok {
+		if stem := r[:len(r)-2]; len(stem) >= 2 && !vowelFinal(stem) {
+			out = append(out, string(stem))
+		}
+	}
+	// Bare -r rides a vowel-final stem.
+	if stem := r[:len(r)-1]; len(stem) >= 2 && vowelFinal(stem) {
+		out = append(out, string(stem))
+	}
+	return out
+}
+
 // endsPastTR reports whether a form ends in the Turkish past-tense suffix -DI, the
 // marker the verb stemmer strips, so a person suffix is shed only over a real past.
 func endsPastTR(s string) bool {
