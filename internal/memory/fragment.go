@@ -107,6 +107,12 @@ const (
 	// freshly pointed at earns the edge. The abstraction pass reads it to bind a
 	// diluted cross-tongue name to its referent rather than splitting a phantom.
 	RelOstends = "ostends"
+	// RelCause links a proposition's moment to the moment of the proposition it
+	// was told explains it: "the dog chased the cat because the cat took the bone"
+	// lays the edge from the chase to the taking, so a why can walk from the fact
+	// to its told reason. It is a telling like any other, defeasible and decaying,
+	// never a grounded causal model.
+	RelCause = "cause"
 	// RelValue links a computed fact to the number its computation evaluated to,
 	// the result half of "6 + 7 = 13" held apart from the operand roles so the
 	// value reads off the fact directly.

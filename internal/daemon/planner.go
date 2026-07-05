@@ -826,6 +826,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "You are golem": a bare proper name told for a participant is a naming,
+	// caught before the told-membership path would read the name as a kind.
+	if ans, ok := d.planIdentity(frame, raw, momentID); ok {
+		return ans, nil
+	}
+
 	// "A zebra is an animal": a told membership, recorded defeasibly so is-a reads a
 	// hedged yes, before the statement path could write it as a plain "be" proposition.
 	// The told fact never joins the grounded categories, so it cannot pull a thing in.
@@ -987,6 +993,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "X because Y": a compound telling whose second clause explains the first.
+	// Both propositions are taught and the cause laid between them, before the
+	// statement path would read the whole compound as one garbled clause.
+	if ans, ok := d.planBecause(frame, raw, momentID); ok {
+		return ans, nil
+	}
+
 	switch frame.Force {
 	case grammar.ForceQuestion:
 		return d.planQuestion(frame, raw), nil
@@ -1125,13 +1138,21 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 
 	switch {
 	case frame.Wh == "why":
-		// "Why" is a move on the warm proposition: walk to what precedes it,
-		// the antecedent in the learned sequence, GOLEM's grounded answer where
-		// it has no causal model. With nothing preceding, the honest gap.
+		// "Why" reads a told cause first: what the exchange was told explains
+		// the fact. With none, it walks to what precedes in the learned
+		// sequence, GOLEM's grounded answer where it has no causal model, and
+		// with nothing preceding, the honest gap.
+		if ans, ok := d.planWhyCause(frame, raw); ok {
+			return ans
+		}
 		return d.discourseWalk(frame, "before", chem)
 	case frame.Wh == "who":
-		// No agents modeled: the honest answer is the gap itself, and the gap
-		// invites the telling that would fill it.
+		// A who aimed at a participant answers its given name; past that, no
+		// agents are modeled, so the honest answer is the gap itself, and the
+		// gap invites the telling that would fill it.
+		if ans, ok := d.planWhoIdentity(frame); ok {
+			return ans
+		}
 		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem))
 	case frame.Counting:

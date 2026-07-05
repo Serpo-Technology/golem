@@ -698,6 +698,14 @@ func (d *Daemon) growConcepts() (born, named int) {
 	perceptless := d.perceptlessSet(conceptIDs)
 	nameEdges := make([]memory.LinkEdge, 0, len(pairs))
 	for _, p := range pairs {
+		// A participant's name is given by a telling ("you are golem"), not by
+		// cross-situational company: the self keeps almost no episodic company,
+		// so the statistical rewrite would only erase what was given. The given
+		// name stands, decay-spared with its participant, until a telling
+		// renames it.
+		if d.isParticipant(p.Concept) {
+			continue
+		}
 		// Cross-situational reliability: the share of the word's company
 		// that lands on this concept, blended with the share of the
 		// concept's company that is this word. A promiscuous word splits

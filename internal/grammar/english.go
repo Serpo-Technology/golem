@@ -81,6 +81,16 @@ func (p *Params) Parse(utterance string, resolve func(string) *memory.Fragment) 
 	return p.ParseHint(utterance, "", resolve)
 }
 
+// Detect names the tongue an utterance's closed class reveals, "" when no
+// function word settles it. It exposes the same judgement ParseHint opens
+// with, so a caller can tell an undetected clause (open-class only, left to
+// morphology) from one detection has already placed.
+func (p *Params) Detect(utterance string) string {
+	p = p.get()
+	tokens, _ := Tokenize(utterance)
+	return p.detectLanguage(tokens)
+}
+
 // ParseHint is Parse with a fallback tongue for when the closed class does not
 // reveal one. A clause of only open-class words (a Turkish comparison "kedi
 // fareden büyük", whose case marking is morphological, not a function word) detects

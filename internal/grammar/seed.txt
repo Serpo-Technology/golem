@@ -191,6 +191,12 @@ fw:la:fido	fido	la	speech
 fw:la:confido	confido	la	speech
 fw:la:dubito	dubito	la	speech
 fw:la:credo	credo	la	speech
+fw:en:am	am	en	cop
+fw:en:because	because	en	fn
+fw:tr:çünkü	çünkü	tr	fn
+fw:la:quia	quia	la	fn
+fw:tr:kimsin	kimsin	tr	wh
+fw:tr:kimim	kimim	tr	wh
 fw:en:hello	hello	en	speech
 fw:en:hi	hi	en	speech
 fw:en:goodbye	goodbye	en	speech
@@ -395,6 +401,9 @@ surface:la:farewell	vale	la
 surface:en:invite	tell me, if you know	en
 surface:tr:invite	biliyorsan söyle	tr
 surface:la:invite	dic mihi, si scis	la
+surface:en:because	because	en
+surface:tr:because	çünkü	tr
+surface:la:because	quia	la
 surface:en:firstperson	I	en
 surface:tr:firstperson	ben	tr
 surface:en:addressee	you	en

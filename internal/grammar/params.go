@@ -290,6 +290,19 @@ func (p *Params) TopicPrep(lang, form string) bool {
 	return false
 }
 
+// CauseWord reports whether a form is the seeded cause conjunction ("because",
+// "çünkü", "quia"), the split point of a compound telling whose second clause
+// explains the first. The refinement rides on the function-word category
+// ("fn:cause"), so the broad class the parser reads is still "fn"; only this
+// accessor reads the refinement.
+func (p *Params) CauseWord(lang, form string) bool {
+	p = p.get()
+	if spec, ok := strings.CutPrefix(p.categories[lang][form], "fn:"); ok {
+		return spec == "cause"
+	}
+	return false
+}
+
 // Existential reports whether a form is the seeded existential that closes a
 // Turkish location or possession clause ("var"), the word that stands in for the
 // copula English would use ("there is", "X has").

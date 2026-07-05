@@ -384,3 +384,100 @@ func TestInviteAtHighDopamine(t *testing.T) {
 		t.Fatalf("the admission should invite at high dopamine too: %q", got)
 	}
 }
+
+// A participant's identity is taught by talk and read back by the who
+// question: "you are golem" names the self, "I am Ada" names the speaker,
+// and each answers from its own side of the conversation afterward.
+func TestIdentityToldAndAsked(t *testing.T) {
+	d, _ := testDaemon(t)
+	if got := say(t, d, "who are you").Say; !strings.HasPrefix(got, "I do not know who yet.") {
+		t.Fatalf("unnamed self should admit the gap: %q", got)
+	}
+	if got := say(t, d, "you are golem").Say; got != "I am golem." {
+		t.Fatalf("the naming should confirm the identity: %q", got)
+	}
+	if got := say(t, d, "who are you").Say; got != "I am golem." {
+		t.Fatalf("the who question should answer the given name: %q", got)
+	}
+	if got := say(t, d, "I am Ada").Say; got != "You are ada." {
+		t.Fatalf("the speaker's name should land on the speaker: %q", got)
+	}
+	if got := say(t, d, "who am i").Say; got != "You are ada." {
+		t.Fatalf("the speaker's who question should answer their name: %q", got)
+	}
+}
+
+// An articled predicate is a kind and stays on the told-membership path; a
+// judgement word does not rename a participant already named.
+func TestIdentityKindAndJudgementStayMembership(t *testing.T) {
+	d, _ := testDaemon(t)
+	if got := say(t, d, "you are a daemon").Say; !strings.Contains(got, "I am a daemon") {
+		t.Fatalf("an articled predicate is a membership: %q", got)
+	}
+	say(t, d, "you are golem")
+	say(t, d, "you are right") // a judgement, not a rename
+	if got := say(t, d, "who are you").Say; got != "I am golem." {
+		t.Fatalf("a bare judgement word must not rename the self: %q", got)
+	}
+}
+
+// Identity is the architect's to give: a peer's bare claim lands as the
+// defeasible told-identity, never as the name.
+func TestPeerCannotNameParticipant(t *testing.T) {
+	d, _ := testDaemon(t)
+	sayAs(t, d, "llm", "you are hal")
+	if got := say(t, d, "who are you").Say; !strings.HasPrefix(got, "I do not know who yet.") {
+		t.Fatalf("a peer's claim must not become the name: %q", got)
+	}
+}
+
+// A because-compound teaches both clauses and the cause between them, and a
+// later why answers from the told cause rather than the succession walk.
+func TestBecauseTeachesAndWhyReads(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "bone")
+	if got := say(t, d, "a dog chased a cat because the cat grabbed a bone").Say; got != "I see." {
+		t.Fatalf("the compound telling should be acknowledged: %q", got)
+	}
+	if got := say(t, d, "what did the dog chase").Say; got != "The dog chased the cat." {
+		t.Fatalf("the main clause should have taught: %q", got)
+	}
+	if got := say(t, d, "why did the dog chase the cat").Say; got != "Because the cat grabbed the bone." {
+		t.Fatalf("why should answer the told cause: %q", got)
+	}
+	// A fact with no told cause keeps the old succession answer.
+	say(t, d, "a dog fetched a ball")
+	if got := say(t, d, "why did the dog fetch the ball").Say; strings.HasPrefix(got, "Because") {
+		t.Fatalf("a fact without a told cause must not invent one: %q", got)
+	}
+}
+
+// An untagged Turkish clause is placed by the lexicon GOLEM has grown: once
+// Turkish words exist, a bare Turkish telling answers in its own tongue.
+func TestUntaggedTurkishSniffed(t *testing.T) {
+	d, _ := testDaemon(t)
+	sayLang(t, d, "tr", "köpek kediyi kovaladı")
+	if got := say(t, d, "kedi köpeği kovaladı").Say; got != "Anladım." {
+		t.Fatalf("an untagged Turkish clause should answer in Turkish: %q", got)
+	}
+	// An English clause with no closed-class token keeps the English default.
+	groundNoun(t, d, "dog")
+	if got := say(t, d, "dog chased cat").Say; got == "Anladım." {
+		t.Fatalf("an English clause must not read as Turkish: %q", got)
+	}
+}
+
+// A given identity survives the night: the participant is spared the grounding
+// prune and its name the statistical rewrite, so "who are you" answers the
+// same after consolidations as before them.
+func TestIdentitySurvivesSleep(t *testing.T) {
+	d, _ := testDaemon(t)
+	say(t, d, "you are golem")
+	d.sleepCycle()
+	d.sleepCycle()
+	if got := say(t, d, "who are you").Say; got != "I am golem." {
+		t.Fatalf("the given name should survive consolidation: %q", got)
+	}
+}

@@ -907,17 +907,44 @@ func (d *Daemon) dropCounter(channel string) *atomic.Int64 {
 	return c
 }
 
+// categoryParticipant marks the conversation participants, discourse scaffolding
+// the nightly prune spares: a participant grounds in no percept and may fill no
+// role for nights on end, yet what hangs off it (its given name) must not die of
+// its disconnection.
+const categoryParticipant = "participant"
+
 // ensureParticipants makes sure the conversation's participants exist as concepts
 // and caches their ids: GOLEM itself, the one it speaks with, and the two
 // together. They are persistent and discourse-grounded rather than perceptual, the
 // referents the deictic pronouns ("you", "I", "we") point at.
 func (d *Daemon) ensureParticipants() {
-	d.selfID = d.ensureConcept("deixis:self", "GOLEM")
-	d.userID = d.ensureConcept("deixis:user", "the speaker")
-	d.bothID = d.ensureConcept("deixis:both", "us")
+	d.selfID = d.ensureParticipant("deixis:self", "GOLEM")
+	d.userID = d.ensureParticipant("deixis:user", "the speaker")
+	d.bothID = d.ensureParticipant("deixis:both", "us")
 	d.ensureDeicticForms()
 	d.ensureCommands()
 	d.ensureOperations()
+}
+
+// ensureParticipant is ensureConcept with the spared participant category, so
+// the trio survives the nightly grounding test with stable ids; an existing
+// node from an earlier brain is re-classed the same way at boot.
+func (d *Daemon) ensureParticipant(template, content string) uint64 {
+	if c, err := d.store.ConceptByTemplate(template); err == nil && c != nil {
+		if c.Category != categoryParticipant {
+			if err := d.store.UpdateCategory(c.ID, categoryParticipant); err != nil {
+				fmt.Fprintf(d.out, "participant category error: %v\n", err)
+			}
+		}
+		return c.ID
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+		Template: template, Category: categoryParticipant, Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := d.store.Encode(c); err != nil {
+		fmt.Fprintf(d.out, "participant concept error: %v\n", err)
+		return 0
+	}
+	return c.ID
 }
 
 // ensureDeicticForms links each seeded deictic pronoun to the participant it
@@ -1043,11 +1070,15 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		// Topic preposition: the object of Latin "de" ("quid de cane scis") is what the clause
 		// is about, so it fills the patient. Rides the function-word category like the locative.
 		{"fn:topic", "topic", []string{"de"}},
+		// Cause conjunction: the split point of a compound telling whose second
+		// clause explains the first ("the dog ran because the cat came"). Rides the
+		// function-word category like the locative, so the parser still flushes it.
+		{"fn:cause", "cause", []string{"because", "çünkü", "quia"}},
 		// Interrogative type: English wh words name their own type, so only the
 		// forms that need translating link; "what:be" carries the copula nedir folds
 		// in ("what is"), read back by whInfo's type-then-copula split.
 		{"wh:what", "what", []string{"ne", "neyi", "quid"}},
-		{"wh:who", "who", []string{"kim"}},
+		{"wh:who", "who", []string{"kim", "kimsin", "kimim"}},
 		{"wh:where", "where", []string{"nerede"}},
 		{"wh:why", "why", []string{"neden", "niye"}},
 		{"wh:how", "how", []string{"nasıl"}},
@@ -2548,6 +2579,16 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// the fallback, applied during the parse so a tongue's constructions are read
 		// even when the clause carries no function word to detect it by.
 		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveIn(req.Lang))
+		if req.Lang == "" && d.gram.Detect(req.Content) == "" && d.sniffTurkish(req.Content) {
+			// An untagged clause no closed-class token places: the lexicon GOLEM
+			// has grown gets a vote before English is assumed, so a bare Turkish
+			// telling answers in its own tongue. A clause detection already
+			// placed is never second-guessed.
+			frame = d.gram.ParseHint(req.Content, "tr", d.resolveIn("tr"))
+			if frame.Lang == "" {
+				frame.Lang = "tr"
+			}
+		}
 		if frame.Lang == "" {
 			frame.Lang = "en" // English is the default tongue when none was detected or tagged
 		}
@@ -2594,7 +2635,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if declarative && !d.statementAbandoned {
 			namingAnchors = d.recentNaming(time.Now(), res.FragmentID)
 		}
-		words := d.mintWordsScaled(req.Content, req.Lang, res.FragmentID, namingAnchors, false, speakerTrust)
+		mintLang := req.Lang
+		if mintLang == "" && frame.Lang == "tr" {
+			mintLang = "tr" // a sniffed Turkish clause mints its words in its own tongue, not as English shadows
+		}
+		words := d.mintWordsScaled(req.Content, mintLang, res.FragmentID, namingAnchors, false, speakerTrust)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
 		// only a declarative naming grounds a word in the attended concept. A
