@@ -132,8 +132,8 @@ func TestAdmitsIgnorance(t *testing.T) {
 		t.Fatalf("nothing follows the last step, so admit it: %q", resp.Say)
 	}
 	resp = say(t, d, "what is flibber")
-	if resp.Say != "I do not know flibber yet." {
-		t.Fatalf("an ungrounded word should be admitted: %q", resp.Say)
+	if resp.Say != "I do not know flibber yet. Tell me, if you know." {
+		t.Fatalf("an ungrounded word should be admitted with the invitation: %q", resp.Say)
 	}
 }
 
@@ -420,7 +420,7 @@ func TestWhenWhereCountAndGaps(t *testing.T) {
 		t.Fatalf("why should walk to the antecedent and admit when there is none: %q", why.Say)
 	}
 	who := say(t, d, "who ran make test")
-	if who.Say != "I do not know who yet." {
+	if who.Say != "I do not know who yet. Tell me, if you know." {
 		t.Fatalf("who has no agent model and should say so: %q", who.Say)
 	}
 }

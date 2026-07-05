@@ -302,3 +302,85 @@ func TestThinkQuestionDoesNotAnchor(t *testing.T) {
 		t.Fatal("normalize sanity")
 	}
 }
+
+// A greeting is met with the tongue's greeting and a farewell with its
+// farewell, in every seeded tongue, so the exchange opens and closes as a
+// social move rather than in silence. The words route as grounded speech
+// acts; the replies are the seeded greeting surfaces.
+func TestGreetingMet(t *testing.T) {
+	d, _ := testDaemon(t)
+	for _, c := range []struct{ say, want string }{
+		{"hello", "Hello."},
+		{"hi", "Hello."},
+		{"merhaba", "Merhaba."},
+		{"salve", "Salve."},
+		{"goodbye", "Goodbye."},
+		{"hoşçakal", "Hoşçakal."},
+		{"vale", "Vale."},
+	} {
+		if got := say(t, d, c.say).Say; got != c.want {
+			t.Fatalf("%q should be met with %q, got %q", c.say, c.want, got)
+		}
+	}
+}
+
+// A clause that carries more than the greeting is not swallowed by it: the
+// question rides through to its own answer, and a greeting leaves the topic
+// in play untouched.
+func TestGreetingDoesNotSwallowContent(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	if got := strings.ToLower(say(t, d, "hello what is a dog").Say); !strings.Contains(got, "dog") {
+		t.Fatalf("a greeting-opened question should still answer: %q", got)
+	}
+	say(t, d, "what is a dog") // the dog is the topic in mind
+	before := d.topic
+	say(t, d, "hello")
+	if d.topic != before {
+		t.Fatalf("a greeting should not displace the topic: %d then %d", before, d.topic)
+	}
+}
+
+// A pro-form in a role question resolves against working memory: after "a fox
+// chased a rabbit", "it" is the fox when the question seats it as the chaser
+// and the rabbit when it seats it as the chased, read off the roles each
+// concept lately played rather than off animacy.
+func TestRoleQuestionResolvesProForm(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "fox")
+	groundNoun(t, d, "rabbit")
+	say(t, d, "a fox chased a rabbit")
+	if got := say(t, d, "what did it chase").Say; got != "The fox chased the rabbit." {
+		t.Fatalf("\"it\" should resolve to the fox that chased: %q", got)
+	}
+	if got := say(t, d, "who chased it").Say; got != "The fox chased the rabbit." {
+		t.Fatalf("\"it\" should resolve to the rabbit that was chased: %q", got)
+	}
+}
+
+// A role gap invites the telling that would fill it: the admission trails the
+// tongue's invitation, and the filled gap is still followed up through the open
+// question the admission recorded.
+func TestRoleGapInvitesTeaching(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "spoon")
+	say(t, d, "a dog chased a cat")
+	got := say(t, d, "what did the spoon chase").Say
+	if !strings.HasPrefix(got, "I do not know what yet.") || !strings.Contains(got, "Tell me, if you know.") {
+		t.Fatalf("a role gap should admit and invite: %q", got)
+	}
+}
+
+// The invitation rides the admission whatever the chemistry: the curiosity
+// follow-up never re-asks a word the admission already speaks, so the invite
+// is what keeps the gap open to the speaker at any dopamine.
+func TestInviteAtHighDopamine(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.chem.SpikeDopamine(0.6)
+	got := say(t, d, "what is flibber").Say
+	if got != "I do not know flibber yet. Tell me, if you know." {
+		t.Fatalf("the admission should invite at high dopamine too: %q", got)
+	}
+}

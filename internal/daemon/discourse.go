@@ -58,6 +58,55 @@ type claim struct {
 
 const claimsCap = 16
 
+// planGreeting meets a greeting with the tongue's greeting and a farewell with
+// its farewell, the social moves that open and close an exchange. The words
+// route as grounded speech acts the way the trust verbs do, and the reply is
+// the tongue's seeded greeting surface, so both sides of the move live in the
+// graph rather than in the engine. It declines a clause that carries anything
+// beyond the greeting itself, so "hello, what is a dog" still answers the
+// question, and it leaves the topic untouched: a greeting opens the talk, it
+// does not change what the talk is about.
+func (d *Daemon) planGreeting(frame grammar.Frame) (string, bool) {
+	if frame.Speech != "greet" && frame.Speech != "farewell" {
+		return "", false
+	}
+	if frame.Wh != "" || !frame.Action.Empty() || frame.Inner != "" || frame.Property != "" {
+		return "", false
+	}
+	word := d.gram.Word(frame.Lang, frame.Speech)
+	if word == "" {
+		return "", false
+	}
+	return upperFirst(word) + ".", true
+}
+
+// ackStatement is the minimal acknowledgment a plain telling earns: the tongue's
+// "I see", so a statement audibly lands instead of passing in silence. The
+// surface is a seeded word the nightly competition can bend, not a string fixed
+// in the engine; a tongue without one keeps the old silence.
+func (d *Daemon) ackStatement(lang string) string {
+	word := d.gram.Word(lang, "isee")
+	if word == "" {
+		return ""
+	}
+	return upperFirst(word) + "."
+}
+
+// withInvite trails a teaching invitation after an admitted gap, so an unknown
+// closes with an opening: the speaker is invited to fill it. The curiosity
+// follow-up never asks after a word the admission already speaks, so when both
+// fire they cover different gaps rather than doubling one.
+func (d *Daemon) withInvite(lang, admission string) string {
+	if admission == "" {
+		return admission
+	}
+	word := d.gram.Word(lang, "invite")
+	if word == "" {
+		return admission
+	}
+	return admission + " " + upperFirst(word) + "."
+}
+
 // recallClaim returns GOLEM's standing claim about a proposition this exchange, or
 // nil when it has made none, so a fresh assertion can be checked against it.
 func (d *Daemon) recallClaim(rel string, agent, patient uint64) *claim {
@@ -662,10 +711,10 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 	}
 
 	var clauses []string
-	compRendered := false       // the comparison block is emitted as a whole at its first key
+	compRendered := false              // the comparison block is emitted as a whole at its first key
 	emittedAction := map[string]bool{} // a subject-object pair's verbs are spoken together, once
-	priorCompDir := ""          // the pole the last comparison was spoken with, to read a contrast off the next
-	actionRun := 0              // consecutive actions by the focus, so a further one reads as an addition
+	priorCompDir := ""                 // the pole the last comparison was spoken with, to read a contrast off the next
+	actionRun := 0                     // consecutive actions by the focus, so a further one reads as an addition
 	for _, k := range order {
 		names := coargs[k]
 		// A locative relation speaks as a copula with a preposition ("the leaf is on

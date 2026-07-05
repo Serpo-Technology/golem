@@ -1023,6 +1023,11 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		// Believing a source is trusting it; distrusting is doubting it.
 		{"speech:trust", "trust", []string{"trust", "trusts", "trusted", "believe", "believes", "believed", "güven", "güvenirim", "inan", "inanırım", "fido", "confido", "credo"}},
 		{"speech:doubt", "doubt", []string{"doubt", "doubts", "doubted", "distrust", "şüphelen", "şüpheleniyorum", "dubito"}},
+		// Social moves: a greeting is met with a greeting, a farewell with a farewell.
+		// The words route as grounded speech acts the way the trust verbs do, so the
+		// opening and closing of an exchange are moves in the graph, not silence.
+		{"speech:greet", "greet", []string{"hello", "hi", "merhaba", "selam", "salve", "salvete"}},
+		{"speech:farewell", "farewell", []string{"goodbye", "bye", "hoşçakal", "vale", "valete"}},
 		{"speech:recall", "recall", []string{"say", "says", "said", "tell", "tells", "told", "söyle", "söyledim", "söyledin", "dedim", "dedin", "dic", "dixi", "dixisti"}},
 		{"speech:describe", "describe", []string{"describe", "describes", "described", "anlat", "narra"}},
 		{"speech:know", "know", []string{"know", "knows", "known", "biliyor", "bilir", "biliyorsun", "bilirsin", "scis", "scisne"}},

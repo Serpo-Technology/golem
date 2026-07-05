@@ -499,6 +499,53 @@ func (d *Daemon) warmReferent(skip int, animacy string) *memory.Fragment {
 	return ranked[skip].f
 }
 
+// roleReferent resolves a pro-form standing in a role question ("what did it
+// chase") to the warm concept that lately played the questioned role. It reads
+// the same field a bare pro-form does, with the lean keyed to the role the
+// question's own syntax gives the pronoun rather than to animacy, and it
+// passes over relations, participants, and scaffolding: "it" points at a thing
+// in the talk, never at the predicate itself.
+func (d *Daemon) roleReferent(role string, skip uint64) *memory.Fragment {
+	entries := d.ws.warmest(workspaceBudget)
+	if len(entries) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(entries))
+	for _, e := range entries {
+		ids = append(ids, e.id)
+	}
+	frags, err := d.store.FragmentsByIDs(ids)
+	if err != nil {
+		return nil
+	}
+	byID := make(map[uint64]*memory.Fragment, len(frags))
+	for _, f := range frags {
+		byID[f.ID] = f
+	}
+	var best *memory.Fragment
+	bestScore := 0.0
+	for _, e := range entries {
+		f := byID[e.id]
+		if f == nil || f.Kind != memory.KindConcept || f.Category == "relation" ||
+			f.ID == skip || d.isParticipant(f.ID) || d.scaffoldingConcept(f.ID) {
+			continue
+		}
+		lean := 0.0
+		switch d.ws.roleOf(f.ID) {
+		case role:
+			lean = 1
+		case "":
+		default:
+			lean = -1
+		}
+		score := e.heat * (1 + animacyBindBonus*lean)
+		if best == nil || score > bestScore {
+			best, bestScore = f, score
+		}
+	}
+	return best
+}
+
 // animacyLean scores how well a concept fits a wanted animacy, from the role
 // it last played: an agent leans animate, a patient inanimate, the things that
 // act being the animate ones. The lean is positive when the concept fits the
@@ -725,6 +772,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		d.turnFocus = frame.Patient.Concept.ID
 	}
 
+	// "Hello", "merhaba", "salve": a greeting is met, not read for content. It
+	// routes off the grounded greeting words before the content paths, and only
+	// when the clause carries nothing else.
+	if ans, ok := d.planGreeting(frame); ok {
+		return ans, nil
+	}
+
 	// "And then" is a move on the warm proposition, not a clause: walk its
 	// successor and speak what came next.
 	if isThenMove(raw) {
@@ -944,9 +998,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		// proposition is taught, not queried, so the curiosity question is
 		// held back for the verb it just grounded.
 		if d.comprehendStatement(frame, raw, momentID) {
-			// A statement teaches in silence, unless it answered a question left open,
-			// in which case GOLEM follows up with the answer it can now give.
-			return d.followUp, nil
+			// A statement teaches, and the telling is acknowledged so it lands
+			// audibly; when it answered a question left open, GOLEM follows up
+			// with the answer it can now give instead.
+			if d.followUp != "" {
+				return d.followUp, nil
+			}
+			return d.ackStatement(frame.Lang), nil
 		}
 		// A clause that did not teach, whose opening word names a faculty, is a
 		// command the grammar did not recognize as one: its verb is not a seeded
@@ -1072,9 +1130,10 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		// it has no causal model. With nothing preceding, the honest gap.
 		return d.discourseWalk(frame, "before", chem)
 	case frame.Wh == "who":
-		// No agents modeled: the honest answer is the gap itself.
-		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem)
+		// No agents modeled: the honest answer is the gap itself, and the gap
+		// invites the telling that would fill it.
+		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: frame.Wh}}, chem))
 	case frame.Counting:
 		return d.planCount(frame, quals, chem)
 	case frame.Wh == "where":
@@ -1201,8 +1260,10 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		return withKind(withFact(strings.Join(parts, " ")))
 	}
 	if topic.Phrase != "" {
-		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Patient: grammar.Term{Phrase: topic.Phrase}}, chem)
+		// An unknown word is admitted and the admission invites the telling that
+		// would teach it; when curiosity is high the follow-up ask asks instead.
+		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Patient: grammar.Term{Phrase: topic.Phrase}}, chem))
 	}
 	return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
 		Negate: true, Patient: grammar.Term{Phrase: "that"}}, chem)

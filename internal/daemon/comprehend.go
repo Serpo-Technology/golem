@@ -849,11 +849,12 @@ func (d *Daemon) answerRole(frame grammar.Frame, rel, known *memory.Fragment, kn
 			return guess, true
 		}
 		// The relation is known but nothing filled the questioned role: the honest
-		// answer is the gap, spoken through the older admission, and the question is
-		// held open so a later telling that fills it can be followed up.
+		// answer is the gap, spoken through the older admission and trailed by the
+		// teaching invitation, and the question is held open so a later telling
+		// that fills it can be followed up.
 		d.recordOpenQuestion(rel.Content, known.ID, knownRole)
-		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
-			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot()), true
+		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement, Action: grammar.Term{Phrase: "know"},
+			Negate: true, Past: past, Patient: grammar.Term{Phrase: frame.Wh}}, d.chem.Snapshot())), true
 	}
 	for _, f := range facts {
 		d.ws.excite(f.coID, exciteSpeech)
@@ -3167,6 +3168,7 @@ func (d *Daemon) namesRelation(content, lang string) bool {
 func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragment, knownRole, verb string) {
 	tokens, _ := grammar.Tokenize(raw)
 	var content []string
+	proIdx := -1
 	for _, t := range tokens {
 		// A deictic pronoun is closed-class but names a participant, so it can be
 		// the known argument of "what did you chase"; keep it beside the open-class
@@ -3177,6 +3179,14 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		if d.gram.IsContentWord(lang, t) || d.gram.IsDeictic(lang, t) ||
 			d.resolveRelation(d.gram.Lemma(lang, t)) != nil {
 			content = append(content, t)
+			continue
+		}
+		// A pro-form ("it", "they") stands where a known argument would: it is
+		// kept beside the content words so position still assigns the roles, and
+		// resolved from working memory once the role it fills is read.
+		if proIdx < 0 && d.gram.WordClass(lang, t) == "pro" {
+			proIdx = len(content)
+			content = append(content, t)
 		}
 	}
 	verbIdx := -1
@@ -3184,7 +3194,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		// A pronoun is never the predicate: even where a garbled clause once
 		// minted a relation under a deictic surface, the question's verb is
 		// sought among the content words alone.
-		if d.gram.IsDeictic(lang, t) {
+		if d.gram.IsDeictic(lang, t) || i == proIdx {
 			continue
 		}
 		if c := d.resolveRelation(d.gram.Lemma(lang, t)); c != nil {
@@ -3196,7 +3206,7 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 		return nil, nil, "", ""
 	}
 	for i, t := range content {
-		if i == verbIdx {
+		if i == verbIdx || i == proIdx {
 			continue
 		}
 		if c := d.resolveConcept(t); c != nil && c.Category != "relation" && !d.scaffoldingConcept(c.ID) {
@@ -3204,13 +3214,20 @@ func (d *Daemon) analyzeRoleQuestion(lang, raw string) (rel, known *memory.Fragm
 			break
 		}
 	}
+	knownRole = "agent" // an argument precedes the verb; the wh-word is the object
+	if verbIdx == 0 {
+		knownRole = "patient" // the wh-word is the subject; the known argument is the patient
+	}
+	// A question whose only argument is the pro-form reads its referent from
+	// working memory: the warm concept that lately played the role the pronoun
+	// stands in, so "what did it chase" asks after the fox that just chased.
+	if known == nil && proIdx >= 0 {
+		known = d.roleReferent(knownRole, rel.ID)
+	}
 	if known == nil {
 		return nil, nil, "", ""
 	}
-	if verbIdx == 0 {
-		return rel, known, "patient", verb // the wh-word is the subject; the known argument is the patient
-	}
-	return rel, known, "agent", verb // an argument precedes the verb; the wh-word is the object
+	return rel, known, knownRole, verb
 }
 
 // relationConcept resolves the relation a proposition binds into, minting it

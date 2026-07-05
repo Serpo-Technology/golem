@@ -201,7 +201,7 @@ func (d *Daemon) planLatinWh(frame grammar.Frame, raw string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	gap := func() (string, bool) { return "Nescio.", true } // I do not know
+	gap := func() (string, bool) { return d.withInvite("la", "Nescio."), true } // I do not know
 	m, ok := d.gram.Comprehend("la", clause, d.resolveConcept, nil)
 	if !ok {
 		return gap()

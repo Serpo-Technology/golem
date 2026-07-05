@@ -79,6 +79,7 @@ fw:en:that	that	en	pro
 fw:en:the	the	en	det
 fw:en:them	them	en	pro
 fw:en:then	then	en	fn
+fw:en:they	they	en	pro
 fw:en:this	this	en	pro
 fw:en:tidy	tidy	en	imp
 fw:en:time	time	en	fn
@@ -190,6 +191,17 @@ fw:la:fido	fido	la	speech
 fw:la:confido	confido	la	speech
 fw:la:dubito	dubito	la	speech
 fw:la:credo	credo	la	speech
+fw:en:hello	hello	en	speech
+fw:en:hi	hi	en	speech
+fw:en:goodbye	goodbye	en	speech
+fw:en:bye	bye	en	speech
+fw:tr:merhaba	merhaba	tr	speech
+fw:tr:selam	selam	tr	speech
+fw:tr:hoşçakal	hoşçakal	tr	speech
+fw:la:salve	salve	la	speech
+fw:la:salvete	salvete	la	speech
+fw:la:vale	vale	la	speech
+fw:la:valete	valete	la	speech
 fw:la:scio	scio	la	fn
 fw:tr:defa	defa	tr	fn
 fw:tr:değil	değil	tr	neg
@@ -373,6 +385,16 @@ surface:en:slight	a little	en
 surface:tr:slight	biraz	tr
 surface:en:isee	I see	en
 surface:tr:isee	anladım	tr
+surface:la:isee	intellego	la
+surface:en:greet	hello	en
+surface:tr:greet	merhaba	tr
+surface:la:greet	salve	la
+surface:en:farewell	goodbye	en
+surface:tr:farewell	hoşçakal	tr
+surface:la:farewell	vale	la
+surface:en:invite	tell me, if you know	en
+surface:tr:invite	biliyorsan söyle	tr
+surface:la:invite	dic mihi, si scis	la
 surface:en:firstperson	I	en
 surface:tr:firstperson	ben	tr
 surface:en:addressee	you	en

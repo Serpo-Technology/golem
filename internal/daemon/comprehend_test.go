@@ -217,15 +217,16 @@ func TestRelationWarmthDoesNotMergeSameTongue(t *testing.T) {
 
 // A novel verb degrades gracefully rather than failing to parse: an unknown
 // verb in transitive position becomes a candidate relation with its slots
-// bound, and the brain does not blurt a confused question about it.
+// bound, and the brain acknowledges the telling rather than blurting a
+// confused question about it.
 func TestComprehendUnknownVerbDegradesGracefully(t *testing.T) {
 	d, s := testDaemon(t)
 	dog := groundNoun(t, d, "dog")
 	cat := groundNoun(t, d, "cat")
 
 	resp := say(t, d, "a dog blorped a cat")
-	if resp.Say != "" {
-		t.Fatalf("an understood novel statement should not blurt: %q", resp.Say)
+	if resp.Say != "I see." {
+		t.Fatalf("an understood novel statement is acknowledged, nothing more: %q", resp.Say)
 	}
 	blorp, _ := s.ConceptByTemplate("rel:en:blorp")
 	if blorp == nil || blorp.Category != "relation" {
@@ -381,8 +382,8 @@ func TestConversationalProbe(t *testing.T) {
 	groundNoun(t, d, "dog")
 	groundNoun(t, d, "cat")
 
-	if got := say(t, d, "a dog chased a cat").Say; got != "" {
-		t.Fatalf("a comprehended statement teaches silently: %q", got)
+	if got := say(t, d, "a dog chased a cat").Say; got != "I see." {
+		t.Fatalf("a comprehended statement is acknowledged: %q", got)
 	}
 	for _, c := range []struct{ ask, want string }{
 		{"what did the dog chase", "The dog chased the cat."},
@@ -2529,9 +2530,9 @@ func TestOpenQuestionFollowedUp(t *testing.T) {
 	if len(d.openQuestions) != 0 {
 		t.Fatal("the answered question should no longer be open")
 	}
-	// A telling that answers nothing open passes in silence, as before.
-	if got := say(t, d, "a cat chased a mouse").Say; got != "" {
-		t.Fatalf("an ordinary telling should stay silent: %q", got)
+	// A telling that answers nothing open earns the plain acknowledgment.
+	if got := say(t, d, "a cat chased a mouse").Say; got != "I see." {
+		t.Fatalf("an ordinary telling should be acknowledged: %q", got)
 	}
 }
 
