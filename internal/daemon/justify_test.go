@@ -405,3 +405,79 @@ func TestTraceRefreshesInPlace(t *testing.T) {
 		t.Fatalf("one claim should keep one trace, got %d", len(frags))
 	}
 }
+
+// The evidence tally counts what stands behind a proposition: an observed fact
+// answers with its seen count, and "how sure are you" reads it.
+func TestEvidenceSeenAnswersCount(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	rel := func() *memory.Fragment {
+		say(t, d, "a dog chased a cat")
+		return d.resolveRelation("chase")
+	}()
+	if rel == nil {
+		t.Fatal("chase should resolve")
+	}
+	// Add two perceptual moments of the proposition.
+	for i := 0; i < 2; i++ {
+		seen := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision", Content: "a dog chased a cat",
+			Template: "seen dog chase cat", Limbic: d.chem.Snapshot(), Time: time.Now()}
+		if _, err := s.Encode(seen); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Propose(rel.ID, seen.ID, dog.ID, cat.ID, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ev := d.propositionEvidence(dog.ID, "chase", cat.ID)
+	if ev.seen < 2 {
+		t.Fatalf("two perceptual moments should count as seen: %+v", ev)
+	}
+	say(t, d, "did the dog chase the cat")
+	got := say(t, d, "how sure are you").Say
+	if !strings.Contains(got, "seen") {
+		t.Fatalf("how sure are you should read the seen count: %q", got)
+	}
+}
+
+// A proposition known only from the architect's telling answers by naming the
+// teller, hedged to a confidence the single telling earns.
+func TestEvidenceToldNamesArchitect(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	ev := d.propositionEvidence(d.resolveConcept("dog").ID, "chase", d.resolveConcept("cat").ID)
+	if !ev.architect || ev.told == 0 {
+		t.Fatalf("an untagged telling should count as the architect's: %+v", ev)
+	}
+	say(t, d, "did the dog chase the cat")
+	got := say(t, d, "how sure are you").Say
+	if !strings.Contains(got, "told me") {
+		t.Fatalf("how sure are you should name the teller: %q", got)
+	}
+}
+
+// A denial standing over a proposition owns the evidence answer: however it was
+// once told, GOLEM no longer holds it.
+func TestEvidenceDeniedOwnsAnswer(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "the dog does not chase the cat") // an explicit denial lays a deny edge
+	ev := d.propositionEvidence(d.resolveConcept("dog").ID, "chase", d.resolveConcept("cat").ID)
+	if !ev.denied {
+		t.Fatalf("a denied proposition should read denied: %+v", ev)
+	}
+}
+
+// With nothing said, the evidence probe admits it, the same as the justify probe.
+func TestEvidenceNothingSaid(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "dog")
+	if got := say(t, d, "how sure are you").Say; got != "I cannot say why." {
+		t.Fatalf("with nothing said the evidence probe should admit it: %q", got)
+	}
+}

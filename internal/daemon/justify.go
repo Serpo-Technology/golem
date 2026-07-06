@@ -186,17 +186,14 @@ func justifySurface(d *Daemon, lang, key string) string {
 	return upperFirst(w) + "."
 }
 
-// justifyTrace renders one trace's proof from live state: the claim identity
-// is read off the said-edges, the support off the drewon edges, and each piece
-// speaks by what it is. It returns "" when nothing on the trace still stands,
-// so the caller can admit the loss.
-func (d *Daemon) justifyTrace(lang string, traceID uint64) string {
+// traceTuple reads a trace's identity off its said-edges: the relation concept,
+// the agent, the patient, and the support it drew on. relID is zero for an is-a
+// stub, which carries no relation concept.
+func (d *Daemon) traceTuple(traceID uint64) (relID, agentID, patientID uint64, drewOn []uint64) {
 	edges, err := d.store.LinksFrom([]uint64{traceID})
 	if err != nil {
-		return ""
+		return 0, 0, 0, nil
 	}
-	var relID, agentID, patientID uint64
-	var evidence []uint64
 	for _, e := range edges {
 		switch e.Rel {
 		case memory.RelSaidRel:
@@ -206,9 +203,18 @@ func (d *Daemon) justifyTrace(lang string, traceID uint64) string {
 		case memory.RelSaidPatient:
 			patientID = e.To
 		case memory.RelDrewOn:
-			evidence = append(evidence, e.To)
+			drewOn = append(drewOn, e.To)
 		}
 	}
+	return relID, agentID, patientID, drewOn
+}
+
+// justifyTrace renders one trace's proof from live state: the claim identity
+// is read off the said-edges, the support off the drewon edges, and each piece
+// speaks by what it is. It returns "" when nothing on the trace still stands,
+// so the caller can admit the loss.
+func (d *Daemon) justifyTrace(lang string, traceID uint64) string {
+	relID, agentID, patientID, evidence := d.traceTuple(traceID)
 	if agentID == 0 || patientID == 0 {
 		return ""
 	}

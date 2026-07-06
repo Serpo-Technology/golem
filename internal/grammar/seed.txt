@@ -438,6 +438,32 @@ surface:la:justifylost	non iam memini	la
 surface:en:justifynone	I cannot say why	en
 surface:tr:justifynone	nedenini söyleyemem	tr
 surface:la:justifynone	cur nescio	la
+# the weight-of-evidence probe and the words it speaks a tally with: how sure,
+# a confidence adverb the tally earns, who told and how often.
+surface:en:sureask	how sure are you	en
+surface:tr:sureask	ne kadar eminsin	tr
+surface:la:sureask	quam certus es	la
+surface:en:sureguess	I am only guessing	en
+surface:tr:sureguess	sadece tahmin ediyorum	tr
+surface:la:sureguess	tantum coniecto	la
+surface:en:surenone	I no longer hold that	en
+surface:tr:surenone	artık buna inanmıyorum	tr
+surface:la:surenone	id iam non teneo	la
+surface:en:certain	I am certain	en
+surface:tr:certain	eminim	tr
+surface:la:certain	certus sum	la
+surface:en:likely	I think so	en
+surface:tr:likely	sanırım	tr
+surface:la:likely	puto	la
+surface:en:unsure	I am not sure	en
+surface:tr:unsure	emin değilim	tr
+surface:la:unsure	incertus sum	la
+surface:en:often	more than once	en
+surface:tr:often	birden çok kez	tr
+surface:la:often	saepe	la
+surface:en:manysources	several told me	en
+surface:tr:manysources	birçok kişi söyledi	tr
+surface:la:manysources	multi mihi dixerunt	la
 surface:en:firstperson	I	en
 surface:tr:firstperson	ben	tr
 surface:en:addressee	you	en

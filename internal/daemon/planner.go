@@ -826,6 +826,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
+	// "How sure are you": the weight-of-evidence companion, reading how much
+	// stands behind the last claim rather than the proof of it.
+	if ans, ok := d.planEvidence(frame, raw); ok {
+		return ans, nil
+	}
+
 	// "And then" is a move on the warm proposition, not a clause: walk its
 	// successor and speak what came next.
 	if isThenMove(raw) {
