@@ -155,11 +155,15 @@ func (d *Daemon) planJustify(frame grammar.Frame, raw string) (string, bool) {
 		return justifySurface(d, lang, "justifynone"), true
 	}
 	var lines []string
+	seen := map[string]bool{}
 	for i, tid := range d.lastTrace {
 		if i >= justifyTraceCap {
 			break
 		}
-		if line := d.justifyTrace(lang, tid); line != "" {
+		// Two facts proved the same way share one verdict: "You told me." once,
+		// not once per fact.
+		if line := d.justifyTrace(lang, tid); line != "" && !seen[line] {
+			seen[line] = true
 			lines = append(lines, line)
 		}
 	}
