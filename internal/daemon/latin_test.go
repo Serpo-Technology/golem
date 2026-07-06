@@ -307,3 +307,31 @@ func TestLatinIsADeclinesComparison(t *testing.T) {
 		t.Fatal("the is-a path must decline a comparison, leaving it to planLatinComparison")
 	}
 }
+
+// An irregular Latin verb (velle, to want) is read where the ending rules cannot
+// reach: "equus aquam vult" parses by case into the one proposition, and the role
+// questions answer it, the same as a regular verb.
+func TestLatinIrregularVerbFact(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "equus", "la")
+	groundNounLang(t, d, "aqua", "la")
+	sayLang(t, d, "la", "equus aquam vult") // the horse wants water
+	if got := sayLang(t, d, "la", "quid equus vult?").Say; got != "Equus aquam vult." {
+		t.Fatalf("an irregular verb fact should answer its role question: %q", got)
+	}
+	if got := sayLang(t, d, "la", "quis aquam vult?").Say; got != "Equus aquam vult." {
+		t.Fatalf("quis should name the agent of an irregular verb fact: %q", got)
+	}
+}
+
+// A third-conjugation verb (edere, to eat, "edit") is read through its -it ending,
+// the conjugation the ending rules gained beyond the first two.
+func TestLatinThirdConjugationFact(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "simia", "la")
+	groundNounLang(t, d, "herba", "la")
+	sayLang(t, d, "la", "simia herbam edit") // the monkey eats grass
+	if got := sayLang(t, d, "la", "quid simia edit?").Say; got != "Simia herbam edit." {
+		t.Fatalf("a third-conjugation verb fact should answer its role question: %q", got)
+	}
+}

@@ -575,13 +575,32 @@ var latinPresent = []struct{ ending, person, lemma string }{
 	{"eo", "1sg", "et"}, {"es", "2sg", "et"}, {"et", "3sg", "et"},
 	{"amus", "1pl", "at"}, {"atis", "2pl", "at"}, {"ant", "3pl", "at"},
 	{"as", "2sg", "at"}, {"at", "3sg", "at"}, {"o", "1sg", "at"},
+	// The third conjugation's third person (edit, edunt), normalized to the -it
+	// singular. Only the third person is read: a fact states what a thing does,
+	// and -it/-unt end no first- or second-declension noun, so they do not
+	// misread a cased noun as a verb the way the ambiguous -is/-o would.
+	{"unt", "3pl", "it"}, {"it", "3sg", "it"},
+}
+
+// latinIrregular lists the present forms of irregular verbs the ending rules
+// cannot reach, each keyed to the one lemma every person normalizes to. velle
+// (to want) is the first: its stem shifts across vol-/vul-/vel-, so "vult" is no
+// regular ending of a single stem and only an explicit paradigm keys it. The
+// lemma is what the resolver grounds to the relation (named "vult" -> want), so a
+// Latin want-fact and its role question read like any other.
+var latinIrregular = map[string]struct{ lemma, person string }{
+	"volo": {"vult", "1sg"}, "vis": {"vult", "2sg"}, "vult": {"vult", "3sg"},
+	"volumus": {"vult", "1pl"}, "vultis": {"vult", "2pl"}, "volunt": {"vult", "3pl"},
 }
 
 // latinVerb reads a Latin present-active verb: the lemma normalized to the
 // third-singular form (so every person keys the one relation) and the person it
-// carries. ok is false when the span is no such verb. The present of the first two
-// conjugations; further conjugations and tenses refine it.
+// carries. ok is false when the span is no such verb. The present of the first
+// three conjugations and the irregular verbs above; further tenses refine it.
 func latinVerb(span string) (lemma, person string, ok bool) {
+	if irr, has := latinIrregular[span]; has {
+		return irr.lemma, irr.person, true
+	}
 	for _, e := range latinPresent {
 		if strings.HasSuffix(span, e.ending) && len(span) > len(e.ending)+1 {
 			return span[:len(span)-len(e.ending)] + e.lemma, e.person, true
