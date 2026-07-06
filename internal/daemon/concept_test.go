@@ -756,3 +756,72 @@ func TestCrossTongueStillBindsUnnamedWord(t *testing.T) {
 		t.Fatalf("an unnamed second-tongue word should still reach the percept it was shown: %v", w)
 	}
 }
+
+// A word whose lived company has thinned to crumbs keeps its earned name rather
+// than have the recount thin it from the ratio of what little remains. This pins
+// the lion drift found live, where the English head-word's own-percept company
+// decayed while a colour it shared company with stood over it once the recount
+// rewrote its bond from noise.
+func TestStarvedWordKeepsItsNaming(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	word, _, err := s.WordNode("lion", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "a golden lion",
+		Template: "a golden lion", Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	e := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision", Content: "a golden lion",
+		Template: "a golden lion", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(e); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(c.ID, e.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(word.ID, c.ID, memory.RelNames, 0.784); err != nil {
+		t.Fatal(err)
+	}
+	// A crumb of company survives, below the evidence floor.
+	if err := s.LinkRel(word.ID, e.ID, memory.RelTemporal, 0.05); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+	if w := edgeWeightRel(t, s, word.ID, c.ID, memory.RelNames); w != 0.784 {
+		t.Fatalf("a starved word must keep its earned name, not thin toward the ratio: %v", w)
+	}
+}
+
+// A starved word births no new bond: with no existing edge, the crumb ratio is
+// not written, however it clears the write floor.
+func TestStarvedCrumbBirthsNoNaming(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	word, _, err := s.WordNode("lion", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "a small brown dog",
+		Template: "a small brown dog", Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	e := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision", Content: "a small brown dog",
+		Template: "a small brown dog", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(e); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(c.ID, e.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(word.ID, e.ID, memory.RelTemporal, 0.06); err != nil {
+		t.Fatal(err)
+	}
+	d.growConcepts()
+	if w := edgeWeightRel(t, s, word.ID, c.ID, memory.RelNames); w != 0 {
+		t.Fatalf("crumb company must not birth a naming: %v", w)
+	}
+}

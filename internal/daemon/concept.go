@@ -45,6 +45,17 @@ const (
 	namesDopamineGain = 0.75
 	namesMaxWeight    = 0.95
 	namesWriteFloor   = 0.1
+	// A word whose whole lived company has decayed below this mass has no
+	// standing to re-litigate its namings from the ratio of what little company
+	// remains. A basic name that reaches neither the ostensive nor the
+	// cross-tongue refresh (an English head-word once its own percept thins out
+	// of its core) would otherwise be thinned toward nothing by the recount
+	// while a colour it shares company with, or its cross-tongue twin kept firm
+	// by the borrow, stands over it (lion surrendered to silver, dog to cat).
+	// Below the floor the earned bond is left as it stands and no new bond is
+	// born; a word with real company (whole units of mass) recounts as before,
+	// and a rehearsed word resumes recounting as its company rebuilds.
+	namesEvidenceFloor = 0.5
 	// deliberateName is the weight of a name asserted outright through the name
 	// command, firm but below the lived ceiling so usage can still move it. It
 	// is the pointer made directly, where cross-situational naming would have
@@ -762,6 +773,16 @@ func (d *Daemon) growConcepts() (born, named int) {
 		// itself.
 		if verbWord[p.Word] && !relConcept[p.Concept] {
 			w = 0
+		} else if p.WordTotal < namesEvidenceFloor {
+			// Starved company stops voting: a word whose lived company has thinned
+			// to crumbs keeps its earned bonds as they stand and births none, so a
+			// basic name is not thinned toward nothing by a ratio computed from
+			// noise while a rival kept firm elsewhere stands over it. A word with
+			// real company recounts as before.
+			if p.Existing == 0 {
+				continue
+			}
+			w = p.Existing
 		}
 		// A percept-less concept gains no NEW name from cross-situational company.
 		// It is named when a telling introduces it and when a word binds to it

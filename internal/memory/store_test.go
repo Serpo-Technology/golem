@@ -432,3 +432,40 @@ func TestRelAndKindMigration(t *testing.T) {
 		t.Fatalf("the rebuilt table should hold two relations per pair: %+v", both)
 	}
 }
+
+// A naming bond is governed by the nightly recount alone: the generic link
+// decay leaves it standing while ordinary associative edges thin, so a bond the
+// recount is holding frozen (its word's company starved) is not surrendered to
+// disuse behind the recount's back.
+func TestNamesEdgeSparedNightlyDecay(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Now()
+	word := &Fragment{Kind: KindWord, Channel: "word", Content: "dog", Template: "dog", Lang: "en", Time: now}
+	if _, err := s.Encode(word); err != nil {
+		t.Fatal(err)
+	}
+	concept := &Fragment{Kind: KindConcept, Channel: "concept", Content: "a small brown dog",
+		Template: "a small brown dog", Category: "noun", Time: now}
+	if _, err := s.Encode(concept); err != nil {
+		t.Fatal(err)
+	}
+	moment := encodeAt(t, s, "vision", "a small brown dog", 0, now)
+	if err := s.LinkRel(concept.ID, moment.ID, RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(word.ID, concept.ID, RelNames, 0.784); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(word.ID, moment.ID, RelTemporal, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Sleep(0.1, 0.05); err != nil {
+		t.Fatal(err)
+	}
+	if w := edgeWeightRel(t, s, word.ID, concept.ID, RelNames); w != 0.784 {
+		t.Fatalf("a naming bond must not thin under the generic decay: %v", w)
+	}
+	if w := edgeWeightRel(t, s, word.ID, moment.ID, RelTemporal); w >= 0.5 {
+		t.Fatalf("ordinary company must still decay: %v", w)
+	}
+}

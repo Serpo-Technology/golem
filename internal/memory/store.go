@@ -280,9 +280,14 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// An edge into grammar scaffolding (a construction's slot, a phrase rule's daughter, a word's
 	// form) is structural rather than associative: it defines the pattern, it does not fade with
 	// disuse. So it is spared the nightly decay and stands at full weight, which keeps a taught
-	// grammar pattern intact across nights instead of thinning toward the link floor.
+	// grammar pattern intact across nights instead of thinning toward the link floor. A naming
+	// bond is spared too: the nightly recount is the one authority over names and moves every bond
+	// whose word still has lived company, so the generic decay would only thin the bonds the
+	// recount holds frozen once their word's company has starved, surrendering an earned name to
+	// disuse the recount is deliberately keeping.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
-		WHERE to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))`, linkNightlyKeep); err != nil {
+		WHERE rel <> ?
+		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))`, linkNightlyKeep, RelNames); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {
