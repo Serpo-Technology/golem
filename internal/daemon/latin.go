@@ -77,6 +77,105 @@ func (d *Daemon) planLatinComparison(frame grammar.Frame, raw string) (string, b
 	return upperFirst(d.gram.Word("la", "no")) + ".", true
 }
 
+// latinGloss speaks a concept's name in Latin, its own name when it has one and
+// its plain content otherwise, never a borrowed one. conceptName falls to the
+// vector layer for a concept with no Latin name and proposes its nearest named
+// neighbour, which for a category is one of its own members (the animal category
+// glossed "vacca"), speaking a thing as one of its members. A definition and an
+// is-a must name each concept by its own word or its content, not a guess.
+func (d *Daemon) latinGloss(c *memory.Fragment) string {
+	if d.conceptNamedIn(c.ID, "la") {
+		return d.conceptName(c.ID, c.Content, "la")
+	}
+	return c.Content
+}
+
+// resolveLatinNoun resolves a Latin token to its concept, trying the nominative
+// as written and then the case stems the declensions yield, so a cased mention
+// (accusative "equum") reaches the same concept the nominative names.
+func (d *Daemon) resolveLatinNoun(tok string) *memory.Fragment {
+	if c := d.resolveConcept(tok); c != nil {
+		return c
+	}
+	for _, base := range d.gram.CaseStems("la", tok) {
+		if c := d.resolveConcept(base); c != nil {
+			return c
+		}
+	}
+	return nil
+}
+
+// planLatinDefinition answers "quid est X" (what is X) with the kind X grounds
+// under, rendered as a Latin copula clause, the same grounded-kind reading the
+// English definition makes. The interrogative and copula lead; the rest is the
+// noun asked about. It admits Nescio when the noun is unknown or grounds under no
+// kind, and returns false when the clause is not a Latin what-is question, so the
+// role-question path still reads "quid <verb>".
+func (d *Daemon) planLatinDefinition(frame grammar.Frame, raw string) (string, bool) {	if frame.Lang != "la" {
+		return "", false
+	}
+	toks := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
+	if len(toks) < 3 || toks[0] != "quid" || (toks[1] != "est" && toks[1] != "sunt") {
+		return "", false
+	}
+	var c *memory.Fragment
+	for _, t := range toks[2:] {
+		if c = d.resolveLatinNoun(t); c != nil {
+			break
+		}
+	}
+	if c == nil {
+		return d.withInvite("la", "Nescio."), true
+	}
+	d.noteFocus(c)
+	if cat := d.groundedKindOf(c.ID); cat != nil {
+		return upperFirst(d.latinGloss(c)) + " est " + d.latinGloss(cat) + ".", true
+	}
+	return d.withInvite("la", "Nescio."), true
+}
+
+// planLatinIsA answers "estne X Y" (is X a Y) as a membership check, the Latin
+// counterpart of the English is-a question. It is distinct from the comparison
+// "estne X maior quam Y", so a comparative or a quam declines it and leaves the
+// comparison path to answer. Grounded or told membership answers Ita; anything
+// else Minime. It returns false when the clause is not a two-noun copular
+// question.
+func (d *Daemon) planLatinIsA(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "la" {
+		return "", false
+	}
+	toks := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
+	// The interrogative enclitic -ne on the copula is the question marker ("estne
+	// X Y", is X a Y); a bare "est" is a statement that teaches, left to the
+	// comprehension path, so only the enclitic form is answered here. The frame
+	// parser does not always read the enclitic as question force, so the marker is
+	// read from the word rather than frame.Force.
+	if len(toks) < 3 || toks[0] != "estne" {
+		return "", false
+	}
+	var nouns []*memory.Fragment
+	for _, t := range toks[1:] {
+		if t == "quam" || latinComparative[t] != "" {
+			return "", false // a comparison, not a membership; leave it to planLatinComparison
+		}
+		if c := d.resolveLatinNoun(t); c != nil {
+			nouns = append(nouns, c)
+		}
+	}
+	if len(nouns) < 2 {
+		return "", false
+	}
+	member, cat := nouns[0], nouns[1]
+	yes := member.ID == cat.ID || d.isA(member.ID, cat.ID) || d.toldIsA(member.ID, cat.ID)
+	d.noteFocus(member)
+	memberName := d.latinGloss(member)
+	catName := d.latinGloss(cat)
+	if yes {
+		return upperFirst(d.gram.Word("la", "yes")) + ", " + memberName + " est " + catName + ".", true
+	}
+	return upperFirst(d.gram.Word("la", "no")) + ", " + memberName + " non est " + catName + ".", true
+}
+
 // latinPrep maps a Latin spatial preposition to the English preposition whose locative
 // relation it shares, so "in mensa" joins the same place relation as "in the table".
 var latinPrep = map[string]string{"in": "in", "sub": "under", "super": "on"}

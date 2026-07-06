@@ -1040,6 +1040,16 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planLatinComparison(frame, raw); ok {
 		return ans, nil
 	}
+	// A Latin what-is or is-a is a copular question the frame parser reads as a bare
+	// yes/no; both are settled from the raw clause before the polar path, the way the
+	// Latin comparison is, so "quid est equus" defines and "estne equus animal" checks
+	// membership rather than falling through to a gap.
+	if ans, ok := d.planLatinDefinition(frame, raw); ok {
+		return ans, nil
+	}
+	if ans, ok := d.planLatinIsA(frame, raw); ok {
+		return ans, nil
+	}
 
 	if line, ok := d.planPolar(frame, raw); ok {
 		return line, nil

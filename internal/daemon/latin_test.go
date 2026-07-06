@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/grammar"
 	"golem/internal/memory"
 )
 
@@ -236,5 +237,73 @@ func TestLatinCrossTongue(t *testing.T) {
 	// And the English-taught fact answers back in Latin.
 	if got := sayLang(t, d, "la", "amatne puella rosam?").Say; got != "Ita, puella rosam amat." {
 		t.Errorf("the English-taught fact should answer in Latin: %q", got)
+	}
+}
+
+// latinMember grounds a Latin-named concept under a Latin-named category, so the
+// category is an abstraction the member grounds (categoriesOf/isA/groundedKindOf
+// all read it), the shape a Latin definition and is-a answer over.
+func latinMember(t *testing.T, d *Daemon, memberGloss, memberLA, catGloss, catLA string) (member, cat *memory.Fragment) {
+	t.Helper()
+	member = groundLatinPair(t, d, memberGloss, memberGloss, memberLA)
+	// The category is a genuine abstraction (an abs: template) so groundedKindOf
+	// and isA read it as a kind rather than a bare percept.
+	now := time.Now()
+	cat = &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: catGloss,
+		Template: "abs:en:" + catGloss, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := d.store.Encode(cat); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []struct{ w, lang string }{{catGloss, "en"}, {catLA, "la"}} {
+		w, _, err := d.store.WordNode(p.w, p.lang, d.chem.Snapshot(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := d.store.SetLinkRel(w.ID, cat.ID, memory.RelNames, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.store.SetLinkRel(cat.ID, member.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	return member, cat
+}
+
+// "Quid est equus" answers with the kind the horse grounds under, spoken in Latin.
+func TestLatinDefinitionAnswersKind(t *testing.T) {
+	d, _ := testDaemon(t)
+	latinMember(t, d, "a golden horse", "equus", "animal", "animal")
+	if got := sayLang(t, d, "la", "quid est equus").Say; got != "Equus est animal." {
+		t.Fatalf("a Latin what-is should define by the grounded kind: %q", got)
+	}
+	// An unknown noun is admitted, not guessed.
+	if got := sayLang(t, d, "la", "quid est draco").Say; !strings.Contains(got, "Nescio") {
+		t.Fatalf("an unknown Latin noun should be admitted: %q", got)
+	}
+}
+
+// "Estne equus animal" checks membership and answers in Latin; a non-membership
+// is denied, and a comparison is left to the comparison path.
+func TestLatinIsAChecksMembership(t *testing.T) {
+	d, _ := testDaemon(t)
+	equus, _ := latinMember(t, d, "a golden horse", "equus", "animal", "animal")
+	groundLatinPair(t, d, "a grass tuft", "grass", "herba")
+	if got := sayLang(t, d, "la", "estne equus animal").Say; got != "Ita, equus est animal." {
+		t.Fatalf("a grounded membership should affirm in Latin: %q", got)
+	}
+	if got := sayLang(t, d, "la", "estne equus herba").Say; got != "Minime, equus non est herba." {
+		t.Fatalf("a non-membership should deny in Latin: %q", got)
+	}
+	_ = equus
+}
+
+// The is-a path declines a comparison so "estne X maior quam Y" still routes to
+// the Latin comparison handler.
+func TestLatinIsADeclinesComparison(t *testing.T) {
+	d, _ := testDaemon(t)
+	latinMember(t, d, "a golden horse", "equus", "animal", "animal")
+	groundLatinPair(t, d, "a spotted cow", "cow", "vacca")
+	if _, ok := d.planLatinIsA(grammar.Frame{Lang: "la", Force: grammar.ForceQuestion}, "estne equus maior quam vacca"); ok {
+		t.Fatal("the is-a path must decline a comparison, leaving it to planLatinComparison")
 	}
 }
