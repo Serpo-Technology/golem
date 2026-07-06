@@ -720,6 +720,37 @@ func TestVolunteersHeldConclusion(t *testing.T) {
 	}
 }
 
+// The idle draw leaves orderings and placements where every fact appendix
+// leaves them: a neighbour's bigger-than does not transfer by likeness, and a
+// volunteered ordering would render its relation as a verb ("the wolf biggered
+// the mouse"). The plain action still transfers and is offered.
+func TestIdleDrawSkipsComparative(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	say(t, d, "a dog is bigger than a mouse")
+	say(t, d, "a mouse is smaller than a dog") // both poles, so bigger reads as a gradable pair
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	d.drawInferenceAbout(wolf)
+	if _, ok := d.held.holds("bigger", wolf.ID, mouse.ID, heldInferred); ok {
+		t.Fatal("a neighbour's ordering must not transfer as an idle guess")
+	}
+	d.topic = wolf.ID
+	if got, ok := d.volunteerRemark("en"); !ok || got != "Probably, the wolf chased the cat." {
+		t.Fatalf("the plain action should still transfer and be offered: %q (%v)", got, ok)
+	}
+}
+
 // Reasoning to itself, GOLEM chains a conclusion onto a conclusion it has
 // already drawn. The dog chased the cat; the wolf resembles the dog and the
 // coyote the wolf, but the coyote resembles the dog not at all. Drawing about the

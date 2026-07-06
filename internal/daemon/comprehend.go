@@ -2829,9 +2829,14 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 			break
 		}
 		drew := false
-		// What the neighbour is observed to do, transferred as a fresh guess.
+		// What the neighbour is observed to do, transferred as a fresh guess. The
+		// states the comparison and place questions own stay out, as they do in
+		// every fact appendix: a neighbour's ordering does not transfer by
+		// likeness, and a volunteered one would render its relation as a verb
+		// ("the fox biggered the mouse").
 		for _, f := range d.gatherFacts(&memory.Fragment{ID: sib.id}, "agent", "") {
-			if f.coID == topic.ID || observed[coArg{f.rel, f.coID}] {
+			if f.coID == topic.ID || observed[coArg{f.rel, f.coID}] ||
+				d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
 				continue
 			}
 			d.held.add(heldProp{rel: f.rel, agent: topic.ID, patient: f.coID,
@@ -2841,7 +2846,8 @@ func (d *Daemon) drawInferenceAbout(topic *memory.Fragment) {
 		}
 		// What the neighbour is only believed to do, transferred a hop further out.
 		for _, p := range d.held.byAgent(sib.id, heldInferred) {
-			if p.patient == topic.ID || p.depth >= heldMaxDepth || observed[coArg{p.rel, p.patient}] {
+			if p.patient == topic.ID || p.depth >= heldMaxDepth || observed[coArg{p.rel, p.patient}] ||
+				d.factIsComparative(p.rel) || d.factIsLocative(p.rel) {
 				continue
 			}
 			d.held.add(heldProp{rel: p.rel, agent: topic.ID, patient: p.patient,
