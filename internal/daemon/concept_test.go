@@ -656,3 +656,103 @@ func TestHygieneReport(t *testing.T) {
 		t.Errorf("the cat word straying onto a percept-less concept should be flagged: %+v", h.Promiscuous)
 	}
 }
+
+// A word that already firmly names its own percept is not re-homed onto a
+// percept it merely keeps company with through a relation. The cat word names
+// the cat percept, but "a dog chased a cat" gives it strong grounded company
+// with the dog percept, and once its own-percept company thins its core can
+// collapse to the dog percept alone. The cross-tongue reuse, which binds a
+// word to the single head-named percept in its core, would then hand the cat
+// word to the dog concept. The own-referent guard blocks it: cat keeps its
+// name and the dog concept gains no cat-naming.
+func TestCrossTongueDoesNotRehomeANamedWord(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	catW, _, err := s.WordNode("cat", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dogW, _, err := s.WordNode("dog", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mint := func(caption string) (*memory.Fragment, *memory.Fragment) {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: caption,
+			Template: caption, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		e := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision", Content: caption,
+			Template: caption, Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := s.Encode(e); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.LinkRel(c.ID, e.ID, memory.RelGrounds, 0.8); err != nil {
+			t.Fatal(err)
+		}
+		return c, e
+	}
+	catC, catEp := mint("a small black cat")
+	dogC, dogEp := mint("a small brown dog")
+	// Each word firmly names its own percept.
+	if err := s.LinkRel(catW.ID, catC.ID, memory.RelNames, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(dogW.ID, dogC.ID, memory.RelNames, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	// The cat word's grounded company: strong with the dog percept (the chase
+	// co-argument), thin with its own, so its core is the dog percept.
+	if err := s.LinkRel(catW.ID, dogEp.ID, memory.RelTemporal, 0.6); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(catW.ID, catEp.ID, memory.RelTemporal, 0.05); err != nil {
+		t.Fatal(err)
+	}
+	d.growAbstractions()
+	if w := edgeWeightRel(t, s, catW.ID, dogC.ID, memory.RelNames); w != 0 {
+		t.Fatalf("a named word must not be re-homed onto a co-occurrence percept: cat->dog %v", w)
+	}
+	if w := edgeWeightRel(t, s, catW.ID, catC.ID, memory.RelNames); w < namesWriteFloor {
+		t.Fatalf("the cat word must keep naming its own percept: %v", w)
+	}
+}
+
+// A genuine second-tongue word, with no percept of its own, still borrows the
+// percept it was shown: the guard blocks only a word that already has a name.
+func TestCrossTongueStillBindsUnnamedWord(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	wolfW, _, err := s.WordNode("wolf", "en", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kurtW, _, err := s.WordNode("kurt", "tr", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "a gray wolf",
+		Template: "a gray wolf", Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(c); err != nil {
+		t.Fatal(err)
+	}
+	e := &memory.Fragment{Kind: memory.KindEpisodic, Channel: "vision", Content: "a gray wolf",
+		Template: "a gray wolf", Limbic: d.chem.Snapshot(), Time: now}
+	if _, err := s.Encode(e); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(c.ID, e.ID, memory.RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(wolfW.ID, c.ID, memory.RelNames, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	// kurt was shown the same percept and names nothing of its own.
+	if err := s.LinkRel(kurtW.ID, e.ID, memory.RelTemporal, 0.6); err != nil {
+		t.Fatal(err)
+	}
+	d.growAbstractions()
+	if w := edgeWeightRel(t, s, kurtW.ID, c.ID, memory.RelNames); w < namesWriteFloor {
+		t.Fatalf("an unnamed second-tongue word should still reach the percept it was shown: %v", w)
+	}
+}

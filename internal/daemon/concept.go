@@ -362,6 +362,16 @@ func (d *Daemon) growAbstractions() (born int) {
 				target = owned
 			}
 		}
+		// A word that already firmly names a percept of its own is not an unbound
+		// second-tongue word seeking a referent: it has one. The cross-tongue
+		// reuse must not re-home it onto a percept it merely keeps company with
+		// through a relation (a cat named beside the dog it was told to be chased
+		// by), which happens once the word's own percept decays out of its core
+		// while the co-argument's stays. A genuine second-tongue synonym owns no
+		// other percept, so it still borrows; a word with its own name keeps it.
+		if target != 0 && d.namesOwnPercept(w, target) {
+			continue
+		}
 		if target != 0 {
 			// The bind must land on something real: a percept, or a concept this
 			// word already names outright (an abstract noun refreshing its own
@@ -538,6 +548,32 @@ func (d *Daemon) ostensiveReferent(word uint64, named []uint64, ost map[uint64]f
 		return best
 	}
 	return 0
+}
+
+// namesOwnPercept reports whether the word already firmly names a percept of its
+// own that it HEADS, other than the candidate: a referent it earned by being the
+// basic name of a thing seen, held apart both from a concept it merely keeps
+// relation-company with (the cross-tongue borrow's misfire) and from a percept
+// it was only shown beside (incidental company the recount wrote). The head test
+// is the discriminator: cat heads "a small black cat", so it keeps that name and
+// is not re-homed onto the dog it was told to be chased by; a genuine
+// second-tongue word (kurt) heads no caption of its own, so it still borrows the
+// percept it was shown. It reads the standing names edges, not the night's
+// company, so a word whose own-percept company has thinned still counts.
+func (d *Daemon) namesOwnPercept(word *memory.Fragment, target uint64) bool {
+	edges, err := d.store.LinksFromRel([]uint64{word.ID}, memory.RelNames)
+	if err != nil {
+		return false
+	}
+	for _, e := range edges {
+		if e.To == target || e.Weight < namesWriteFloor || d.isPerceptless(e.To) {
+			continue
+		}
+		if d.headsCorePercept(word.Content, []uint64{e.To}) {
+			return true
+		}
+	}
+	return false
 }
 
 // wordNamesConcept reports whether a word form names a concept directly, the test
