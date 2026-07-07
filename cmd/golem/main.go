@@ -352,6 +352,38 @@ func main() {
 		}
 		fmt.Println(resp.Say)
 
+	case "scale":
+		rest := args[1:]
+		lang := ""
+		if len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
+		}
+		if len(rest) < 3 {
+			fail(fmt.Errorf("usage: golem scale [--lang <tag>] <dimension> <greater-adj> <lesser-adj>"))
+		}
+		resp := call(home, wire.Request{Cmd: "scale", Content: rest[0], Query: rest[1], Command: rest[2], Lang: lang})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
+	case "cmpform":
+		rest := args[1:]
+		lang := ""
+		if len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
+		}
+		if len(rest) < 2 {
+			fail(fmt.Errorf("usage: golem cmpform [--lang <tag>] <adjective> <comparative form>"))
+		}
+		resp := call(home, wire.Request{Cmd: "cmpform", Content: rest[0], Query: strings.Join(rest[1:], " "), Lang: lang})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
 	case "recall":
 		resp := call(home, wire.Request{Cmd: "recall", Query: strings.Join(args[1:], " ")})
 		if len(resp.Fragments) == 0 {

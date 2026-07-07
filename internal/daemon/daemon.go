@@ -2823,6 +2823,66 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		}
 		return wire.Response{OK: true, Say: fmt.Sprintf("%q now names %s.", req.Content, c.Content)}, false, false
 
+	case "scale":
+		// Teach a gradable scale: its dimension and the greater and lesser pole
+		// adjectives, with the scale membership, the pole roles, and the antonymy
+		// that let a comparison compose onto it. The poles and scale are grown
+		// content (resolvable, counted), minted once by template so a re-teach is
+		// idempotent; the comparative surfaces are taught apart by cmpform, and a
+		// second tongue's words are added by name onto these same concepts.
+		if req.Content == "" || req.Query == "" || req.Command == "" {
+			return wire.Response{Error: "scale needs a dimension, a greater adjective, and a lesser adjective"}, false, false
+		}
+		lang := req.Lang
+		if lang == "" {
+			lang = "en"
+		}
+		dim := d.ensureClassConcept("scale:"+req.Content, req.Content)
+		greater := d.ensureClassConcept("pole:"+req.Content+":greater", req.Query)
+		lesser := d.ensureClassConcept("pole:"+req.Content+":lesser", req.Command)
+		greaterRole, lesserRole := d.poleRoleID("greater"), d.poleRoleID("lesser")
+		if dim == 0 || greater == 0 || lesser == 0 || greaterRole == 0 || lesserRole == 0 {
+			return wire.Response{Error: "could not build the scale block"}, false, false
+		}
+		d.nameConceptWord(dim, req.Content, lang)
+		d.nameConceptWord(greater, req.Query, lang)
+		d.nameConceptWord(lesser, req.Command, lang)
+		d.store.SetLinkRel(greater, dim, memory.RelScale, deliberateName)
+		d.store.SetLinkRel(lesser, dim, memory.RelScale, deliberateName)
+		d.store.SetLinkRel(greater, greaterRole, memory.RelMarks, deliberateName)
+		d.store.SetLinkRel(lesser, lesserRole, memory.RelMarks, deliberateName)
+		d.store.SetLinkRel(greater, lesser, memory.RelOpposite, deliberateName)
+		d.store.SetLinkRel(lesser, greater, memory.RelOpposite, deliberateName)
+		if err := d.store.Audit(time.Now().Unix(), "scale", req.Content, req.Query+" over "+req.Command); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("%s grades %s over %s.", req.Content, req.Query, req.Command)}, false, false
+
+	case "cmpform":
+		// Teach a pole adjective's comparative surface in a tongue ("big" -> "bigger",
+		// "daha buyuk", "maior"), the durable form the serve path speaks. The pole is
+		// resolved by the adjective word, so a second tongue's form rides the pole once
+		// that tongue's name for it exists.
+		if req.Content == "" || req.Query == "" {
+			return wire.Response{Error: "cmpform needs an adjective and its comparative form"}, false, false
+		}
+		lang := req.Lang
+		if lang == "" {
+			lang = "en"
+		}
+		pole := d.resolveConcept(req.Content)
+		if pole == nil {
+			return wire.Response{Error: fmt.Sprintf("no gradable adjective matches %q", req.Content)}, false, false
+		}
+		if _, ok := d.scaleOf(pole); !ok {
+			return wire.Response{Error: fmt.Sprintf("%q is not a scale pole; teach its scale first", req.Content)}, false, false
+		}
+		d.assertRealizedForm(pole, "", lang, req.Query)
+		if err := d.store.Audit(time.Now().Unix(), "cmpform", req.Content, req.Query); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("the comparative of %s is %q.", pole.Content, req.Query)}, false, false
+
 	case "recall":
 		var seeds []*memory.Fragment
 		var mediators []*wire.FragmentInfo
