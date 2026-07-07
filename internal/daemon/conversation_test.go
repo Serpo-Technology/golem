@@ -683,3 +683,25 @@ func TestPartWholePolar(t *testing.T) {
 		t.Fatalf("an untold part-whole should deny: %q", got)
 	}
 }
+
+// A guess is spoken at the confidence it was drawn with, but never firmer than
+// "probably": a thin guess just above the floor reads tentative, an ordinary and
+// even a strong one the plain word, since certainty is reserved for what is
+// grounded. An unknown confidence falls to the plain word.
+func TestHedgeWordGradesByConfidence(t *testing.T) {
+	d, _ := testDaemon(t)
+	cases := []struct {
+		conf float64
+		want string
+	}{
+		{0.9, "probably"},
+		{0.55, "probably"},
+		{0.3, "perhaps"},
+		{0, "probably"},
+	}
+	for _, c := range cases {
+		if got := d.hedgeWord("en", c.conf); got != c.want {
+			t.Errorf("hedgeWord(%.2f) = %q, want %q", c.conf, got, c.want)
+		}
+	}
+}

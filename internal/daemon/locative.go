@@ -331,8 +331,8 @@ func (d *Daemon) planLocativePolar(frame grammar.Frame) (string, bool) {
 		// The preposition has never placed anything, so the proposition cannot hold.
 		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
 	}
-	belief, _, supposed, lender := d.assessProposition(figure, rel.Content, ground)
-	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender), true
+	belief, conf, supposed, lender := d.assessProposition(figure, rel.Content, ground)
+	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender, conf), true
 }
 
 // comprehendLocativeTR reads a Turkish locative clause, which marks place by the
@@ -419,8 +419,8 @@ func (d *Daemon) planLocativePolarTR(frame grammar.Frame, raw string) (string, b
 		return upperFirst(d.gram.Word(frame.Lang, "no")) + ".", true
 	}
 	d.noteFocus(figure)
-	belief, _, supposed, lender := d.assessProposition(figure, containmentPrep, ground)
-	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender), true
+	belief, conf, supposed, lender := d.assessProposition(figure, containmentPrep, ground)
+	return d.answerPolar(frame.Lang, figure, rel, ground, false, belief, supposed, lender, conf), true
 }
 
 // storeLocative writes a locative proposition (the figure at the ground

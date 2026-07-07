@@ -1183,7 +1183,7 @@ func (d *Daemon) hedgedElaboration(frame grammar.Frame, focus *memory.Fragment, 
 	if !ok {
 		return "", false
 	}
-	hedge := d.gram.Word(frame.Lang, "probably")
+	hedge := d.hedgeWord(frame.Lang, topConf(fresh))
 	if hedge == "" {
 		return line, true
 	}
@@ -2157,8 +2157,8 @@ func (d *Daemon) planPolar(frame grammar.Frame, raw string) (string, bool) {
 	// English carries the tense on the auxiliary it led with; Turkish on the verb
 	// the particle trailed, read back by Comprehend. Either way the answer matches.
 	past := pastAux || m.Past
-	belief, _, supposed, lender := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
-	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief, supposed, lender), true
+	belief, conf, supposed, lender := d.assessProposition(agent.Concept, rel.Content, patient.Concept)
+	return d.answerPolar(frame.Lang, agent.Concept, rel, patient.Concept, past, belief, supposed, lender, conf), true
 }
 
 // planSuppose entertains a supposition without asserting it: "suppose the wolf
@@ -2701,7 +2701,7 @@ func (d *Daemon) inferRole(frame grammar.Frame, known *memory.Fragment, knownRol
 	if !ok {
 		return "", false
 	}
-	hedge := d.gram.Word(frame.Lang, "probably")
+	hedge := d.hedgeWord(frame.Lang, topConf(kept))
 	if hedge == "" {
 		return line, true
 	}
@@ -2947,7 +2947,7 @@ func (d *Daemon) speakHeld(lang string, p *heldProp) string {
 	if !ok {
 		return ""
 	}
-	hedge := d.gram.Word(lang, "probably")
+	hedge := d.hedgeWord(lang, p.conf)
 	if hedge == "" {
 		return clause
 	}
@@ -3029,7 +3029,7 @@ func (d *Daemon) kindGuessClause(frame grammar.Frame, c *memory.Fragment, action
 // supposition is marked contingent on it ("If so, probably the cat chased the
 // dog"), so it is never mistaken for something GOLEM believes outright. Word and
 // clause both come from the tongue's data.
-func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool, lender uint64) string {
+func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, past bool, belief propBelief, supposed bool, lender uint64, conf float64) string {
 	// What GOLEM is about to commit to, weighed against what it has already said
 	// this exchange. A supposition is contingent, so it is neither recorded nor
 	// held against: it never becomes a claim GOLEM stands by.
@@ -3063,7 +3063,7 @@ func (d *Daemon) answerPolar(lang string, agent, rel, patient *memory.Fragment, 
 	case beliefObserved:
 		word = d.gram.Word(lang, "yes")
 	case beliefInferred:
-		word = d.gram.Word(lang, "probably") // the hedge marks the clause a guess
+		word = d.hedgeWord(lang, conf) // the hedge marks the clause a guess, graded by how sure
 	default:
 		word = d.gram.Word(lang, "no")
 		negate = true

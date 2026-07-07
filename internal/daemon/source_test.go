@@ -250,8 +250,10 @@ func TestPeerToldFactAnswersHedged(t *testing.T) {
 	say(t, d, "a horse ate a grass")
 	sayAs(t, d, "llm", "a zebra ate a mouse")
 
-	polar := say(t, d, "did a zebra eat a mouse").Say
-	if !strings.Contains(strings.ToLower(polar), "probab") {
+	polar := strings.ToLower(say(t, d, "did a zebra eat a mouse").Say)
+	// A fresh peer's claim is hedged, and at its starting trust (below the weak
+	// bound) it reads tentative rather than the plain "probably".
+	if !strings.Contains(polar, "perhaps") && !strings.Contains(polar, "probab") {
 		t.Fatalf("a peer-told fact should answer hedged, got %q", polar)
 	}
 	firm := say(t, d, "did a horse eat a grass").Say

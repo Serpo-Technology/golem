@@ -374,6 +374,12 @@ surface:la:addressee	tu	la
 surface:la:firstpersonpl	nos	la
 surface:en:probably	probably	en
 surface:tr:probably	muhtemelen	tr
+# the weaker shade a thin guess reads at; a tongue with only "probably" keeps the
+# single shade. A guess is never graded firmer than "probably".
+surface:en:maybe	perhaps	en
+surface:tr:maybe	belki	tr
+surface:la:maybe	fortasse	la
+surface:la:probably	probabiliter	la
 surface:en:ifso	if so	en
 surface:tr:ifso	öyleyse	tr
 surface:en:asisaid	as I said	en

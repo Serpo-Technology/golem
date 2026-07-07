@@ -143,8 +143,8 @@ func TestJustifyNamesLowTrustTeller(t *testing.T) {
 	if got := sayAs(t, d, "llm", "a dog chased a bird").Say; got == "" {
 		t.Fatal("a peer telling should land")
 	}
-	got := say(t, d, "did the dog chase the bird").Say
-	if !strings.Contains(got, "robably") {
+	got := strings.ToLower(say(t, d, "did the dog chase the bird").Say)
+	if !strings.Contains(got, "perhaps") && !strings.Contains(got, "probab") {
 		t.Fatalf("a peer-told fact should answer hedged: %q", got)
 	}
 	why := say(t, d, "why do you say that").Say

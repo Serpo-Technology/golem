@@ -313,6 +313,42 @@ func (d *Daemon) followUpAnswer(lang string, q openQuestion) string {
 	return line
 }
 
+// weakHedgeConf is the floor below which a guess reads tentative rather than
+// the plain "probably". A guess is never graded ABOVE "probably": near-certainty
+// is reserved for what GOLEM has grounded, so an inference, however strong the
+// analogy that drew it, is at most probable and never almost-certain. The one
+// shade calibration adds is the weaker one, for a guess that barely clears the
+// inference floor.
+const weakHedgeConf = 0.4
+
+// hedgeWord grades the tongue's hedge by how confident the guess is, honesty as
+// calibrated labelling: a guess drawn just above the inference floor reads
+// tentative, an ordinary one the plain "probably". The weaker shade is a seeded
+// surface; a tongue that seeds only "probably" keeps the single shade, so a
+// calibrated guess never costs a word a tongue lacks. A zero or unknown
+// confidence falls to the plain word.
+func (d *Daemon) hedgeWord(lang string, conf float64) string {
+	if conf > 0 && conf < weakHedgeConf {
+		if w := d.gram.Word(lang, "maybe"); w != "" {
+			return w
+		}
+	}
+	return d.gram.Word(lang, "probably")
+}
+
+// topConf reads the confidence a set of guessed facts is spoken at: the firmest
+// among them, since the hedge shades the whole line and the strongest guess sets
+// how sure it may honestly sound.
+func topConf(facts []focusFact) float64 {
+	best := 0.0
+	for _, f := range facts {
+		if f.weight > best {
+			best = f.weight
+		}
+	}
+	return best
+}
+
 // ackIfSaid prefixes an answer with the tongue's "as I said" when GOLEM is
 // repeating a claim it already made, so a re-asked question is noted rather than
 // replayed cold. With no such word seeded, the answer stands plain.
