@@ -1004,6 +1004,12 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 	if ans, ok := d.planPartWholePolar(frame, raw); ok {
 		return ans, nil
 	}
+	// "What is part of the tree": the parts of a whole, read off the same marker
+	// before the generic role question would render the part-whole relation as a
+	// verb ("the wood part-ofs the table") and hedge a grounded fact.
+	if ans, ok := d.planPartWholeWh(frame, raw); ok {
+		return ans, nil
+	}
 	// "Is a cat an animal": an is-a question, recognized from its comprehended
 	// frame (a copular question over two concepts) and settled against the category
 	// hierarchy rather than the relation graph a polar question reads.

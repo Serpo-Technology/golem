@@ -183,6 +183,67 @@ func (d *Daemon) planPartWholePolar(frame grammar.Frame, raw string) (string, bo
 		" is not part of the " + wholeName + ".", true
 }
 
+// planPartWholeWh answers "what is part of X" by naming the parts of X: the parts
+// stored against X as their whole, rendered with the same "is part of" phrasing
+// the polar answer uses rather than the part-whole relation conjugated as a verb.
+// It reads before the generic role question, which mistakes part-of for an
+// ordinary verb ("the wood part-ofs the table") and hedges what is grounded. It
+// declines when the clause carries no "part of" marker or the whole is unknown.
+func (d *Daemon) planPartWholeWh(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Force != grammar.ForceQuestion || frame.Wh != "what" {
+		return "", false
+	}
+	tokens, _ := grammar.Tokenize(raw)
+	mark := -1
+	for i := 0; i+1 < len(tokens); i++ {
+		if tokens[i] == "part" && tokens[i+1] == "of" {
+			mark = i
+			break
+		}
+	}
+	if mark < 0 || mark+2 >= len(tokens) {
+		return "", false
+	}
+	var whole *memory.Fragment
+	for _, t := range tokens[mark+2:] {
+		if !d.gram.IsContentWord("en", t) {
+			continue
+		}
+		if c := d.resolveConcept(t); c != nil && c.Category != "relation" {
+			whole = c
+			break
+		}
+	}
+	if whole == nil {
+		return "", false
+	}
+	d.noteFocus(whole)
+	// The parts are the agents of the part-whole propositions this whole is the
+	// patient of; gathered through the same walk a role answer uses, filtered to
+	// the part-whole relation.
+	var parts []string
+	seen := map[uint64]bool{}
+	for _, f := range d.gatherFacts(whole, "patient", partWholeRelation) {
+		if seen[f.coID] {
+			continue
+		}
+		seen[f.coID] = true
+		parts = append(parts, "the "+d.conceptName(f.coID, f.coGloss, frame.Lang))
+	}
+	wholeName := d.conceptName(whole.ID, whole.Content, frame.Lang)
+	if len(parts) == 0 {
+		return d.withInvite(frame.Lang, d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true,
+			Patient: grammar.Term{Phrase: d.gram.WhSurface(frame.Lang, "what")}}, d.chem.Snapshot())), true
+	}
+	subject := grammar.JoinAnd(parts)
+	verb := "is"
+	if len(parts) > 1 {
+		verb = "are"
+	}
+	return upperFirst(subject) + " " + verb + " part of the " + wholeName + ".", true
+}
+
 // locativeClause renders "FIGURE is PREP GROUND" ("the leaf is on the tree")
 // through the copula construction, the preposition and ground riding as the
 // complement the way an is-a answer's category does. The figure and ground are

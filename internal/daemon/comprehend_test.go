@@ -2948,3 +2948,21 @@ func TestWarmestRelationNeedsFreshAttention(t *testing.T) {
 		t.Fatalf("a freshly attended relation should be offered: %v", got)
 	}
 }
+
+// "What is part of the table" names the parts stored against the whole, rendered
+// with the part-of phrasing rather than the relation conjugated as a verb, and
+// firm because the part-whole fact is grounded.
+func TestPartWholeWhNamesParts(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "wood")
+	groundNoun(t, d, "table")
+	say(t, d, "wood is part of a table")
+	if got := say(t, d, "what is part of the table").Say; got != "The wood is part of the table." {
+		t.Fatalf("what-is-part-of should name the parts firmly: %q", got)
+	}
+	// An unknown whole is admitted, not answered as a verb clause.
+	groundNoun(t, d, "cloud")
+	if got := say(t, d, "what is part of the cloud").Say; !strings.Contains(strings.ToLower(got), "know") {
+		t.Fatalf("a whole with no parts should admit the gap: %q", got)
+	}
+}
