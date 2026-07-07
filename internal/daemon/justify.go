@@ -72,7 +72,14 @@ func (d *Daemon) traceClaim(relContent string, agentID, patientID uint64, spoken
 		if _, err := d.store.Encode(trace); err != nil {
 			return
 		}
-		if rel := d.resolveRelation(relContent); rel != nil {
+		// The trace's said-relation is the relation concept, or the scale dimension when
+		// the claim is a comparison ordering, so traceTuple reads a non-zero relation and
+		// the reader does not misclassify a comparative claim as an is-a stub.
+		rel := d.resolveRelation(relContent)
+		if rel == nil {
+			rel = d.scaleDimension(relContent)
+		}
+		if rel != nil {
 			d.store.LinkRel(trace.ID, rel.ID, memory.RelSaidRel, claimTraceWeight)
 		}
 		d.store.LinkRel(trace.ID, agentID, memory.RelSaidAgent, claimTraceWeight)
@@ -109,6 +116,12 @@ func (d *Daemon) noteTraced(id uint64) {
 // trace stays bare and the reader owns up to reasoning it out.
 func (d *Daemon) polarEvidence(relContent string, agentID, patientID, lender uint64) []uint64 {
 	rel := d.resolveRelation(relContent)
+	if rel == nil {
+		// A comparison ordering grounds on its scale dimension, not a relation, and the
+		// agent/patient the caller passes are the canonical greater/lesser pair, so the
+		// moment reads in the direction the ordering was stored.
+		rel = d.scaleDimension(relContent)
+	}
 	if rel == nil {
 		return nil
 	}

@@ -158,13 +158,20 @@ func TestComprehensionTraversalSoak(t *testing.T) {
 			// the verb clause the round-trip below reads, so it is left to that path's own soak.
 			if d.factIsComparative(f.rel) {
 				subj := d.conceptName(c.ID, c.Content, "en")
-				cmpRel := d.resolveRelation(f.rel)
+				// The comparison is an ordering on a scale, not a relation: the surface
+				// comes from the pole the focus stood as (greater when agent, lesser when
+				// patient), realized to its comparative form, no relation to resolve.
+				side := "greater"
+				if f.focusRole == "patient" {
+					side = "lesser"
+				}
+				pole := d.scalePole(f.rel, side)
 				cf, err := s.FragmentsByIDs([]uint64{f.coID})
-				if err != nil || len(cf) != 1 || cmpRel == nil || subj == "" || strings.Contains(subj, " ") {
+				if err != nil || len(cf) != 1 || pole == nil || subj == "" || strings.Contains(subj, " ") {
 					continue
 				}
 				std := d.conceptName(f.coID, cf[0].Content, "en")
-				relName := d.relationName(cmpRel.Content, "en")
+				relName := d.realizeComparative(pole, "en", "")
 				if std == "" || strings.Contains(std, " ") || relName == "" || strings.Contains(relName, " ") {
 					continue
 				}

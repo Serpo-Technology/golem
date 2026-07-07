@@ -650,22 +650,19 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 	if cop < 0 {
 		return "", "", "", false, false
 	}
-	// The gradable word sits just before "than"; an analytic comparative puts
-	// "more" or "less" before it, which is folded into the relation.
-	relStart, invert := than-1, false
+	// The gradable word sits just before "than"; an analytic comparative puts "more" or
+	// "less" before it. The raw comparative span (including any "more"/"less") is returned
+	// as the relation; the daemon decomposes it to a pole and reads the sign, where "less"
+	// flips it. No normalization and no subject/standard swap happen in the grammar layer,
+	// which has no store access to resolve a pole.
+	relStart := than - 1
 	if than-2 > cop {
 		switch tokens[than-2] {
-		case "more":
+		case "more", "less":
 			relStart = than - 2
-		case "less":
-			relStart, invert = than-2, true
 		}
 	}
-	if relStart < than-1 {
-		rel = "more " + tokens[than-1] // analytic comparative, normalized
-	} else {
-		rel = tokens[than-1] // synthetic "-er" comparative
-	}
+	rel = strings.Join(tokens[relStart:than], " ")
 	standard = p.contentSpan(tokens[than+1:])
 	if cop == 0 {
 		// The copula led the clause: subject-auxiliary inversion makes it a question,
@@ -673,9 +670,6 @@ func (p *Params) comparativeParts(lang string, tokens []string) (rel, subject, s
 		subject, ask = p.contentSpan(tokens[cop+1:relStart]), true
 	} else {
 		subject = p.contentSpan(tokens[:cop])
-	}
-	if invert {
-		subject, standard = standard, subject // "X less clever than Y" is "Y more clever than X"
 	}
 	if rel == "" || subject == "" || standard == "" {
 		return "", "", "", false, false
@@ -781,7 +775,7 @@ func (p *Params) magnitudeParts(lang string, tokens []string) (rel, subject, sta
 	if cop < 3 { // need a gradable word between "how much" and the copula
 		return "", "", "", false
 	}
-	rel = p.contentSpan(tokens[2:cop])
+	rel = strings.Join(tokens[2:cop], " ") // the raw comparative span, decomposed by the daemon
 	subject = p.contentSpan(tokens[cop+1 : than])
 	standard = p.contentSpan(tokens[than+1:])
 	if rel == "" || subject == "" || standard == "" {

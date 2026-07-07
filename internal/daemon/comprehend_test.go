@@ -52,6 +52,55 @@ func nameInLang(t *testing.T, d *Daemon, c *memory.Fragment, word, lang string) 
 	}
 }
 
+// teachScale grounds one gradable scale before its first comparison fact: a dimension
+// concept, its greater and lesser pole adjectives, each named per tongue and linked to the
+// dimension by RelScale, marked with the un-gated greater/lesser role, joined by
+// RelOpposite, and given a comparative surface per tongue. Under the scale model
+// storeComparison admit-gaps a comparative whose pole is not grounded, so a test grounds
+// the scale here before telling any ordering on it. names maps a tongue to the five
+// surfaces of the scale in that tongue: [dimension, greater adjective, greater comparative,
+// lesser adjective, lesser comparative]. An English row is required, its adjectives naming
+// the pole concepts' content so the reverse-stemming resolves them.
+func teachScale(t *testing.T, d *Daemon, names map[string][5]string) (scale, greater, lesser *memory.Fragment) {
+	t.Helper()
+	en, ok := names["en"]
+	if !ok {
+		t.Fatal("teachScale needs an English row for the pole concept content")
+	}
+	now := time.Now()
+	mint := func(content, tmpl string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+			Template: tmpl, Category: "class", Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := d.store.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	scale = mint(en[0], "scale:"+en[0])
+	greater = mint(en[1], "pole:"+en[0]+":greater")
+	lesser = mint(en[3], "pole:"+en[0]+":lesser")
+	for lang, row := range names {
+		d.nameConceptWord(scale.ID, row[0], lang)
+		d.nameConceptWord(greater.ID, row[1], lang)
+		d.nameConceptWord(lesser.ID, row[3], lang)
+		d.assertRealizedForm(greater, "", lang, row[2])
+		d.assertRealizedForm(lesser, "", lang, row[4])
+	}
+	d.store.SetLinkRel(greater.ID, scale.ID, memory.RelScale, deliberateName)
+	d.store.SetLinkRel(lesser.ID, scale.ID, memory.RelScale, deliberateName)
+	d.store.SetLinkRel(greater.ID, d.poleRoleID("greater"), memory.RelMarks, deliberateName)
+	d.store.SetLinkRel(lesser.ID, d.poleRoleID("lesser"), memory.RelMarks, deliberateName)
+	d.store.SetLinkRel(greater.ID, lesser.ID, memory.RelOpposite, deliberateName)
+	d.store.SetLinkRel(lesser.ID, greater.ID, memory.RelOpposite, deliberateName)
+	return scale, greater, lesser
+}
+
+// teachSizeScale is the English size scale, the block most comparison tests open with:
+// big over small, realized "bigger"/"smaller".
+func teachSizeScale(t *testing.T, d *Daemon) (scale, greater, lesser *memory.Fragment) {
+	return teachScale(t, d, map[string][5]string{"en": {"size", "big", "bigger", "small", "smaller"}})
+}
+
 // sayLang tells GOLEM an utterance tagged with its language, the path the
 // CLI takes for "tell --lang tr".
 func sayLang(t *testing.T, d *Daemon, lang, words string) wire.Response {
@@ -726,13 +775,13 @@ func TestVolunteersHeldConclusion(t *testing.T) {
 // the mouse"). The plain action still transfers and is offered.
 func TestIdleDrawSkipsComparative(t *testing.T) {
 	d, s := testDaemon(t)
+	teachSizeScale(t, d)
 	dog := groundNoun(t, d, "dog")
 	groundNoun(t, d, "cat")
 	mouse := groundNoun(t, d, "mouse")
 	wolf := groundNoun(t, d, "wolf")
 	say(t, d, "a dog chased a cat")
 	say(t, d, "a dog is bigger than a mouse")
-	say(t, d, "a mouse is smaller than a dog") // both poles, so bigger reads as a gradable pair
 	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
 		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
 	if _, err := s.Encode(feat); err != nil {
@@ -742,7 +791,7 @@ func TestIdleDrawSkipsComparative(t *testing.T) {
 	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
 
 	d.drawInferenceAbout(wolf)
-	if _, ok := d.held.holds("bigger", wolf.ID, mouse.ID, heldInferred); ok {
+	if _, ok := d.held.holds("size", wolf.ID, mouse.ID, heldInferred); ok {
 		t.Fatal("a neighbour's ordering must not transfer as an idle guess")
 	}
 	d.topic = wolf.ID
@@ -1177,12 +1226,12 @@ func TestSalientFactsOrdersAndStops(t *testing.T) {
 // so the same comparison is left out of "what did X do".
 func TestDescribeSpeaksComparisonActivityKeepsToActions(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
 	for _, n := range []string{"lion", "mouse", "deer"} {
 		groundNoun(t, d, n)
 	}
 	say(t, d, "a lion chased a deer")
 	say(t, d, "a lion is bigger than a mouse")
-	say(t, d, "a mouse is smaller than a lion") // the converse pole, so bigger is known gradable
 
 	desc := say(t, d, "tell me about the lion").Say
 	if !strings.Contains(desc, "chased") || !strings.Contains(desc, "bigger than") {
@@ -1202,19 +1251,15 @@ func TestDescribeSpeaksComparisonActivityKeepsToActions(t *testing.T) {
 // ordering is over the relation's grounded kind, not any word, so it holds in any tongue.
 func TestPlanDescriptionGroupsByAspect(t *testing.T) {
 	d, _ := testDaemon(t)
-	for _, n := range []string{"dog", "cat", "lion", "mouse"} {
-		groundNoun(t, d, n)
-	}
-	say(t, d, "a dog chased a cat")            // chase: a plain action
-	say(t, d, "a lion is bigger than a mouse") // bigger and smaller, a known gradable pair
-	say(t, d, "a mouse is smaller than a lion")
+	teachSizeScale(t, d) // so size is recognized as a scale (a comparison aspect)
 
-	// Facts that interleave by weight, so only grouping can cluster them.
+	// Facts that interleave by weight, so only grouping can cluster them. The comparison
+	// facts key on the scale content, the aspect the describe reader groups them under.
 	facts := []focusFact{
 		{rel: "chase", focusRole: "agent", coID: 1, weight: 0.9},
-		{rel: "bigger", focusRole: "agent", coID: 2, weight: 0.8},
+		{rel: "size", focusRole: "agent", coID: 2, weight: 0.8},
 		{rel: "chase", focusRole: "agent", coID: 3, weight: 0.7},
-		{rel: "bigger", focusRole: "agent", coID: 4, weight: 0.6},
+		{rel: "size", focusRole: "agent", coID: 4, weight: 0.6},
 	}
 	got := d.planDescription(facts)
 	seen := map[string]bool{}
@@ -1238,11 +1283,11 @@ func TestPlanDescriptionGroupsByAspect(t *testing.T) {
 // meaning (the opposite pole); the connective is the tongue's seeded word.
 func TestDescriptionContrastsOppositePoles(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
 	for _, n := range []string{"hare", "mouse", "horse"} {
 		groundNoun(t, d, n)
 	}
 	say(t, d, "a hare is bigger than a mouse")
-	say(t, d, "a mouse is smaller than a hare") // pairs bigger and smaller as one scale
 	say(t, d, "a hare is smaller than a horse") // the hare is the lesser here, same scale
 
 	got := say(t, d, "tell me about the hare").Say
@@ -1292,17 +1337,17 @@ func TestDescriptionAddsAcrossActions(t *testing.T) {
 // grouping is by the standard (meaning); the coordinator and contrast words are the tongue's data.
 func TestDescriptionCoordinatesSameStandardComparisons(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachScale(t, d, map[string][5]string{"en": {"weight", "heavy", "heavier", "light", "lighter"}})
+	teachScale(t, d, map[string][5]string{"en": {"speed", "fast", "faster", "slow", "slower"}})
+	teachSizeScale(t, d)
 	for _, n := range []string{"mouse", "cat", "snail", "lion"} {
 		groundNoun(t, d, n)
 	}
 	// Two scales sharing the cat as standard: the mouse is lighter and slower than the cat.
 	say(t, d, "a mouse is lighter than a cat")
-	say(t, d, "a cat is heavier than a mouse") // pairs lighter and heavier as one scale
 	say(t, d, "a mouse is slower than a cat")
-	say(t, d, "a cat is faster than a mouse") // pairs slower and faster as one scale
 	// A size scale with opposite poles against two standards, so the contrast still coexists.
 	say(t, d, "a mouse is bigger than a snail")
-	say(t, d, "a snail is smaller than a mouse") // pairs bigger and smaller
 	say(t, d, "a mouse is smaller than a lion")
 
 	got := say(t, d, "tell me about the mouse").Say
@@ -1366,11 +1411,11 @@ func TestDescriptionCoordinatesSameAgentActionsOnFocus(t *testing.T) {
 // coordination, mirroring how the verbs of one action already coordinate their co-arguments.
 func TestDescriptionCoordinatesSameDirectionStandards(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachScale(t, d, map[string][5]string{"en": {"weight", "heavy", "heavier", "light", "lighter"}})
 	for _, n := range []string{"mouse", "cat", "dog"} {
 		groundNoun(t, d, n)
 	}
 	say(t, d, "a mouse is lighter than a cat")
-	say(t, d, "a cat is heavier than a mouse") // pairs lighter and heavier so the relation is gradable
 	say(t, d, "a mouse is lighter than a dog")
 
 	got := say(t, d, "tell me about the mouse").Say
@@ -1937,6 +1982,7 @@ func TestParticipantObjectCase(t *testing.T) {
 // never told directly. The ordering lives in the told facts, not a scale in code.
 func TestComparativeOrdersTransitively(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
 	groundNoun(t, d, "cat")
 	groundNoun(t, d, "mouse")
 	groundNoun(t, d, "snail")
@@ -1951,10 +1997,45 @@ func TestComparativeOrdersTransitively(t *testing.T) {
 	if got := say(t, d, "is the cat bigger than the mouse").Say; got != "Yes, the cat is bigger than the mouse." {
 		t.Fatalf("a directly told comparison should hold: %q", got)
 	}
-	// A dimension never compared on ("smaller", only "bigger" was told) is admitted,
-	// not denied: GOLEM does not assert an ordering it never heard.
-	if got := say(t, d, "is the mouse smaller than the cat").Say; strings.HasPrefix(got, "No") {
-		t.Fatalf("an untold dimension should be admitted, not denied: %q", got)
+	// The lesser pole reads the same orderings: with small taught as big's antonym in the
+	// scale block, "is the mouse smaller than the cat" decomposes to (size, small, lt),
+	// swaps to walk cat over mouse, and answers Yes with the original subject and the
+	// small-pole word, no reversed telling required.
+	if got := say(t, d, "is the mouse smaller than the cat").Say; got != "Yes, the mouse is smaller than the cat." {
+		t.Fatalf("the lesser pole should read the same ordering by argument swap: %q", got)
+	}
+}
+
+// The scale model mints no atomic comparative relation: after a comparison is taught and
+// asked across all three tongues, no rel:<lang>:<comparative> concept exists, and the
+// pole surfaces resolve to no relation. The comparison lives as an ordering on the shared
+// scale, the identity the cutover moved the representation to.
+func TestComparativeMintsNoAtomicRelation(t *testing.T) {
+	d, _ := testDaemon(t)
+	teachScale(t, d, map[string][5]string{
+		"en": {"size", "big", "bigger", "small", "smaller"},
+		"tr": {"boyut", "büyük", "daha büyük", "küçük", "daha küçük"},
+		"la": {"magnitudo", "magnus", "maior", "parvus", "minor"},
+	})
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "is the cat bigger than the mouse")
+	say(t, d, "is the mouse smaller than the cat")
+
+	for _, tpl := range []string{
+		"rel:en:bigger", "rel:en:smaller", "rel:tr:daha büyük", "rel:tr:büyük",
+		"rel:tr:daha küçük", "rel:la:maior", "rel:la:minor",
+	} {
+		if c, _ := d.store.ConceptByTemplate(tpl); c != nil {
+			t.Fatalf("no atomic comparative relation should be minted, found %q", tpl)
+		}
+	}
+	// The comparative surfaces name a pole, never a relation.
+	for _, surface := range []string{"bigger", "smaller", "maior", "büyük"} {
+		if r := d.resolveRelation(surface); r != nil {
+			t.Fatalf("%q should resolve to no relation, got %d", surface, r.ID)
+		}
 	}
 }
 
@@ -1964,6 +2045,9 @@ func TestComparativeOrdersTransitively(t *testing.T) {
 // the positive comparative, "the dog is more clever than the mouse".
 func TestAnalyticComparative(t *testing.T) {
 	d, _ := testDaemon(t)
+	// Cleverness is an analytic scale: its greater pole realizes "more clever", not a
+	// "-er" suffix, so a comparison composes from the pole and the analytic surface.
+	teachScale(t, d, map[string][5]string{"en": {"cleverness", "clever", "more clever", "dull", "less clever"}})
 	groundNoun(t, d, "cat")
 	groundNoun(t, d, "dog")
 	groundNoun(t, d, "mouse")
@@ -1983,12 +2067,17 @@ func TestAnalyticComparative(t *testing.T) {
 // answer is spoken with the standard back in the ablative.
 func TestComparativeTurkish(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachScale(t, d, map[string][5]string{
+		"en": {"size", "big", "bigger", "small", "smaller"},
+		"tr": {"boyut", "büyük", "daha büyük", "küçük", "daha küçük"},
+	})
 	groundNounLang(t, d, "kedi", "tr")
 	groundNounLang(t, d, "fare", "tr")
 	groundNounLang(t, d, "köpek", "tr")
 	sayLang(t, d, "tr", "köpek kediden büyük")     // the dog is bigger than the cat (ablative, no daha)
 	sayLang(t, d, "tr", "kedi fareden daha büyük") // the cat is bigger than the mouse (with daha)
-	// Both forms normalize to the same comparative "daha büyük", so the chain holds.
+	// Both forms strip to the same "büyük" pole, so the chain holds, spoken with the
+	// realized "daha büyük".
 	if got := sayLang(t, d, "tr", "köpek fareden büyük mü").Say; got != "Evet, köpek fareden daha büyük." {
 		t.Fatalf("a chained Turkish comparison should hold transitively, spoken as the comparative: %q", got)
 	}
@@ -2024,9 +2113,15 @@ func TestComparativeUnifiesCrossTongue(t *testing.T) {
 	bilingual("cat", "kedi")
 	bilingual("mouse", "fare")
 	bilingual("dog", "köpek")
-	// The chain is split across tongues, taught back to back so the relation unifies.
-	say(t, d, "the dog is bigger than the cat")    // English: the bigger relation, warm
-	sayLang(t, d, "tr", "kedi fareden daha büyük") // Turkish: daha büyük joins the same relation
+	// One size scale, its big pole named in both tongues, so a comparison told in either
+	// lands on the same orderings.
+	teachScale(t, d, map[string][5]string{
+		"en": {"size", "big", "bigger", "small", "smaller"},
+		"tr": {"boyut", "büyük", "daha büyük", "küçük", "daha küçük"},
+	})
+	// The chain is split across tongues; both poles land on the one shared size scale.
+	say(t, d, "the dog is bigger than the cat")    // English: big over cat
+	sayLang(t, d, "tr", "kedi fareden daha büyük") // Turkish: büyük, the same pole
 	// Asked in Turkish over the whole chain (dog > cat told in English, cat > mouse in Turkish).
 	if got := sayLang(t, d, "tr", "köpek fareden daha büyük mü").Say; !strings.HasPrefix(got, "Evet") {
 		t.Fatalf("a chain split across tongues should hold, asked in Turkish: %q", got)
@@ -2037,21 +2132,17 @@ func TestComparativeUnifiesCrossTongue(t *testing.T) {
 	}
 }
 
-// GOLEM discovers that two gradable relations are converse poles of one scale from
-// the ordering itself: told one pair the other way, it learns "smaller" reverses
-// "bigger" and answers smaller-questions across the whole bigger-chain, though it
-// was told only one smaller fact. The link is discovered, not seeded or told as an
-// antonym.
-func TestComparativeConverseDiscovered(t *testing.T) {
+// The converse is derived from antonymy, not from a reversed telling: with small taught
+// as big's antonym on one scale, a "smaller" question reads the whole bigger-chain by
+// argument swap, though no "smaller" fact was ever told.
+func TestComparativeConverseFromAntonymy(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
 	groundNoun(t, d, "cat")
 	groundNoun(t, d, "mouse")
 	groundNoun(t, d, "snail")
 	say(t, d, "the cat is bigger than the mouse")
 	say(t, d, "the mouse is bigger than the snail")
-	// One reversed telling reveals the converse: the cat stands above the mouse, so
-	// "smaller" is the other reading of the same scale.
-	say(t, d, "the mouse is smaller than the cat")
 	if got := say(t, d, "is the snail smaller than the cat").Say; got != "Yes, the snail is smaller than the cat." {
 		t.Fatalf("the converse should generalize across the chain: %q", got)
 	}
@@ -2060,13 +2151,14 @@ func TestComparativeConverseDiscovered(t *testing.T) {
 	}
 }
 
-// Two scales that correlate (size and speed both order the horse above the dog)
-// must not have their converse poles conflated. Telling "the dog is slower than the
-// horse" reverses the size pair as well, but slower is the converse of faster, the
-// scale it shares, not of bigger. A scale keeps the one converse its pole-pair
-// claimed, so a speed question is never answered off the size chain.
+// Two scales that correlate (size and speed both order the horse above the dog) keep
+// separate dimensions, so a speed question is never answered off the size chain. Antonymy
+// lives at the adjective level (small opposite big, slow opposite fast), one RelOpposite
+// per scale, and a pole grades along its own scale only.
 func TestConverseDoesNotConflateScales(t *testing.T) {
 	d, s := testDaemon(t)
+	teachSizeScale(t, d)
+	teachScale(t, d, map[string][5]string{"en": {"speed", "fast", "faster", "slow", "slower"}})
 	for _, n := range []string{"lion", "horse", "dog", "snail"} {
 		groundNoun(t, d, n)
 	}
@@ -2074,22 +2166,21 @@ func TestConverseDoesNotConflateScales(t *testing.T) {
 	say(t, d, "the lion is bigger than the horse")
 	say(t, d, "the horse is bigger than the dog")
 	say(t, d, "the dog is bigger than the snail")
-	say(t, d, "the snail is smaller than the dog") // size converse: smaller <-> bigger
 	// Speed over the lower animals: the horse above the dog above the snail.
 	say(t, d, "the horse is faster than the dog")
 	say(t, d, "the dog is faster than the snail")
-	say(t, d, "the dog is slower than the horse") // reverses bigger AND faster
 
-	bigger, faster, slower := d.resolveRelation("bigger"), d.resolveRelation("faster"), d.resolveRelation("slower")
-	if bigger == nil || faster == nil || slower == nil {
-		t.Fatal("the three relations should be known after the tellings")
+	big, small := d.resolveConcept("big"), d.resolveConcept("small")
+	fast, slow := d.resolveConcept("fast"), d.resolveConcept("slow")
+	if big == nil || small == nil || fast == nil || slow == nil {
+		t.Fatal("the pole adjectives should be grounded")
 	}
-	// Slower is the converse of faster (its own scale), not of bigger (a correlate).
-	if edgeWeightRel(t, s, slower.ID, faster.ID, memory.RelOpposite) == 0 {
-		t.Fatal("slower should be discovered as the converse of faster")
+	// Antonymy is between the pole adjectives of one scale, not across scales.
+	if edgeWeightRel(t, s, slow.ID, fast.ID, memory.RelOpposite) == 0 {
+		t.Fatal("slow should be the opposite pole of fast")
 	}
-	if w := edgeWeightRel(t, s, slower.ID, bigger.ID, memory.RelOpposite); w != 0 {
-		t.Fatalf("slower must not become the converse of bigger (scale conflation), got %.2f", w)
+	if w := edgeWeightRel(t, s, slow.ID, big.ID, memory.RelOpposite); w != 0 {
+		t.Fatalf("slow must not be the opposite of big (scale conflation), got %.2f", w)
 	}
 	// The genuine converses still reason across their whole chains.
 	if got := say(t, d, "is the snail slower than the horse").Say; got != "Yes, the snail is slower than the horse." {
@@ -2099,7 +2190,7 @@ func TestConverseDoesNotConflateScales(t *testing.T) {
 		t.Fatalf("the size converse should chain: %q", got)
 	}
 	// The lion has a size but no speed; a speed question about it must not be
-	// answered off the size chain through a conflated converse.
+	// answered off the size chain.
 	if got := say(t, d, "is the horse slower than the lion").Say; strings.HasPrefix(got, "Yes") {
 		t.Fatalf("the lion's size must not answer a speed question: %q", got)
 	}
@@ -2111,6 +2202,7 @@ func TestConverseDoesNotConflateScales(t *testing.T) {
 // great and a one-step gap as slight, no metric amount claimed.
 func TestComparativeMagnitudeFromRank(t *testing.T) {
 	d, _ := testDaemon(t)
+	size, _, _ := teachSizeScale(t, d)
 	lion := groundNoun(t, d, "lion")
 	dog := groundNoun(t, d, "dog")
 	cat := groundNoun(t, d, "cat")
@@ -2120,11 +2212,7 @@ func TestComparativeMagnitudeFromRank(t *testing.T) {
 	say(t, d, "the dog is bigger than the cat")
 	say(t, d, "the cat is bigger than the mouse")
 	say(t, d, "the mouse is bigger than the snail")
-	rel := d.resolveRelation("bigger")
-	if rel == nil {
-		t.Fatal("bigger should be a known relation after the tellings")
-	}
-	rank := func(c *memory.Fragment) int { return len(d.comparativeReach(rel, c.ID)) }
+	rank := func(c *memory.Fragment) int { return len(d.comparativeReach(size, c.ID)) }
 	if rank(snail) != 0 || rank(lion) != 4 {
 		t.Fatalf("ranks from the chain wrong: snail=%d (want 0) lion=%d (want 4)", rank(snail), rank(lion))
 	}
@@ -2139,7 +2227,7 @@ func TestComparativeMagnitudeFromRank(t *testing.T) {
 		{dog, cat, 1, "slight"},
 	}
 	for _, c := range cases {
-		gap, ok := d.comparativeMagnitude(rel, c.a.ID, c.b.ID)
+		gap, ok := d.comparativeMagnitude(size, c.a.ID, c.b.ID)
 		if !ok || gap != c.gap {
 			t.Fatalf("%s over %s: gap=%d ok=%v, want gap %d", c.a.Content, c.b.Content, gap, ok, c.gap)
 		}
@@ -2148,7 +2236,7 @@ func TestComparativeMagnitudeFromRank(t *testing.T) {
 		}
 	}
 	// The smaller end does not stand above the larger, so there is nothing to measure.
-	if _, ok := d.comparativeMagnitude(rel, snail.ID, lion.ID); ok {
+	if _, ok := d.comparativeMagnitude(size, snail.ID, lion.ID); ok {
 		t.Fatal("the snail is not bigger than the lion; no magnitude to give")
 	}
 }
@@ -2159,6 +2247,7 @@ func TestComparativeMagnitudeFromRank(t *testing.T) {
 // plain comparison is denied instead.
 func TestMagnitudeQuestionAnswered(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
 	groundNoun(t, d, "lion")
 	groundNoun(t, d, "dog")
 	groundNoun(t, d, "cat")
@@ -2204,6 +2293,7 @@ func TestQuestionCutoverDrivesCoveredShapes(t *testing.T) {
 	}
 	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
 	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5)
+	teachSizeScale(t, d)
 	say(t, d, "the cat is bigger than the mouse")
 
 	for _, c := range []struct{ q, want string }{

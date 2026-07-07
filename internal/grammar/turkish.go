@@ -528,7 +528,7 @@ func (p *Params) trComparativeParts(tokens []string) (rel, subject, standard str
 	if len(adj) == 0 {
 		return "", "", "", false, false
 	}
-	rel = "daha " + strings.Join(adj, " ") // the comparative, not the bare adjective
+	rel = strings.Join(adj, " ") // the raw adjective, the preposed "daha" stripped; the daemon decomposes it to a pole
 	standard = stripCaseTR(tokens[abl])
 	subject = strings.Join(tokens[:abl], " ")
 	if subject == "" || standard == "" {

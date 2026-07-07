@@ -10,20 +10,14 @@ import (
 
 // A numeric comparison is a claim GOLEM can settle for itself: "is 17 bigger
 // than 12" over bare numerals needs no told ordering, only the difference its
-// own runtime computes. What a gradable word means in number is TAUGHT, not
-// coded: "bigger is above" marks the relation with the grounded comparison it
-// runs on (a marks edge to the cmp concept, the told-property shape), so the
-// mapping lives in the graph, erodible and auditable, and an unmarked gradable
-// falls through to the told orderings as before. The verdict of a run is
-// GOLEM's own observation: it answers firm over any telling, and the false
-// direction is denied on record, so a source that claimed it is contradicted
+// own runtime computes. What a gradable word means in number is read from the
+// pole it decomposes to: the greater pole gives ">", the lesser "<", the same
+// un-gated pole role a told ordering canonicalizes by. So the numeric sign and
+// the ordering direction share one substrate without a trust gate, and a surface
+// that names no gradable pole falls through to the told orderings. The verdict of
+// a run is GOLEM's own observation: it answers firm over any telling, and the
+// false direction is denied on record, so a source that claimed it is contradicted
 // by the check when the nightly trust pass judges the night.
-
-// cmpMarkFloor is how firmly a relation must be marked with a comparison
-// before the mark is believed: a full-trust telling writes above it, a
-// low-trust source's cannot set it alone, since a flipped pole would invert
-// arithmetic truth.
-const cmpMarkFloor = 0.5
 
 // numericLiteral reports whether a phrase is a bare integer numeral, an
 // optional minus then digits.
@@ -45,71 +39,21 @@ func numericLiteral(s string) bool {
 	return true
 }
 
-// planPole learns what a gradable word means in number: told "bigger is
-// above" by a fully trusted speaker, the relation the subject names is marked
-// with the comparison the predicate names, a marks edge to the grounded cmp
-// concept. A speaker below full trust is refused: a flipped pole would invert
-// every checked comparison, so the mapping stays with the architect.
-func (d *Daemon) planPole(frame grammar.Frame, momentID uint64) (string, bool) {
-	if frame.Force != grammar.ForceStatement || frame.Action.Phrase != "be" {
-		return "", false
-	}
-	poleWord := frame.Patient.Phrase
-	if poleWord == "" {
-		poleWord = frame.LocPrep
-	}
-	if poleWord == "" {
-		return "", false
-	}
-	sym, ok := d.cmpRelator(poleWord)
-	if !ok || sym == "" || sym == d.cmpDefault {
-		return "", false
-	}
-	rel := d.propertySubjectRelation(frame.Agent)
-	if rel == nil {
-		return "", false
-	}
-	if d.momentTrust(momentID) < trustAuthorityFloor {
-		return "I take what a word means in number from the architect.", true
-	}
-	cmpID, ok := d.cmpConceptBySymbol(sym)
+// numericPole reads what a gradable word means in number: the comparison symbol of the
+// pole its surface decomposes to, the greater pole giving ">" and the lesser "<". The sign
+// comes from the un-gated pole role, never a trust gate (invariant I1), so a told-ordering
+// answer never depends on a numeric-mark firmness. It is empty when the surface names no
+// gradable pole, so the caller falls through to the told orderings.
+func (d *Daemon) numericPole(gradable, lang string) (string, bool) {
+	_, _, sign, ok := d.comparativeToPole(gradable, lang)
 	if !ok {
 		return "", false
 	}
-	d.store.SetLinkRel(rel.ID, cmpID, memory.RelMarks, deliberateName)
-	return d.confirmProperty(frame.Lang, rel, poleWord), true
-}
-
-// cmpConceptBySymbol finds the grounded comparison concept carrying a symbol,
-// the inverse read of cmpConcept.
-func (d *Daemon) cmpConceptBySymbol(sym string) (uint64, bool) {
-	for id, s := range d.cmpConcept {
-		if s == sym {
-			return id, true
-		}
-	}
-	return 0, false
-}
-
-// numericPole reads what a gradable word means in number: the comparison
-// symbol its relation was marked with, empty when the word was never taught a
-// pole, so the caller falls through to the told orderings.
-func (d *Daemon) numericPole(gradable string) (string, bool) {
-	rel := d.resolveRelation(gradable)
-	if rel == nil {
-		return "", false
-	}
-	edges, err := d.store.LinksFromRel([]uint64{rel.ID}, memory.RelMarks)
-	if err != nil {
-		return "", false
-	}
-	for _, e := range edges {
-		if e.Weight < cmpMarkFloor {
-			continue
-		}
-		if sym, ok := d.cmpConcept[e.To]; ok {
-			return sym, true
-		}
+	switch sign {
+	case "gt":
+		return ">", true
+	case "lt":
+		return "<", true
 	}
 	return "", false
 }
@@ -132,9 +76,13 @@ func (d *Daemon) numericCheck(frame grammar.Frame) (subj, std *memory.Fragment, 
 	if !numericLiteral(a) || !numericLiteral(b) {
 		return nil, nil, 0, false, false
 	}
-	sym, ok0 := d.numericPole(frame.Action.Phrase)
-	if !ok0 || (sym != ">" && sym != "<") {
+	pole, scaleID, sign, ok0 := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
+	if !ok0 || (sign != "gt" && sign != "lt") {
 		return nil, nil, 0, false, false
+	}
+	sym := ">"
+	if sign == "lt" {
+		sym = "<"
 	}
 	diff, _, ok0 = d.numericDifference(a, b)
 	if !ok0 {
@@ -153,13 +101,23 @@ func (d *Daemon) numericCheck(frame grammar.Frame) (subj, std *memory.Fragment, 
 	if subj.ID != subjID {
 		subj, std = std, subj
 	}
-	if rel := d.resolveRelation(frame.Action.Phrase); rel != nil {
-		from, to := subjID, stdID
-		if holds {
-			from, to = stdID, subjID
+	// The refuted ordering is denied between the number concepts, keyed on the scale as a
+	// canonical greater-over-lesser edge. The asked comparison claims askedGreater exceeds
+	// askedLesser (a lesser pole swaps them first); when it holds, the false converse
+	// (askedLesser over askedGreater) is denied, and when it does not, the asked ordering
+	// itself is. Either way one directed deny records what the run refuted.
+	if sf, err := d.store.FragmentsByIDs([]uint64{scaleID}); err == nil && len(sf) == 1 {
+		askedGreaterID, askedLesserID := subjID, stdID
+		if sign == "lt" {
+			askedGreaterID, askedLesserID = stdID, subjID
 		}
-		d.store.SetLinkRel(from, to, denyRel(rel.Content), computedFactWeight)
+		from, to := askedGreaterID, askedLesserID
+		if holds {
+			from, to = askedLesserID, askedGreaterID
+		}
+		d.store.SetLinkRel(from, to, denyRel(sf[0].Content), computedFactWeight)
 	}
+	_ = pole
 	return subj, std, diff, holds, true
 }
 
@@ -171,7 +129,22 @@ func (d *Daemon) compareNumbers(frame grammar.Frame) (string, bool) {
 		return "", false
 	}
 	d.noteFocus(subj)
-	return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds), true
+	pole, _, sign, pok := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
+	if !pok {
+		return "", false
+	}
+	surface := d.realizeComparative(pole, frame.Lang, "")
+	if surface == "" {
+		return "", false
+	}
+	// A "less <greater-adj>" question speaks the greater surface with subject and standard
+	// swapped, the same analytic-less relaxation the graph path applies; a genuine lesser
+	// pole keeps the original subject (invariant I2).
+	saySubj, sayStd := subj, std
+	if own, ok := d.poleSign(pole); ok && own != sign {
+		saySubj, sayStd = std, subj
+	}
+	return d.sayComparison(frame.Lang, saySubj, surface, sayStd, holds), true
 }
 
 // magnitudeNumbers answers "how much bigger is 17 than 12" over bare numerals
@@ -184,13 +157,25 @@ func (d *Daemon) magnitudeNumbers(frame grammar.Frame) (string, bool) {
 		return "", false
 	}
 	d.noteFocus(subj)
+	pole, _, sign, pok := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
+	if !pok {
+		return "", false
+	}
+	surface := d.realizeComparative(pole, frame.Lang, "")
+	if surface == "" {
+		return "", false
+	}
+	saySubj, sayStd := subj, std
+	if own, ok := d.poleSign(pole); ok && own != sign {
+		saySubj, sayStd = std, subj
+	}
 	if !holds {
-		return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, false), true
+		return d.sayComparison(frame.Lang, saySubj, surface, sayStd, false), true
 	}
 	if diff < 0 {
 		diff = -diff
 	}
-	return d.sayMagnitude(frame.Lang, subj, frame.Action.Phrase, std, strconv.Itoa(diff)), true
+	return d.sayMagnitude(frame.Lang, saySubj, surface, sayStd, strconv.Itoa(diff)), true
 }
 
 // numericDifference reads the difference of two numerals: the landed fact in

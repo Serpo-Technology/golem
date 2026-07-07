@@ -47,9 +47,12 @@ const (
 	RelFeature   = "feature"
 	RelAgent     = "agent"
 	RelPatient   = "patient"
-	// RelOpposite links two gradable relations discovered to be converse poles of
-	// one scale (bigger and smaller), so an ordering told one way answers the
-	// other. It joins relation concepts, not the things they order.
+	// RelOpposite links the two pole adjectives of one gradable scale (big and small),
+	// so a reader that wants the opposite end of a scale gets it in one hop. It is one
+	// source of truth with the scale membership and the pole roles: taught directly and
+	// rebuilt at every recompile from same-scale-opposite-role, a derived fast index
+	// rather than a second authoritative store to drift against. It joins the adjectives,
+	// not the things they order.
 	RelOpposite = "opposite"
 	// RelTransitive marks a relation concept as transitive: a self-edge that
 	// records a learned property of the relation, so a told ordering chains
@@ -77,6 +80,19 @@ const (
 	// that is in the forest is in the forest. Like the others, the character is a fact about the
 	// relation in the graph, not baked into a construction.
 	RelPartWhole = "partwhole"
+	// RelScale links a gradable pole adjective to the dimension it grades along, so "big"
+	// and "small" both point at size and a comparison is an ordering on the shared scale
+	// rather than a fact hung off a per-tongue comparative relation. The two poles of a
+	// scale name its opposite ends; which end each names is a pole role read to orient an
+	// ordering and to derive the numeric sign, so the scale is the one place a magnitude
+	// comparison lives across tongues.
+	RelScale = "scale"
+	// RelComparativeForm links a gradable pole adjective to a durable, prune-spared
+	// surface node holding its comparative realization in one tongue ("big" -> "bigger",
+	// "daha büyük", "maior"). The serve path reads this stored surface rather than running
+	// a morphology rule, so a comparison speaks the same word every time, gate-independent
+	// and nap-durable, and the reverse read never mints a per-tongue comparative relation.
+	RelComparativeForm = "cmpform"
 	// RelMarks links a closed-class word to a concept it marks, so a grammatical
 	// category the engine reads is derived from the graph rather than a seeded
 	// string. A speech-act verb marks the discourse move it carries (clarify,

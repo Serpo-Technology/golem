@@ -131,6 +131,10 @@ func TestLatinSpeaksByCase(t *testing.T) {
 // chain transitively the way the English comparison does.
 func TestLatinComparison(t *testing.T) {
 	d, _ := testDaemon(t)
+	teachScale(t, d, map[string][5]string{
+		"en": {"size", "big", "bigger", "small", "smaller"},
+		"la": {"magnitudo", "magnus", "maior", "parvus", "minor"},
+	})
 	groundNounLang(t, d, "rosa", "la")
 	groundNounLang(t, d, "viola", "la")
 	groundNounLang(t, d, "lilia", "la")

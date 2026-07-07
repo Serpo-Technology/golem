@@ -350,9 +350,9 @@ func TestComprehendComparativeQuestionMatchesParse(t *testing.T) {
 	}{
 		{"en", "is the cat bigger than the mouse", "bigger", frag["cat"], frag["mouse"]},
 		{"en", "is the cat more clever than the dog", "more clever", frag["cat"], frag["dog"]},
-		{"en", "is the cat less big than the mouse", "more big", frag["mouse"], frag["cat"]}, // "less" inverts the pair
-		{"tr", "kedi fareden büyük mü", "daha büyük", frag["kedi"], frag["fare"]},
-		{"tr", "kedi fareden daha büyük mü", "daha büyük", frag["kedi"], frag["fare"]},
+		{"en", "is the cat less big than the mouse", "less big", frag["cat"], frag["mouse"]}, // raw token; the daemon flips the sign
+		{"tr", "kedi fareden büyük mü", "büyük", frag["kedi"], frag["fare"]},
+		{"tr", "kedi fareden daha büyük mü", "büyük", frag["kedi"], frag["fare"]},
 	} {
 		coded := p.ParseHint(c.in, c.lang, resolve)
 		walked, ok := p.comprehendComparativeQuestion(c.lang, c.in, resolve)

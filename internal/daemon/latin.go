@@ -7,26 +7,29 @@ import (
 	"golem/internal/memory"
 )
 
-// latinComparative maps a Latin comparative adjective to the English gradable relation
-// it shares, so "maior" orders on the same scale as "bigger".
-var latinComparative = map[string]string{"maior": "bigger", "minor": "smaller"}
+// latinComparativeBase maps a Latin comparative adjective to the Latin pole adjective it
+// decomposes to, a suppletive override read fail-closed: "maior" is the comparative of
+// "magnus", "minor" of "parvus". The base resolves to the shared pole concept, so a Latin
+// comparison orders on the same scale an English or Turkish one does, and "maior" never
+// mints a relation.
+var latinComparativeBase = map[string]string{"maior": "magnus", "minor": "parvus"}
 
 // latinComparison reads a Latin comparison "X maior quam Y" (X is bigger than Y): the
-// comparative adjective names the relation, the noun before it the subject, and the
+// comparative adjective is the raw pole surface, the noun before it the subject, and the
 // noun after "quam" the standard. The interrogative est and its enclitic, and quam
 // itself, ground in nothing and are skipped. It returns false when no comparative is
 // present.
-func (d *Daemon) latinComparison(raw string) (subj *memory.Fragment, rel, relWord string, std *memory.Fragment, ok bool) {
+func (d *Daemon) latinComparison(raw string) (subj *memory.Fragment, relWord string, std *memory.Fragment, ok bool) {
 	tokens := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
 	compIdx := -1
 	for i, tok := range tokens {
-		if r, has := latinComparative[tok]; has {
-			compIdx, rel, relWord = i, r, tok
+		if _, has := latinComparativeBase[tok]; has {
+			compIdx, relWord = i, tok
 			break
 		}
 	}
 	if compIdx < 0 {
-		return nil, "", "", nil, false
+		return nil, "", nil, false
 	}
 	for i := 0; i < compIdx; i++ {
 		if c := d.resolveConcept(tokens[i]); c != nil {
@@ -40,39 +43,56 @@ func (d *Daemon) latinComparison(raw string) (subj *memory.Fragment, rel, relWor
 			break
 		}
 	}
-	return subj, rel, relWord, std, subj != nil && std != nil
+	return subj, relWord, std, subj != nil && std != nil
 }
 
-// comprehendComparisonLA stores a Latin comparison statement as an ordering on the
-// gradable relation, the shared comparison machinery discovering the converse pole.
+// comprehendComparisonLA stores a Latin comparison statement as a canonical ordering on
+// the shared scale, decomposing the raw Latin comparative surface into its pole the same
+// way the English and Turkish write paths do.
 func (d *Daemon) comprehendComparisonLA(raw string, momentID uint64) bool {
-	subj, rel, _, std, ok := d.latinComparison(raw)
+	subj, relWord, std, ok := d.latinComparison(raw)
 	if !ok {
 		return false
 	}
+	w := comprehendWeight * d.momentTrust(momentID)
 	return d.storeComparison(grammar.Frame{Comparative: true, Lang: "la",
 		Agent:   grammar.Term{Concept: subj},
 		Patient: grammar.Term{Concept: std},
-		Action:  grammar.Term{Phrase: rel}}, momentID)
+		Action:  grammar.Term{Phrase: relWord}}, momentID, w)
 }
 
 // planLatinComparison answers a Latin comparison question ("estne rosa maior quam
-// viola") by walking the told orderings transitively, the same reasoning the English
-// comparison question uses, and speaking the verdict back in Latin.
+// viola") by decomposing the comparative to its pole and walking the canonical orderings
+// on its scale, the same reasoning the English comparison question uses, and speaking the
+// verdict back in Latin with the original subject and standard (invariant I2).
 func (d *Daemon) planLatinComparison(frame grammar.Frame, raw string) (string, bool) {
 	if frame.Lang != "la" || frame.Force != grammar.ForceQuestion {
 		return "", false
 	}
-	subj, _, relWord, std, ok := d.latinComparison(raw)
+	subj, relWord, std, ok := d.latinComparison(raw)
 	if !ok {
 		return "", false
 	}
 	d.noteFocus(subj)
-	rel := d.resolveRelation(latinComparative[relWord])
-	if rel != nil && subj.ID != std.ID && d.comparesTransitively(rel, subj.ID, std.ID) {
-		clause := d.conceptName(subj.ID, subj.Content, "la") + " " + relWord + " quam " +
-			d.conceptName(std.ID, std.Content, "la")
-		return upperFirst(d.gram.Word("la", "yes")) + ", " + clause + ".", true
+	pole, scaleID, sign, pok := d.comparativeToPole(relWord, "la")
+	if !pok {
+		return d.withInvite("la", "Nescio."), true // no gradable pole: admit the gap (invariant I4)
+	}
+	sf, err := d.store.FragmentsByIDs([]uint64{scaleID})
+	if err != nil || len(sf) != 1 {
+		return d.withInvite("la", "Nescio."), true
+	}
+	_ = pole
+	if subj.ID != std.ID {
+		walkFrom, walkTo := subj.ID, std.ID
+		if sign == "lt" {
+			walkFrom, walkTo = std.ID, subj.ID
+		}
+		if d.comparesTransitively(sf[0], walkFrom, walkTo) {
+			clause := d.conceptName(subj.ID, subj.Content, "la") + " " + relWord + " quam " +
+				d.conceptName(std.ID, std.Content, "la")
+			return upperFirst(d.gram.Word("la", "yes")) + ", " + clause + ".", true
+		}
 	}
 	return upperFirst(d.gram.Word("la", "no")) + ".", true
 }
@@ -144,7 +164,8 @@ func (d *Daemon) resolveLatinNoun(tok string) *memory.Fragment {
 // noun asked about. It admits Nescio when the noun is unknown or grounds under no
 // kind, and returns false when the clause is not a Latin what-is question, so the
 // role-question path still reads "quid <verb>".
-func (d *Daemon) planLatinDefinition(frame grammar.Frame, raw string) (string, bool) {	if frame.Lang != "la" {
+func (d *Daemon) planLatinDefinition(frame grammar.Frame, raw string) (string, bool) {
+	if frame.Lang != "la" {
 		return "", false
 	}
 	toks := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
@@ -188,7 +209,7 @@ func (d *Daemon) planLatinIsA(frame grammar.Frame, raw string) (string, bool) {
 	}
 	var nouns []*memory.Fragment
 	for _, t := range toks[1:] {
-		if t == "quam" || latinComparative[t] != "" {
+		if t == "quam" || latinComparativeBase[t] != "" {
 			return "", false // a comparison, not a membership; leave it to planLatinComparison
 		}
 		if c := d.resolveLatinNoun(t); c != nil {

@@ -257,11 +257,23 @@ func (d *Daemon) claimAt(momentID uint64) (agentID, patientID uint64, relContent
 		if err != nil || len(rf) != 1 {
 			continue
 		}
-		if rf[0].Category == "relation" {
+		// A told proposition grounds on a relation; a told comparison grounds on the
+		// scale dimension it was Proposed on (a class concept carrying incoming RelScale
+		// poles, never Category "relation"). Both reconstruct here, so the trust pass, the
+		// evidence tally, and the justify walk read a comparative claim the same as a verb one.
+		if rf[0].Category == "relation" || d.hasIncomingScale(rf[0].ID) {
 			return ag[0].To, pa[0].To, rf[0].Content, true
 		}
 	}
 	return 0, 0, "", false
+}
+
+// hasIncomingScale reports whether a concept is a scale dimension: a concept poles hang
+// on by RelScale. It is how claimAt tells a comparison's grounding scale from an ordinary
+// concept without resolving the pole surfaces.
+func (d *Daemon) hasIncomingScale(id uint64) bool {
+	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelScale)
+	return err == nil && len(edges) > 0
 }
 
 // propositionTrust reads the firmest trust behind a held proposition: over the moments

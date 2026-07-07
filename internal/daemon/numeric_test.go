@@ -8,29 +8,23 @@ import (
 	"golem/internal/memory"
 )
 
-// What a gradable means in number is taught, trust-gated: the architect's
-// telling marks the relation with the grounded comparison; a low-trust peer's
-// is refused, since a flipped pole would invert arithmetic truth.
-func TestNumericPoleTaughtAndTrustGated(t *testing.T) {
+// What a gradable means in number is read from the pole it decomposes to: the greater
+// pole gives ">", the lesser "<", the un-gated pole role the scale block taught. No trust
+// gate stands between a told ordering and its answer, and a surface never taught a scale
+// reads nothing.
+func TestNumericPoleFromPoleRole(t *testing.T) {
 	d, _ := testDaemon(t)
-	d.cfg.RuntimeEnabled = true
-	// The gradable exists as a relation once an ordering has been told with it.
-	say(t, d, "2 is bigger than 1")
+	teachSizeScale(t, d)
 
-	// A peer cannot set the pole.
-	r := sayAs(t, d, "llm", "bigger is above")
-	if !strings.Contains(r.Say, "architect") {
-		t.Fatalf("a low-trust speaker should be refused the pole: %q", r.Say)
-	}
-	if _, ok := d.numericPole("bigger"); ok {
-		t.Fatal("a refused telling must not mark the pole")
-	}
-
-	// The architect sets it, and the mark reads back.
-	say(t, d, "bigger is above")
-	sym, ok := d.numericPole("bigger")
+	sym, ok := d.numericPole("bigger", "en")
 	if !ok || sym != ">" {
-		t.Fatalf("the taught pole should read back as the comparison symbol: %q %v", sym, ok)
+		t.Fatalf("the greater pole should read the comparison symbol: %q %v", sym, ok)
+	}
+	if sym, ok := d.numericPole("smaller", "en"); !ok || sym != "<" {
+		t.Fatalf("the lesser pole should read the reversed symbol: %q %v", sym, ok)
+	}
+	if _, ok := d.numericPole("heavier", "en"); ok {
+		t.Fatal("a gradable with no scale taught reads no pole")
 	}
 }
 
@@ -40,8 +34,7 @@ func TestNumericPoleTaughtAndTrustGated(t *testing.T) {
 func TestNumericComparisonComputedAndShared(t *testing.T) {
 	d, s := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
-	say(t, d, "2 is bigger than 1")
-	say(t, d, "bigger is above")
+	size, _, _ := teachSizeScale(t, d)
 
 	yes := say(t, d, "is 17 bigger than 12").Say
 	if !strings.Contains(strings.ToLower(yes), "yes") {
@@ -57,18 +50,35 @@ func TestNumericComparisonComputedAndShared(t *testing.T) {
 		t.Fatalf("the converse should answer firm no from the landed difference: %q", no)
 	}
 
-	// The false direction stands denied between the number concepts.
-	rel := d.resolveRelation("bigger")
-	if rel == nil {
-		t.Fatal("the gradable should resolve to its relation")
-	}
+	// The false direction stands denied between the number concepts, keyed on the scale.
 	twelve, _ := d.store.ConceptByTemplate("num:12")
 	seventeen, _ := d.store.ConceptByTemplate("num:17")
 	if twelve == nil || seventeen == nil {
 		t.Fatal("the numerals should stand as number concepts")
 	}
-	if !d.propositionDenied(twelve, rel.Content, seventeen.ID) {
-		t.Fatal("the refuted direction should be denied on record")
+	if !d.propositionDenied(twelve, size.Content, seventeen.ID) {
+		t.Fatal("the refuted direction should be denied on record, keyed on the scale")
+	}
+}
+
+// A numeric analytic-"less" comparison speaks the greater surface with the subject and
+// standard swapped, never the subject as the greater. "is 12 less big than 17" is true
+// and must read "17 is bigger than 12", the same relaxation the graph path applies, not
+// the inverted "12 is bigger than 17".
+func TestNumericLessBigSwapsSpokenSubject(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	teachSizeScale(t, d)
+
+	ans := strings.ToLower(say(t, d, "is 12 less big than 17").Say)
+	if !strings.Contains(ans, "yes") {
+		t.Fatalf("12 is less big than 17 is true, expected a yes: %q", ans)
+	}
+	if !strings.Contains(ans, "17 is bigger than the 12") {
+		t.Fatalf("the analytic-less answer should restate via the greater pole with swapped arguments: %q", ans)
+	}
+	if strings.Contains(ans, "12 is bigger than the 17") {
+		t.Fatalf("the analytic-less answer must not speak the subject as the greater: %q", ans)
 	}
 }
 
@@ -77,10 +87,9 @@ func TestNumericComparisonComputedAndShared(t *testing.T) {
 func TestComputedRefutationErodesTrust(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
-	say(t, d, "2 is bigger than 1")
-	say(t, d, "bigger is above")
+	teachSizeScale(t, d)
 
-	// The peer claims a falsehood; the claim lands on the number concepts.
+	// The peer claims a falsehood; the claim lands on the number concepts as an ordering.
 	sayAs(t, d, "llm", "12 is bigger than 17")
 	llm, err := d.ensureSource("llm")
 	if err != nil {
@@ -101,20 +110,19 @@ func TestComputedRefutationErodesTrust(t *testing.T) {
 	}
 }
 
-// An unmarked gradable falls through: numerals compared on a word never taught
-// a pole take the told-ordering path exactly as before.
+// An unmarked gradable admits the gap: numerals compared on a word never taught a scale
+// name no pole, so nothing decomposes, the runtime is never reached, and the ordering is
+// not asserted (invariant I4).
 func TestUnmarkedGradableFallsThrough(t *testing.T) {
 	d, s := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
 	say(t, d, "2 is heavier than 1")
 	say(t, d, "is 17 heavier than 12")
-	if _, err := s.FragmentByTemplate("computed:subtract:17:12"); err == nil {
-		if f, _ := s.FragmentByTemplate("computed:subtract:17:12"); f != nil {
-			t.Fatal("an unmarked gradable must not reach the runtime")
-		}
+	if f, _ := s.FragmentByTemplate("computed:subtract:17:12"); f != nil {
+		t.Fatal("an untaught gradable must not reach the runtime")
 	}
-	if _, ok := d.numericPole("heavier"); ok {
-		t.Fatal("no pole was taught for heavier")
+	if _, ok := d.numericPole("heavier", "en"); ok {
+		t.Fatal("no scale was taught for heavier")
 	}
 }
 
@@ -123,8 +131,7 @@ func TestUnmarkedGradableFallsThrough(t *testing.T) {
 func TestNumericMagnitudeComputed(t *testing.T) {
 	d, _ := testDaemon(t)
 	d.cfg.RuntimeEnabled = true
-	say(t, d, "2 is bigger than 1")
-	say(t, d, "bigger is above")
+	teachSizeScale(t, d)
 	say(t, d, "is 17 bigger than 12") // lands the difference
 
 	d.cfg.RuntimeEnabled = false // the magnitude must read the landed fact

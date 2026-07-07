@@ -75,6 +75,13 @@ func (d *Daemon) loadGrammar() error {
 	if err := d.ensureCategoryClasses(); err != nil {
 		return err
 	}
+	// The comparative scaffolding (the comparison operator, the greater and lesser pole
+	// roles, and the rule, regular, irregular, and exception meta concepts) lives as class
+	// concepts too; seed them here so gradable comparison is graph data rather than a Go
+	// flag. The gradable adjectives and their scales are grown content, taught later.
+	if err := d.ensureComparativeScaffold(); err != nil {
+		return err
+	}
 	// The argument-structure constructions live as concepts carrying their form pole in the graph;
 	// ensure them and their slot subgraphs here too, before the compile, so the derive can shadow
 	// the graph representation against the compiled constructions.
@@ -170,6 +177,11 @@ func (d *Daemon) recompileGrammar() error {
 	gparams := paramsOf(gnodes)
 	d.deriveCategoryClasses(gnodes, gparams)
 	d.deriveCategoryRefinements(gnodes, gparams)
+	// Antonymy between two pole adjectives is a derived fast index over the ground truth
+	// (the scale plus the pole roles), rebuilt every compile from same-scale-opposite-role,
+	// so a reader that wants the opposite pole gets it in one hop without a second store to
+	// drift against. It is a no-op until a scale is taught.
+	d.deriveRelOpposite()
 	// The declarative grammar's phrase rules read their form pole (daughter order, agreement flows, head)
 	// from the concepts the graph holds for them, so the general realization engine compiles the rules
 	// from the graph rather than the seed string; a rule with no concept keeps its stored value.
@@ -214,6 +226,49 @@ func (d *Daemon) recompileGrammar() error {
 	// engine is rebuilt above.
 	d.code.SetBodyParser(d.parseBodyGrammar)
 	return nil
+}
+
+// deriveRelOpposite rebuilds the RelOpposite fast index between the pole adjectives of
+// every scale: for each dimension it gathers the poles hung on it by RelScale and links
+// each greater pole to each lesser pole both ways. The scale membership and the un-gated
+// pole roles are the one source of truth; this index is derived from them so a describe
+// or contrast reader gets the opposite pole in one hop, self-healing every boot and every
+// night. It is idempotent (SetLinkRel refreshes) and a no-op before any scale is taught.
+func (d *Daemon) deriveRelOpposite() {
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return
+	}
+	for _, dim := range concepts {
+		poles, err := d.store.LinksToRel([]uint64{dim.ID}, memory.RelScale)
+		if err != nil || len(poles) < 2 {
+			continue
+		}
+		ids := make([]uint64, 0, len(poles))
+		for _, e := range poles {
+			ids = append(ids, e.From)
+		}
+		frags, err := d.store.FragmentsByIDs(ids)
+		if err != nil {
+			continue
+		}
+		var greater, lesser []uint64
+		for _, p := range frags {
+			if sign, ok := d.poleSign(p); ok {
+				if sign == "gt" {
+					greater = append(greater, p.ID)
+				} else {
+					lesser = append(lesser, p.ID)
+				}
+			}
+		}
+		for _, g := range greater {
+			for _, l := range lesser {
+				d.store.SetLinkRel(g, l, memory.RelOpposite, 1)
+				d.store.SetLinkRel(l, g, memory.RelOpposite, 1)
+			}
+		}
+	}
 }
 
 // deriveCategoryClasses sets each closed-class word's whole category from the bare class

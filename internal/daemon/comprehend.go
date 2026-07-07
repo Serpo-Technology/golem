@@ -212,7 +212,7 @@ func (d *Daemon) comprehendStatement(frame grammar.Frame, raw string, momentID u
 	// frame's roles rather than re-read from the surface, which the argument
 	// splitter would mistake (it has no "than" construction).
 	if frame.Comparative {
-		return d.storeComparison(frame, momentID)
+		return d.storeComparison(frame, momentID, w)
 	}
 	// A Turkish locative clause marks place by the case and carries no verb
 	// ("yaprak ağaçta"), so the verb-based comprehension would mistake the cased
@@ -526,12 +526,12 @@ func (d *Daemon) rankRelationsByCompany(agentID, patientID uint64) []scoredRel {
 
 // verbalRelation reports whether a relation can be the reading of a plain
 // subject-verb-object clause, the only construction the resemblance fallback
-// covers. A relation that carries its own construction is excluded: a gradable
-// comparison (it has an opposite pole), a locative, or a possession. This keeps a
-// verb from being read as "bigger" or "on" just because its arguments keep the
-// same company those relations do.
+// covers. A relation that carries its own construction is excluded: a locative or a
+// possession. A gradable comparison is no longer a relation at all (it is an ordering
+// on a scale), so it never reaches this ranking; the check keeps a verb from being read
+// as "on" or "has" just because its arguments keep the same company those relations do.
 func (d *Daemon) verbalRelation(relID uint64) bool {
-	for _, mark := range []string{memory.RelOpposite, memory.RelLocative, memory.RelPossessive} {
+	for _, mark := range []string{memory.RelLocative, memory.RelPossessive} {
 		if e, err := d.store.LinksFromRel([]uint64{relID}, mark); err == nil && len(e) > 0 {
 			return false
 		}
@@ -552,10 +552,13 @@ func (d *Daemon) meaningNamesParticipant(m grammar.Meaning) bool {
 }
 
 // storeComparison writes a told comparison "the cat is bigger than the mouse" as a
-// proposition on the gradable relation, from the frame's already-resolved roles, so
-// the ordering accumulates in the graph for a later comparison query to walk. It
-// returns false when a side grounds in nothing or the relation cannot be reached.
-func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64) bool {
+// canonical ordering Proposed on the gradable scale, decomposing the comparative surface
+// into its pole and reading the un-gated pole role for the direction (invariant I1). The
+// subject over standard for a greater pole, standard over subject for a lesser one, so one
+// greater-over-lesser ordering per scale reads the same from both poles. It admits the gap
+// (returns false, never denies, never mints) when the surface decomposes to no gradable
+// pole, so a word never taught a scale binds nothing (invariant I4).
+func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64, w float64) bool {
 	subj, std := frame.Agent.Concept, frame.Patient.Concept
 	// A numeral side of a told ordering grounds in its number concept, minted
 	// on first contact, so the claim lands on the same node a computed check
@@ -569,24 +572,28 @@ func (d *Daemon) storeComparison(frame grammar.Frame, momentID uint64) bool {
 	if subj == nil || std == nil {
 		return false
 	}
-	rel, err := d.relationConcept(grammar.Term{Phrase: frame.Action.Phrase}, frame.Lang)
-	if err != nil || rel == nil {
+	pole, scaleID, sign, ok := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
+	if !ok {
+		return false // the surface names no gradable pole: admit the gap, mint nothing
+	}
+	sf, err := d.store.FragmentsByIDs([]uint64{scaleID})
+	if err != nil || len(sf) != 1 {
 		return false
 	}
-	if err := d.store.Propose(rel.ID, momentID, subj.ID, std.ID, comprehendWeight); err != nil {
+	scale := sf[0]
+	greater, lesser := canonicalOrdering(sign, subj, std)
+	if err := d.store.Propose(scaleID, momentID, greater.ID, lesser.ID, w); err != nil {
 		fmt.Fprintf(d.out, "propose error: %v\n", err)
 		return false
 	}
-	d.noteFocus(subj)
-	// An ordering told the other way for a pair reveals this relation's converse
-	// pole, so a later query on either reads the same scale.
-	d.discoverConverse(rel, subj, std)
-	d.recordThreadProp(rel.Content, subj.ID, std.ID, subj.Content, std.Content)
-	d.ws.excite(rel.ID, exciteSpeech)
-	d.ws.exciteRole(subj.ID, exciteSpeech, "agent")
-	d.ws.exciteRole(std.ID, exciteSpeech, "patient")
-	d.event(events.Event{Ev: "link", From: momentID, To: subj.ID, Rel: memory.RelAgent, Weight: comprehendWeight})
-	d.event(events.Event{Ev: "link", From: momentID, To: std.ID, Rel: memory.RelPatient, Weight: comprehendWeight})
+	d.noteFocus(subj) // the original subject stays the topic (invariant I2)
+	d.recordThreadProp(scale.Content, greater.ID, lesser.ID, greater.Content, lesser.Content)
+	d.ws.excite(scaleID, exciteSpeech)
+	d.ws.exciteRole(greater.ID, exciteSpeech, "agent")
+	d.ws.exciteRole(lesser.ID, exciteSpeech, "patient")
+	d.event(events.Event{Ev: "link", From: momentID, To: greater.ID, Rel: memory.RelAgent, Weight: w})
+	d.event(events.Event{Ev: "link", From: momentID, To: lesser.ID, Rel: memory.RelPatient, Weight: w})
+	_ = pole
 	return true
 }
 
@@ -1562,21 +1569,47 @@ func (d *Daemon) planComparative(frame grammar.Frame) (string, bool) {
 		return "", false // a side of the comparison grounds in nothing; admit the gap
 	}
 	d.noteFocus(subj)
-	rel := d.resolveRelation(frame.Action.Phrase)
-	if rel == nil {
-		// Nothing has ever been compared on this dimension, so GOLEM cannot place
-		// the two: it admits the gap rather than deny an ordering it never heard.
+	gap := func() (string, bool) {
+		// Nothing places the two on this dimension: no pole taught, no scale, or
+		// the surface names no gradable. GOLEM admits the gap rather than deny an
+		// ordering it never heard (invariant I4).
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
 	}
-	holds := subj.ID != std.ID && d.comparesTransitively(rel, subj.ID, std.ID)
-	line := d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, holds)
-	// An affirmed ordering leaves its proof: the told ordering's moment when
-	// the pair was compared directly, a bare trace when the order was chained,
-	// which the probe owns as GOLEM's own reasoning.
+	pole, scaleID, sign, ok := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
+	if !ok {
+		return gap()
+	}
+	sf, err := d.store.FragmentsByIDs([]uint64{scaleID})
+	if err != nil || len(sf) != 1 {
+		return gap()
+	}
+	scale := sf[0]
+	// The walk runs in the canonical greater-over-lesser direction: an lt sign swaps its
+	// walk pair (the standard is the greater). Realization keeps the original subject,
+	// standard, and asked pole for a genuine lesser pole (invariant I2), but a "less"
+	// inversion of a greater pole (its own role disagrees with the flipped sign) speaks
+	// the greater surface with subject and standard swapped, "Y is more X than Z".
+	walkFrom, walkTo := subj.ID, std.ID
+	if sign == "lt" {
+		walkFrom, walkTo = std.ID, subj.ID
+	}
+	holds := subj.ID != std.ID && d.comparesTransitively(scale, walkFrom, walkTo)
+	surface := d.realizeComparative(pole, frame.Lang, "")
+	if surface == "" {
+		return gap()
+	}
+	saySubj, sayStd := subj, std
+	if own, ok := d.poleSign(pole); ok && own != sign {
+		saySubj, sayStd = std, subj
+	}
+	line := d.sayComparison(frame.Lang, saySubj, surface, sayStd, holds)
+	// An affirmed ordering leaves its proof, keyed on the scale and the canonical
+	// greater/lesser pair the walk affirmed, so the evidence reads the right moment.
 	if holds {
-		d.traceClaim(rel.Content, subj.ID, std.ID, line,
-			d.polarEvidence(rel.Content, subj.ID, std.ID, 0))
+		greater, lesser := canonicalOrdering(sign, subj, std)
+		d.traceClaim(scale.Content, greater.ID, lesser.ID, line,
+			d.polarEvidence(scale.Content, greater.ID, lesser.ID, 0))
 	}
 	return line, true
 }
@@ -1599,25 +1632,49 @@ func (d *Daemon) planMagnitude(frame grammar.Frame) (string, bool) {
 		return "", false
 	}
 	d.noteFocus(subj)
-	rel := d.resolveRelation(frame.Action.Phrase)
-	if rel == nil {
+	dontKnow := func() (string, bool) {
 		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 			Action: grammar.Term{Phrase: "know"}, Negate: true}, d.chem.Snapshot()), true
 	}
-	gap, ok := d.comparativeMagnitude(rel, subj.ID, std.ID)
+	pole, scaleID, sign, ok := d.comparativeToPole(frame.Action.Phrase, frame.Lang)
 	if !ok {
-		return d.sayComparison(frame.Lang, subj, frame.Action.Phrase, std, false), true
+		return dontKnow()
 	}
-	return d.sayMagnitude(frame.Lang, subj, frame.Action.Phrase, std, degreeBucket(gap)), true
+	sf, err := d.store.FragmentsByIDs([]uint64{scaleID})
+	if err != nil || len(sf) != 1 {
+		return dontKnow()
+	}
+	scale := sf[0]
+	surface := d.realizeComparative(pole, frame.Lang, "")
+	if surface == "" {
+		return dontKnow()
+	}
+	// The magnitude reads the rank gap in the canonical direction: an lt sign swaps its
+	// walk pair so the reach is measured greater-to-lesser (invariant I2). A "less"
+	// inversion of a greater pole speaks the greater surface with the pair swapped.
+	fromID, toID := subj.ID, std.ID
+	if sign == "lt" {
+		fromID, toID = std.ID, subj.ID
+	}
+	saySubj, sayStd := subj, std
+	if own, ok := d.poleSign(pole); ok && own != sign {
+		saySubj, sayStd = std, subj
+	}
+	gap, ok := d.comparativeMagnitude(scale, fromID, toID)
+	if !ok {
+		return d.sayComparison(frame.Lang, saySubj, surface, sayStd, false), true
+	}
+	return d.sayMagnitude(frame.Lang, saySubj, surface, sayStd, degreeBucket(gap)), true
 }
 
-// comparesTransitively reports whether the subject stands above the standard on a
-// gradable relation, directly or through a chain walked over the graph. The order
-// is read from the told facts, so it needs no scale in code, and a converse pole
-// the relation was discovered to oppose ("smaller" to "bigger") is walked reversed,
-// so an ordering told one way answers the other across the whole chain.
-func (d *Daemon) comparesTransitively(rel *memory.Fragment, fromID, toID uint64) bool {
-	opposites := d.oppositeRelations(rel.ID)
+// comparesTransitively reports whether the from-concept stands above the to-concept on
+// a scale, directly or through a chain walked over the graph. The order is read from the
+// canonical greater-over-lesser orderings Proposed on the scale (the greater stands as
+// agent), so a single generic agent-direction walk serves it. A converse ("smaller")
+// query swaps its walk pair before calling, so it reads the same orderings the greater
+// pole wrote rather than a reversed second pole. The same walk answers an ordinary told-
+// transitive relation, whose content is the relation rather than a scale.
+func (d *Daemon) comparesTransitively(frag *memory.Fragment, fromID, toID uint64) bool {
 	seen := map[uint64]bool{fromID: true}
 	stack := []uint64{fromID}
 	for len(stack) > 0 {
@@ -1638,31 +1695,20 @@ func (d *Daemon) comparesTransitively(rel *memory.Fragment, fromID, toID uint64)
 			return false
 		}
 		// The things cur was told to exceed directly.
-		for _, f := range d.gatherFacts(frags[0], "agent", rel.Content) {
+		for _, f := range d.gatherFacts(frags[0], "agent", frag.Content) {
 			if reach(f.coID) {
 				return true
-			}
-		}
-		// And the things told to fall below cur on a converse pole: "the mouse is
-		// smaller than the cat" places the cat above the mouse just as "bigger" would.
-		for _, opp := range opposites {
-			for _, f := range d.gatherFacts(frags[0], "patient", opp) {
-				if reach(f.coID) {
-					return true
-				}
 			}
 		}
 	}
 	return false
 }
 
-// comparativeReach returns every concept a concept stands above on a gradable
-// relation, directly or through the chain. It is the same walk comparesTransitively
-// runs, collecting the whole set rather than stopping at one target, so a concept's
-// PLACE on the scale (its rank: how many it exceeds) is read from the told order
-// alone, no scale written in code.
-func (d *Daemon) comparativeReach(rel *memory.Fragment, fromID uint64) map[uint64]bool {
-	opposites := d.oppositeRelations(rel.ID)
+// comparativeReach returns every concept a concept stands above on a scale, directly or
+// through the chain. It is the same walk comparesTransitively runs, collecting the whole
+// set rather than stopping at one target, so a concept's PLACE on the scale (its rank:
+// how many it exceeds) is read from the canonical orderings alone.
+func (d *Daemon) comparativeReach(frag *memory.Fragment, fromID uint64) map[uint64]bool {
 	below := map[uint64]bool{}
 	seen := map[uint64]bool{fromID: true}
 	stack := []uint64{fromID}
@@ -1680,13 +1726,8 @@ func (d *Daemon) comparativeReach(rel *memory.Fragment, fromID uint64) map[uint6
 				stack = append(stack, id)
 			}
 		}
-		for _, f := range d.gatherFacts(frags[0], "agent", rel.Content) {
+		for _, f := range d.gatherFacts(frags[0], "agent", frag.Content) {
 			step(f.coID)
-		}
-		for _, opp := range opposites {
-			for _, f := range d.gatherFacts(frags[0], "patient", opp) {
-				step(f.coID)
-			}
 		}
 	}
 	delete(below, fromID)
@@ -1694,8 +1735,8 @@ func (d *Daemon) comparativeReach(rel *memory.Fragment, fromID uint64) map[uint6
 }
 
 // comparativeMagnitude is the ordinal distance the subject stands above the
-// standard on a gradable relation: the difference in how many each exceeds, read
-// from the told order. The comparisons are ordinal, so this is a rank gap, not a
+// standard on a scale: the difference in how many each exceeds, read from the
+// canonical order. The comparisons are ordinal, so this is a rank gap, not a
 // metric amount, the honest degree the data supports. It returns false when the
 // subject does not stand above the standard at all (nothing to measure).
 func (d *Daemon) comparativeMagnitude(rel *memory.Fragment, subjID, stdID uint64) (int, bool) {
@@ -1718,83 +1759,13 @@ func degreeBucket(gap int) string {
 	return ""
 }
 
-// oppositeRelations returns the contents of the relations discovered to be converse
-// poles of the given one, so a comparison query can walk them reversed.
 // factIsComparative reports whether a gathered fact's relation is a gradable
-// comparison, which has an opposite pole and speaks as "X is bigger than Y"
-// through its own query, not as a plain verb ("X biggered Y") in a fact list.
+// comparison, now that a comparison is an ordering on a scale rather than a fact hung
+// off a per-tongue relation. Its content names a scale dimension (a concept with poles
+// hung on it by RelScale), so it speaks as "X is bigger than Y" through the comparison
+// query rather than as a plain verb ("X biggered Y") in a fact list.
 func (d *Daemon) factIsComparative(relContent string) bool {
-	rel := d.resolveRelation(relContent)
-	return rel != nil && len(d.oppositeRelations(rel.ID)) > 0
-}
-
-func (d *Daemon) oppositeRelations(relID uint64) []string {
-	edges, err := d.store.LinksFromRel([]uint64{relID}, memory.RelOpposite)
-	if err != nil || len(edges) == 0 {
-		return nil
-	}
-	ids := make([]uint64, 0, len(edges))
-	for _, e := range edges {
-		ids = append(ids, e.To)
-	}
-	frags, err := d.store.FragmentsByIDs(ids)
-	if err != nil {
-		return nil
-	}
-	out := make([]string, 0, len(frags))
-	for _, f := range frags {
-		out = append(out, f.Content)
-	}
-	return out
-}
-
-// discoverConverse learns that two gradable relations are opposite poles of one
-// scale from the ordering itself: a new "subj rel std" whose pair another relation
-// already orders the other way (std above subj), and never the same way, makes that
-// relation rel's converse. One such telling links them, so an ordering told as
-// "bigger" thereafter answers "smaller" across the whole chain, discovered rather
-// than told as an antonym.
-func (d *Daemon) discoverConverse(rel, subj, std *memory.Fragment) {
-	for _, f := range d.gatherFacts(std, "agent", "") { // relations std leads
-		if f.coID != subj.ID || f.rel == rel.Content {
-			continue // not the reversed pair, or the same relation
-		}
-		opp := d.resolveRelation(f.rel)
-		if opp == nil || opp.ID == rel.ID {
-			continue
-		}
-		if d.propositionHolds(subj, f.rel, std.ID) {
-			continue // it also orders subj above std: a synonym, not a converse
-		}
-		if d.hasOtherConverse(opp.ID, rel.ID) {
-			continue // opp's converse pole is already a different relation: this
-			// reversed pair is a separate scale that merely correlates with opp
-			// (size and speed both order the horse above the dog), not opp's
-			// opposite. A gradable scale has one converse pole, claimed by the
-			// pole-pair taught together; a later cross-scale reversal does not
-			// get to share it, which would conflate the two scales.
-		}
-		d.store.SetLinkRel(rel.ID, opp.ID, memory.RelOpposite, 1)
-		d.store.SetLinkRel(opp.ID, rel.ID, memory.RelOpposite, 1)
-	}
-}
-
-// hasOtherConverse reports whether relID already holds a converse pole that is not
-// other, so a relation keeps the single opposite its scale's pole-pair claimed
-// rather than collecting a converse from every relation that happens to order one
-// pair the other way. A pole may still serve several relations (one smaller for
-// the English and Turkish bigger), so only the already-leading relation is guarded.
-func (d *Daemon) hasOtherConverse(relID, other uint64) bool {
-	links, err := d.store.LinksFromRel([]uint64{relID}, memory.RelOpposite)
-	if err != nil {
-		return false
-	}
-	for _, l := range links {
-		if l.To != other {
-			return true
-		}
-	}
-	return false
+	return d.isScale(relContent)
 }
 
 // analogize completes a proportion a:b::c:?: it finds the relation that holds from
@@ -1852,10 +1823,12 @@ func (d *Daemon) planAnalogy(frame grammar.Frame) (string, bool) {
 	return upperFirst(d.coordinatedNP(frame.Lang, names)) + ".", true
 }
 
-// sayComparison speaks a comparison's answer, the affirmation word and the clause
-// the question stated, denied when the ordering does not hold: "Yes, the cat is
-// bigger than the mouse" or "No, the cat is not bigger than the mouse". The copula
-// and the standard marker come from the tongue's data.
+// sayComparison speaks a comparison's answer, the affirmation word and the clause the
+// question stated, denied when the ordering does not hold: "Yes, the cat is bigger than
+// the mouse" or "No, the cat is not bigger than the mouse". The rel is the realized
+// comparative surface of the asked pole, spliced with the original subject and standard
+// so a swapped walk pair never inverts the spoken clause (invariant I2). The copula and
+// the standard marker come from the tongue's data.
 func (d *Daemon) sayComparison(lang string, subj *memory.Fragment, rel string, std *memory.Fragment, holds bool) string {
 	if lang == "tr" {
 		// Turkish marks the standard ablative and follows the adjective with "değil"
@@ -1901,7 +1874,19 @@ func (d *Daemon) comparativeClause(lang, subj string, dirs, stds []string, given
 	if len(dirs) == 0 || len(stds) == 0 {
 		return "", false
 	}
-	rel := d.joinCoordinated(lang, dirs)
+	// Each direction is a pole's content ("big", "small"), language-agnostic through the
+	// grouping and contrast logic; it realizes to the tongue's comparative surface here,
+	// so the same plan reads in any tongue the poles carry a form in.
+	surfaces := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		pole := d.resolveConcept(dir)
+		surface := d.realizeComparative(pole, lang, "")
+		if surface == "" {
+			return "", false
+		}
+		surfaces = append(surfaces, surface)
+	}
+	rel := d.joinCoordinated(lang, surfaces)
 	if lang == "tr" {
 		abl := make([]string, len(stds))
 		for i, s := range stds {
@@ -1949,53 +1934,60 @@ func (d *Daemon) joinCoordinated(lang string, items []string) string {
 	}
 }
 
-// comparisonDir is the relation a comparison is spoken with from the focus's side: the
-// relation itself when the focus is the greater pole (agent), its opposite when the focus is
-// the lesser (patient), so the same stored "bigger" reads "bigger" or "smaller".
+// comparisonDir is the pole a comparison is spoken from, given as the pole's content
+// ("big", "small") so the direction key stays language-agnostic through the grouping and
+// contrast logic and realizes to a surface only at the clause. The focus is the greater
+// pole when it stood as the greater (agent) on the scale, the lesser when it stood below
+// (patient), so the same stored ordering reads "bigger" or "smaller".
 func (d *Daemon) comparisonDir(f focusFact) string {
-	if f.focusRole != "patient" {
-		return f.rel
+	side := "greater"
+	if f.focusRole == "patient" {
+		side = "lesser"
 	}
-	if rel := d.resolveRelation(f.rel); rel != nil {
-		if opp := d.oppositeRelations(rel.ID); len(opp) > 0 {
-			return opp[0]
-		}
+	if p := d.scalePole(f.rel, side); p != nil {
+		return p.Content
 	}
 	return f.rel
 }
 
-// comparisonScale names the gradable scale a direction lies on, the same for a pole and its
-// opposite ("bigger" and "smaller" share one scale), so the two poles cluster in a description
-// and a switch between them reads as a contrast.
+// comparisonScale names the scale a direction (a pole's content) lies on, the same for a
+// pole and its opposite ("big" and "small" share one scale), so the two poles cluster in a
+// description and a switch between them reads as a contrast. It reads the dimension via the
+// pole's RelScale rather than a lexicographic proxy.
 func (d *Daemon) comparisonScale(dir string) string {
-	rel := d.resolveRelation(dir)
-	if rel == nil {
+	pole := d.resolveConcept(dir)
+	if pole == nil {
 		return dir
 	}
-	for _, opp := range d.oppositeRelations(rel.ID) {
-		if opp < dir {
-			return opp
+	if scaleID, ok := d.scaleOf(pole); ok {
+		if sf, err := d.store.FragmentsByIDs([]uint64{scaleID}); err == nil && len(sf) == 1 {
+			return sf[0].Content
 		}
 	}
 	return dir
 }
 
-// opposesDir reports whether two comparison directions are the opposite poles of one scale
-// ("bigger" against "smaller"), the discourse relation a contrast connective realizes.
+// opposesDir reports whether two comparison directions (pole contents) are the opposite
+// poles of one scale ("big" against "small"), the discourse relation a contrast connective
+// realizes. They oppose when they share a scale and carry different pole roles.
 func (d *Daemon) opposesDir(a, b string) bool {
 	if a == "" || b == "" || a == b {
 		return false
 	}
-	rel := d.resolveRelation(a)
-	if rel == nil {
+	pa, pb := d.resolveConcept(a), d.resolveConcept(b)
+	if pa == nil || pb == nil {
 		return false
 	}
-	for _, opp := range d.oppositeRelations(rel.ID) {
-		if opp == b {
-			return true
-		}
+	sa, oka := d.scaleOf(pa)
+	sb, okb := d.scaleOf(pb)
+	if !oka || !okb || sa != sb {
+		return false
 	}
-	return false
+	// The poles oppose only when they name opposite ends of the shared scale, so a pair of
+	// same-role synonyms on one scale is not a contrast.
+	ra, rok := d.poleSign(pa)
+	rb, rbok := d.poleSign(pb)
+	return rok && rbok && ra != rb
 }
 
 // sayMagnitude speaks a comparison's degree: the clause the question asked with the
@@ -3363,6 +3355,14 @@ func (d *Daemon) relationConcept(rel grammar.Term, lang string) (*memory.Fragmen
 	// relations and must pass), so the malformed proposition binds no relation rather than
 	// entrenching the marker as one.
 	if marker := d.gram.Word(lang, "than"); marker != "" && strings.EqualFold(lemma, marker) {
+		return nil, nil
+	}
+	// A gradable comparative surface names a pole on a scale, never a relation. A
+	// comparison frame is written by storeComparison and never reaches here, but a
+	// malformed clause could seat "bigger" as a predicate on the general-proposition
+	// path; minting rel:en:bigger would fork the very atomic relation the scale model
+	// dissolved. Refuse it structurally, so a comparative surface binds nothing here.
+	if d.isGradablePoleSurface(lemma, lang) {
 		return nil, nil
 	}
 	// A relation this verb already names, in any tongue, is the one to reuse.

@@ -941,14 +941,6 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		return ans, nil
 	}
 
-	// "Bigger is above": what a gradable means in number, the comparison its
-	// relation is marked with, learned from a fully trusted telling the way a
-	// property is. It runs beside planProperty for the same reason: its subject
-	// is a relation, and the mapping is a rule about it, not a fact of the world.
-	if ans, ok := d.planPole(frame, momentID); ok {
-		return ans, nil
-	}
-
 	// "Do you know X": a reflexive question about what GOLEM has grounded, recognized off the
 	// frame the know verb marks as an epistemic move. It runs before the polar and command
 	// paths so the "do"-opened clause is read as a question rather than mis-handled as a

@@ -806,15 +806,19 @@ func (d *Daemon) renderFactsCapped(lang, focusName string, facts []focusFact, pa
 		if !d.factIsComparative(k.rel) {
 			continue
 		}
-		dir := k.rel
+		// The focus is the greater pole when it stood above (agent) and the lesser when
+		// below (patient); the direction is that pole's content, the scale is the fact's
+		// relation content directly, no opposite-relation lookup.
+		side := "greater"
 		if k.role == "patient" {
-			opp := d.oppositeRelations(d.resolveRelation(k.rel).ID)
-			if len(opp) == 0 {
-				continue
-			}
-			dir = opp[0]
+			side = "lesser"
 		}
-		scale := d.comparisonScale(dir)
+		pole := d.scalePole(k.rel, side)
+		if pole == nil {
+			continue
+		}
+		dir := pole.Content
+		scale := k.rel
 		for _, name := range coargs[k] {
 			g := byStd[name]
 			if g == nil {

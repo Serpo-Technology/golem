@@ -333,6 +333,13 @@ type Daemon struct {
 	// word's whole category from the link rather than a seeded class string, and membership
 	// becomes a teachable graph fact. Like the refinements, they sit outside the grown layer.
 	categoryClasses map[uint64]string
+	// gradableScaffold holds the comparative machinery seeded as class concepts: the
+	// comparison operator, the greater and lesser pole roles, and the rule, regular,
+	// irregular, and exception meta concepts. The concept ID maps to its content word.
+	// Like the category classes, they sit outside the grown concept layer; the gradable
+	// adjectives and the scales they grade along are grown content, taught rather than
+	// seeded here.
+	gradableScaffold map[uint64]string
 
 	// argConstructions are the argument-structure construction concepts (transitive,
 	// intransitive), each carrying its form pole as a slot subgraph in the graph (an ordered slot
@@ -1182,6 +1189,37 @@ func (d *Daemon) ensureCategoryClasses() error {
 	return nil
 }
 
+// ensureComparativeScaffold seeds the machinery of gradable comparison as graph
+// concepts, so comparison degree, pole direction, and the rule-versus-override
+// distinction are graph data rather than Go flags. The comparative operator denotes
+// greater-on-scale toward a pole. The greater and lesser pole roles are the un-gated
+// ground truth for which end of a scale a pole names; an ordering reads them to orient
+// itself and the numeric compare path derives its sign from them. The rule, regular,
+// irregular, and exception concepts are the meta layer a realization rule and its
+// lexical overrides are tagged with. All are class concepts, so they are prune-spared,
+// kept out of cognition, and collision-safe, seeded idempotently at boot beside the
+// category classes. The gradable adjectives and the scales they grade along are grown
+// content and are taught, so they are not seeded here.
+func (d *Daemon) ensureComparativeScaffold() error {
+	d.gradableScaffold = map[uint64]string{}
+	for _, s := range []struct{ template, content string }{
+		{"cmp:comparative", "comparative"},
+		{"pole:greater", "greater"},
+		{"pole:lesser", "lesser"},
+		{"meta:rule", "rule"},
+		{"meta:regular", "regular"},
+		{"meta:irregular", "irregular"},
+		{"meta:exception", "exception"},
+	} {
+		id := d.ensureClassConcept(s.template, s.content)
+		if id == 0 {
+			continue
+		}
+		d.gradableScaffold[id] = s.content
+	}
+	return nil
+}
+
 // ensureClassConcept is ensureConcept with the distinct "class" category, so a piece of
 // grammar scaffolding (a bare grammatical class or a closed-class refinement) lives as a
 // graph concept that cannot collide with a grown noun in the naming or hygiene views, is
@@ -1211,6 +1249,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.categoryClasses[id]; ok {
+		return true
+	}
+	if _, ok := d.gradableScaffold[id]; ok {
 		return true
 	}
 	if _, ok := d.argConstructions[id]; ok {
