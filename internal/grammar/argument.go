@@ -494,10 +494,11 @@ func (p *Params) selectArgByFit(lang string, spans []string, resolve func(string
 // finite verb is present.
 func (p *Params) comprehendByCase(lang string, spans []string, resolve func(string) *memory.Fragment) (Meaning, bool) {
 	m := Meaning{Roles: map[string]Term{}, Lang: lang}
+	verbIdx := p.pickVerbByCase(lang, spans, resolve)
 	var nouns []string
 	person := ""
-	for _, span := range spans {
-		if m.Relation.Phrase == "" && p.finiteVerbByCase(lang, span) {
+	for i, span := range spans {
+		if i == verbIdx {
 			lemma := p.verbLemma(lang, span)
 			m.Relation = Term{Concept: resolve(lemma), Phrase: lemma}
 			m.Past = p.verbPast(lang, span)
@@ -557,6 +558,13 @@ func (p *Params) caseRole(lang, span string) (role, lemma string) {
 		}
 		if strings.HasSuffix(span, "um") && len([]rune(span)) > 3 {
 			return "patient", strings.TrimSuffix(span, "um") + "us"
+		}
+		// The third declension marks the accusative with -em on a stem the
+		// nominative does not reveal (caro/carnem, leo/leonem), so it cannot be
+		// reduced by rule: the accusative is a taught name resolved whole, and
+		// its -em ending is enough to read the patient role off the case.
+		if strings.HasSuffix(span, "em") && len([]rune(span)) > 3 {
+			return "patient", span
 		}
 		return "agent", span
 	}
@@ -645,6 +653,38 @@ func latinAccusative(nom string) string {
 func (p *Params) finiteVerbByCase(lang, span string) bool {
 	_, _, ok := latinVerb(span)
 	return ok
+}
+
+// pickVerbByCase chooses which span is the clause's verb, letting the resolver
+// break the ties the endings alone cannot. A noun can end in a vowel a verb also
+// wears (leo, the lion, ends in the first person's -o), so a span shaped like a
+// verb is only the verb when its lemma names a known relation, or, when none does,
+// when it is not already a known noun. That keeps a noun whose ending merely looks
+// verbal a noun, and still lets a genuinely new verb mint its relation. It returns
+// -1 when no span is a verb. With no resolver it falls back to the first
+// verb-shaped span, the old behaviour.
+func (p *Params) pickVerbByCase(lang string, spans []string, resolve func(string) *memory.Fragment) int {
+	if resolve == nil {
+		for i, span := range spans {
+			if p.finiteVerbByCase(lang, span) {
+				return i
+			}
+		}
+		return -1
+	}
+	for i, span := range spans {
+		if p.finiteVerbByCase(lang, span) {
+			if c := resolve(p.verbLemma(lang, span)); c != nil && c.Category == "relation" {
+				return i
+			}
+		}
+	}
+	for i, span := range spans {
+		if p.finiteVerbByCase(lang, span) && resolve(span) == nil {
+			return i
+		}
+	}
+	return -1
 }
 
 // bestFit reorders the role assignment by feature fit when one is clearly

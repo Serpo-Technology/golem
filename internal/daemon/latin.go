@@ -90,6 +90,39 @@ func (d *Daemon) latinGloss(c *memory.Fragment) string {
 	return c.Content
 }
 
+// latinPatientForm speaks a concept in the accusative for the patient slot. The
+// third declension's accusative is no rule from the nominative (caro/carnem), so
+// a taught -em name is used whole when one exists; otherwise the nominative gloss
+// stands and the generator cases the regular declensions (-a/-us) itself, a third
+// declension noun with no taught accusative keeping its nominative as the honest
+// limit. Never a borrowed name, so a food noun is not glossed as a neighbour.
+func (d *Daemon) latinPatientForm(id uint64, gloss string) string {
+	if namers, err := d.store.LinksToRel([]uint64{id}, memory.RelNames); err == nil && len(namers) > 0 {
+		ids := make([]uint64, 0, len(namers))
+		for _, e := range namers {
+			ids = append(ids, e.From)
+		}
+		if words, err := d.store.FragmentsByIDs(ids); err == nil {
+			for _, w := range words {
+				if w.Lang == "la" && strings.HasSuffix(w.Content, "em") {
+					return w.Content
+				}
+			}
+		}
+	}
+	return d.latinGloss(&memory.Fragment{ID: id, Content: gloss})
+}
+
+// latinRoleForm speaks a concept in the case its role wears: the accusative for
+// the patient, the nominative for the agent, so a Latin clause reads and
+// round-trips whatever the noun's declension.
+func (d *Daemon) latinRoleForm(role string, id uint64, gloss string) string {
+	if role == "patient" {
+		return d.latinPatientForm(id, gloss)
+	}
+	return d.latinGloss(&memory.Fragment{ID: id, Content: gloss})
+}
+
 // resolveLatinNoun resolves a Latin token to its concept, trying the nominative
 // as written and then the case stems the declensions yield, so a cased mention
 // (accusative "equum") reaches the same concept the nominative names.
@@ -318,8 +351,8 @@ func (d *Daemon) planLatinWh(frame grammar.Frame, raw string) (string, bool) {
 	var clauses []string
 	for _, f := range d.gatherFacts(known.Concept, knownRole, rel.Content) {
 		roles := map[string]grammar.Term{
-			knownRole: {Phrase: d.conceptName(known.Concept.ID, known.Concept.Content, "la")},
-			askedRole: {Phrase: d.conceptName(f.coID, f.coGloss, "la")},
+			knownRole: {Phrase: d.latinRoleForm(knownRole, known.Concept.ID, known.Concept.Content)},
+			askedRole: {Phrase: d.latinRoleForm(askedRole, f.coID, f.coGloss)},
 		}
 		if line, ok := d.gram.SpeakDecl("la", grammar.Meaning{
 			Relation: grammar.Term{Phrase: m.Relation.Phrase}, Roles: roles,

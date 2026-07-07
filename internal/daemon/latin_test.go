@@ -335,3 +335,26 @@ func TestLatinThirdConjugationFact(t *testing.T) {
 		t.Fatalf("a third-conjugation verb fact should answer its role question: %q", got)
 	}
 }
+
+// A third-declension noun wears an accusative the nominative does not reveal
+// (caro/carnem), so the accusative is taught as a name and used whole: the fact
+// "leo carnem edit" reads by case and the role question renders the accusative
+// back, where the regular declensions form it by rule.
+func TestLatinThirdDeclensionAccusative(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNounLang(t, d, "leo", "la") // lion, nominative only
+	meat := groundNounLang(t, d, "caro", "la")
+	// Teach the accusative form of the third-declension meat noun.
+	now := time.Now()
+	w, _, err := d.store.WordNode("carnem", "la", d.chem.Snapshot(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.store.SetLinkRel(w.ID, meat.ID, memory.RelNames, 0.9); err != nil {
+		t.Fatal(err)
+	}
+	sayLang(t, d, "la", "leo carnem edit") // the lion eats meat
+	if got := sayLang(t, d, "la", "quid leo edit?").Say; got != "Leo carnem edit." {
+		t.Fatalf("a third-declension accusative fact should read and render whole: %q", got)
+	}
+}
