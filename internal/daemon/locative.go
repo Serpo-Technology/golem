@@ -63,9 +63,24 @@ func (d *Daemon) factIsPartWhole(relContent string) bool {
 	return err == nil && len(edges) > 0
 }
 
-// partWholes lists the wholes a figure is a part of: the patients of its part-whole propositions
-// ("the leaf is part of the tree" yields the tree).
+// partWholes lists the wholes a figure is a part of: the patients of its part-whole
+// propositions ("the leaf is part of the tree" yields the tree). The marker-filtered reach it
+// runs now lives in the graph as the part-whole rule: it runs through evalPartWholeRule when
+// the rule is present, and the Go walk below is the fallback. The rule reproduces the Go walk,
+// verified over the part-whole fixtures.
 func (d *Daemon) partWholes(figureID uint64) []uint64 {
+	if root := d.partWholeRuleRoot(); root != 0 {
+		if wholes, ok := d.evalPartWholeRule(root, figureID); ok {
+			return wholes
+		}
+	}
+	return d.partWholesGo(figureID)
+}
+
+// partWholesGo is the hardcoded marker-filtered reach, the fallback for the part-whole rule:
+// it gathers the figure's agent facts and keeps the co-arguments of the ones whose relation
+// carries the part-whole marker (the wholes the figure is a part of).
+func (d *Daemon) partWholesGo(figureID uint64) []uint64 {
 	frags, err := d.store.FragmentsByIDs([]uint64{figureID})
 	if err != nil || len(frags) != 1 {
 		return nil

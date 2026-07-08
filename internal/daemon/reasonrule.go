@@ -42,10 +42,16 @@ const (
 	// counterpart of the role a reach rule stores, so the walk it follows is graph data.
 	isAEdge = "is-a"
 
-	// transitiveRuleTemplate and inheritRuleTemplate key the generic rules, so each is found
-	// and reused rather than stored per relation.
+	// partWholeRule grounds a rule node in the part-whole primitive: a single-hop reach that
+	// keeps only the facts whose relation carries the part-whole marker, returning the wholes a
+	// figure is a part of. A marker-filtered reach, distinct from a named-relation closure.
+	partWholeRule = "partwhole"
+
+	// transitiveRuleTemplate, inheritRuleTemplate, and partWholeRuleTemplate key the generic
+	// rules, so each is found and reused rather than stored per relation.
 	transitiveRuleTemplate = "rule:transitive"
 	inheritRuleTemplate    = "rule:inherit"
+	partWholeRuleTemplate  = "rule:partwhole"
 )
 
 // ensureReasonRule returns the root of a durable reasoning-rule subgraph keyed by template,
@@ -74,6 +80,10 @@ func (d *Daemon) ensureTransitivityRule() uint64 {
 
 func (d *Daemon) ensureInheritanceRule() uint64 {
 	return d.ensureReasonRule(inheritRuleTemplate, inheritRule, isAEdge)
+}
+
+func (d *Daemon) ensurePartWholeRule() uint64 {
+	return d.ensureReasonRule(partWholeRuleTemplate, partWholeRule, agentRole)
 }
 
 // reasonRuleByTemplate finds a reasoning-rule subgraph root by its template, 0 when none is
@@ -138,6 +148,44 @@ func (d *Daemon) evalInheritRule(ruleRoot uint64, relContent string, agentID, pa
 		}
 	}
 	return 0, false, true
+}
+
+// partWholeRuleRoot returns the cached root of the part-whole rule, ensuring it once on first
+// use so the containment path runs the graph-stored rule without a per-query scan. Called only
+// on the single request loop, so the cache write is unsynchronized by design.
+func (d *Daemon) partWholeRuleRoot() uint64 {
+	if d.partWholeRuleID == 0 {
+		d.partWholeRuleID = d.ensurePartWholeRule()
+	}
+	return d.partWholeRuleID
+}
+
+// evalPartWholeRule evaluates a part-whole rule against the live graph: it gathers a figure's
+// facts in the role the rule stores and keeps the co-arguments of the ones whose relation
+// carries the part-whole marker, the wholes the figure is a part of. It reproduces
+// partWholesGo, driven by the stored rule (its kind and role read from the graph) rather than
+// hardcoded, a third rule shape (a marker-filtered single-hop reach) on the one interpreter.
+// ok is false when the node is not a part-whole rule, so a caller falls back to the Go handler.
+func (d *Daemon) evalPartWholeRule(ruleRoot, figureID uint64) ([]uint64, bool) {
+	g := d.storeView()
+	if g.content(firstDest(g, ruleRoot, memory.RelGrounds)) != partWholeRule {
+		return nil, false
+	}
+	role := g.content(firstDest(g, ruleRoot, operand0Rel))
+	if role == "" {
+		return nil, false
+	}
+	frags, err := d.store.FragmentsByIDs([]uint64{figureID})
+	if err != nil || len(frags) != 1 {
+		return nil, true
+	}
+	var wholes []uint64
+	for _, f := range d.gatherFacts(frags[0], role, "") {
+		if d.factIsPartWhole(f.rel) {
+			wholes = append(wholes, f.coID)
+		}
+	}
+	return wholes, true
 }
 
 // ruleReachRole reads the role a reach rule follows from its subgraph, false when the node is

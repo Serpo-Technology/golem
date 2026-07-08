@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -153,6 +154,54 @@ func TestInheritanceRuleReproducesHandler(t *testing.T) {
 	}
 	if d.inheritanceRuleID == 0 {
 		t.Fatal("the query should have ensured and cached the inheritance rule")
+	}
+}
+
+// The part-whole rule stored in the graph reproduces the hardcoded marker-filtered reach, a
+// third rule shape on the one interpreter: the wholes a leaf is a part of come back the same
+// from the graph-walked evaluator and partWholesGo, and the live containment query that steps
+// through part-whole still composes. partWholesGo stays the authoritative handler.
+func TestPartWholeRuleReproducesHandler(t *testing.T) {
+	d, _ := testDaemon(t)
+	leaf := groundNoun(t, d, "leaf")
+	tree := groundNoun(t, d, "tree")
+	forest := groundNoun(t, d, "forest")
+	say(t, d, "the leaf is part of the tree")
+
+	root := d.ensurePartWholeRule()
+	if root == 0 {
+		t.Fatal("the part-whole rule should materialize a durable subgraph")
+	}
+	g := d.storeView()
+	if g.content(firstDest(g, root, memory.RelGrounds)) != partWholeRule {
+		t.Fatal("the rule root should ground in the part-whole primitive")
+	}
+
+	// The leaf is part of the tree; the rule and the handler agree on the wholes.
+	want := d.partWholesGo(leaf.ID)
+	got, ok := d.evalPartWholeRule(root, leaf.ID)
+	if !ok {
+		t.Fatal("the part-whole rule should run")
+	}
+	if len(got) != len(want) || (len(want) == 1 && got[0] != want[0]) {
+		t.Fatalf("rule wholes %v disagree with handler %v", got, want)
+	}
+	if len(got) != 1 || got[0] != tree.ID {
+		t.Fatalf("the leaf should be part of the tree (%d), got %v", tree.ID, got)
+	}
+
+	// The forest is part of nothing here; the rule agrees (empty).
+	if fw, _ := d.evalPartWholeRule(root, forest.ID); len(fw) != 0 {
+		t.Fatalf("the forest should be part of nothing, got %v", fw)
+	}
+
+	// The live containment query steps through part-whole and composes, routed through the rule.
+	say(t, d, "the tree is in the forest")
+	if answer := say(t, d, "is the leaf in the forest").Say; !strings.HasPrefix(answer, "Yes") {
+		t.Fatalf("a part of a thing in a place is in that place: %q", answer)
+	}
+	if d.partWholeRuleID == 0 {
+		t.Fatal("the containment query should have ensured and cached the part-whole rule")
 	}
 }
 
