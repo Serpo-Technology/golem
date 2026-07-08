@@ -262,7 +262,7 @@ func (d *Daemon) groundColor(word, lang, cell string) bool {
 		d.colourCells = map[uint64]bool{}
 	}
 	d.colourCells[id] = true
-	w, _, err := d.store.WordNode(word, lang, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(word, lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return false
 	}
@@ -321,7 +321,7 @@ func (d *Daemon) ensureColourSenses() error {
 		// A colour word is scaffolding, not a lived moment, so it takes a bare limbic
 		// state rather than the daemon's mood; this also lets the seed run on a chem-less
 		// grammar-only boot.
-		word, _, err := d.store.WordNode(w, "en", limbic.State{}, time.Now())
+		word, _, err := d.mintWordNode(w, "en", limbic.State{}, time.Now())
 		if err != nil {
 			return err
 		}

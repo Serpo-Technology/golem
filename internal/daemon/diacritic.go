@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"strings"
+	"time"
 	"unicode"
 
+	"golem/internal/limbic"
 	"golem/internal/memory"
 )
 
@@ -192,6 +194,44 @@ func (d *Daemon) foldCandidateRows(surface string) (form string, rows []*memory.
 		return "", nil, false // no surviving form, or an ambiguous minimal pair: decline
 	}
 	return forms[0], byForm[forms[0]], true
+}
+
+// diacriticFreeTR reports whether a surface carries no Turkish diacritic, i.e. it is the
+// fully flattened ASCII view its lossy channel would produce. A surface holding any of the
+// six diacritic letters is a deliberate spelling (one member of a minimal pair like sık or
+// şık, or an already-proper form like büyük), not a channel loss to recover.
+func diacriticFreeTR(s string) bool {
+	for _, r := range s {
+		switch r {
+		case 'ü', 'ö', 'ı', 'ç', 'ş', 'ğ':
+			return false
+		}
+	}
+	return true
+}
+
+// mintWordNode is the single seam every word-form mint passes through. Before a Turkish
+// surface is minted it runs the diacritic fold: a fully flattened ASCII form that recovers
+// a single existing proper spelling ("buyuk" of "büyük") resolves to that node instead of
+// forking a lossy shadow. This makes "buyuk and büyük are one word" hold at the mint
+// itself, rather than depending on every caller resolving the surface first, so a pole or
+// comparative surface minted before its span was framed can no longer leak an orphan. The
+// fold fires only for a fully flattened surface: a form still carrying a diacritic is a
+// deliberate spelling and mints its own node, so a minimal pair (sık, şık) stays two words.
+// A non-Turkish surface, a surface that folds to nothing, and one that folds to an ambiguous
+// pair all mint as usual. Unlike foldResolve it is not gated on foldEnabled, because a mint
+// never runs inside the language sniff, so the teaching commands that skip the tell-path
+// resolve are covered too.
+func (d *Daemon) mintWordNode(form, lang string, chem limbic.State, at time.Time) (*memory.Fragment, bool, error) {
+	if lang == "tr" {
+		surface := strings.ToLower(strings.TrimSpace(form))
+		if diacriticFreeTR(surface) {
+			if folded, rows, ok := d.foldCandidateRows(surface); ok && folded != surface && len(rows) > 0 {
+				return rows[0], false, nil
+			}
+		}
+	}
+	return d.store.WordNode(form, lang, chem, at)
 }
 
 // foldOneForm returns the single Turkish word the token's diacritic fold recovers, or

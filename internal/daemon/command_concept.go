@@ -92,7 +92,7 @@ func (d *Daemon) ensureCommandConcept(template, content string) uint64 {
 // nameConceptWord binds a word in a tongue to a concept, the same naming edge a
 // learner lays down, so the word resolves to the concept.
 func (d *Daemon) nameConceptWord(conceptID uint64, word, lang string) {
-	w, _, err := d.store.WordNode(word, lang, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(word, lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return
 	}

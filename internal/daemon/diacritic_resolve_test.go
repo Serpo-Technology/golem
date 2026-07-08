@@ -62,6 +62,41 @@ func TestFoldResolveDeclinesMinimalPair(t *testing.T) {
 	}
 }
 
+// The mint seam folds a fully flattened ASCII surface onto the existing proper node it
+// recovers, so a pole or comparative taught in ASCII never forks a shadow, and it does so
+// without foldEnabled (the teaching-command path). A diacritic-bearing minimal-pair member
+// still mints its own node, so the seam never collapses two real words into one.
+func TestMintWordNodeFoldsLossyASCIIKeepsMinimalPair(t *testing.T) {
+	d, s := testDaemon(t)
+
+	namedConceptTR(t, d, s, "büyük", "büyük")
+	proper, _ := s.WordNodesByForms([]string{"büyük"})
+	if len(proper) != 1 {
+		t.Fatalf("seeding büyük should mint one node, got %d", len(proper))
+	}
+	w, minted, err := d.mintWordNode("buyuk", "tr", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w == nil || w.ID != proper[0].ID {
+		t.Fatalf("minting lossy buyuk should return the existing büyük node %d, got %+v", proper[0].ID, w)
+	}
+	if minted {
+		t.Fatalf("folding a lossy surface must not report a fresh mint")
+	}
+	if rows, _ := s.WordNodesByForms([]string{"buyuk"}); len(rows) != 0 {
+		t.Fatalf("minting lossy buyuk must not fork an ASCII shadow, got %d rows", len(rows))
+	}
+
+	namedConceptTR(t, d, s, "sık", "sık")
+	namedConceptTR(t, d, s, "şık", "şık")
+	sik, _ := s.WordNodesByForms([]string{"sık"})
+	sic, _ := s.WordNodesByForms([]string{"şık"})
+	if len(sik) != 1 || len(sic) != 1 || sik[0].ID == sic[0].ID {
+		t.Fatalf("sık and şık must stay two distinct word nodes, got sık=%d şık=%d", len(sik), len(sic))
+	}
+}
+
 // A single surviving form whose several concepts are ordinary polysemy is NOT declined:
 // the belt keys on distinct FORMS, so one form's polysemy proceeds to the warmth vote,
 // which elects the warmer concept the same way the exact path would.

@@ -2005,7 +2005,7 @@ func (d *Daemon) nameWarmConcept(phrase, lang string, chem limbic.State) string 
 	}
 	named := false
 	for _, form := range grammar.AllTokens(phrase) {
-		w, _, err := d.store.WordNode(form, lang, chem, time.Now())
+		w, _, err := d.mintWordNode(form, lang, chem, time.Now())
 		if err != nil {
 			fmt.Fprintf(d.out, "word mint error: %v\n", err)
 			continue

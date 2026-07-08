@@ -1213,7 +1213,7 @@ func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors 
 		if d.isRestoredForm(form) {
 			continue
 		}
-		word, minted, err := d.store.WordNode(form, lang, d.chem.Snapshot(), time.Now())
+		word, minted, err := d.mintWordNode(form, lang, d.chem.Snapshot(), time.Now())
 		if err != nil {
 			fmt.Fprintf(d.out, "word mint error: %v\n", err)
 			continue

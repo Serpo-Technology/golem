@@ -2860,7 +2860,7 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if lang == "" {
 			lang = "en"
 		}
-		w, _, err := d.store.WordNode(req.Content, lang, d.chem.Snapshot(), time.Now())
+		w, _, err := d.mintWordNode(req.Content, lang, d.chem.Snapshot(), time.Now())
 		if err != nil {
 			return wire.Response{Error: err.Error()}, false, false
 		}

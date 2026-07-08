@@ -1235,7 +1235,7 @@ func (d *Daemon) teachThought(word, rel, sig, lang string) error {
 	if lang == "" {
 		lang = "en"
 	}
-	w, _, err := d.store.WordNode(strings.ToLower(word), lang, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(strings.ToLower(word), lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return err
 	}

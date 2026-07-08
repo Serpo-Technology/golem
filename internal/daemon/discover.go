@@ -171,7 +171,7 @@ func (d *Daemon) groundKind(lang, name string, members []uint64) (string, bool) 
 	for _, m := range members {
 		d.store.SetLinkRel(abs.ID, m, memory.RelGrounds, namedKindWeight)
 	}
-	if w, _, err := d.store.WordNode(name, lang, d.chem.Snapshot(), time.Now()); err == nil && w != nil {
+	if w, _, err := d.mintWordNode(name, lang, d.chem.Snapshot(), time.Now()); err == nil && w != nil {
 		d.store.SetLinkRel(w.ID, abs.ID, memory.RelNames, absNameWeight)
 	}
 	d.noteFocus(abs)

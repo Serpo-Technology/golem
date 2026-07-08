@@ -116,7 +116,7 @@ func (d *Daemon) planIdentity(frame grammar.Frame, raw string, momentID uint64) 
 	if d.momentTrust(momentID) < architectTrust {
 		return "", false // identity is the architect's to give; a peer's claim stays a defeasible telling
 	}
-	w, _, err := d.store.WordNode(name, lang, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(name, lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return "", false
 	}

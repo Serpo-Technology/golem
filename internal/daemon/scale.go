@@ -372,7 +372,7 @@ func (d *Daemon) depositRealizedForm(pole *memory.Fragment, tongue, surface stri
 	if tongue == "" {
 		tongue = "en"
 	}
-	w, _, err := d.store.WordNode(surface, tongue, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(surface, tongue, d.chem.Snapshot(), time.Now())
 	if err != nil || w == nil {
 		return 0, false
 	}

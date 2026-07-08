@@ -3484,7 +3484,7 @@ func (d *Daemon) conceptNamedIn(id uint64, lang string) bool {
 // nameRelationInTongue bonds a verb's word in one tongue to the relation it
 // names, the naming edge a later telling in that tongue resolves through.
 func (d *Daemon) nameRelationInTongue(rel *memory.Fragment, lemma, lang string) {
-	w, _, err := d.store.WordNode(lemma, lang, d.chem.Snapshot(), time.Now())
+	w, _, err := d.mintWordNode(lemma, lang, d.chem.Snapshot(), time.Now())
 	if err != nil {
 		return
 	}
