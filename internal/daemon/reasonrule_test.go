@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"testing"
+	"time"
 
 	"golem/internal/memory"
 )
@@ -79,6 +80,79 @@ func TestComparisonRunsThroughStoredRule(t *testing.T) {
 	}
 	if got := d.reasonRuleByTemplate(transitiveRuleTemplate); got != d.transitivityRuleID {
 		t.Fatalf("the cached rule id %d should match the stored rule %d", d.transitivityRuleID, got)
+	}
+}
+
+// The inheritance rule stored in the graph reproduces the hardcoded composition, a second
+// inference kind on the one rule interpreter: a cat that is an animal inherits the animal's
+// chasing of the mouse (defeasibly), and the graph-walked evaluator agrees with
+// categoryInheritsGo on the inheriting member and a non-member. The live inheritance query
+// still fires the guess through the rule. categoryInheritsGo stays the authoritative handler.
+func TestInheritanceRuleReproducesHandler(t *testing.T) {
+	d, s := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	rabbit := groundNoun(t, d, "rabbit") // grounded, but belongs to no category with a fact
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5) // the cat is an animal
+	say(t, d, "an animal chased the mouse")                 // a category-level fact
+
+	chase, err := s.ConceptByTemplate("rel:en:chase")
+	if err != nil || chase == nil {
+		t.Fatal("the chase relation should exist after the category fact")
+	}
+
+	root := d.ensureInheritanceRule()
+	if root == 0 {
+		t.Fatal("the inheritance rule should materialize a durable subgraph")
+	}
+	g := d.storeView()
+	if g.content(firstDest(g, root, memory.RelGrounds)) != inheritRule {
+		t.Fatal("the rule root should ground in the inherit primitive")
+	}
+	if edge := g.content(firstDest(g, root, operand0Rel)); edge != isAEdge {
+		t.Fatalf("the rule should reach over is-a, got %q", edge)
+	}
+
+	// The cat inherits chasing the mouse from the animal; the rule agrees with the handler and
+	// names the inheriting category.
+	wantCat, wantFound := d.categoryInheritsGo(cat, chase.Content, mouse.ID)
+	gotCat, gotFound, ok := d.evalInheritRule(root, chase.Content, cat.ID, mouse.ID)
+	if !ok {
+		t.Fatal("the inherit rule should run")
+	}
+	if gotFound != wantFound || gotCat != wantCat {
+		t.Fatalf("rule (%d,%v) disagrees with handler (%d,%v)", gotCat, gotFound, wantCat, wantFound)
+	}
+	if !gotFound || gotCat != animal.ID {
+		t.Fatalf("the cat should inherit from the animal (%d), got %d found %v", animal.ID, gotCat, gotFound)
+	}
+
+	// The rabbit belongs to no category with the fact, so it inherits nothing; the rule agrees.
+	rc, rf, _ := d.evalInheritRule(root, chase.Content, rabbit.ID, mouse.ID)
+	wc, wf := d.categoryInheritsGo(rabbit, chase.Content, mouse.ID)
+	if rf != wf || rc != wc {
+		t.Fatalf("rabbit: rule (%d,%v) vs handler (%d,%v)", rc, rf, wc, wf)
+	}
+	if rf {
+		t.Fatal("the rabbit should inherit nothing")
+	}
+
+	// The live query fires the guess through the stored rule, which is then cached.
+	if got := say(t, d, "did the cat chase the mouse").Say; got != "Probably, the cat chased the mouse." {
+		t.Fatalf("the inheritance guess should fire through the rule: %q", got)
+	}
+	if d.inheritanceRuleID == 0 {
+		t.Fatal("the query should have ensured and cached the inheritance rule")
 	}
 }
 

@@ -32,28 +32,48 @@ const (
 	// walks from a concept to the concepts it stands over.
 	agentRole = "agent"
 
-	// transitiveRuleTemplate keys the one generic transitive-closure rule, so it is found and
-	// reused for every relation told transitive rather than stored once per relation.
+	// inheritRule grounds a rule node in the inheritance primitive: reach the categories a
+	// concept belongs to and test the queried relation at each, the composed two-relation
+	// inference (reach is-a, then check the relation) that transitivity's single reach is not.
+	inheritRule = "inherit"
+
+	// isAEdge is the edge an inheritance rule reaches over: the is-a membership hierarchy, so
+	// a member reaches the categories above it. Stored on the rule as the reach edge, the
+	// counterpart of the role a reach rule stores, so the walk it follows is graph data.
+	isAEdge = "is-a"
+
+	// transitiveRuleTemplate and inheritRuleTemplate key the generic rules, so each is found
+	// and reused rather than stored per relation.
 	transitiveRuleTemplate = "rule:transitive"
+	inheritRuleTemplate    = "rule:inherit"
 )
 
-// ensureTransitivityRule returns the root of the durable transitive-closure rule subgraph,
-// creating it once if absent: a reach node following the agent role, held in a code subgraph
-// the nightly prune spares like any other. The rule is generic (the relation it chains is
-// bound at evaluation time from the query), so one object serves every transitive relation.
-func (d *Daemon) ensureTransitivityRule() uint64 {
-	if id := d.reasonRuleByTemplate(transitiveRuleTemplate); id != 0 {
+// ensureReasonRule returns the root of a durable reasoning-rule subgraph keyed by template,
+// creating it once if absent: a node grounding in the rule's primitive with its one operand
+// (a reach rule's role, an inherit rule's reach edge), held in a code subgraph the nightly
+// prune spares like any other. A rule is generic (the relation it works over is bound at
+// evaluation time from the query), so one object serves every relation of its kind.
+func (d *Daemon) ensureReasonRule(template, primitive, operand string) uint64 {
+	if id := d.reasonRuleByTemplate(template); id != 0 {
 		return id
 	}
 	root := &memory.Fragment{Kind: memory.KindCodeNode, Channel: "grammar", Category: "code",
-		Template: transitiveRuleTemplate, Weight: taughtConstructionWeight, Time: time.Now()}
+		Template: template, Weight: taughtConstructionWeight, Time: time.Now()}
 	if _, err := d.store.Encode(root); err != nil {
 		return 0
 	}
 	w := storeCodeWriter{d}
-	w.link(root.ID, w.add(reachRule), memory.RelGrounds)
-	w.link(root.ID, w.add(agentRole), operand0Rel)
+	w.link(root.ID, w.add(primitive), memory.RelGrounds)
+	w.link(root.ID, w.add(operand), operand0Rel)
 	return root.ID
+}
+
+func (d *Daemon) ensureTransitivityRule() uint64 {
+	return d.ensureReasonRule(transitiveRuleTemplate, reachRule, agentRole)
+}
+
+func (d *Daemon) ensureInheritanceRule() uint64 {
+	return d.ensureReasonRule(inheritRuleTemplate, inheritRule, isAEdge)
 }
 
 // reasonRuleByTemplate finds a reasoning-rule subgraph root by its template, 0 when none is
@@ -80,6 +100,44 @@ func (d *Daemon) transitivityRule() uint64 {
 		d.transitivityRuleID = d.ensureTransitivityRule()
 	}
 	return d.transitivityRuleID
+}
+
+// inheritanceRule returns the cached root of the inheritance rule, ensuring it once on first
+// use so the inheritance path runs the graph-stored rule without a per-query scan. Called
+// only on the single request loop, so the cache write is unsynchronized by design.
+func (d *Daemon) inheritanceRule() uint64 {
+	if d.inheritanceRuleID == 0 {
+		d.inheritanceRuleID = d.ensureInheritanceRule()
+	}
+	return d.inheritanceRuleID
+}
+
+// evalInheritRule evaluates an inheritance rule against the live graph: it reaches the
+// categories the agent belongs to (over the is-a edge the rule stores) and tests the queried
+// relation at each, returning the first category that holds it, defeasibly. It reproduces
+// categoryInheritsGo, but driven by the stored rule (its kind and reach edge read from the
+// graph) rather than hardcoded, so a second inference kind runs on the one rule interpreter.
+// ok is false when the node is not an inheritance rule over is-a, so a caller falls back to
+// the Go handler. The deny-filtering that makes inheritance defeasible rides in the reused
+// propositionHolds (through gatherFacts), so the exception discipline is preserved unchanged.
+func (d *Daemon) evalInheritRule(ruleRoot uint64, relContent string, agentID, patientID uint64) (catID uint64, found, ok bool) {
+	g := d.storeView()
+	if g.content(firstDest(g, ruleRoot, memory.RelGrounds)) != inheritRule {
+		return 0, false, false
+	}
+	if g.content(firstDest(g, ruleRoot, operand0Rel)) != isAEdge {
+		return 0, false, false // a reach edge the evaluator does not yet interpret
+	}
+	for _, cid := range d.categoriesOf(agentID) {
+		cf, err := d.fragmentsByIDsTiered([]uint64{cid})
+		if err != nil || len(cf) != 1 {
+			continue
+		}
+		if d.propositionHolds(cf[0], relContent, patientID) {
+			return cid, true, true
+		}
+	}
+	return 0, false, true
 }
 
 // ruleReachRole reads the role a reach rule follows from its subgraph, false when the node is

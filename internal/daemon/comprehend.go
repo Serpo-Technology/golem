@@ -2432,12 +2432,25 @@ func (d *Daemon) isA(memberID, catID uint64) bool {
 	return false
 }
 
-// categoryInherits reads whether a category the agent belongs to stands in the
-// relation to the patient: told that the animal chased the mouse, a cat (an animal)
-// probably did too. It composes membership with a category-level fact, defeasibly,
-// since a category's doing does not bind every member. It returns the inheriting
-// category, for the explanation, and whether one was found.
+// categoryInherits reads whether a category the agent belongs to stands in the relation to
+// the patient: told that the animal chased the mouse, a cat (an animal) probably did too. It
+// composes membership with a category-level fact, defeasibly. The composition now lives in
+// the graph as the inheritance rule: it runs through evalInheritRule when the rule is present
+// (the reasoning is graph-authoritative), and the Go walk below serves as the fallback. The
+// rule reproduces the Go walk, verified over the inheritance fixtures.
 func (d *Daemon) categoryInherits(agent *memory.Fragment, relContent string, patientID uint64) (uint64, bool) {
+	if root := d.inheritanceRule(); root != 0 {
+		if catID, found, ok := d.evalInheritRule(root, relContent, agent.ID, patientID); ok {
+			return catID, found
+		}
+	}
+	return d.categoryInheritsGo(agent, relContent, patientID)
+}
+
+// categoryInheritsGo is the hardcoded composition, the fallback for the inheritance rule
+// above: it climbs the agent's categories and returns the first that stands in the relation
+// to the patient, for the explanation, and whether one was found.
+func (d *Daemon) categoryInheritsGo(agent *memory.Fragment, relContent string, patientID uint64) (uint64, bool) {
 	for _, catID := range d.categoriesOf(agent.ID) {
 		cf, err := d.fragmentsByIDsTiered([]uint64{catID})
 		if err != nil || len(cf) != 1 {
