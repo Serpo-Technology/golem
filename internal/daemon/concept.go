@@ -1206,6 +1206,13 @@ func (d *Daemon) mintWordsScaled(utterance, lang string, tellID uint64, anchors 
 	w := linkWeight * scale
 	var words []*memory.Fragment
 	for _, form := range forms {
+		// A surface the diacritic fold recovered this turn is a lossy view of a proper
+		// word ("buyuk" of "büyük"), not a word of its own: minting a KindWord row for
+		// it would fork one word into two nodes. Skip it, so it exists only through the
+		// concept the fold resolved it to.
+		if d.isRestoredForm(form) {
+			continue
+		}
 		word, minted, err := d.store.WordNode(form, lang, d.chem.Snapshot(), time.Now())
 		if err != nil {
 			fmt.Fprintf(d.out, "word mint error: %v\n", err)

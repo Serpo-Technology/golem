@@ -202,7 +202,10 @@ func (d *Daemon) comparativeToPole(surface, lang string) (pole *memory.Fragment,
 		}
 	}
 	for _, base := range bases {
-		p := d.resolveConcept(base)
+		// Resolve the base in the comparison's own tongue, so a Turkish comparative
+		// surface written in ASCII ("daha buyuk") reaches the diacritic fold gate and
+		// decomposes to the existing "büyük" pole rather than missing.
+		p := d.resolveConceptLang(base, lang)
 		if p == nil {
 			continue
 		}

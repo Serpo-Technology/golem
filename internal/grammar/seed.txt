@@ -422,6 +422,11 @@ surface:tr:lost	bunu anlamadım	tr
 surface:la:lost	non intellexi	la
 surface:en:whichmean	do you mean	en
 surface:en:or	or	en
+# the "you mean" carrier a diacritic-restoration doubt speaks ("Perhaps you mean
+# büyük?"); the verb-final tongues place it after the restored form.
+surface:en:youmean	you mean	en
+surface:tr:youmean	demek istiyorsun	tr
+surface:la:youmean	dicere vis	la
 # the epistemic probe and its answers: the ask phrases the justify reader
 # matches whole, and the provenance surfaces a proof speaks with.
 surface:en:justifyask	why do you say that	en

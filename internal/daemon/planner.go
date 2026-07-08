@@ -83,90 +83,8 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 		words = preferTongue(words, lang)
 	}
 	if err == nil && len(words) > 0 {
-		ids := make([]uint64, 0, len(words))
-		for _, w := range words {
-			ids = append(ids, w.ID)
-		}
-		names, err := d.store.LinksFromRel(ids, memory.RelNames)
-		if err == nil && len(names) > 0 {
-			votes := map[uint64]float64{}
-			votedIDs := make([]uint64, 0, len(names))
-			for _, e := range names {
-				if votes[e.To] == 0 {
-					votedIDs = append(votedIDs, e.To)
-				}
-				votes[e.To] += e.Weight
-			}
-			tokSet := make(map[string]bool, len(tokens))
-			for _, t := range tokens {
-				tokSet[t] = true
-			}
-			frags, err := d.store.FragmentsByIDs(votedIDs)
-			if err == nil && len(frags) > 0 {
-				// An abstraction is the referent of its OWN word; a word that names
-				// an abstraction it does not match holds an inherited member-to-
-				// superordinate name (cat names the animal abstraction at 0.8), and
-				// refers to its own specific concept, not the category. So such an
-				// inherited abstraction is set aside, and the noun resolves to the
-				// percept it directly names. A category word still resolves to its
-				// abstraction, which it matches. The any-fallback keeps a word that
-				// names only an inherited abstraction resolving rather than failing.
-				// A basic word names a thing, not a class of it. A percept's
-				// basic kind is the head of its caption ("a small black cat" is a
-				// cat), so when a candidate percept is basically an L, an
-				// "abs:<lang>:L" concept is a basic-level shadow of that percept,
-				// not a category above it: heavy company can grow such a shadow
-				// from a noun that only ever named one kind. It is set aside the
-				// same as an inherited name, so the noun resolves to the percept it
-				// labels. A true superordinate ("animal") heads no percept's
-				// caption, so its abstraction still wins.
-				perceptHead := map[string]bool{}
-				for _, f := range frags {
-					if _, ok := abstractionLemma(f.Template); ok {
-						continue
-					}
-					if f.Category == "relation" {
-						continue // a relation is not a thing with a basic-level name
-					}
-					if fields := strings.Fields(f.Content); len(fields) > 0 {
-						perceptHead[strings.ToLower(fields[len(fields)-1])] = true
-					}
-				}
-				var best, bestAny uint64
-				var bestW, bestAnyW float64
-				for _, f := range frags {
-					w := votes[f.ID]
-					if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
-						bestAny, bestAnyW = f.ID, w
-					}
-					// A colour sense-cell (percept:col:*) is a perceptual class a
-					// colour word names, not a thing in the world. When the same word
-					// also names a real percept (the fruit "orange" beside the colour),
-					// the thing is the referent, so the innate cell edge, immortal
-					// because links into a class are decay-spared, is set aside. bestAny
-					// still lets a bare colour word that names only its cell resolve.
-					// Grammar scaffolding (a construction, a rule, a bare class) is
-					// set aside the same way: it lives in the graph but is never
-					// the referent of an ordinary word.
-					if d.colourCells[f.ID] || d.scaffoldingConcept(f.ID) {
-						continue
-					}
-					if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
-						continue
-					}
-					if w > bestW || (w == bestW && f.ID > best) {
-						best, bestW = f.ID, w
-					}
-				}
-				if best == 0 {
-					best = bestAny
-				}
-				for _, f := range frags {
-					if f.ID == best {
-						return f
-					}
-				}
-			}
+		if f := d.voteNamed(words, tokens); f != nil {
+			return f
 		}
 	}
 	if concepts, err := d.store.ConceptsByGloss(phrase, 3); err == nil {
@@ -177,6 +95,111 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 			if !d.scaffoldingConcept(c.ID) {
 				return c
 			}
+		}
+	}
+	// Both the exact word probe and the gloss fallback missed. A Turkish token written
+	// through the lossy ASCII channel ("buyuk") is recovered here by folding it to its
+	// diacritic candidates and keeping the one GOLEM already knows, so the miss resolves
+	// to the existing concept rather than falling to a fresh mint downstream.
+	if f := d.foldResolve(phrase, lang); f != nil {
+		return f
+	}
+	return nil
+}
+
+// voteNamed elects the concept a set of word nodes names, the warmth vote the exact
+// resolver and the diacritic fold both run: it pools the RelNames edges, sets aside a
+// merely-inherited abstraction (a member-to-superordinate name), a colour sense-cell,
+// and grammar scaffolding, and returns the warmest surviving referent, ties broken by
+// id. A word that names only an inherited abstraction still resolves through the
+// any-fallback. It returns nil when nothing votes, so the caller falls to the gloss or
+// fold path.
+func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string) *memory.Fragment {
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	names, err := d.store.LinksFromRel(ids, memory.RelNames)
+	if err != nil || len(names) == 0 {
+		return nil
+	}
+	votes := map[uint64]float64{}
+	votedIDs := make([]uint64, 0, len(names))
+	for _, e := range names {
+		if votes[e.To] == 0 {
+			votedIDs = append(votedIDs, e.To)
+		}
+		votes[e.To] += e.Weight
+	}
+	tokSet := make(map[string]bool, len(tokens))
+	for _, t := range tokens {
+		tokSet[t] = true
+	}
+	frags, err := d.store.FragmentsByIDs(votedIDs)
+	if err != nil || len(frags) == 0 {
+		return nil
+	}
+	// An abstraction is the referent of its OWN word; a word that names
+	// an abstraction it does not match holds an inherited member-to-
+	// superordinate name (cat names the animal abstraction at 0.8), and
+	// refers to its own specific concept, not the category. So such an
+	// inherited abstraction is set aside, and the noun resolves to the
+	// percept it directly names. A category word still resolves to its
+	// abstraction, which it matches. The any-fallback keeps a word that
+	// names only an inherited abstraction resolving rather than failing.
+	// A basic word names a thing, not a class of it. A percept's
+	// basic kind is the head of its caption ("a small black cat" is a
+	// cat), so when a candidate percept is basically an L, an
+	// "abs:<lang>:L" concept is a basic-level shadow of that percept,
+	// not a category above it: heavy company can grow such a shadow
+	// from a noun that only ever named one kind. It is set aside the
+	// same as an inherited name, so the noun resolves to the percept it
+	// labels. A true superordinate ("animal") heads no percept's
+	// caption, so its abstraction still wins.
+	perceptHead := map[string]bool{}
+	for _, f := range frags {
+		if _, ok := abstractionLemma(f.Template); ok {
+			continue
+		}
+		if f.Category == "relation" {
+			continue // a relation is not a thing with a basic-level name
+		}
+		if fields := strings.Fields(f.Content); len(fields) > 0 {
+			perceptHead[strings.ToLower(fields[len(fields)-1])] = true
+		}
+	}
+	var best, bestAny uint64
+	var bestW, bestAnyW float64
+	for _, f := range frags {
+		w := votes[f.ID]
+		if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
+			bestAny, bestAnyW = f.ID, w
+		}
+		// A colour sense-cell (percept:col:*) is a perceptual class a
+		// colour word names, not a thing in the world. When the same word
+		// also names a real percept (the fruit "orange" beside the colour),
+		// the thing is the referent, so the innate cell edge, immortal
+		// because links into a class are decay-spared, is set aside. bestAny
+		// still lets a bare colour word that names only its cell resolve.
+		// Grammar scaffolding (a construction, a rule, a bare class) is
+		// set aside the same way: it lives in the graph but is never
+		// the referent of an ordinary word.
+		if d.colourCells[f.ID] || d.scaffoldingConcept(f.ID) {
+			continue
+		}
+		if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
+			continue
+		}
+		if w > bestW || (w == bestW && f.ID > best) {
+			best, bestW = f.ID, w
+		}
+	}
+	if best == 0 {
+		best = bestAny
+	}
+	for _, f := range frags {
+		if f.ID == best {
+			return f
 		}
 	}
 	return nil
@@ -1093,6 +1116,13 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 		if line, handled := d.routeFacultyFallback(frame, raw); handled {
 			return line, nil
 		}
+		// A lone Turkish token written in ASCII that taught nothing is a bare
+		// restoration: it folds to one known word, spoken as a doubt ("Perhaps you
+		// mean büyük?") through the same hedge rail an uncertain inference uses, before
+		// the plain lost admission.
+		if line, ok := d.bareRestoreDoubt(frame.Lang, raw); ok {
+			return line, nil
+		}
 		// A clause that neither taught nor routed is admitted, so failure to
 		// understand is audible instead of silent, and the first unknown word
 		// is asked after, the missing word usually being why the clause did
@@ -1109,7 +1139,16 @@ func (d *Daemon) plan(frame grammar.Frame, raw string, momentID uint64) (string,
 // earn an appended follow-up question when curiosity is high: deciding
 // what to say next includes asking.
 func (d *Daemon) planQuestion(frame grammar.Frame, raw string) string {
-	return d.withFollowUp(frame, d.planAnswer(frame, raw))
+	ans := d.planAnswer(frame, raw)
+	// A question that answered nothing and is a lone Turkish token written in ASCII is
+	// a bare restoration: the token folds to one known word, spoken as a doubt. It fires
+	// only when planAnswer returned empty, so a real answer is never preempted.
+	if ans == "" {
+		if line, ok := d.bareRestoreDoubt(frame.Lang, raw); ok {
+			return line
+		}
+	}
+	return d.withFollowUp(frame, ans)
 }
 
 // withFollowUp appends the curiosity question when the exchange left a

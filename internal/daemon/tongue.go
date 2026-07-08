@@ -12,6 +12,13 @@ import (
 // evidence keeps the English default, so a fresh brain is unchanged until its
 // Turkish lexicon has actually grown.
 func (d *Daemon) sniffTurkish(content string) bool {
+	// Language detection stays on exact and morphological evidence: the diacritic fold
+	// is turned off around this probe, since sniffTurkish itself resolves through the
+	// daemon resolver and one spuriously folding token would otherwise flip a whole
+	// English clause to Turkish and run the 2^k generation on every untagged clause.
+	prev := d.foldEnabled
+	d.foldEnabled = false
+	defer func() { d.foldEnabled = prev }()
 	tokens, _ := grammar.Tokenize(content)
 	if len(tokens) == 0 {
 		return false

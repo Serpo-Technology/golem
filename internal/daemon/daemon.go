@@ -111,6 +111,19 @@ type Daemon struct {
 	// not grounded into whatever happened to be warm. Reset before each plan.
 	statementAbandoned bool
 
+	// restored is the diacritic fold's per-turn record: for each ASCII Turkish
+	// surface recovered this turn, the concept it resolved to and the confidence a
+	// bare guess of it may be spoken at. It is the memo that folds a span once, the
+	// signal the word-form mint reads to skip a lossy KindWord row, and the anti-leak
+	// set the naming company drops, so "buyuk" exists only as a lossy view of "büyük"
+	// and never caches an alias. Cleared at the start of each turn.
+	restored map[string]restoredNote
+	// foldEnabled gates the diacritic fold: ON during the main resolve pass so a
+	// lossy Turkish token recovers its proper concept, OFF while sniffTurkish runs so
+	// language detection stays on exact and morphological evidence and one spuriously
+	// folding token can never flip a whole clause to Turkish.
+	foldEnabled bool
+
 	// hot is the RAM working set in front of the sqlite archive: recent
 	// encodes and recalls answer from here, and archive hits promote.
 	hot *memory.HotTier
@@ -2652,6 +2665,11 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// Detection reads the tongue from the closed class; the spoken --lang tag is
 		// the fallback, applied during the parse so a tongue's constructions are read
 		// even when the clause carries no function word to detect it by.
+		// The diacritic fold runs through this turn's resolves: a fresh per-turn record
+		// so a restoration never leaks across turns, and the fold enabled for the main
+		// pass (sniffTurkish toggles it off around its own probe below).
+		d.restored = map[string]restoredNote{}
+		d.foldEnabled = true
 		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveIn(req.Lang))
 		if req.Lang == "" && d.gram.Detect(req.Content) == "" && d.sniffTurkish(req.Content) {
 			// An untagged clause no closed-class token places: the lexicon GOLEM
@@ -2724,13 +2742,18 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// an ordering, so its words must not ground in the standard that was warm
 		// (else the dog's word keeps company with the horse and they blur).
 		if declarative && !frame.Comparative && !d.momentBoundRoles(res.FragmentID) && !d.statementAbandoned {
-			d.bindAttention(words, attn)
+			// A diacritic-restored surface is dropped from the naming company here too:
+			// the word-form mint already skipped it, so it is absent from words, but the
+			// naming sites are kept explicitly clear of it so no RelNames alias from a
+			// "buyuk" row to "büyük" is ever born and a bare token stays doubted each turn.
+			named := d.dropRestoredWords(words)
+			d.bindAttention(named, attn)
 			// Record what the naming pointed at, the freshest percept, as a salience
 			// the abstraction pass reads apart from the uniform company: a name said
 			// over one constant percept ostends it alone, a category said over varying
 			// members spreads its ostension, so a cross-tongue name diluted by a
 			// lingering scene-mate binds to its referent rather than splitting a phantom.
-			d.recordOstension(words, time.Now(), res.FragmentID)
+			d.recordOstension(named, time.Now(), res.FragmentID)
 		}
 		// A reply that was built is also spoken when the voice is on.
 		d.speak(resp.Say)
