@@ -181,6 +181,25 @@ func TestReteachReplacesSubgraphWithoutLeak(t *testing.T) {
 	}
 }
 
+// Teaching a mutually recursive pair does not crash the daemon: the return-type inference
+// refuses a call cycle rather than recursing forever, so the definition is learned (its type
+// simply cannot be inferred) and GOLEM stays responsive. echo and mate call each other after
+// echo is re-taught; the daemon must survive and still compute an unrelated expression.
+func TestMutualRecursionDoesNotCrash(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.RuntimeEnabled = true
+	say(t, d, "the echo of a number is the product of the number and 2")
+	say(t, d, "the mate of a number is 0 if the number is below 1 else the echo of the difference of the number and 1")
+	// Re-teach echo so echo calls mate and mate calls echo: a call cycle whose type cannot
+	// be inferred. This once overflowed the stack in the type checker.
+	say(t, d, "the echo of a number is 0 if the number is below 1 else the mate of the difference of the number and 1")
+	// The daemon is still alive and computes an unrelated expression.
+	resp, _, _ := d.handle(wire.Request{Cmd: "runcode", Content: "the sum of 6 and 7"}, nil)
+	if !resp.OK || !strings.Contains(resp.Say, "13") {
+		t.Fatalf("the daemon should stay responsive after teaching mutual recursion: %q", resp.Say)
+	}
+}
+
 // The durable code subgraph is spared the nightly consolidation: its edges keep full weight
 // across naps rather than decaying toward the link floor where the orphan drop would erase
 // the function, so the reconstruction still yields the same body after many Sleep passes. A

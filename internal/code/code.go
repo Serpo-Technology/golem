@@ -879,9 +879,18 @@ func clearEach(c Computation) Computation {
 // whose own calls yield a number. It returns false on any mismatch, so a
 // type-inconsistent computation is refused before it is run to a broken program.
 func (e *Engine) typeOf(c Computation, env map[string]string, self string) (string, bool) {
+	return e.typeOfSeen(c, env, self, map[string]bool{})
+}
+
+// typeOfSeen is typeOf carrying the set of defined operations whose return type is being
+// computed up the current stack, so a call chain that cycles (two functions that call each
+// other) is refused rather than recursed into forever. A direct self-call is still resolved
+// by self without consulting seen (its type is known: a number); only a call that reaches a
+// different function already open on the stack trips the guard.
+func (e *Engine) typeOfSeen(c Computation, env map[string]string, self string, seen map[string]bool) (string, bool) {
 	switch {
 	case c.Map != nil:
-		if lt, ok := e.typeOf(c.Map.List, env, self); !ok || lt != typeList {
+		if lt, ok := e.typeOfSeen(c.Map.List, env, self, seen); !ok || lt != typeList {
 			return "", false
 		}
 		inner := make(map[string]string, len(env)+1)
@@ -889,17 +898,17 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 			inner[k] = v
 		}
 		inner[c.Map.Var] = typeInt // an element of a list of numbers is a number
-		if bt, ok := e.typeOf(c.Map.Body, inner, self); !ok || bt != typeInt {
+		if bt, ok := e.typeOfSeen(c.Map.Body, inner, self, seen); !ok || bt != typeInt {
 			return "", false
 		}
 		return typeList, true
 	case c.Each:
 		return typeInt, true // an element reference, before it is lifted into a map
 	case c.Cond != nil:
-		lt, lok := e.typeOf(c.Cond.Left, env, self)
-		rt, rok := e.typeOf(c.Cond.Right, env, self)
-		tt, tok := e.typeOf(c.Cond.Then, env, self)
-		et, eok := e.typeOf(c.Cond.Else, env, self)
+		lt, lok := e.typeOfSeen(c.Cond.Left, env, self, seen)
+		rt, rok := e.typeOfSeen(c.Cond.Right, env, self, seen)
+		tt, tok := e.typeOfSeen(c.Cond.Then, env, self, seen)
+		et, eok := e.typeOfSeen(c.Cond.Else, env, self, seen)
 		if !lok || !rok || !tok || !eok {
 			return "", false
 		}
@@ -927,7 +936,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 		return typeInt, true
 	case c.Op == listWord:
 		for _, a := range c.Args {
-			if t, ok := e.typeOf(a, env, self); !ok || t != typeInt {
+			if t, ok := e.typeOfSeen(a, env, self, seen); !ok || t != typeInt {
 				return "", false
 			}
 		}
@@ -935,7 +944,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 	}
 	if self != "" && c.Op == self {
 		for _, a := range c.Args {
-			if _, ok := e.typeOf(a, env, self); !ok {
+			if _, ok := e.typeOfSeen(a, env, self, seen); !ok {
 				return "", false
 			}
 		}
@@ -950,7 +959,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 			return "", false
 		}
 		for i, a := range c.Args {
-			if t, ok := e.typeOf(a, env, self); !ok || t != op.paramType(i) {
+			if t, ok := e.typeOfSeen(a, env, self, seen); !ok || t != op.paramType(i) {
 				return "", false
 			}
 		}
@@ -964,7 +973,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 			return "", false
 		}
 		for i, a := range c.Args {
-			if t, ok := e.typeOf(a, env, self); !ok || t != op.In[i] {
+			if t, ok := e.typeOfSeen(a, env, self, seen); !ok || t != op.In[i] {
 				return "", false
 			}
 		}
@@ -982,7 +991,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 		if op.Body != nil {
 			expect = op.paramType(i)
 		}
-		if t, ok := e.typeOf(a, env, self); !ok || t != expect {
+		if t, ok := e.typeOfSeen(a, env, self, seen); !ok || t != expect {
 			return "", false
 		}
 	}
@@ -990,7 +999,7 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 	// returns a list reads as a list to whatever consumes it; a primitive returns a
 	// number.
 	if op.Body != nil {
-		return e.retType(op)
+		return e.retTypeSeen(op, seen)
 	}
 	return typeInt, true
 }
@@ -1390,14 +1399,28 @@ func goType(t string) string {
 // retType is a defined operation's return type, the type its body evaluates to,
 // so a transform that yields a list is written returning a slice.
 func (e *Engine) retType(op Op) (string, bool) {
+	return e.retTypeSeen(op, map[string]bool{})
+}
+
+// retTypeSeen is retType carrying the set of functions whose return type is being computed
+// up the current stack. A function reached while it is already open is a call cycle (mutual
+// recursion) whose type cannot be inferred, so it is refused rather than recursed into
+// forever; the name is dropped again on the way out, so a function called twice on separate
+// branches (not a cycle) is unaffected.
+func (e *Engine) retTypeSeen(op Op, seen map[string]bool) (string, bool) {
 	if op.Body == nil {
 		return "", false
 	}
+	if seen[op.Name] {
+		return "", false
+	}
+	seen[op.Name] = true
+	defer delete(seen, op.Name)
 	env := make(map[string]string, len(op.Params))
 	for i, p := range op.Params {
 		env[p] = op.paramType(i)
 	}
-	return e.typeOf(*op.Body, env, op.Name)
+	return e.typeOfSeen(*op.Body, env, op.Name, seen)
 }
 
 // sigParams writes a function's parameter list with Go types, "numbers []int".
