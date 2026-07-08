@@ -137,8 +137,9 @@ func (o Op) paramType(i int) string {
 type Def struct {
 	Name       string
 	Params     []string
-	ParamTypes []string // parallel to Params, "int" or "list"; empty means all int
-	Body       string   // the body as code, e.g. "number * factor"
+	ParamTypes []string     // parallel to Params, "int" or "list"; empty means all int
+	Body       string       // the body as code, e.g. "number * factor"
+	Comp       *Computation // when set, the body's meaning directly, walked from the durable code graph rather than read from Body
 }
 
 // The value types the faculty distinguishes.
@@ -217,6 +218,15 @@ func NewEngine(prims []Op, defs []Def) *Engine {
 		}
 	}
 	for _, d := range defs {
+		// A body walked from the durable code graph arrives as its meaning directly, so it
+		// is indexed as-is with no text parse: the graph is the authoritative source for a
+		// learned function's body, the stored text only the fallback for a shape the walk
+		// does not reconstruct.
+		if d.Comp != nil {
+			body := *d.Comp
+			e.index(Op{Name: d.Name, Word: d.Name, Params: d.Params, ParamTypes: d.ParamTypes, Body: &body})
+			continue
+		}
 		// A synthesized imperative function is stored as its Go statements behind a
 		// "raw:<ret> " marker; it reloads as the raw op it is rather than through the
 		// expression reader.
@@ -1708,6 +1718,11 @@ func morphDecode(toks []string, pos int) (Computation, int, bool) {
 // bodySep separates a stored body's parts, a sequence no arithmetic body contains
 // so the parts split back cleanly.
 const bodySep = " ; "
+
+// RawDefPrefix marks a synthesized imperative function's stored body, exported so the
+// daemon can reconstruct one from its durable code subgraph in the form rawDef reads back:
+// the statements the graph walk regenerates carry no re-parse, so they stand as written.
+const RawDefPrefix = rawDefPrefix
 
 // bodySource serializes a body for storage with the function's own name in scope:
 // arithmetic and inlined calls as code, a conditional and a map as the structured

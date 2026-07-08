@@ -285,9 +285,17 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// whose word still has lived company, so the generic decay would only thin the bonds the
 	// recount holds frozen once their word's company has starved, surrendering an earned name to
 	// disuse the recount is deliberately keeping.
+	// An edge touching a code node is structural too: it holds a piece of a learned
+	// function's meaning graph, which the engine walks on load to reconstruct the body. So
+	// every edge into or out of a code node is spared the nightly decay and stands at full
+	// weight, keeping the durable code subgraph intact across nights rather than thinning it
+	// toward the link floor where the orphan-link drop would erase the function.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
 		WHERE rel <> ? AND rel <> ?
-		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))`, linkNightlyKeep, RelNames, RelComparativeForm); err != nil {
+		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))
+		AND to_id   NOT IN (SELECT id FROM fragments WHERE kind = ?)
+		AND from_id NOT IN (SELECT id FROM fragments WHERE kind = ?)`,
+		linkNightlyKeep, RelNames, RelComparativeForm, KindCodeNode, KindCodeNode); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {
@@ -915,6 +923,14 @@ func (s *Store) SetLinkRel(from, to uint64, rel string, weight float64) error {
 	_, err := s.db.Exec(`INSERT INTO links (from_id, to_id, rel, weight) VALUES (?,?,?,?)
 		ON CONFLICT(from_id, to_id, rel) DO UPDATE SET weight = excluded.weight`,
 		from, to, rel, weight)
+	return err
+}
+
+// DeleteLinksFrom removes every edge of one relation leaving a fragment, the outright
+// delete the upsert link API otherwise lacks. Re-rooting a code subgraph uses it to clear
+// the stale coderoot before pointing the construction at the freshly materialized one.
+func (s *Store) DeleteLinksFrom(from uint64, rel string) error {
+	_, err := s.db.Exec(`DELETE FROM links WHERE from_id = ? AND rel = ?`, from, rel)
 	return err
 }
 

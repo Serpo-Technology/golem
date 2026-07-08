@@ -28,6 +28,11 @@ const (
 	KindGrammar      = "grammar"
 	KindFeature      = "feature"
 	KindConstruction = "construction"
+	// KindCodeNode is a node of a durable code-meaning subgraph (an operation, a
+	// conditional, a leaf token, a function node, or an ordered slot). It is semantic
+	// scaffolding like a construction: non-episodic, so it is never weight-pruned, and
+	// held out of the concept and word space so cognition never sees it.
+	KindCodeNode = "codenode"
 )
 
 // An edge's relation types the association: temporal is co-occurrence

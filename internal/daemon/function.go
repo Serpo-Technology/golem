@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -176,11 +177,13 @@ func (d *Daemon) learnFunction(op code.Op) (string, error) {
 		return "", err
 	}
 	updated := false
+	var constructionID uint64
 	for _, n := range nodes {
 		if n.Template == key {
 			if err := d.store.UpdateContent(n.ID, value, key); err != nil {
 				return "", err
 			}
+			constructionID = n.ID
 			updated = true
 			break
 		}
@@ -202,8 +205,15 @@ func (d *Daemon) learnFunction(op code.Op) (string, error) {
 		if err := d.store.SetWeight(id, taughtConstructionWeight); err != nil {
 			return "", err
 		}
+		constructionID = id
 		d.event(events.Event{Ev: "grammar", ID: id, Tpl: key, Weight: taughtConstructionWeight, Outcome: "defined"})
 	}
+
+	// Persist the definition as a durable code subgraph and root it on the construction, so
+	// on reload the body is walked out of the graph rather than re-parsed from the stored
+	// text. This is behaviour-neutral where it materializes (the graph reconstructs the same
+	// meaning) and a no-op where it does not, the text body serving as the fallback either way.
+	d.materializeDurable(op, constructionID)
 
 	if err := d.recompileGrammar(); err != nil {
 		return "", err
@@ -215,4 +225,67 @@ func (d *Daemon) learnFunction(op code.Op) (string, error) {
 		return "I learned " + op.Name + ". I write it as " + src, nil
 	}
 	return "I learned " + op.Name + ".", nil
+}
+
+// materializeDurable writes a learned function's meaning into the graph as a durable code
+// subgraph and, once it has verified the graph reconstructs the same meaning, roots it on
+// the construction, so on reload the body is walked out of the store rather than re-parsed
+// from the stored text. A re-teach redefines the function, so any prior subgraph and its
+// root are dropped first: the old meaning must never linger as authoritative once the text
+// body has been updated to a new one. The new shape is materialized into a throwaway graph
+// and cross-checked there, so nothing durable is written unless the whole subgraph
+// reconstructs faithfully; a shape the materializer refuses (mutual recursion, an
+// unrecognized raw loop) or one that reconstructs to a different meaning leaves no durable
+// node and no root, and the updated text body serves as the fallback (a divergence is
+// logged as a tripwire).
+func (d *Daemon) materializeDurable(op code.Op, constructionID uint64) {
+	if constructionID == 0 {
+		return
+	}
+	d.dropCodeSubgraph(constructionID)
+	scratch := newScratchGraph()
+	sfn, ok := d.materializeFnNode(scratch, op, map[string]uint64{})
+	if !ok {
+		return
+	}
+	comp, raw, rok := d.reconstructedBody(scratch, sfn)
+	if !rok {
+		return
+	}
+	faithful := (comp != nil && op.Body != nil && reflect.DeepEqual(*comp, *op.Body)) ||
+		(raw != "" && op.Raw != "" && raw == code.RawDefPrefix+op.Ret+" "+op.Raw)
+	if !faithful {
+		fmt.Fprintf(d.out, "codegraph def mismatch for %s\n", op.Name)
+		return
+	}
+	fn, ok := d.materializeFnNode(storeCodeWriter{d}, op, map[string]uint64{})
+	if !ok {
+		return
+	}
+	if err := d.store.SetLinkRel(constructionID, fn, codeRootRel, deliberateName); err != nil {
+		fmt.Fprintf(d.out, "codegraph root link failed for %s: %v\n", op.Name, err)
+	}
+}
+
+// dropCodeSubgraph removes a construction's durable code subgraph and its root edge, so a
+// re-teach leaves neither a stale meaning that could override the new text nor dead nodes
+// the nightly prune spares forever. It clears the root, then deletes every code node the
+// old subgraph owns (gathered from the root by a walk that admits only code nodes, so it
+// stays within the subgraph and never reaches a shared concept). A construction with no
+// root is untouched.
+func (d *Daemon) dropCodeSubgraph(constructionID uint64) {
+	root := firstDest(d.storeView(), constructionID, codeRootRel)
+	if err := d.store.DeleteLinksFrom(constructionID, codeRootRel); err != nil {
+		fmt.Fprintf(d.out, "codegraph root clear failed: %v\n", err)
+	}
+	if root == 0 {
+		return
+	}
+	victims := map[uint64]bool{}
+	d.collectCodeNodes(root, victims)
+	for id := range victims {
+		if _, err := d.store.DeleteByID(id); err != nil {
+			fmt.Fprintf(d.out, "codegraph node delete failed: %v\n", err)
+		}
+	}
 }

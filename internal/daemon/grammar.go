@@ -214,7 +214,14 @@ func (d *Daemon) recompileGrammar() error {
 	// held a role on record keeps the seat the teller gave it, read off the
 	// graph as a presence, never a count.
 	d.gram.RoleHeld = d.roleHeld
-	d.code = code.NewEngine(codeOps(cparams))
+	// A learned function's body is walked out of its durable code subgraph rather than
+	// re-parsed from the stored text: codeOps reads the primitives and the definitions from
+	// the constructions, then reconstructDefBodies overrides each definition whose
+	// construction roots a code subgraph with the body the graph reconstructs. A function
+	// with no such subgraph (a shape the materializer refuses) keeps its text body.
+	prims, defs := codeOps(cparams)
+	defs = d.reconstructDefBodies(defs, cnodes)
+	d.code = code.NewEngine(prims, defs)
 	// Which word names an operation is resolved through the grounded concept graph,
 	// not the engine's own English word map: the engine consults this resolver, which
 	// reads the operation concepts (cross-tongue, teachable). The concepts themselves
@@ -407,6 +414,44 @@ func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
 		prims = append(prims, code.Op{Name: name, Symbol: fields[0], Word: fields[1]})
 	}
 	return prims, defs
+}
+
+// reconstructDefBodies rewrites each learned function's body from its durable code
+// subgraph, so a reloaded function's meaning is walked out of the graph rather than read
+// from the stored text. For a definition whose code:<name> construction carries a coderoot
+// edge, reconstructedBody regenerates the meaning from the graph and replaces the one
+// codeOps read from text: a synthesized loop as its raw statements, any other body as the
+// Computation it means. A definition with no coderoot keeps its text body, the principled
+// fallback (the materializer roots only what it can reconstruct faithfully, so mutual
+// recursion and any shape it refuses fall through to the text). The graph is authoritative
+// for execution wherever it reconstructs; the stored text remains only as that fallback.
+func (d *Daemon) reconstructDefBodies(defs []code.Def, cnodes []*memory.Fragment) []code.Def {
+	g := d.storeView()
+	root := func(name string) uint64 {
+		key := "code:" + name
+		for _, n := range cnodes {
+			if n.Template == key {
+				return firstDest(g, n.ID, codeRootRel)
+			}
+		}
+		return 0
+	}
+	for i := range defs {
+		fn := root(defs[i].Name)
+		if fn == 0 {
+			continue
+		}
+		comp, raw, ok := d.reconstructedBody(g, fn)
+		if !ok {
+			continue
+		}
+		if comp != nil {
+			defs[i].Comp = comp
+		} else {
+			defs[i].Body = raw
+		}
+	}
+	return defs
 }
 
 // paramsOf reads a set of grammar or construction nodes back into the

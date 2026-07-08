@@ -19,7 +19,7 @@ import (
 // selfName grounds in its own node (a recursive self-reference the traverser writes as a
 // local function), and a call back to a different open function (mutual recursion) is
 // refused, the one call shape the shadow skips.
-func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, selfName string, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeCode(g codeWriter, c code.Computation, selfName string, fnNodes map[string]uint64) (uint64, bool) {
 	// A leaf carries its token as content. An "each" reference lives only inside a map
 	// body, which is not materialized, so it is not a leaf here.
 	if c.Op == "" && c.Cond == nil && c.Map == nil && !c.Each {
@@ -107,7 +107,7 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, selfName s
 // a call back to a different open function is mutual recursion, out of scope, refused.
 // Otherwise the function is built as a graph (materializeFnNode) and the call grounds in it
 // with its ordered arguments, which stay in the caller's scope.
-func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName string, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeCall(g codeWriter, c code.Computation, selfName string, fnNodes map[string]uint64) (uint64, bool) {
 	if c.Op == selfName {
 		call := g.add("")
 		g.link(call, fnNodes[selfName], memory.RelGrounds)
@@ -141,7 +141,7 @@ func (d *Daemon) materializeCall(g *scratchGraph, c code.Computation, selfName s
 // imperative function (a synthesized loop) is built from its parsed Raw structure instead.
 // The function is the same however the call reached it, so this is shared by a comprehended
 // call (from a Computation) and a comprehension graph built straight from the grammar.
-func (d *Daemon) materializeFnNode(g *scratchGraph, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeFnNode(g codeWriter, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
 	if op.Raw != "" {
 		return d.materializeRawFnNode(g, op, fnNodes)
 	}
@@ -167,7 +167,7 @@ func (d *Daemon) materializeFnNode(g *scratchGraph, op code.Op, fnNodes map[stri
 // The traverser wraps a call to it in the applied func literal the typed render gives a Raw
 // call. It refuses a shape the parsers do not recognize, so the call dispatch falls back to
 // the typed render rather than mis-building.
-func (d *Daemon) materializeRawFnNode(g *scratchGraph, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeRawFnNode(g codeWriter, op code.Op, fnNodes map[string]uint64) (uint64, bool) {
 	if len(op.Params) != 1 {
 		return 0, false
 	}
@@ -193,7 +193,7 @@ func (d *Daemon) materializeRawFnNode(g *scratchGraph, op code.Op, fnNodes map[s
 // the accumulator, the start (a const or the first element), the step expression, and
 // the guard, recovered by parseFold. It returns the fold node and false when the Raw
 // is not a fold parseFold recognizes.
-func (d *Daemon) materializeFold(g *scratchGraph, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeFold(g codeWriter, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
 	acc, first, initLit, step, guard, ok := d.parseFold(raw, param)
 	if !ok {
 		return 0, false
@@ -220,7 +220,7 @@ func (d *Daemon) materializeFold(g *scratchGraph, raw, param string, fnNodes map
 // Raw statements: a map carries its per-element transform, a filter its comparison and
 // constant, recovered by parseListLoop. It returns the list-loop node and false when
 // the Raw is not a map or filter parseListLoop recognizes.
-func (d *Daemon) materializeListLoop(g *scratchGraph, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
+func (d *Daemon) materializeListLoop(g codeWriter, raw, param string, fnNodes map[string]uint64) (uint64, bool) {
 	filter, cmp, c, step, ok := d.parseListLoop(raw, param)
 	if !ok {
 		return 0, false
@@ -342,7 +342,7 @@ func (d *Daemon) parseListLoop(raw, param string) (filter bool, cmp, c string, s
 }
 
 // materializeInto materializes c and links it from parent under rel, false on failure.
-func (d *Daemon) materializeInto(g *scratchGraph, parent uint64, rel string, c code.Computation, selfName string, fnNodes map[string]uint64) bool {
+func (d *Daemon) materializeInto(g codeWriter, parent uint64, rel string, c code.Computation, selfName string, fnNodes map[string]uint64) bool {
 	id, ok := d.materializeCode(g, c, selfName, fnNodes)
 	if !ok {
 		return false
@@ -352,7 +352,7 @@ func (d *Daemon) materializeInto(g *scratchGraph, parent uint64, rel string, c c
 }
 
 // materializeSlots materializes each child and attaches it to parent as an ordered slot.
-func (d *Daemon) materializeSlots(g *scratchGraph, parent uint64, rel string, children []code.Computation, selfName string, fnNodes map[string]uint64) bool {
+func (d *Daemon) materializeSlots(g codeWriter, parent uint64, rel string, children []code.Computation, selfName string, fnNodes map[string]uint64) bool {
 	for i, child := range children {
 		id, ok := d.materializeCode(g, child, selfName, fnNodes)
 		if !ok {
