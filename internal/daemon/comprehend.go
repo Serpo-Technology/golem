@@ -2632,6 +2632,13 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 			return beliefObserved, 1, false, 0
 		}
 	}
+	// A symmetric relation holds both ways: told "meet is symmetric", the cat meeting the dog
+	// answers that the dog met the cat. The relation must have been told it is symmetric, so
+	// this never fires for an ordinary relation; the reversed fact is read by running the
+	// stored compositional symmetric rule against the graph, the deduction as firm as the fact.
+	if agent.ID != patient.ID && d.symmetricHolds(agent.ID, relContent, patient.ID) {
+		return beliefObserved, 1, false, 0
+	}
 	// Containment composes across placements of different kinds: a thing on or in something
 	// that is in a place is in that place ("the leaf is on the tree, the tree is in the
 	// forest, so the leaf is in the forest"). The chain of locative grounds is walked for the

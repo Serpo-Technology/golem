@@ -44,6 +44,13 @@ const (
 	findRelRel   = "rtestrel"
 	findArgRel   = "rtestarg"
 
+	// reachStartRel binds which query concept a reach walks from (the subject by default); it
+	// lets a rule reach from the target instead, which is how a symmetric rule checks the
+	// reversed fact. containsTargetRel binds which concept a contains looks for (the target by
+	// default), the counterpart on the result side.
+	reachStartRel     = "rstart"
+	containsTargetRel = "ctarget"
+
 	// The query bindings a leaf resolves to at evaluation, and the two special reach edges (the
 	// queried relation, and any relation, for a marker-filtered reach that is not over one named
 	// relation). A leaf that is none of these is a literal (a relation name, a role, a marker).
@@ -83,6 +90,7 @@ type compSpec struct {
 	edge, role       string
 	trans, filter    string
 	testRel, testArg string
+	start, ctarget   string // reach start binding and contains target binding, empty for the defaults ($from, $to)
 }
 
 // ensureCompRule creates (once) a durable compositional rule subgraph keyed by template and
@@ -108,7 +116,13 @@ func (d *Daemon) ensureCompRule(template string, spec compSpec) uint64 {
 	if spec.filter != "" {
 		w.link(reach, w.add(spec.filter), reachFilterRel)
 	}
+	if spec.start != "" {
+		w.link(reach, w.add(spec.start), reachStartRel)
+	}
 	w.link(root.ID, reach, resSourceRel)
+	if spec.ctarget != "" {
+		w.link(root.ID, w.add(spec.ctarget), containsTargetRel)
+	}
 	if spec.result == resFind {
 		w.link(root.ID, w.add(spec.testRel), findRelRel)
 		w.link(root.ID, w.add(spec.testArg), findArgRel)
@@ -135,8 +149,12 @@ func (d *Daemon) evalRule(root uint64, q ruleQuery) (ruleResult, bool) {
 	}
 	switch kind {
 	case resContains:
+		target := q.to
+		if b := g.content(firstDest(g, root, containsTargetRel)); b != "" {
+			target = d.resolveArgBinding(b, q)
+		}
 		for _, id := range reached {
-			if id == q.to {
+			if id == target {
 				return ruleResult{kind: kind, hit: true}, true
 			}
 		}
@@ -178,9 +196,13 @@ func (d *Daemon) reachSet(reach uint64, q ruleQuery) ([]uint64, bool) {
 	}
 	trans := g.content(firstDest(g, reach, reachTransRel)) == transYes
 	filter := g.content(firstDest(g, reach, reachFilterRel))
+	start := q.from
+	if b := g.content(firstDest(g, reach, reachStartRel)); b != "" {
+		start = d.resolveArgBinding(b, q)
+	}
 	var reached []uint64
-	seen := map[uint64]bool{q.from: true}
-	stack := []uint64{q.from}
+	seen := map[uint64]bool{start: true}
+	stack := []uint64{start}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]

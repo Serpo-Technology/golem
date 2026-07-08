@@ -345,6 +345,7 @@ type Daemon struct {
 	transitivityRuleID uint64
 	inheritanceRuleID  uint64
 	partWholeRuleID    uint64
+	symmetricRuleID    uint64
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction
@@ -1107,6 +1108,7 @@ func (d *Daemon) ensureCategoryRefinements() error {
 		{"rel:after", "after", []string{"sonra"}},
 		{"rel:before", "before", []string{"önce"}},
 		{"property:transitive", "transitive", []string{"transitive"}},
+		{"property:symmetric", "symmetric", []string{"symmetric"}},
 		// Locative prepositions: the closed class whose use as a copula's complement
 		// ("the leaf is on the tree") marks its relation locative. The refinement rides
 		// on the function-word category so the parser still reads "fn"; only the

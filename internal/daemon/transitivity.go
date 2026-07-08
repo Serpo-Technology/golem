@@ -62,18 +62,38 @@ func (d *Daemon) planProperty(frame grammar.Frame) (string, bool) {
 			Patient: grammar.Term{Phrase: word}}, d.chem.Snapshot()), true
 	}
 	d.noteFocus(rel)
-	// Only transitivity is a property GOLEM reasons with today; the marker seeds no
-	// other, so a set Property is the transitive rule.
+	// A relation property GOLEM reasons with maps to the marker it sets and reads: transitivity
+	// (a told ordering chains) and symmetry (a told relation holds both ways). A property it does
+	// not reason with is an honest gap rather than a silent mis-mark.
+	mark, held, known := d.relationProperty(frame.Property)
+	if !known {
+		return d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
+			Action: grammar.Term{Phrase: "know"}, Negate: true,
+			Patient: grammar.Term{Phrase: frame.Property}}, d.chem.Snapshot()), true
+	}
 	if frame.Force == grammar.ForceQuestion {
-		held := d.relationIsTransitive(rel.ID)
 		word := "no"
-		if held {
+		if held(rel.ID) {
 			word = "yes"
 		}
 		return upperFirst(d.gram.Word(frame.Lang, word)) + ".", true
 	}
-	d.markTransitive(rel.ID)
+	mark(rel.ID)
 	return d.confirmProperty(frame.Lang, rel, frame.Property), true
+}
+
+// relationProperty maps a told property word to the marker that records it and the predicate
+// that reads it, and whether GOLEM reasons with that property at all: transitivity chains a
+// told ordering, symmetry holds a relation both ways. A property it does not know returns
+// known false, so the clause admits the gap rather than mis-marking the relation.
+func (d *Daemon) relationProperty(property string) (mark func(uint64), held func(uint64) bool, known bool) {
+	switch property {
+	case "transitive":
+		return d.markTransitive, d.relationIsTransitive, true
+	case "symmetric":
+		return d.markSymmetric, d.relationIsSymmetric, true
+	}
+	return nil, nil, false
 }
 
 // propertySubjectRelation resolves the relation a property clause is about: the

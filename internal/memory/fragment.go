@@ -65,6 +65,12 @@ const (
 	// told the relation is transitive, not baked into any construction, so the
 	// chaining is a fact about the relation rather than the grammar.
 	RelTransitive = "transitive"
+	// RelSymmetric marks a relation concept as symmetric: a self-edge recording the learned
+	// property that the relation holds both ways ("meet is symmetric", so the cat meeting the
+	// dog entails the dog meeting the cat). Like RelTransitive it is set when GOLEM is told the
+	// property, and the inference it fires is a graph-stored reasoning rule run against the
+	// graph rather than a hardcoded walk, so the reasoning is a taught data artifact.
+	RelSymmetric = "symmetric"
 	// RelLocative marks a relation concept as locative: a self-edge that records
 	// the learned property that the relation places its figure at its ground
 	// ("on", "in", "under"). It is set when GOLEM is told the relation is a place,

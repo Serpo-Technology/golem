@@ -87,6 +87,7 @@ fw:en:times	times	en	fn
 fw:en:to	to	en	fn
 fw:en:than	than	en	than
 fw:en:told	told	en	speech
+fw:en:symmetric	symmetric	en	property
 fw:en:transitive	transitive	en	property
 fw:en:try	try	en	imp
 fw:en:under	under	en	fn
