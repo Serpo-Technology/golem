@@ -91,19 +91,34 @@ func canonicalOrdering(sign string, subj, std *memory.Fragment) (greater, lesser
 	return subj, std
 }
 
-// scaleDimension returns the scale concept a content names, or nil: a resolvable
-// concept with poles hung on it by RelScale. It is how a scale-ordering content
-// ("size") is turned back into its dimension Fragment for the moment and evidence reads.
+// scaleDimension returns the scale concept a content names, or nil: the concept that
+// content names AND that carries poles (incoming RelScale). It finds the scale by its
+// structure rather than the naming vote, because a scale word can collide with a concept
+// of the same name that is not a scale ("size" also names the magnitude reduction), and
+// the vote may return the non-scale; a dimension is identified by having poles hung on it.
 func (d *Daemon) scaleDimension(content string) *memory.Fragment {
-	dim := d.resolveConcept(content)
-	if dim == nil {
+	words, err := d.store.WordNodesByForms([]string{strings.ToLower(strings.TrimSpace(content))})
+	if err != nil || len(words) == 0 {
 		return nil
 	}
-	edges, err := d.store.LinksToRel([]uint64{dim.ID}, memory.RelScale)
-	if err != nil || len(edges) == 0 {
+	ids := make([]uint64, 0, len(words))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	names, err := d.store.LinksFromRel(ids, memory.RelNames)
+	if err != nil {
 		return nil
 	}
-	return dim
+	for _, e := range names {
+		poles, err := d.store.LinksToRel([]uint64{e.To}, memory.RelScale)
+		if err != nil || len(poles) == 0 {
+			continue // this named concept carries no poles, so it is not the dimension
+		}
+		if frags, err := d.store.FragmentsByIDs([]uint64{e.To}); err == nil && len(frags) == 1 {
+			return frags[0]
+		}
+	}
+	return nil
 }
 
 // isScale reports whether a relation content names a scale dimension: a resolvable
