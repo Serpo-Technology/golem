@@ -1667,14 +1667,28 @@ func (d *Daemon) planMagnitude(frame grammar.Frame) (string, bool) {
 	return d.sayMagnitude(frame.Lang, saySubj, surface, sayStd, degreeBucket(gap)), true
 }
 
-// comparesTransitively reports whether the from-concept stands above the to-concept on
-// a scale, directly or through a chain walked over the graph. The order is read from the
-// canonical greater-over-lesser orderings Proposed on the scale (the greater stands as
-// agent), so a single generic agent-direction walk serves it. A converse ("smaller")
-// query swaps its walk pair before calling, so it reads the same orderings the greater
-// pole wrote rather than a reversed second pole. The same walk answers an ordinary told-
-// transitive relation, whose content is the relation rather than a scale.
+// comparesTransitively reports whether the from-concept stands above the to-concept on a
+// scale or a told-transitive relation, chained transitively. The chaining walk now lives in
+// the graph as the transitivity rule: it runs against the store through evalReachRule when
+// the rule is present (the switch-over that makes this reasoning graph-authoritative), and
+// the Go walk below serves as the fallback when no rule is stored or its shape is not one the
+// evaluator runs. The rule reproduces the Go walk, verified over the comparison fixtures.
 func (d *Daemon) comparesTransitively(frag *memory.Fragment, fromID, toID uint64) bool {
+	if root := d.transitivityRule(); root != 0 {
+		if holds, ok := d.evalReachRule(root, frag.Content, fromID, toID); ok {
+			return holds
+		}
+	}
+	return d.comparesTransitivelyGo(frag, fromID, toID)
+}
+
+// comparesTransitivelyGo is the hardcoded chaining walk, the fallback for the transitivity
+// rule above. The order is read from the canonical greater-over-lesser orderings Proposed on
+// the scale (the greater stands as agent), so a single generic agent-direction walk serves
+// it. A converse ("smaller") query swaps its walk pair before calling, so it reads the same
+// orderings the greater pole wrote rather than a reversed second pole. The same walk answers
+// an ordinary told-transitive relation, whose content is the relation rather than a scale.
+func (d *Daemon) comparesTransitivelyGo(frag *memory.Fragment, fromID, toID uint64) bool {
 	seen := map[uint64]bool{fromID: true}
 	stack := []uint64{fromID}
 	for len(stack) > 0 {
@@ -1705,10 +1719,22 @@ func (d *Daemon) comparesTransitively(frag *memory.Fragment, fromID, toID uint64
 }
 
 // comparativeReach returns every concept a concept stands above on a scale, directly or
-// through the chain. It is the same walk comparesTransitively runs, collecting the whole
-// set rather than stopping at one target, so a concept's PLACE on the scale (its rank:
-// how many it exceeds) is read from the canonical orderings alone.
+// through the chain, so a concept's PLACE on the scale (its rank) is read from the canonical
+// orderings. Like comparesTransitively it runs the graph-stored rule (evalReachSet, the
+// collecting counterpart) when present, and falls back to the Go walk below otherwise.
 func (d *Daemon) comparativeReach(frag *memory.Fragment, fromID uint64) map[uint64]bool {
+	if root := d.transitivityRule(); root != 0 {
+		if below, ok := d.evalReachSet(root, frag.Content, fromID); ok {
+			return below
+		}
+	}
+	return d.comparativeReachGo(frag, fromID)
+}
+
+// comparativeReachGo is the hardcoded collecting walk, the fallback for the reach rule above.
+// It is the same walk comparesTransitivelyGo runs, collecting the whole set rather than
+// stopping at one target, so a concept's rank (how many it exceeds) reads from the orderings.
+func (d *Daemon) comparativeReachGo(frag *memory.Fragment, fromID uint64) map[uint64]bool {
 	below := map[uint64]bool{}
 	seen := map[uint64]bool{fromID: true}
 	stack := []uint64{fromID}

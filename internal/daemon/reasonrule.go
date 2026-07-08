@@ -72,20 +72,36 @@ func (d *Daemon) reasonRuleByTemplate(tmpl string) uint64 {
 	return 0
 }
 
-// evalReachRule evaluates a reach rule against the live graph, the reasoning counterpart of
-// genCode running a code subgraph: it reads the rule's shape (the reach primitive and the
-// role it follows) from the graph, then chains that role-directed relation transitively from
-// one concept to another, returning whether the target is reached. It reproduces
-// comparesTransitively, but with the role read from the stored rule rather than hardcoded, so
-// the walk itself is graph-stored data. ok is false when the node is not a reach rule, so a
-// caller falls back to the Go handler.
-func (d *Daemon) evalReachRule(ruleRoot uint64, relContent string, fromID, toID uint64) (holds, ok bool) {
-	g := d.storeView()
+// transitivityRule returns the cached root of the transitive-closure rule, ensuring it once
+// on first use so the comparison path runs the graph-stored rule without a per-query scan. It
+// is called only on the single request loop, so the cache write is unsynchronized by design.
+func (d *Daemon) transitivityRule() uint64 {
+	if d.transitivityRuleID == 0 {
+		d.transitivityRuleID = d.ensureTransitivityRule()
+	}
+	return d.transitivityRuleID
+}
+
+// ruleReachRole reads the role a reach rule follows from its subgraph, false when the node is
+// not a reach rule (it grounds in something else), so a caller falls back to the Go handler.
+func (d *Daemon) ruleReachRole(g codeGraph, ruleRoot uint64) (string, bool) {
 	if g.content(firstDest(g, ruleRoot, memory.RelGrounds)) != reachRule {
-		return false, false
+		return "", false
 	}
 	role := g.content(firstDest(g, ruleRoot, operand0Rel))
-	if role == "" {
+	return role, role != ""
+}
+
+// evalReachRule evaluates a reach rule against the live graph, the reasoning counterpart of
+// genCode running a code subgraph: it reads the role the rule follows from the graph, then
+// chains that role-directed relation transitively from one concept to another, returning
+// whether the target is reached. It reproduces comparesTransitivelyGo, but with the role read
+// from the stored rule rather than hardcoded, so the walk itself is graph-stored data. ok is
+// false when the node is not a reach rule, so a caller falls back to the Go handler.
+func (d *Daemon) evalReachRule(ruleRoot uint64, relContent string, fromID, toID uint64) (holds, ok bool) {
+	g := d.storeView()
+	role, ok := d.ruleReachRole(g, ruleRoot)
+	if !ok {
 		return false, false
 	}
 	seen := map[uint64]bool{fromID: true}
@@ -108,4 +124,37 @@ func (d *Daemon) evalReachRule(ruleRoot uint64, relContent string, fromID, toID 
 		}
 	}
 	return false, true
+}
+
+// evalReachSet evaluates a reach rule for the whole set a concept reaches, the collecting
+// counterpart of evalReachRule: it walks the same role-directed relation transitively and
+// returns every concept reached (a concept's place on a scale, how many it stands over),
+// reproducing comparativeReachGo with the role read from the rule. ok is false when the node
+// is not a reach rule, so a caller falls back to the Go handler.
+func (d *Daemon) evalReachSet(ruleRoot uint64, relContent string, fromID uint64) (map[uint64]bool, bool) {
+	g := d.storeView()
+	role, ok := d.ruleReachRole(g, ruleRoot)
+	if !ok {
+		return nil, false
+	}
+	below := map[uint64]bool{}
+	seen := map[uint64]bool{fromID: true}
+	stack := []uint64{fromID}
+	for len(stack) > 0 {
+		cur := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		frags, err := d.store.FragmentsByIDs([]uint64{cur})
+		if err != nil || len(frags) != 1 {
+			continue
+		}
+		for _, f := range d.gatherFacts(frags[0], role, relContent) {
+			below[f.coID] = true
+			if !seen[f.coID] {
+				seen[f.coID] = true
+				stack = append(stack, f.coID)
+			}
+		}
+	}
+	delete(below, fromID)
+	return below, true
 }

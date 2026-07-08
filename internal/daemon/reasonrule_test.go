@@ -60,6 +60,28 @@ func TestTransitivityRuleReproducesHandler(t *testing.T) {
 	}
 }
 
+// The live comparison path runs the graph-stored rule: after a chained comparison query the
+// transitivity rule has been ensured and cached, so comparesTransitively answered through the
+// rule (evalReachRule), not only the Go fallback, and the answer is right.
+func TestComparisonRunsThroughStoredRule(t *testing.T) {
+	d, _ := testDaemon(t)
+	teachSizeScale(t, d)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "snail")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "the mouse is bigger than the snail")
+	if got := say(t, d, "is the cat bigger than the snail").Say; got != "Yes, the cat is bigger than the snail." {
+		t.Fatalf("the chained comparison should still hold through the rule: %q", got)
+	}
+	if d.transitivityRuleID == 0 {
+		t.Fatal("the comparison should have ensured and cached the transitivity rule")
+	}
+	if got := d.reasonRuleByTemplate(transitiveRuleTemplate); got != d.transitivityRuleID {
+		t.Fatalf("the cached rule id %d should match the stored rule %d", d.transitivityRuleID, got)
+	}
+}
+
 // The rule is durable and generic: a second ensure returns the same root (no duplicate is
 // minted), and it is still found and still reproduces the handler after a recompile, the
 // reload path a real boot takes.
