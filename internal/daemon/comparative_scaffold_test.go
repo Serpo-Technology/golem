@@ -5,21 +5,26 @@ import (
 )
 
 // The gradable-comparison machinery is seeded as graph concepts at boot: the comparative
-// operator, the greater and lesser pole roles, and the rule, regular, irregular, and
-// exception meta concepts. They are class concepts, so they sit outside the grown layer
-// and are kept out of cognition, and they are seeded idempotently, so a re-boot or a
-// recompile finds them rather than forking a duplicate.
+// operator, the analytic mark, the greater and lesser pole roles, the rule / regular /
+// irregular / exception meta concepts, and the tongue tags a rule is keyed on. They are
+// class concepts, so they sit outside the grown layer and are kept out of cognition, and
+// they are seeded idempotently, so a re-boot or a recompile finds them rather than forking
+// a duplicate.
 func TestComparativeScaffoldSeeded(t *testing.T) {
 	d, s := testDaemon(t)
 
 	want := map[string]string{
 		"cmp:comparative": "comparative",
+		"cmp:analytic":    "analytic",
 		"pole:greater":    "greater",
 		"pole:lesser":     "lesser",
 		"meta:rule":       "rule",
 		"meta:regular":    "regular",
 		"meta:irregular":  "irregular",
 		"meta:exception":  "exception",
+		"lang:en":         "en",
+		"lang:tr":         "tr",
+		"lang:la":         "la",
 	}
 
 	if len(d.gradableScaffold) != len(want) {

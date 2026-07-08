@@ -74,11 +74,33 @@ type Op struct {
 	Symbol     string       // the code form: the operator that runs it, for a primitive
 	Word       string       // the literal form: the word it is taught by
 	Params     []string     // the parameters of a defined operation, in order
-	ParamTypes []string     // each parameter's type ("int" or "list"), parallel to Params; empty means int
+	ParamTypes []string     // each parameter's type ("int", "list", or "string"), parallel to Params; empty means int
 	Body       *Computation // the meaning of a defined operation over its parameters, nil for a primitive
 	Raw        string       // the Go statements of an imperative function (a reduction or a synthesized loop), when set
 	Ret        string       // an imperative function's return type ("int" or "list"), parallel to Raw
+	// A string primitive carries per-operand types and an emit template rather than
+	// an operator symbol. In gives each operand's type, Out the result type, and Emit
+	// how the operation lowers to import-free Go: "infix:+" for a binary join (concat,
+	// prepend), "slice:last" for a[len(a)-1:], "slice:init" for a[:len(a)-1]. The
+	// slice forms are ASCII-scoped (byte slices), correct for ASCII English stems and
+	// never reused where a multibyte surface is cut. Emit non-empty is the mark that
+	// an operation is a string primitive (isStrPrim); such an op leaves Symbol empty so
+	// the "+" it emits stays owned by code:add on the raw-source parse path.
+	In   []string // operand types; empty defaults to the binary-int arithmetic case
+	Out  string   // result type; empty defaults to int
+	Emit string   // the import-free Go template a string primitive lowers to
 }
+
+// isStrPrim reports whether an operation is a string primitive: one that carries an
+// emit template rather than an operator symbol, so the four sites that once read
+// symbol-emptiness as the binary-int discriminator classify it explicitly instead.
+func (o Op) isStrPrim() bool { return o.Emit != "" }
+
+// emitsPrimary reports whether a string primitive lowers to a Go primary expression
+// (a slice expression a[len(a)-1:], which needs no grouping as an operand) rather than
+// an infix join (a + b, which an operand position parenthesizes). It keeps the typed
+// render's operand parenthesization in lockstep with the graph twin's compound flag.
+func (o Op) emitsPrimary() bool { return strings.HasPrefix(o.Emit, "slice:") }
 
 // Arity is how many operands the operation takes, exported so the daemon can record
 // it on the operation's concept for the resolver to return.
@@ -88,6 +110,8 @@ func (o Op) Arity() int { return o.arity() }
 // operation as many as it has parameters, a primitive is binary.
 func (o Op) arity() int {
 	switch {
+	case len(o.In) != 0:
+		return len(o.In) // a string primitive takes as many operands as it declares
 	case o.Raw != "":
 		return len(o.Params)
 	case o.Body != nil:
@@ -121,10 +145,16 @@ type Def struct {
 const (
 	typeInt  = "int"
 	typeList = "list"
+	typeStr  = "string"
 
 	listWord = "list" // the literal surface, "the list of 1 and 2 and 3"
 	eachWord = "each" // the element of a map, "the double of each number"
 )
+
+// isQuoted reports whether a literal's stored form is a Go string literal, its
+// leading double quote the durable type marker fromExpr preserves verbatim. A number
+// ("5") or a signed number ("-5") never carries one, so none reclassifies.
+func isQuoted(lit string) bool { return len(lit) > 0 && lit[0] == '"' }
 
 // ListWord is the list constructor's operation name, exported so a caller that
 // builds a list computation from a surface the grammar parsed names it without a
@@ -860,16 +890,29 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 		rt, rok := e.typeOf(c.Cond.Right, env, self)
 		tt, tok := e.typeOf(c.Cond.Then, env, self)
 		et, eok := e.typeOf(c.Cond.Else, env, self)
-		if !lok || !rok || !tok || !eok || lt != typeInt || rt != typeInt || tt != typeInt || et != typeInt {
+		if !lok || !rok || !tok || !eok {
 			return "", false
 		}
-		return typeInt, true
+		// The test compares two operands of one type: an ordering (">"/"<") over
+		// numbers, or equality ("==") over numbers or strings. The two branches share
+		// a type T, ints for an arithmetic choice or strings for a morphology cascade,
+		// and the conditional yields T.
+		if lt != rt || tt != et {
+			return "", false
+		}
+		if c.Cond.Cmp != "==" && lt != typeInt {
+			return "", false
+		}
+		return tt, true
 	case c.Var != "":
 		t, ok := env[c.Var]
 		return t, ok
 	case c.Op == "":
 		if c.Lit == "" {
 			return "", false
+		}
+		if isQuoted(c.Lit) {
+			return typeStr, true
 		}
 		return typeInt, true
 	case c.Op == listWord:
@@ -905,6 +948,17 @@ func (e *Engine) typeOf(c Computation, env map[string]string, self string) (stri
 			return typeList, true
 		}
 		return typeInt, true
+	}
+	if op.isStrPrim() { // a string primitive takes its declared operand types, returns Out
+		if len(c.Args) != len(op.In) {
+			return "", false
+		}
+		for i, a := range c.Args {
+			if t, ok := e.typeOf(a, env, self); !ok || t != op.In[i] {
+				return "", false
+			}
+		}
+		return op.Out, true
 	}
 	want := 2
 	if op.Body != nil {
@@ -957,6 +1011,9 @@ func (e *Engine) ReturnType(name string) (string, bool) {
 	}
 	if op.Body != nil {
 		return e.retType(op)
+	}
+	if op.Out != "" { // a string primitive declares its result type
+		return op.Out, true
 	}
 	return typeInt, true
 }
@@ -1133,6 +1190,9 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		}
 		return e.render(inlined, self, flat)
 	}
+	if op.isStrPrim() {
+		return e.renderStrPrim(op, c.Args, self, flat)
+	}
 	if len(c.Args) != 2 {
 		return "", false
 	}
@@ -1142,6 +1202,39 @@ func (e *Engine) render(c Computation, self string, flat bool) (string, bool) {
 		return "", false
 	}
 	return a + " " + op.Symbol + " " + b, true
+}
+
+// renderStrPrim writes a string primitive to its import-free Go form by its emit
+// template: an infix join "a + b" for concat and prepend, a byte slice "a[len(a)-1:]"
+// for lastChar and "a[:len(a)-1]" for dropLast. The operands go through renderOperand
+// so a nested infix operand is parenthesized while a slice operand stays a primary,
+// the same parenthesization the graph twin's genStrPrim applies.
+func (e *Engine) renderStrPrim(op Op, args []Computation, self string, flat bool) (string, bool) {
+	if sym, ok := strings.CutPrefix(op.Emit, "infix:"); ok {
+		if len(args) != 2 {
+			return "", false
+		}
+		a, aok := e.renderOperand(args[0], self, flat)
+		b, bok := e.renderOperand(args[1], self, flat)
+		if !aok || !bok {
+			return "", false
+		}
+		return a + " " + sym + " " + b, true
+	}
+	if len(args) != 1 {
+		return "", false
+	}
+	a, aok := e.renderOperand(args[0], self, flat)
+	if !aok {
+		return "", false
+	}
+	switch op.Emit {
+	case "slice:last":
+		return a + "[len(" + a + ")-1:]", true
+	case "slice:init":
+		return a + "[:len(" + a + ")-1]", true
+	}
+	return "", false
 }
 
 // renderArgs writes a call's argument list.
@@ -1185,7 +1278,13 @@ func (e *Engine) rendersAsCall(c Computation, self string) bool {
 		return true
 	}
 	op, ok := e.byName[c.Op]
-	return ok && (op.Raw != "" || e.recursive(op))
+	if !ok {
+		return false
+	}
+	if op.isStrPrim() {
+		return op.emitsPrimary() // a slice expression is a primary; an infix join is not
+	}
+	return op.Raw != "" || e.recursive(op)
 }
 
 // genCond writes a conditional as a parenthesized immediately-invoked function
@@ -1199,7 +1298,38 @@ func (e *Engine) genCond(c *Conditional, self string) (string, bool) {
 	if !tok || !thok || !eok {
 		return "", false
 	}
-	return "(func() int { if " + test + " { return " + then + " }; return " + els + " }())", true
+	return "(func() " + goType(e.condType(c, self)) + " { if " + test + " { return " + then + " }; return " + els + " }())", true
+}
+
+// condType is the value type a conditional yields, the type its two branches share,
+// so genCond writes the immediately-invoked literal returning that type rather than a
+// hardcoded int. A string cascade returns string, an arithmetic choice int. It reads
+// the then branch's type with the function's own parameter types in scope (a morphology
+// rule's body is inlined before it is rendered, so the branches are grounded in literals
+// and env may be nil), falling back to int when the type does not resolve.
+func (e *Engine) condType(c *Conditional, self string) string {
+	if t, ok := e.typeOf(c.Then, e.selfEnv(self), self); ok {
+		return t
+	}
+	return typeInt
+}
+
+// selfEnv gives the parameter types of the function currently being written, so a
+// conditional rendered inside a not-yet-inlined body (ToFunc) still types its branches;
+// an empty name or an unknown function yields no bindings.
+func (e *Engine) selfEnv(self string) map[string]string {
+	if self == "" {
+		return nil
+	}
+	op, ok := e.byName[self]
+	if !ok || len(op.Params) == 0 {
+		return nil
+	}
+	env := make(map[string]string, len(op.Params))
+	for i, p := range op.Params {
+		env[p] = op.paramType(i)
+	}
+	return env
 }
 
 // genTest writes a conditional's comparison, "number > count", the guard the
@@ -1238,8 +1368,11 @@ func (e *Engine) genRecursiveCall(op Op, args []Computation, outerSelf string) (
 
 // goType is a value type's Go form.
 func goType(t string) string {
-	if t == typeList {
+	switch t {
+	case typeList:
 		return "[]int"
+	case typeStr:
+		return "string"
 	}
 	return "int"
 }
@@ -1401,9 +1534,176 @@ func (e *Engine) DefSource(op Op) (params []string, body string, ok bool) {
 }
 
 // condBodyPrefix marks a stored body as a conditional, ahead of its parts;
-// mapBodyPrefix marks one as a map.
+// mapBodyPrefix marks one as a map; morphBodyPrefix marks one as a string /
+// conditional cascade stored structurally.
 const condBodyPrefix = "if "
 const mapBodyPrefix = "map "
+const morphBodyPrefix = "morph "
+
+// isStringBody reports whether a computation runs over the string primitives, so a
+// morphology rule (a nested conditional cascade whose leaves are string primitives) is
+// serialized structurally rather than as re-parsed Go text. Re-parsing "a + b" would
+// misread a concat as add, and a nested conditional cannot store flat, so a string body
+// takes the structural morph encoding instead.
+func (e *Engine) isStringBody(c Computation) bool {
+	if c.Cond != nil {
+		return e.isStringBody(c.Cond.Left) || e.isStringBody(c.Cond.Right) ||
+			e.isStringBody(c.Cond.Then) || e.isStringBody(c.Cond.Else)
+	}
+	if c.Op != "" && c.Op != listWord {
+		if op, ok := e.byName[c.Op]; ok && op.isStrPrim() {
+			return true
+		}
+	}
+	for _, a := range c.Args {
+		if e.isStringBody(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// morphEncode serializes a string / conditional computation as a parenthesized
+// s-expression, so a nested morphology rule round-trips through storage without the Go
+// parser (where "a + b" would misread concat as add and a nested conditional could not
+// store flat). A conditional is (if <cmp> left right then else), an operation
+// (op <name> args...), a parameter reference (var <name>), a literal (lit <quoted>); the
+// quoted literal keeps its quotes, and a space inside it (the TR "daha ") is preserved by
+// the tokenizer that reads it back.
+func morphEncode(c Computation) (string, bool) {
+	switch {
+	case c.Map != nil || c.Each:
+		return "", false // a morphology body carries no map or element reference
+	case c.Cond != nil:
+		l, lok := morphEncode(c.Cond.Left)
+		r, rok := morphEncode(c.Cond.Right)
+		t, tok := morphEncode(c.Cond.Then)
+		el, eok := morphEncode(c.Cond.Else)
+		if !lok || !rok || !tok || !eok {
+			return "", false
+		}
+		return "(if " + c.Cond.Cmp + " " + l + " " + r + " " + t + " " + el + ")", true
+	case c.Var != "":
+		return "(var " + c.Var + ")", true
+	case c.Op == "":
+		if c.Lit == "" {
+			return "", false
+		}
+		return "(lit " + c.Lit + ")", true
+	default:
+		parts := make([]string, 0, len(c.Args)+2)
+		parts = append(parts, "op", c.Op)
+		for _, a := range c.Args {
+			s, ok := morphEncode(a)
+			if !ok {
+				return "", false
+			}
+			parts = append(parts, s)
+		}
+		return "(" + strings.Join(parts, " ") + ")", true
+	}
+}
+
+// morphTokens splits a morph s-expression into tokens: the parentheses, a quoted string
+// as one token (its inner space kept), and a bare identifier or symbol. A literal in a
+// morphology rule carries no embedded quote or paren, so the tokenizer needs no escaping.
+func morphTokens(s string) []string {
+	var toks []string
+	for i := 0; i < len(s); {
+		switch ch := s[i]; {
+		case ch == ' ':
+			i++
+		case ch == '(' || ch == ')':
+			toks = append(toks, string(ch))
+			i++
+		case ch == '"':
+			j := i + 1
+			for j < len(s) && s[j] != '"' {
+				j++
+			}
+			if j < len(s) {
+				j++ // include the closing quote
+			}
+			toks = append(toks, s[i:j])
+			i = j
+		default:
+			j := i
+			for j < len(s) && s[j] != ' ' && s[j] != '(' && s[j] != ')' {
+				j++
+			}
+			toks = append(toks, s[i:j])
+			i = j
+		}
+	}
+	return toks
+}
+
+// morphDecode reads one morph s-expression node from toks at pos, returning the
+// computation, the position past it, and ok, the inverse of morphEncode. It is a plain
+// recursive descent over the (head ...) forms morphEncode writes.
+func morphDecode(toks []string, pos int) (Computation, int, bool) {
+	if pos >= len(toks) || toks[pos] != "(" {
+		return Computation{}, pos, false
+	}
+	pos++ // consume "("
+	if pos >= len(toks) {
+		return Computation{}, pos, false
+	}
+	head := toks[pos]
+	pos++
+	switch head {
+	case "lit":
+		if pos+1 >= len(toks) || toks[pos+1] != ")" {
+			return Computation{}, pos, false
+		}
+		lit := toks[pos]
+		return Computation{Lit: lit}, pos + 2, true
+	case "var":
+		if pos+1 >= len(toks) || toks[pos+1] != ")" {
+			return Computation{}, pos, false
+		}
+		name := toks[pos]
+		return Computation{Var: name}, pos + 2, true
+	case "if":
+		if pos >= len(toks) {
+			return Computation{}, pos, false
+		}
+		cmp := toks[pos]
+		pos++
+		sides := make([]Computation, 4)
+		for i := 0; i < 4; i++ {
+			c, np, ok := morphDecode(toks, pos)
+			if !ok {
+				return Computation{}, pos, false
+			}
+			sides[i], pos = c, np
+		}
+		if pos >= len(toks) || toks[pos] != ")" {
+			return Computation{}, pos, false
+		}
+		return Computation{Cond: &Conditional{Cmp: cmp, Left: sides[0], Right: sides[1], Then: sides[2], Else: sides[3]}}, pos + 1, true
+	case "op":
+		if pos >= len(toks) {
+			return Computation{}, pos, false
+		}
+		name := toks[pos]
+		pos++
+		var args []Computation
+		for pos < len(toks) && toks[pos] != ")" {
+			c, np, ok := morphDecode(toks, pos)
+			if !ok {
+				return Computation{}, pos, false
+			}
+			args = append(args, c)
+			pos = np
+		}
+		if pos >= len(toks) {
+			return Computation{}, pos, false
+		}
+		return Computation{Op: name, Args: args}, pos + 1, true
+	}
+	return Computation{}, pos, false
+}
 
 // bodySep separates a stored body's parts, a sequence no arithmetic body contains
 // so the parts split back cleanly.
@@ -1413,6 +1713,13 @@ const bodySep = " ; "
 // arithmetic and inlined calls as code, a conditional and a map as the structured
 // forms bodyFromSource reads back, and a self-call kept as a call.
 func (e *Engine) bodySource(c Computation, self string) (string, bool) {
+	if e.isStringBody(c) {
+		enc, ok := morphEncode(c)
+		if !ok {
+			return "", false
+		}
+		return morphBodyPrefix + enc, true
+	}
 	switch {
 	case c.Map != nil:
 		list, lok := e.render(c.Map.List, self, true)
@@ -1441,6 +1748,14 @@ func (e *Engine) bodySource(c Computation, self string) (string, bool) {
 // bodySource: a conditional or a map from its structured parts, anything else
 // through the Go parser as arithmetic.
 func (e *Engine) bodyFromSource(body string) (Computation, bool) {
+	if rest, ok := strings.CutPrefix(body, morphBodyPrefix); ok {
+		toks := morphTokens(rest)
+		c, pos, ok := morphDecode(toks, 0)
+		if !ok || pos != len(toks) {
+			return Computation{}, false
+		}
+		return c, true
+	}
 	if rest, ok := strings.CutPrefix(body, mapBodyPrefix); ok {
 		parts := strings.SplitN(rest, bodySep, 3)
 		if len(parts) != 3 || parts[0] == "" {

@@ -286,8 +286,8 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// recount holds frozen once their word's company has starved, surrendering an earned name to
 	// disuse the recount is deliberately keeping.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
-		WHERE rel <> ?
-		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))`, linkNightlyKeep, RelNames); err != nil {
+		WHERE rel <> ? AND rel <> ?
+		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))`, linkNightlyKeep, RelNames, RelComparativeForm); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {

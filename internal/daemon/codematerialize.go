@@ -77,6 +77,24 @@ func (d *Daemon) materializeCode(g *scratchGraph, c code.Computation, selfName s
 		}
 		return 0, false
 	}
+	// A string primitive: a root grounding in the operation concept with its operands
+	// (one for a slice, two for an infix join), recognized by the operation's emit
+	// template rather than an operator symbol, so a unary slice is not mis-read as a
+	// call by len(c.Args) == 2.
+	if op, ok := d.opByName(c.Op); ok && op.Emit != "" {
+		if len(c.Args) != len(op.In) {
+			return 0, false
+		}
+		root := g.add("")
+		g.link(root, g.add(c.Op), memory.RelGrounds)
+		rels := []string{operand0Rel, operand1Rel}
+		for i, a := range c.Args {
+			if !d.materializeInto(g, root, rels[i], a, selfName, fnNodes) {
+				return 0, false
+			}
+		}
+		return root, true
+	}
 	// A call of a defined function.
 	if d.isCall(c) {
 		return d.materializeCall(g, c, selfName, fnNodes)
@@ -433,8 +451,12 @@ func (d *Daemon) typeCheckGraph(g *scratchGraph, root uint64) bool {
 func (d *Daemon) typeOfGraph(g codeGraph, node uint64) (string, bool) {
 	grounds := firstDest(g, node, memory.RelGrounds)
 	if grounds == 0 {
-		if g.content(node) == "" {
+		content := g.content(node)
+		if content == "" {
 			return "", false
+		}
+		if content[0] == '"' {
+			return "string", true // a quoted literal leaf
 		}
 		return "int", true
 	}
@@ -454,6 +476,19 @@ func (d *Daemon) typeOfGraph(g codeGraph, node uint64) (string, bool) {
 	op, ok := d.opByName(name)
 	if !ok {
 		return "", false
+	}
+	if op.Emit != "" { // a string primitive: operand0/operand1 typed by In, result Out
+		rels := []string{operand0Rel, operand1Rel}
+		if len(op.In) > len(rels) {
+			return "", false
+		}
+		for i, want := range op.In {
+			t, tok := d.typeOfGraph(g, firstDest(g, node, rels[i]))
+			if !tok || t != want {
+				return "", false
+			}
+		}
+		return op.Out, true
 	}
 	if d.opSymbol(name) != "" {
 		l, lok := d.typeOfGraph(g, firstDest(g, node, operand0Rel))

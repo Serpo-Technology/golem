@@ -469,3 +469,37 @@ func TestNamesEdgeSparedNightlyDecay(t *testing.T) {
 		t.Fatalf("ordinary company must still decay: %v", w)
 	}
 }
+
+// The comparative-form edge is the sole surface the serve path reads for a comparison, and
+// it points at a plain word node with no spared category, so without a rel exclusion it
+// would thin to the link floor and prune, leaving the comparison a silent gap forever. It
+// is spared by its rel the way a naming bond is, so an offline-derived surface stays durable
+// across many nights while ordinary company still fades.
+func TestComparativeFormEdgeSparedNightlyDecay(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Now()
+	pole := &Fragment{Kind: KindConcept, Channel: "concept", Content: "big",
+		Template: "pole:size:greater", Category: "class", Time: now}
+	if _, err := s.Encode(pole); err != nil {
+		t.Fatal(err)
+	}
+	form := &Fragment{Kind: KindWord, Channel: "word", Content: "bigger", Template: "bigger", Lang: "en", Time: now}
+	if _, err := s.Encode(form); err != nil {
+		t.Fatal(err)
+	}
+	moment := encodeAt(t, s, "vision", "bigger", 0, now)
+	if err := s.LinkRel(pole.ID, form.ID, RelComparativeForm, 0.9); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(form.ID, moment.ID, RelTemporal, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ {
+		if _, err := s.Sleep(0.1, 0.05); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w := edgeWeightRel(t, s, pole.ID, form.ID, RelComparativeForm); w != 0.9 {
+		t.Fatalf("the comparative-form edge must survive N nights at full weight: %v", w)
+	}
+}

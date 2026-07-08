@@ -87,11 +87,13 @@ const (
 	// ordering and to derive the numeric sign, so the scale is the one place a magnitude
 	// comparison lives across tongues.
 	RelScale = "scale"
-	// RelComparativeForm links a gradable pole adjective to a durable, prune-spared
-	// surface node holding its comparative realization in one tongue ("big" -> "bigger",
-	// "daha büyük", "maior"). The serve path reads this stored surface rather than running
-	// a morphology rule, so a comparison speaks the same word every time, gate-independent
-	// and nap-durable, and the reverse read never mints a per-tongue comparative relation.
+	// RelComparativeForm links a gradable pole adjective to a surface node holding its
+	// comparative realization in one tongue ("big" -> "bigger", "daha büyük", "maior"). The
+	// serve path reads this stored surface rather than running a morphology rule, so a
+	// comparison speaks the same word every time, gate-independent, and the reverse read
+	// never mints a per-tongue comparative relation. The edge is spared the nightly decay
+	// by its rel (the sibling of the RelNames exclusion in Sleep), so an offline-derived
+	// surface stays durable across nights rather than thinning to the link floor.
 	RelComparativeForm = "cmpform"
 	// RelMarks links a closed-class word to a concept it marks, so a grammatical
 	// category the engine reads is derived from the graph rather than a seeded

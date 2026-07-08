@@ -302,6 +302,12 @@ type Daemon struct {
 	// substitute for the code engine's English word map: a computation word resolves
 	// to its concept, and the concept yields the operation the engine runs.
 	opConcept map[uint64]code.OpRef
+	// stringOpConcept maps a string-primitive concept (concat, prepend, lastChar,
+	// dropLast) to the operation it names, kept apart from opConcept the way the
+	// comparisons and extremals are, so a string primitive never reads as an ordinary
+	// call head in prose and IsComputationSurface never picks it up. A morphology rule
+	// composes over these; the serve path never resolves one from a spoken word.
+	stringOpConcept map[uint64]code.OpRef
 	// cmpConcept maps a comparison concept to its operator symbol (">", "<", "==").
 	// Comparisons are grounded operations a conditional's test names ("above" -> gt),
 	// kept apart from opConcept so a comparison word never reads as a call head;
@@ -1204,12 +1210,21 @@ func (d *Daemon) ensureComparativeScaffold() error {
 	d.gradableScaffold = map[uint64]string{}
 	for _, s := range []struct{ template, content string }{
 		{"cmp:comparative", "comparative"},
+		{"cmp:analytic", "analytic"},
 		{"pole:greater", "greater"},
 		{"pole:lesser", "lesser"},
 		{"meta:rule", "rule"},
 		{"meta:regular", "regular"},
 		{"meta:irregular", "irregular"},
 		{"meta:exception", "exception"},
+		// The tongue a morphology rule realizes is a graph concept too, so "the tongue is
+		// graph data" holds. These are un-named class concepts: prune-spared, hidden by
+		// isSystemConcept, and collision-free because they carry no RelNames surface a grown
+		// noun could clash with. A rule is tagged with its tongue so the keyed selection walk
+		// finds the right rule per language.
+		{"lang:en", "en"},
+		{"lang:tr", "tr"},
+		{"lang:la", "la"},
 	} {
 		id := d.ensureClassConcept(s.template, s.content)
 		if id == 0 {
@@ -1276,6 +1291,9 @@ func (d *Daemon) isSystemConcept(id uint64) bool {
 		return true
 	}
 	if _, ok := d.opConcept[id]; ok {
+		return true
+	}
+	if _, ok := d.stringOpConcept[id]; ok {
 		return true
 	}
 	if _, ok := d.cmpConcept[id]; ok {
@@ -2877,11 +2895,65 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if _, ok := d.scaleOf(pole); !ok {
 			return wire.Response{Error: fmt.Sprintf("%q is not a scale pole; teach its scale first", req.Content)}, false, false
 		}
+		// A hand-stored surface is an irregular override: assertRealizedForm tags it
+		// meta:irregular so the reverse lookup owns its token before any stemming.
 		d.assertRealizedForm(pole, "", lang, req.Query)
 		if err := d.store.Audit(time.Now().Unix(), "cmpform", req.Content, req.Query); err != nil {
 			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
 		}
 		return wire.Response{OK: true, Say: fmt.Sprintf("the comparative of %s is %q.", pole.Content, req.Query)}, false, false
+
+	case "cmprule":
+		// Teach and tag the regular comparative morphology rule for a tongue: ensure the
+		// rule function exists in the code faculty, run the pure-op determinism guard, and
+		// RelMarks it (cmp:comparative + meta:regular + tongue) so the keyed selection walk
+		// finds it. The rule composition is Go; rule / regular and the tongue are graph data.
+		lang := req.Lang
+		if lang == "" {
+			lang = "en"
+		}
+		op, ok := comparativeRule(lang)
+		if !ok {
+			return wire.Response{Error: fmt.Sprintf("no productive comparative rule for %q", lang)}, false, false
+		}
+		if op.Body == nil || !isPureMorph(*op.Body) {
+			return wire.Response{Error: "a comparative rule must compose only the pure string primitives"}, false, false
+		}
+		if _, err := d.learnFunction(op); err != nil {
+			return wire.Response{Error: err.Error()}, false, false
+		}
+		node, err := d.store.FragmentByTemplate("code:" + op.Name)
+		if err != nil || node == nil || !d.tagComparativeRule(node.ID, lang) {
+			return wire.Response{Error: "could not tag the comparative rule"}, false, false
+		}
+		if err := d.store.Audit(time.Now().Unix(), "cmprule", op.Name, lang); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("the %s comparative rule is %s.", lang, op.Name)}, false, false
+
+	case "cmpderive":
+		// Run the tagged rule over every regular pole lacking a form and freeze the derived
+		// surface into the durable edge, the final grow sweep. Requires the runtime;
+		// idempotent (a pole already carrying a form is skipped) and re-runnable.
+		if !d.cfg.RuntimeEnabled {
+			return wire.Response{Error: "cmpderive needs the runtime open"}, false, false
+		}
+		tongues := []string{"en", "tr"}
+		if req.Lang != "" {
+			tongues = []string{req.Lang}
+		}
+		derived := 0
+		for _, pole := range d.allPoles() {
+			for _, tongue := range tongues {
+				if _, ok := d.deriveComparativeForm(pole, tongue, ""); ok {
+					derived++
+				}
+			}
+		}
+		if err := d.store.Audit(time.Now().Unix(), "cmpderive", fmt.Sprintf("%d", derived), strings.Join(tongues, ",")); err != nil {
+			fmt.Fprintf(d.out, "audit write failed: %v\n", err)
+		}
+		return wire.Response{OK: true, Say: fmt.Sprintf("derived %d comparative forms.", derived)}, false, false
 
 	case "recall":
 		var seeds []*memory.Fragment

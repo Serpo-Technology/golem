@@ -384,6 +384,40 @@ func main() {
 		}
 		fmt.Println(resp.Say)
 
+	case "cmprule":
+		rest := args[1:]
+		lang, feature := "", ""
+		for len(rest) >= 2 && (rest[0] == "--lang" || rest[0] == "--feature") {
+			if rest[0] == "--lang" {
+				lang = rest[1]
+			} else {
+				feature = rest[1]
+			}
+			rest = rest[2:]
+		}
+		ruleName := ""
+		if len(rest) >= 1 {
+			ruleName = rest[0]
+		}
+		resp := call(home, wire.Request{Cmd: "cmprule", Content: ruleName, Query: feature, Lang: lang})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
+	case "cmpderive":
+		rest := args[1:]
+		lang := ""
+		if len(rest) >= 2 && rest[0] == "--lang" {
+			lang = rest[1]
+			rest = rest[2:]
+		}
+		resp := call(home, wire.Request{Cmd: "cmpderive", Lang: lang})
+		if resp.Error != "" {
+			fail(fmt.Errorf("%s", resp.Error))
+		}
+		fmt.Println(resp.Say)
+
 	case "recall":
 		resp := call(home, wire.Request{Cmd: "recall", Query: strings.Join(args[1:], " ")})
 		if len(resp.Fragments) == 0 {

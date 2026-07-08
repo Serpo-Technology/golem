@@ -87,6 +87,7 @@ var propertyOps = []struct {
 // naming edges are reused when present, re-minted after a consolidation prunes them.
 func (d *Daemon) ensureOperations() {
 	d.opConcept = map[uint64]code.OpRef{}
+	d.stringOpConcept = map[uint64]code.OpRef{}
 	d.cmpConcept = map[uint64]string{}
 	d.extremalConcept = map[uint64]string{}
 	d.propertyConcept = map[uint64]code.Property{}
@@ -99,7 +100,15 @@ func (d *Daemon) ensureOperations() {
 		if id == 0 {
 			continue
 		}
-		d.opConcept[id] = code.OpRef{Name: op.Name, Symbol: op.Symbol, Arity: op.Arity()}
+		ref := code.OpRef{Name: op.Name, Symbol: op.Symbol, Arity: op.Arity()}
+		// A string primitive is recorded apart, in stringOpConcept, so its word never
+		// resolves as a value-producing call head in ordinary talk; a morphology rule
+		// reaches it structurally, not by resolving a spoken word.
+		if op.Emit != "" {
+			d.stringOpConcept[id] = ref
+		} else {
+			d.opConcept[id] = ref
+		}
 		if op.Word != "" {
 			d.nameConceptWord(id, op.Word, "en")
 		}

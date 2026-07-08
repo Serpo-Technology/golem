@@ -109,10 +109,11 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 		if (cmp != ">" && cmp != "<" && cmp != "==") || left == 0 || right == 0 || then == 0 || els == 0 {
 			return construction{}, false
 		}
+		rt := goCodeType(d.inferType(g, node, nil)) // the branch type: string for a morphology cascade
 		return construction{
 			slots: []slot{{child: left, ctx: ctx}, {child: right, ctx: ctx}, {child: then, ctx: ctx}, {child: els, ctx: ctx}},
 			assemble: func(parts []rendered) (rendered, bool) {
-				return rendered{src: "(func() int { if " + parenthesize(parts[0]) + " " + cmp + " " +
+				return rendered{src: "(func() " + rt + " { if " + parenthesize(parts[0]) + " " + cmp + " " +
 					parenthesize(parts[1]) + " { return " + parts[2].src + " }; return " + parts[3].src + " }())"}, true
 			},
 		}, true
@@ -201,7 +202,11 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 		}
 		return construction{assemble: func([]rendered) (rendered, bool) { return rendered{src: c}, true }}, true
 	}
-	sym := d.opSymbol(g.content(firstDest(g, node, memory.RelGrounds)))
+	grounds := g.content(firstDest(g, node, memory.RelGrounds))
+	if op, ok := d.opByName(grounds); ok && op.Emit != "" {
+		return d.goStrPrim(g, op, left, right, ctx)
+	}
+	sym := d.opSymbol(grounds)
 	if left == 0 || right == 0 || sym == "" {
 		return construction{}, false
 	}
@@ -209,6 +214,39 @@ func (goSurface) construct(d *Daemon, g codeGraph, node uint64, ctx any) (constr
 		slots: []slot{{child: left, ctx: ctx}, {child: right, ctx: ctx}},
 		assemble: func(parts []rendered) (rendered, bool) {
 			return rendered{src: parenthesize(parts[0]) + " " + sym + " " + parenthesize(parts[1]), compound: true}, true
+		},
+	}, true
+}
+
+// goStrPrim renders a string primitive by its emit template: an infix join "a + b"
+// (concat, prepend), a compound an operand position parenthesizes; or an ASCII byte
+// slice "a[len(a)-1:]" (lastChar) / "a[:len(a)-1]" (dropLast), a primary that needs no
+// grouping. The operands parenthesize by their compound flag, the same care the typed
+// render's renderStrPrim takes, so the two executors stay byte-for-byte in lockstep.
+func (d *Daemon) goStrPrim(g codeGraph, op code.Op, left, right uint64, ctx any) (construction, bool) {
+	if sym, ok := strings.CutPrefix(op.Emit, "infix:"); ok {
+		if left == 0 || right == 0 {
+			return construction{}, false
+		}
+		return construction{
+			slots: []slot{{child: left, ctx: ctx}, {child: right, ctx: ctx}},
+			assemble: func(parts []rendered) (rendered, bool) {
+				return rendered{src: parenthesize(parts[0]) + " " + sym + " " + parenthesize(parts[1]), compound: true}, true
+			},
+		}, true
+	}
+	if left == 0 || (op.Emit != "slice:last" && op.Emit != "slice:init") {
+		return construction{}, false
+	}
+	init := op.Emit == "slice:init"
+	return construction{
+		slots: []slot{{child: left, ctx: ctx}},
+		assemble: func(parts []rendered) (rendered, bool) {
+			a := parenthesize(parts[0])
+			if init {
+				return rendered{src: a + "[:len(" + a + ")-1]"}, true
+			}
+			return rendered{src: a + "[len(" + a + ")-1:]"}, true
 		},
 	}, true
 }

@@ -351,17 +351,31 @@ func (d *Daemon) deriveCategoryRefinements(gnodes []*memory.Fragment, gparams []
 }
 
 // codeOps reads the code constructions out of the construction parameters,
-// splitting the seeded primitives from the functions learned since. A primitive
-// value is "<symbol> <word>", the operator and the word it is taught by; a
-// learned function is "func:<param,...> <body as code>", its parameters
-// comma-joined ahead of the body, which the engine reads back into the operation
-// it names so the function returns after a restart.
+// splitting the seeded primitives from the functions learned since. An arithmetic
+// primitive value is "<symbol> <word>", the operator and the word it is taught by; a
+// string primitive is "str:<word> <inCSV> <out> <emit>", symbol-less and carrying its
+// operand types, result type, and import-free emit template instead; a learned function
+// is "func:<param,...> <body as code>", its parameters comma-joined ahead of the body,
+// which the engine reads back into the operation it names so the function returns after
+// a restart.
 func codeOps(params []grammar.Param) ([]code.Op, []code.Def) {
 	var prims []code.Op
 	var defs []code.Def
 	for _, p := range params {
 		name, ok := strings.CutPrefix(p.Key, "code:")
 		if !ok {
+			continue
+		}
+		if spec, ok := strings.CutPrefix(p.Value, "str:"); ok {
+			// A string primitive: "str:<word> <inCSV> <out> <emit>", every field
+			// space-free (the operand types are comma-joined, the emit template carries
+			// no space), so the four fields split cleanly.
+			f := strings.Fields(spec)
+			if len(f) != 4 {
+				continue
+			}
+			prims = append(prims, code.Op{Name: name, Word: f[0],
+				In: strings.Split(f[1], ","), Out: f[2], Emit: f[3]})
 			continue
 		}
 		if spec, ok := strings.CutPrefix(p.Value, "func:"); ok {

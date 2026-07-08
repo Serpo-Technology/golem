@@ -153,13 +153,45 @@ func (d *Daemon) genCode(g codeGraph, nodeID uint64, env map[string]boundArg, se
 		}
 		return c, false, true // a literal or a free variable is a single token
 	}
-	sym := d.opSymbol(g.content(firstDest(g, nodeID, memory.RelGrounds)))
+	grounds := g.content(firstDest(g, nodeID, memory.RelGrounds))
+	if op, ok := d.opByName(grounds); ok && op.Emit != "" {
+		return d.genStrPrim(g, op, left, right, env, self)
+	}
+	sym := d.opSymbol(grounds)
 	l, lok := d.genOperand(g, left, env, self)
 	r, rok := d.genOperand(g, right, env, self)
 	if sym == "" || !lok || !rok {
 		return "", false, false
 	}
 	return l + " " + sym + " " + r, true, true // an infix expression is compound
+}
+
+// genStrPrim renders a string-primitive node by its emit template, the graph twin of
+// the typed render's renderStrPrim: an infix join "a + b" for concat and prepend (a
+// compound an operand position parenthesizes), an ASCII byte slice "a[len(a)-1:]" for
+// lastChar and "a[:len(a)-1]" for dropLast (a primary that needs none). The operands go
+// through genOperand so a nested infix operand is parenthesized identically to the typed
+// side, keeping the two emitters byte-for-byte in lockstep.
+func (d *Daemon) genStrPrim(g codeGraph, op code.Op, left, right uint64, env map[string]boundArg, self uint64) (string, bool, bool) {
+	if sym, ok := strings.CutPrefix(op.Emit, "infix:"); ok {
+		l, lok := d.genOperand(g, left, env, self)
+		r, rok := d.genOperand(g, right, env, self)
+		if !lok || !rok {
+			return "", false, false
+		}
+		return l + " " + sym + " " + r, true, true // an infix join is compound
+	}
+	a, aok := d.genOperand(g, left, env, self)
+	if !aok {
+		return "", false, false
+	}
+	switch op.Emit {
+	case "slice:last":
+		return a + "[len(" + a + ")-1:]", false, true // a slice expression is a primary
+	case "slice:init":
+		return a + "[:len(" + a + ")-1]", false, true
+	}
+	return "", false, false
 }
 
 // genOperand renders an operand under the binding, wrapping a compound (bare infix)
@@ -195,7 +227,8 @@ func (d *Daemon) genConditional(g codeGraph, nodeID uint64, env map[string]bound
 	if !lok || !rok || !tok || !eok {
 		return "", false
 	}
-	return "(func() int { if " + left + " " + cmp + " " + right +
+	rt := goCodeType(d.inferType(g, nodeID, nil)) // the branch type: string for a morphology cascade
+	return "(func() " + rt + " { if " + left + " " + cmp + " " + right +
 		" { return " + then + " }; return " + els + " }())", true
 }
 
@@ -524,18 +557,33 @@ func (d *Daemon) inferType(g codeGraph, nodeID uint64, paramTypes map[string]str
 		return "int" // a call, taken as a number in the common case
 	}
 	if firstDest(g, nodeID, operand0Rel) != 0 {
-		return "int" // arithmetic
+		// An operation node yields its declared result type: a string primitive its Out
+		// (string), arithmetic an int. Read it from the operation inventory so a
+		// string-returning concat is not mis-typed int and wrapped in func() int.
+		grounds := g.content(firstDest(g, nodeID, memory.RelGrounds))
+		if d.code != nil {
+			if rt, ok := d.code.ReturnType(grounds); ok {
+				return rt
+			}
+		}
+		return "int"
 	}
 	if t, ok := paramTypes[g.content(nodeID)]; ok {
 		return t
 	}
+	if c := g.content(nodeID); len(c) > 0 && c[0] == '"' {
+		return "string" // a quoted literal leaf
+	}
 	return "int" // a literal
 }
 
-// goCodeType is a value type's Go form, a list written as a slice.
+// goCodeType is a value type's Go form, a list written as a slice, a string as itself.
 func goCodeType(t string) string {
-	if t == "list" {
+	switch t {
+	case "list":
 		return "[]int"
+	case "string":
+		return "string"
 	}
 	return "int"
 }

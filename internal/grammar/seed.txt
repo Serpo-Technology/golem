@@ -339,6 +339,13 @@ code:add	+ sum	en
 code:subtract	- difference	en
 code:multiply	* product	en
 code:divide	/ quotient	en
+# String primitives: symbol-less operations that lower to import-free Go (an infix
+# join, or an ASCII byte slice), the floor a morphology rule composes over. The value
+# is "str:<word> <operand-types> <result-type> <emit-template>".
+code:concat	str:concat string,string string infix:+	en
+code:prepend	str:prepend string,string string infix:+	en
+code:lastChar	str:lastChar string string slice:last	en
+code:dropLast	str:dropLast string string slice:init	en
 
 # Surface words a tongue renders an answer with: the definite marker, the
 # coordinator that joins co-arguments, the pronoun a given referent takes by

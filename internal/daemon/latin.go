@@ -7,23 +7,17 @@ import (
 	"golem/internal/memory"
 )
 
-// latinComparativeBase maps a Latin comparative adjective to the Latin pole adjective it
-// decomposes to, a suppletive override read fail-closed: "maior" is the comparative of
-// "magnus", "minor" of "parvus". The base resolves to the shared pole concept, so a Latin
-// comparison orders on the same scale an English or Turkish one does, and "maior" never
-// mints a relation.
-var latinComparativeBase = map[string]string{"maior": "magnus", "minor": "parvus"}
-
 // latinComparison reads a Latin comparison "X maior quam Y" (X is bigger than Y): the
 // comparative adjective is the raw pole surface, the noun before it the subject, and the
 // noun after "quam" the standard. The interrogative est and its enclitic, and quam
-// itself, ground in nothing and are skipped. It returns false when no comparative is
-// present.
+// itself, ground in nothing and are skipped. The comparative is recognized by the graph
+// overrides (a suppletive form decomposing to a pole), not a Go map. It returns false when
+// no comparative is present.
 func (d *Daemon) latinComparison(raw string) (subj *memory.Fragment, relWord string, std *memory.Fragment, ok bool) {
 	tokens := strings.Fields(strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "?")))
 	compIdx := -1
 	for i, tok := range tokens {
-		if _, has := latinComparativeBase[tok]; has {
+		if d.isLatinComparativeWord(tok) {
 			compIdx, relWord = i, tok
 			break
 		}
@@ -209,7 +203,7 @@ func (d *Daemon) planLatinIsA(frame grammar.Frame, raw string) (string, bool) {
 	}
 	var nouns []*memory.Fragment
 	for _, t := range toks[1:] {
-		if t == "quam" || latinComparativeBase[t] != "" {
+		if t == "quam" || d.isLatinComparativeWord(t) {
 			return "", false // a comparison, not a membership; leave it to planLatinComparison
 		}
 		if c := d.resolveLatinNoun(t); c != nil {

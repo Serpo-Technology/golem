@@ -138,14 +138,14 @@ func toInts(row []string) ([]int, bool) {
 	return nums, true
 }
 
-// encodeParams writes an operation's parameters for storage: a list parameter
-// keeps its type ("numbers:list"), a number parameter just its name, so the
-// types reload with the function.
+// encodeParams writes an operation's parameters for storage: a non-int parameter
+// keeps its type ("numbers:list", "stem:string"), a number parameter just its name,
+// so the types reload with the function.
 func encodeParams(op code.Op) string {
 	parts := make([]string, len(op.Params))
 	for i, p := range op.Params {
-		if i < len(op.ParamTypes) && op.ParamTypes[i] == "list" {
-			parts[i] = p + ":list"
+		if i < len(op.ParamTypes) && op.ParamTypes[i] != "" && op.ParamTypes[i] != "int" {
+			parts[i] = p + ":" + op.ParamTypes[i]
 		} else {
 			parts[i] = p
 		}
