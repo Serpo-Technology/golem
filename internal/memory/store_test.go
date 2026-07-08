@@ -503,3 +503,41 @@ func TestComparativeFormEdgeSparedNightlyDecay(t *testing.T) {
 		t.Fatalf("the comparative-form edge must survive N nights at full weight: %v", w)
 	}
 }
+
+// A told comparison grounds its moment on the scale dimension, a class concept rather than
+// a relation. The nightly prune spares a told moment that grounds a relation (a real
+// instance of it); this confirms the same exception covers a scale, so a comparison does
+// not disconnect from its scale on the first night, while a moment grounding an ordinary
+// class concept is still purged (the exception is specific to a scale dimension).
+func TestScaleOrderingSparedNightlyPrune(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Now()
+	scale := &Fragment{Kind: KindConcept, Channel: "concept", Content: "size", Template: "scale:size", Category: "class", Time: now}
+	other := &Fragment{Kind: KindConcept, Channel: "concept", Content: "plainclass", Template: "class:plainclass", Category: "class", Time: now}
+	pole := &Fragment{Kind: KindConcept, Channel: "concept", Content: "big", Template: "pole:size:greater", Category: "class", Time: now}
+	for _, c := range []*Fragment{scale, other, pole} {
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.LinkRel(pole.ID, scale.ID, RelScale, 1); err != nil {
+		t.Fatal(err)
+	}
+	ordering := encodeAt(t, s, "tell", "a lion is bigger than a horse", 0, now)
+	plain := encodeAt(t, s, "tell", "a lion frobs a horse", 0, now)
+	if err := s.LinkRel(scale.ID, ordering.ID, RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LinkRel(other.ID, plain.ID, RelGrounds, 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Sleep(0.1, 0.05); err != nil {
+		t.Fatal(err)
+	}
+	if w := edgeWeightRel(t, s, scale.ID, ordering.ID, RelGrounds); w == 0 {
+		t.Fatal("a told comparison grounding a scale must survive the nightly prune")
+	}
+	if w := edgeWeightRel(t, s, other.ID, plain.ID, RelGrounds); w != 0 {
+		t.Fatalf("a told moment grounding an ordinary class concept should still be purged, weight %v", w)
+	}
+}

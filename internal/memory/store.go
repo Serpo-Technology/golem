@@ -306,11 +306,15 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// is the exception: a narrated event is a real instance of the relation it
 	// states, so a relation grounding in the moment it was told in stands, and
 	// the proposition comprehension wrote persists the way a perceived one
-	// would rather than being purged before it can be consolidated.
+	// would rather than being purged before it can be consolidated. A told comparison is
+	// likewise a real instance of the ordering on its scale, so a moment grounding a scale
+	// dimension (the target of a pole's scale edge) is spared the same way the relation is,
+	// or every told comparison would disconnect from its scale on the first night.
 	if _, err := s.db.Exec(`DELETE FROM links WHERE rel = ?
 		AND to_id IN (SELECT id FROM fragments WHERE channel IN (?, ?))
-		AND from_id NOT IN (SELECT id FROM fragments WHERE category = ?)`,
-		RelGrounds, utteranceChannel, thoughtChannel, "relation"); err != nil {
+		AND from_id NOT IN (SELECT id FROM fragments WHERE category = ?)
+		AND from_id NOT IN (SELECT to_id FROM links WHERE rel = ?)`,
+		RelGrounds, utteranceChannel, thoughtChannel, "relation", RelScale); err != nil {
 		return int(pruned), err
 	}
 	// A word that no edge touches names nothing and recalls nothing; a
