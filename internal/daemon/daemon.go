@@ -2731,6 +2731,14 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		if mintLang == "" && frame.Lang == "tr" {
 			mintLang = "tr" // a sniffed Turkish clause mints its words in its own tongue, not as English shadows
 		}
+		// A comparative surface ("buyuk" of "büyük") is a gradable pole named through the
+		// scale block, not a lexeme of its own. Its pole resolves late, in storeComparison,
+		// after this mint, so a lossy ASCII spelling would be minted before the fold could
+		// mark it restored. Pre-resolve the comparative adjective here, so the fold records
+		// the lossy form and the word mint below skips it: one word, one node.
+		if frame.Comparative || frame.Magnitude {
+			d.comparativeToPole(frame.Action.Phrase, mintLang)
+		}
 		words := d.mintWordsScaled(req.Content, mintLang, res.FragmentID, namingAnchors, false, speakerTrust)
 		d.warmConcepts(words, exciteSpeech)
 		// Grounding the words in what was merely held in mind waits on the force:
