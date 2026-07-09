@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"golem/internal/memory"
 	"golem/wire"
 )
 
@@ -125,3 +126,66 @@ func TestSleepCycleConsolidates(t *testing.T) {
 // Edges fold onto the prototype per relation: a grounding stays a
 // grounding and an order stays an order, with weights summed within each
 // relation rather than across them.
+
+// Consolidation reasons over the day's concepts unprompted: taught that the dog chased the cat
+// and (separately) that the wolf feared the deer, with the wolf and the dog sharing a predator
+// feature, a night draws that the wolf probably chased the cat too -- a guess nobody asked for,
+// held in mind and never written to the graph, so the idle reasoning stays honest.
+func TestConsolidationDrawsUnpromptedGuess(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	groundNoun(t, d, "deer")
+	d.lastSleep = time.Time{} // the whole session counts as the day to reason over
+
+	say(t, d, "the dog chased the cat")
+	say(t, d, "the wolf feared the deer")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	// Nobody asked whether the wolf chased the cat, and it is no observed fact.
+	if _, held := d.held.holds("chase", wolf.ID, cat.ID, heldInferred); held {
+		t.Fatal("the guess should not be held before consolidation reasons")
+	}
+
+	topics, drawn := d.consolidateReasoning()
+	if topics == 0 {
+		t.Fatal("consolidation should reason over the day's concepts")
+	}
+	if drawn == 0 {
+		t.Fatal("consolidation should draw at least one fresh conclusion")
+	}
+
+	// The unprompted conclusion is now held as a guess.
+	if _, held := d.held.holds("chase", wolf.ID, cat.ID, heldInferred); !held {
+		t.Fatalf("consolidation should draw that the wolf probably chased the cat (drew %d)", drawn)
+	}
+	// Honesty: it is held, never asserted as an observed fact in the graph.
+	if d.propositionHolds(wolf, "chase", cat.ID) {
+		t.Fatal("the idle guess must stay a held guess, never an observed fact")
+	}
+}
+
+// Consolidation reasons about learned concepts, never the discourse participants: told a
+// first-person fact whose agent is the speaker, the night must not draw guesses attributed to
+// the speaker or to GOLEM itself, which would fabricate their doings from a look-alike.
+func TestConsolidationSkipsParticipants(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	d.lastSleep = time.Time{}
+	say(t, d, "I chased the cat") // the agent resolves to the speaker, a participant concept
+
+	d.consolidateReasoning()
+
+	for i := range d.held.props {
+		if agent := d.held.props[i].agent; d.isSystemConcept(agent) {
+			t.Fatalf("consolidation reasoned about a participant/system concept (agent %d)", agent)
+		}
+	}
+}
