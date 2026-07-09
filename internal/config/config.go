@@ -119,6 +119,22 @@ type Config struct {
 	// channel.
 	UntrustedChannels []string `json:"untrusted_channels"`
 
+	// SubliminalEnabled turns on graded attention: a habituated observation on a
+	// SubconsciousChannel still encodes below consciousness at low salience rather
+	// than being dropped, so learning continues while attention only governs
+	// salience. Off by default, so the gate stays binary until a channel opts in.
+	SubliminalEnabled bool `json:"subliminal_enabled"`
+	// SubconsciousChannels are the trusted channels graded attention applies to, so
+	// ambient host channels stay fully gated until proven not to pollute. An
+	// untrusted channel never learns sub-consciously whatever this lists. A
+	// sub-conscious trace is faint on every axis (low weight, low genesis mass,
+	// throttled intake, no naming or episodic reach), but many repetitions of ONE
+	// template inside a single wake window can still accrue enough mass to mint a
+	// concept for it: keep this empty for a continuously active ambient channel
+	// (a camera, a busy feed) until cross-episode de-duplication counts a repeated
+	// percept once. It is safe today for a bounded, trusted teaching channel.
+	SubconsciousChannels []string `json:"subconscious_channels"`
+
 	// ArchitectPubKey is the architect's Ed25519 public key, base64. The daemon
 	// holds only this public half and verifies the architect's signature against
 	// it; the private key never touches the daemon. A request that carries
@@ -487,6 +503,22 @@ func (c Config) Untrusted(channel string) bool {
 		list = []string{"web"}
 	}
 	for _, ch := range list {
+		if ch == channel {
+			return true
+		}
+	}
+	return false
+}
+
+// Subconscious reports whether a channel learns below consciousness: a habituated
+// observation on it encodes faintly rather than dropping. It requires the feature
+// enabled and the channel allow-listed, and never applies to an untrusted channel,
+// so open-world perception can never accrue below the attention gate.
+func (c Config) Subconscious(channel string) bool {
+	if !c.SubliminalEnabled || c.Untrusted(channel) {
+		return false
+	}
+	for _, ch := range c.SubconsciousChannels {
 		if ch == channel {
 			return true
 		}

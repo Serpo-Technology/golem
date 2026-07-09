@@ -320,6 +320,7 @@ func testDaemonOn(t *testing.T, s *memory.Store) *Daemon {
 		stats:        make(map[string]*wire.ChannelStat),
 		drops:        make(map[string]*atomic.Int64),
 		governors:    make(map[string]*tokenBucket),
+		subGovernors: make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
 		running:      make(map[uint64]*actionRun),
 		execDone:     make(chan execResult, 16),

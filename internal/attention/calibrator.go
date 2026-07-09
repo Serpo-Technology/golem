@@ -42,23 +42,32 @@ func (c *Calibrator) Seed(n int, mean, vari float64) {
 	c.n, c.mean, c.vari = n, mean, vari
 }
 
-// Gate decides whether a surprise reaches consciousness on this channel,
-// judging it against the statistics as they stood before this observation,
-// then folding the observation in. During warmup only the absolute floor
-// applies.
-func (c *Calibrator) Gate(bits, absFloor, zGate float64, warmup int) bool {
+// Assess folds the observation into the channel's statistics and reports two
+// things the graded gate needs kept apart: whether the surprise reaches
+// consciousness (clears the z-threshold) and whether it clears the absolute noise
+// floor at all. Below the floor is pure noise and reaches neither; above the floor
+// but below the threshold is a habituated stimulus, which reaches no consciousness
+// yet is real enough to learn from below it. During warmup only the floor applies.
+func (c *Calibrator) Assess(bits, absFloor, zGate float64, warmup int) (conscious, aboveFloor bool) {
 	mean, sd, n := c.mean, math.Sqrt(c.vari), c.n
 	c.observe(bits)
 	if bits < absFloor {
-		return false
+		return false, false
 	}
 	if n < warmup {
-		return true
+		return true, true
 	}
 	// Floor the deviation so a near-constant channel does not alarm on
 	// noise-level wobble.
 	if sd < 0.25 {
 		sd = 0.25
 	}
-	return bits-mean >= zGate*sd
+	return bits-mean >= zGate*sd, true
+}
+
+// Gate reports only whether a surprise reaches consciousness, the reading Assess
+// subsumes; kept for callers that do not distinguish habituation from noise.
+func (c *Calibrator) Gate(bits, absFloor, zGate float64, warmup int) bool {
+	conscious, _ := c.Assess(bits, absFloor, zGate, warmup)
+	return conscious
 }

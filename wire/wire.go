@@ -260,6 +260,7 @@ type WarmInfo struct {
 type ChannelStat struct {
 	Observed   int   `json:"observed"`
 	Conscious  int   `json:"conscious"`
+	Subliminal int   `json:"subliminal"` // encoded below consciousness (habituated but still learned)
 	Suppressed int   `json:"suppressed"`
 	Dropped    int64 `json:"dropped"`
 }

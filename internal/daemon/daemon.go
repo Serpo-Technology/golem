@@ -157,8 +157,11 @@ type Daemon struct {
 
 	// governors throttle memory formation per channel, and pendingStorm
 	// counts the surprises each throttle suppressed until they can be
-	// summarized as one moment.
+	// summarized as one moment. subGovernors throttle the sub-conscious
+	// stream on its own budget so an ambient flood cannot drain the tokens a
+	// genuine conscious surprise needs, nor spend them faster than it earns.
 	governors    map[string]*tokenBucket
+	subGovernors map[string]*tokenBucket
 	pendingStorm map[string]int
 
 	// pending holds the last proposal awaiting the operator's approve or
@@ -532,6 +535,15 @@ type recentMoment struct {
 // channel: half a memory, gone in half the nights.
 const untrustedWeight = 0.5
 
+// A subliminal moment, encoded below consciousness because it has become routine,
+// is faint on both axes: a low weight so it fades in a few nights unless something
+// reinforces it, and a low genesis mass so ambient repetition alone needs far more
+// of it than a handful of attended showings to earn a concept.
+const (
+	subliminalWeight = 0.35
+	subliminalMass   = 0.3
+)
+
 // untrustedNameScale is how lightly a word read on an untrusted channel bonds,
 // so reading grows the vocabulary only by recurrence: a word met across many of
 // the watched sources entrenches, while a word from one page fades.
@@ -790,6 +802,7 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		stats:        make(map[string]*wire.ChannelStat),
 		drops:        make(map[string]*atomic.Int64),
 		governors:    make(map[string]*tokenBucket),
+		subGovernors: make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
 		obs:          make(chan senses.Observation, 256),
 		reqs:         make(chan ipcReq),
@@ -898,24 +911,40 @@ func (d *Daemon) burstFor(channel string) float64 {
 	return d.cfg.EncodeBurst
 }
 
+func (d *Daemon) newBucket(channel string) *tokenBucket {
+	burst := d.burstFor(channel)
+	if burst < 1 {
+		burst = 1
+	}
+	refillSec := d.cfg.EncodeRefillSec
+	if refillSec <= 0 {
+		refillSec = 2
+	}
+	return &tokenBucket{
+		tokens: burst,
+		max:    burst,
+		refill: 1 / refillSec,
+		last:   time.Now(),
+	}
+}
+
 func (d *Daemon) governor(channel string) *tokenBucket {
 	b, ok := d.governors[channel]
 	if !ok {
-		burst := d.burstFor(channel)
-		if burst < 1 {
-			burst = 1
-		}
-		refillSec := d.cfg.EncodeRefillSec
-		if refillSec <= 0 {
-			refillSec = 2
-		}
-		b = &tokenBucket{
-			tokens: burst,
-			max:    burst,
-			refill: 1 / refillSec,
-			last:   time.Now(),
-		}
+		b = d.newBucket(channel)
 		d.governors[channel] = b
+	}
+	return b
+}
+
+// subGovernor throttles the sub-conscious stream on a budget separate from the
+// conscious governor, so a fast ambient channel cannot spend faster than it
+// refills, and cannot steal the conscious channel's tokens.
+func (d *Daemon) subGovernor(channel string) *tokenBucket {
+	b, ok := d.subGovernors[channel]
+	if !ok {
+		b = d.newBucket(channel)
+		d.subGovernors[channel] = b
 	}
 	return b
 }
@@ -1789,27 +1818,56 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		d.autoCue(o, tpl)
 	}
 
-	// The gate is channel-relative: the same bit count that is routine on
-	// a diverse channel is an alarm on a monotonous one.
-	if !forced &&
-		!d.calibrator(o.Channel).Gate(bits, d.cfg.SurpriseThreshold, d.cfg.ZGate, d.cfg.CalibrationWarmup) {
+	// The gate is channel-relative and GRADED: the same bit count that is routine on
+	// a diverse channel is an alarm on a monotonous one. Below the absolute floor is
+	// pure noise and drops. Above the floor but below the channel's z-threshold has
+	// become routine (habituated): it reaches no consciousness, and is dropped as
+	// before UNLESS the channel learns sub-consciously, in which case it still
+	// encodes -- a faint, quiet trace that can merge into a concept and be named --
+	// while the salience it would have spiked is withheld. Attention gates
+	// consciousness, not whether an observation encodes.
+	conscious := true
+	if !forced {
+		var aboveFloor bool
+		conscious, aboveFloor = d.calibrator(o.Channel).Assess(
+			bits, d.cfg.SurpriseThreshold, d.cfg.ZGate, d.cfg.CalibrationWarmup)
+		if !aboveFloor {
+			return wire.ObserveResult{Bits: bits}
+		}
+	}
+	subliminal := !forced && !conscious
+	if subliminal && !d.cfg.Subconscious(o.Channel) {
 		return wire.ObserveResult{Bits: bits}
 	}
 
-	// The refractory: past the burst allowance, a storm of surprises is
-	// counted instead of encoded, and later collapsed into one summary
-	// moment. The predictor and calibrator have already learned the line.
-	if !forced && !d.governor(o.Channel).take(o.At) {
+	// The refractory: past the burst allowance, a CONSCIOUS storm of surprises is
+	// counted instead of encoded, and later collapsed into one summary moment. The
+	// predictor and calibrator have already learned the line.
+	if !forced && conscious && !d.governor(o.Channel).take(o.At) {
 		st.Suppressed++
 		d.pendingStorm[o.Channel]++
 		return wire.ObserveResult{Bits: bits}
 	}
-
-	if o.Channel != thoughtChannel {
-		d.lastSurprise = time.Now()
+	// The sub-conscious stream has its own refractory on its own budget. A faint
+	// trace is cheaply lost, so past the allowance an ambient flood is dropped
+	// rather than encoded: this keeps a never-silent channel from accruing genesis
+	// mass faster than the budget refills, without spending the conscious tokens or
+	// summarizing into a storm moment it never earned.
+	if subliminal && !d.subGovernor(o.Channel).take(o.At) {
+		st.Suppressed++
+		return wire.ObserveResult{Bits: bits}
 	}
-	d.chem.SpikeNoradrenaline(bits * limbic.NASpikePerBit)
-	d.chem.SuppressSleep(limbic.SleepSuppressOnSurprise)
+
+	// The salience of a surprise is what reaches consciousness: the alerting spike,
+	// the pressure to consolidate it phasically, the mark on time. A sub-conscious
+	// trace withholds all of it; it is learned, not noticed.
+	if !subliminal {
+		if o.Channel != thoughtChannel {
+			d.lastSurprise = time.Now()
+		}
+		d.chem.SpikeNoradrenaline(bits * limbic.NASpikePerBit)
+		d.chem.SuppressSleep(limbic.SleepSuppressOnSurprise)
+	}
 
 	frag := &memory.Fragment{
 		Channel:  o.Channel,
@@ -1825,27 +1883,45 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		// experience.
 		frag.Weight = untrustedWeight
 	}
+	if subliminal {
+		// A below-consciousness trace is faint on both axes: a low weight so it fades
+		// in a few nights unless reinforced, and a low genesis mass so routine
+		// repetition earns a concept only by weight of numbers, not a few showings.
+		frag.Weight = subliminalWeight
+		frag.Mass = subliminalMass
+	}
 	id, err := d.store.Encode(frag)
 	if err != nil {
 		fmt.Fprintf(d.out, "memory error: %v\n", err)
 		return wire.ObserveResult{Bits: bits}
 	}
-	st.Conscious++
+	if subliminal {
+		st.Subliminal++
+	} else {
+		st.Conscious++
+	}
 	d.encodesSinceSleep++
 	d.chem.BuildSleepNeed(limbic.SleepNeedPerEncode) // what was taken in must be slept on
-	d.hot.Put(frag)
-	// A moment whose shape has a concept warms that concept: experience
-	// keeps working memory pointed at what is happening. The warming scales
-	// with the concept's information, so a high-frequency low-information
-	// node cannot pull the inner loop above real knowledge.
-	if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
-		d.ws.excite(c.ID, exciteEncode*infoScale(c.Surprise))
+	if !subliminal {
+		d.hot.Put(frag)
+		// A moment whose shape has a concept warms that concept: experience
+		// keeps working memory pointed at what is happening. The warming scales
+		// with the concept's information, so a high-frequency low-information
+		// node cannot pull the inner loop above real knowledge. A sub-conscious
+		// trace never warms the workspace: it is below attention by definition.
+		if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
+			d.ws.excite(c.ID, exciteEncode*infoScale(c.Surprise))
+		}
+		d.event(events.Event{Ev: "encode", Channel: o.Channel, ID: id, Bits: bits, Tpl: wire.Clip(tpl, 120)})
+		fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
+			bits, o.Channel, wire.Clip(o.Content, 140), wire.Clip(tpl, 140), frag.Limbic.Noradrenaline, id)
 	}
-	d.event(events.Event{Ev: "encode", Channel: o.Channel, ID: id, Bits: bits, Tpl: wire.Clip(tpl, 120)})
-	fmt.Fprintf(d.out, "[!] %.2f bits  %-8s %q -> %q  NA=%.2f  #%d\n",
-		bits, o.Channel, wire.Clip(o.Content, 140), wire.Clip(tpl, 140), frag.Limbic.Noradrenaline, id)
 
-	if bind {
+	// Episodic adjacency and the naming window are attention-level: only attended
+	// moments link to the recent past, enter it, and can be what a spoken name
+	// points at. A sub-conscious trace stays out, so ambient repetition can neither
+	// crowd conscious moments out of the recent window nor capture an ostension.
+	if bind && !subliminal {
 		if linked := d.linkMoment(frag); len(linked) > 0 {
 			fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
 		}
@@ -1854,7 +1930,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 			d.recent = d.recent[len(d.recent)-32:]
 		}
 	}
-	return wire.ObserveResult{Bits: bits, Conscious: true, FragmentID: id}
+	return wire.ObserveResult{Bits: bits, Conscious: !subliminal, FragmentID: id}
 }
 
 // linkMoment binds a new fragment to the recent past: every fragment
