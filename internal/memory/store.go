@@ -106,6 +106,10 @@ CREATE TABLE IF NOT EXISTS usage_vectors (
 	vec         BLOB    NOT NULL,
 	PRIMARY KEY (fragment_id, role)
 );
+CREATE TABLE IF NOT EXISTS holo_vectors (
+	fragment_id INTEGER PRIMARY KEY,
+	vec         BLOB    NOT NULL
+);
 CREATE TABLE IF NOT EXISTS beliefs (
 	rel         TEXT    NOT NULL,
 	agent       INTEGER NOT NULL,

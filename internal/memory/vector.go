@@ -142,6 +142,45 @@ func (s *Store) UsageVectorsByRole(role string) (map[uint64][]float32, error) {
 	return out, rows.Err()
 }
 
+// SetHolo stores a concept's holographic record, the one fixed-width vector that
+// holds its whole relational frame (its roles bound to their fillers, superposed).
+// It sits beside the kind and usage embeddings as a third proposer space and never
+// touches them, so placing a concept by its bound frame disturbs neither geometry.
+func (s *Store) SetHolo(fragmentID uint64, vec []float32) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO holo_vectors (fragment_id, vec) VALUES (?, ?)`,
+		fragmentID, encodeVec(vec))
+	return err
+}
+
+// Holo reads a concept's holographic record; ok is false when it has none, which is
+// the common case: only a concept whose frame carries enough distinct fillers to map
+// is encoded, so most concepts have no record and a query over them admits the gap.
+func (s *Store) Holo(fragmentID uint64) (vec []float32, ok bool) {
+	var blob []byte
+	if err := s.db.QueryRow(`SELECT vec FROM holo_vectors WHERE fragment_id = ?`, fragmentID).Scan(&blob); err != nil {
+		return nil, false
+	}
+	return decodeVec(blob), true
+}
+
+// DeleteHolo drops a concept's holographic record, so a concept whose frame has
+// thinned below the encode threshold since the last night stops offering a stale
+// record for a mapping to read.
+func (s *Store) DeleteHolo(fragmentID uint64) error {
+	_, err := s.db.Exec(`DELETE FROM holo_vectors WHERE fragment_id = ?`, fragmentID)
+	return err
+}
+
+// SweepHoloOrphans drops holographic records for fragments the graph no longer holds,
+// so a concept pruned by a nightly consolidation (and thus never revisited by the
+// re-encode) leaves no lingering row. Ids never repeat, so a swept record can never be
+// misread as a live concept's.
+func (s *Store) SweepHoloOrphans() error {
+	_, err := s.db.Exec(`DELETE FROM holo_vectors WHERE fragment_id NOT IN (SELECT id FROM fragments)`)
+	return err
+}
+
 func encodeVec(vec []float32) []byte {
 	b := make([]byte, 4*len(vec))
 	for i, f := range vec {

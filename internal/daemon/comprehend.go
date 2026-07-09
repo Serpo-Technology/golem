@@ -1863,9 +1863,16 @@ func (d *Daemon) planAnalogy(frame grammar.Frame) (string, bool) {
 	d.noteFocus(c)
 	_, ans, ok := d.analogize(a, b, c)
 	if !ok {
-		// No told relation carries the proportion, but the kind space may still read the
-		// regularity off the geometry (king:queen::man:woman), proposed as a thin guess.
+		// No told relation carries the proportion. The kind space may still read the regularity off
+		// a shared offset (king:queen::man:woman); failing that, the holographic frames may map one
+		// entity's roles onto another's (the dollar of America to the peso of Mexico). Both are thin
+		// vector guesses with no fact to firm them, spoken at the weakest hedge.
 		if d4, vok := d.vectorAnalogy(a, b, c); vok {
+			if line, sok := d.sayVectorAnalogy(frame.Lang, d4); sok {
+				return line, true
+			}
+		}
+		if d4, hok := d.holoAnalogy(a, b, c); hok {
 			if line, sok := d.sayVectorAnalogy(frame.Lang, d4); sok {
 				return line, true
 			}

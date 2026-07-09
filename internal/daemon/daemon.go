@@ -2188,6 +2188,10 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// The embedder learns each concept's place in a continuous space from its
 	// own feature company, so the resemblance walk gains geometric neighbours.
 	d.growEmbeddings()
+	// The frames rich enough to map from are re-bound into holographic records, so a
+	// structural analogy can read the fourth term off the shape of one concept's roles
+	// carried onto another's.
+	d.growHolographic()
 	// A source's trust follows its record: a claim GOLEM has since grounded otherwise
 	// counts against it, an unchallenged night restores a little, so a voice earns or
 	// loses standing by how its tellings hold up rather than by decree alone.
@@ -2296,6 +2300,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	d.growAbstractions()
 	d.growFeatures()
 	d.growEmbeddings()
+	d.growHolographic()
 	d.growSourceTrust()
 	d.growConstructions()
 	d.grammarCompetition()
