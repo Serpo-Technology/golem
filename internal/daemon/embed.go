@@ -22,6 +22,17 @@ const embedDim = 32
 // cosine, comfortably over the floor with room to spare.
 const categoryTraitWeight = 6.0
 
+// A relation's role is placed by prototype POINTS, the mean of its fillers plus a pair one
+// standard deviation out along each leading spread direction, so a role whose fillers cluster in
+// two crowds is matched by the nearer crowd rather than the midpoint between them. rProtoMax caps
+// the spread directions kept, protoEnergyFloor is the share of total variance a direction must
+// carry to earn a prototype pair, and protoSigma is how far along it the pair sits.
+const (
+	rProtoMax        = 3
+	protoEnergyFloor = 0.10
+	protoSigma       = 1.0
+)
+
 // growEmbeddings learns each concept's place in a continuous space from its own
 // grounded company, no outside model. It is LSA over the concept-by-trait
 // matrix: factor that matrix, keep its leading directions, and a concept's
@@ -258,44 +269,100 @@ func (d *Daemon) conceptUsageResemblance(a, b uint64) float64 {
 
 // embedRelationsUsage places each relation in the usage space by the company it
 // keeps in its propositions, the agents and patients of the moments it grounds in,
-// kept apart by role. The agent vector is the average of the role-fillers' kind
-// coordinates that stood as agent, the patient vector the average of those that
-// stood as patient, so a directional relation (a predator chasing prey) reads
-// differently from a symmetric one whose roles draw the same crowd. This writes to
-// the usage space alone, so the feature-and-category geometry is untouched.
+// kept apart by role. Each role is placed by prototype points near its filler crowds
+// (setRoleProtos), so a directional relation (a predator chasing prey) reads
+// differently from a symmetric one whose roles draw the same crowd, and a role drawn
+// from two crowds is read by the nearer one. This writes to the usage space alone,
+// so the feature-and-category geometry is untouched.
 func (d *Daemon) embedRelationsUsage(concepts []*memory.Fragment, vecByID map[uint64][]float32, k int) {
 	for _, c := range concepts {
 		if c.Category != "relation" {
 			continue
 		}
 		agents, patients := d.relationRoleFillers(c.ID)
-		d.setRoleCentroid(c.ID, memory.RelAgent, agents, vecByID, k)
-		d.setRoleCentroid(c.ID, memory.RelPatient, patients, vecByID, k)
+		d.setRoleProtos(c.ID, memory.RelAgent, agents, vecByID, k)
+		d.setRoleProtos(c.ID, memory.RelPatient, patients, vecByID, k)
 	}
 }
 
-// setRoleCentroid writes the average of a relation's role-fillers' kind vectors as
-// its usage vector for that role. A role no embedded filler ever took is left
-// unplaced, so an intransitive relation carries an agent vector and no patient.
-func (d *Daemon) setRoleCentroid(relID uint64, role string, fillers []uint64, vecByID map[uint64][]float32, k int) {
-	centroid := make([]float64, k)
-	n := 0
+// setRoleProtos places a relation's role by SIGNED PROTOTYPE POINTS in the kind space: the mean
+// of its fillers' kind vectors, plus a pair one standard deviation out along each leading spread
+// direction (a right singular vector of the centered filler matrix). So a role whose fillers form
+// two clusters is placed by a point near EACH, not the midpoint near neither, and a match reads
+// the nearest prototype. The mean is stored FIRST, so a match never scores below the old
+// cosine-to-mean; a role with one tight crowd stores essentially the mean alone. The prototypes
+// are real points in the kind space, so an argument's kind vector is matched by cosine as before,
+// and storing both the plus and the minus of each direction makes the placement invariant to the
+// singular vectors' arbitrary sign. It writes to the usage space alone, so the feature-and-category
+// geometry the lion fix rests on is untouched. A role no embedded filler took is left unplaced.
+func (d *Daemon) setRoleProtos(relID uint64, role string, fillers []uint64, vecByID map[uint64][]float32, k int) {
+	rows := make([][]float64, 0, len(fillers))
 	for _, id := range fillers {
 		v, ok := vecByID[id]
 		if !ok || len(v) != k {
 			continue
 		}
+		row := make([]float64, k)
 		for j := 0; j < k; j++ {
-			centroid[j] += float64(v[j])
+			row[j] = float64(v[j])
 		}
-		n++
+		rows = append(rows, row)
 	}
+	n := len(rows)
 	if n == 0 {
 		return
 	}
-	vec := make([]float32, k)
+	mean := make([]float64, k)
+	for _, row := range rows {
+		for j := 0; j < k; j++ {
+			mean[j] += row[j]
+		}
+	}
 	for j := 0; j < k; j++ {
-		vec[j] = float32(centroid[j] / float64(n))
+		mean[j] /= float64(n)
+	}
+	protos := append([]float64(nil), mean...) // the mean first: a match never falls below cosine-to-mean
+	if n >= 2 {
+		centered := make([]float64, n*k)
+		for i, row := range rows {
+			for j := 0; j < k; j++ {
+				centered[i*k+j] = row[j] - mean[j]
+			}
+		}
+		var svd mat.SVD
+		if svd.Factorize(mat.NewDense(n, k, centered), mat.SVDThinV) {
+			var v mat.Dense
+			svd.VTo(&v)
+			sv := svd.Values(nil)
+			total := 0.0
+			for _, s := range sv {
+				total += s * s
+			}
+			r := rProtoMax
+			if len(sv) < r {
+				r = len(sv)
+			}
+			for i := 0; i < r && total > 0; i++ {
+				// Singular values descend, so once one direction is too faint nothing further clears the floor.
+				if sv[i] <= 0 || (sv[i]*sv[i])/total < protoEnergyFloor {
+					break
+				}
+				std := sv[i] / math.Sqrt(float64(n))
+				plus := make([]float64, k)
+				minus := make([]float64, k)
+				for j := 0; j < k; j++ {
+					off := protoSigma * std * v.At(j, i)
+					plus[j] = mean[j] + off
+					minus[j] = mean[j] - off
+				}
+				protos = append(protos, plus...)
+				protos = append(protos, minus...)
+			}
+		}
+	}
+	vec := make([]float32, len(protos))
+	for i, x := range protos {
+		vec[i] = float32(x)
 	}
 	if err := d.store.SetUsageVector(relID, role, vec); err != nil {
 		fmt.Fprintf(d.out, "usage embedding error: %v\n", err)

@@ -479,6 +479,26 @@ type scoredRel struct {
 // With one role given (a question's gap leaves the other zero) it ranks on that
 // role alone. The directional, role-aware match tells a predator-chases-prey
 // relation from a symmetric one a mixed centroid could not.
+// maxProtoCosine scores an argument against a relation's role placement: the strongest cosine to
+// any prototype point the placement holds (the mean of the role's fillers and its per-direction
+// spread shoulders, stored concatenated, each the width of the argument's kind vector). A
+// single-prototype placement (a tight unimodal role, or a brain embedded before the spread points)
+// reduces to the plain cosine to the mean, so the score never falls below the old behaviour; a
+// role drawn from two crowds is matched by its nearer crowd rather than the midpoint between them.
+func maxProtoCosine(arg, protos []float32) float64 {
+	k := len(arg)
+	if k == 0 || len(protos) < k {
+		return 0
+	}
+	best, found := 0.0, false
+	for off := 0; off+k <= len(protos); off += k {
+		if c := memory.Cosine(arg, protos[off:off+k]); !found || c > best {
+			best, found = c, true
+		}
+	}
+	return best
+}
+
 func (d *Daemon) rankRelationsByCompany(agentID, patientID uint64) []scoredRel {
 	var agentVec, patientVec []float32
 	if agentID != 0 {
@@ -500,13 +520,13 @@ func (d *Daemon) rankRelationsByCompany(agentID, patientID uint64) []scoredRel {
 		var sum, roles float64
 		if agentVec != nil {
 			if ac, ok := agentCentroids[relID]; ok {
-				sum += memory.Cosine(agentVec, ac)
+				sum += maxProtoCosine(agentVec, ac)
 				roles++
 			}
 		}
 		if patientVec != nil {
 			if pc, ok := patientCentroids[relID]; ok {
-				sum += memory.Cosine(patientVec, pc)
+				sum += maxProtoCosine(patientVec, pc)
 				roles++
 			}
 		}
