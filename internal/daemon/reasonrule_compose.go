@@ -41,6 +41,12 @@ const (
 	// the agents that stand to each). Unlike resApply the source yields concepts not relations,
 	// each feeds the apply's START not its edge, and the fold is a union not a first-non-empty.
 	resChain = "chain"
+	// resSupport is the one VECTOR-grounded result kind: over a weight-bearing $like reach (the
+	// concepts the subject resembles), it tests the queried relation at each and returns the
+	// weighted-best support as a CONFIDENCE, plus the neighbour it rode on (the lender). It is the
+	// resemblance guess -- always hedged, never firm. The guardrail keeps a $like reach out of the
+	// sound (boolean/set) kinds, so a vector proposal can never be spoken as a firm fact.
+	resSupport = "support"
 
 	// The reach parameters, each a leaf on the reach node: the edge to walk, the role, whether
 	// to close transitively, and an optional marker to filter facts by.
@@ -86,6 +92,10 @@ const (
 	bindChained = "$chained" // a reach start bound to each concept a source reach yields (multi-hop)
 	bindRel2    = "$rel2"    // a second queried relation, the outer relation of a nested query
 	anyEdge     = "$any"
+	// bindLike is the VECTOR-grounded reach edge: it reaches by resemblance (featureSiblings), the
+	// weight-bearing neighbours the resemblance guess proposes. It is walkable only by reachLikeSet
+	// and read only by resSupport, and is inert in the sound reaches (the guardrail).
+	bindLike = "$like"
 
 	transYes = "yes"
 	transNo  = "no"
@@ -122,6 +132,14 @@ type ruleResult struct {
 	id       uint64
 	set      []uint64
 	foundRel string // for a resApply: the relation that carried through (the proportion's relation)
+	// The confidence-carrying fields a resSupport (resemblance) rule returns, meaningful only for
+	// it: a weighted-best confidence, the depth and source of the held chain it rode, whether it
+	// rests on a supposition, and the lender (the neighbour the guess rode on, for the trace).
+	conf     float64
+	depth    int
+	from     uint64
+	supposed bool
+	lender   uint64
 }
 
 // reachSpec authors one reach node. A compSpec's own edge/role/trans/filter/start/land describe
@@ -170,7 +188,7 @@ func (d *Daemon) ensureCompRule(template string, spec compSpec) uint64 {
 	if spec.ctarget != "" {
 		w.link(root.ID, w.add(spec.ctarget), containsTargetRel)
 	}
-	if spec.result == resFind {
+	if spec.result == resFind || spec.result == resSupport {
 		w.link(root.ID, w.add(spec.testRel), findRelRel)
 		w.link(root.ID, w.add(spec.testArg), findArgRel)
 	}
@@ -216,6 +234,9 @@ func (d *Daemon) evalRule(root uint64, q ruleQuery) (ruleResult, bool) {
 	}
 	if kind == resApply {
 		return d.evalApply(g, root, reach, q)
+	}
+	if kind == resSupport {
+		return d.evalSupport(g, root, reach, q)
 	}
 	reached, ok := d.reachSet(reach, q)
 	if !ok {
@@ -323,6 +344,12 @@ func (d *Daemon) reachSet(reach uint64, q ruleQuery) ([]uint64, bool) {
 	if edge == "" || role == "" {
 		return nil, false
 	}
+	// The guardrail: a $like (resemblance) reach is vector-grounded and weight-bearing, so it is
+	// never walked as a sound concept reach. Returning false (not an empty set) makes a firm kind
+	// over $like fall back rather than answer a firm no, so a vector proposal cannot be spoken firm.
+	if edge == bindLike {
+		return nil, false
+	}
 	trans := g.content(firstDest(g, reach, reachTransRel)) == transYes
 	filter := g.content(firstDest(g, reach, reachFilterRel))
 	keepStart := g.content(firstDest(g, reach, reachKeepStartRel)) == transYes
@@ -421,6 +448,9 @@ func (d *Daemon) reachRelSet(reach uint64, q ruleQuery) ([]string, bool) {
 	if edge == "" || role == "" || landLeaf == "" {
 		return nil, false
 	}
+	if edge == bindLike { // the resemblance reach never feeds a connector (the guardrail)
+		return nil, false
+	}
 	start := q.from
 	if b := g.content(firstDest(g, reach, reachStartRel)); b != "" {
 		start = d.resolveArgBinding(b, q)
@@ -445,6 +475,62 @@ func (d *Daemon) relationBetween(fromID, toID uint64, role, rel string) []string
 		}
 	}
 	return out
+}
+
+// reachLikeSet walks a VECTOR-grounded resemblance reach: the concepts the start resembles, each
+// with the resemblance weight, read from featureSiblings (the invariant vector+feature step this
+// reach stands on, the counterpart of reachStep's gatherFacts). It is the sole entry to the
+// weight-bearing neighbourhood and is read only by evalSupport, so a resemblance proposal is
+// walled off from the sound reaches. ok is false when the node is not a $like reach or the vector
+// read errors, so a caller falls back.
+func (d *Daemon) reachLikeSet(reach uint64, q ruleQuery) ([]walkDest, bool) {
+	g := d.storeView()
+	if g.content(firstDest(g, reach, memory.RelGrounds)) != reachRule {
+		return nil, false
+	}
+	if g.content(firstDest(g, reach, reachEdgeRel)) != bindLike {
+		return nil, false
+	}
+	start := q.from
+	if b := g.content(firstDest(g, reach, reachStartRel)); b != "" {
+		start = d.resolveArgBinding(b, q)
+	}
+	sibs, err := d.featureSiblings(start, time.Now())
+	if err != nil {
+		return nil, false
+	}
+	return sibs, true
+}
+
+// evalSupport runs a resemblance (resSupport) rule: over the neighbours the $like reach yields, it
+// tests the queried relation at each (propositionSupport, the invariant graph/held dispose step),
+// weights each support by the resemblance strength, and returns the weighted-best as a confidence
+// plus the neighbour it rode on. The weighted-max IS the composable part of the resemblance guess;
+// the held self-seed, the inference floor, and the working-memory recording stay in the caller
+// (assessProposition), the invariant machinery this rule runs on. It never sets hit, so a
+// resemblance proposal is a confidence, never a firm answer.
+func (d *Daemon) evalSupport(g codeGraph, root, reach uint64, q ruleQuery) (ruleResult, bool) {
+	sibs, ok := d.reachLikeSet(reach, q)
+	if !ok {
+		return ruleResult{}, false
+	}
+	testRel := d.resolveRelBinding(g.content(firstDest(g, root, findRelRel)), q)
+	arg := d.resolveArgBinding(g.content(firstDest(g, root, findArgRel)), q)
+	best, bestDepth, bestFrom, bestSupposed, bestSib := 0.0, 0, uint64(0), false, uint64(0)
+	for _, sib := range sibs {
+		if sib.id == arg { // the patient itself is not evidence that the agent acts on it
+			continue
+		}
+		conf, depth, from, supposed, ok := d.propositionSupport(sib.id, testRel, arg)
+		if !ok {
+			continue
+		}
+		if cand := sib.weight * conf; cand > best {
+			best, bestDepth, bestFrom, bestSupposed, bestSib = cand, depth, from, supposed, sib.id
+		}
+	}
+	return ruleResult{kind: resSupport, conf: best, depth: bestDepth, from: bestFrom,
+		supposed: bestSupposed, lender: bestSib}, true
 }
 
 // markerHolds reports whether a relation carries a reach filter's marker: today only the
