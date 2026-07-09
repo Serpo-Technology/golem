@@ -339,13 +339,10 @@ type Daemon struct {
 	// concept maps so a property word never reads as a call head, relator, or extremal.
 	propertyConcept map[uint64]code.Property
 
-	// transitivityRuleID, inheritanceRuleID, and partWholeRuleID cache the roots of the durable
-	// reasoning-rule subgraphs once found or created, so the query path runs the graph-stored
-	// rule without a scan per query. Set and read only on the single request loop; 0 until use.
-	transitivityRuleID uint64
-	inheritanceRuleID  uint64
-	partWholeRuleID    uint64
-	symmetricRuleID    uint64
+	// reasonRuleID caches the roots of the durable compositional reasoning-rule subgraphs by
+	// their template once found or created, so a reasoning handler runs the graph-stored rule
+	// without a scan per query. Set and read only on the single request loop; nil until use.
+	reasonRuleID map[string]uint64
 
 	// refinements are the category-refinement concepts a closed-class word marks: a
 	// speech-act verb's discourse move (clarify, recall), a relator's direction

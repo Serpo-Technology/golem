@@ -69,9 +69,9 @@ func (d *Daemon) factIsPartWhole(relContent string) bool {
 // the rule is present, and the Go walk below is the fallback. The rule reproduces the Go walk,
 // verified over the part-whole fixtures.
 func (d *Daemon) partWholes(figureID uint64) []uint64 {
-	if root := d.partWholeRuleRoot(); root != 0 {
-		if wholes, ok := d.evalPartWholeRule(root, figureID); ok {
-			return wholes
+	if root := d.compRule(partWholeRuleTemplate, partWholeSpec()); root != 0 {
+		if r, ok := d.evalRule(root, ruleQuery{from: figureID}); ok {
+			return r.set
 		}
 	}
 	return d.partWholesGo(figureID)

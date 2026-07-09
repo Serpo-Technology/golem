@@ -27,7 +27,7 @@ func TestSymmetricRelationTaughtAndReasoned(t *testing.T) {
 	if got := say(t, d, "did the dog match the cat").Say; !strings.HasPrefix(got, "Yes") {
 		t.Fatalf("a symmetric relation should hold both ways: %q", got)
 	}
-	if d.symmetricRuleID == 0 {
+	if d.reasonRuleID[symmetricRuleTemplate] == 0 {
 		t.Fatal("the symmetric query should have ensured and cached the compositional rule")
 	}
 

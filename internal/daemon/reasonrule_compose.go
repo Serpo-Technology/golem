@@ -72,6 +72,16 @@ type ruleQuery struct {
 	rel               string
 }
 
+// sliceToSet turns a reach's ordered result into the membership set some handlers return (a
+// rank reads its size, an ordering its members), the order not being meaningful to them.
+func sliceToSet(ids []uint64) map[uint64]bool {
+	m := make(map[uint64]bool, len(ids))
+	for _, id := range ids {
+		m[id] = true
+	}
+	return m
+}
+
 // ruleResult is what evalRule returns, one field meaningful per result kind: hit for a
 // contains or find (whether it holds/was found), id for a find (the matching concept), set
 // for a set.

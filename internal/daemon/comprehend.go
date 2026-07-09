@@ -1674,9 +1674,9 @@ func (d *Daemon) planMagnitude(frame grammar.Frame) (string, bool) {
 // the Go walk below serves as the fallback when no rule is stored or its shape is not one the
 // evaluator runs. The rule reproduces the Go walk, verified over the comparison fixtures.
 func (d *Daemon) comparesTransitively(frag *memory.Fragment, fromID, toID uint64) bool {
-	if root := d.transitivityRule(); root != 0 {
-		if holds, ok := d.evalReachRule(root, frag.Content, fromID, toID); ok {
-			return holds
+	if root := d.compRule(transContainsRuleTemplate, transContainsSpec()); root != 0 {
+		if r, ok := d.evalRule(root, ruleQuery{from: fromID, to: toID, rel: frag.Content}); ok {
+			return r.hit
 		}
 	}
 	return d.comparesTransitivelyGo(frag, fromID, toID)
@@ -1723,9 +1723,9 @@ func (d *Daemon) comparesTransitivelyGo(frag *memory.Fragment, fromID, toID uint
 // orderings. Like comparesTransitively it runs the graph-stored rule (evalReachSet, the
 // collecting counterpart) when present, and falls back to the Go walk below otherwise.
 func (d *Daemon) comparativeReach(frag *memory.Fragment, fromID uint64) map[uint64]bool {
-	if root := d.transitivityRule(); root != 0 {
-		if below, ok := d.evalReachSet(root, frag.Content, fromID); ok {
-			return below
+	if root := d.compRule(transSetRuleTemplate, transSetSpec()); root != 0 {
+		if r, ok := d.evalRule(root, ruleQuery{from: fromID, rel: frag.Content}); ok {
+			return sliceToSet(r.set)
 		}
 	}
 	return d.comparativeReachGo(frag, fromID)
@@ -2439,9 +2439,9 @@ func (d *Daemon) isA(memberID, catID uint64) bool {
 // (the reasoning is graph-authoritative), and the Go walk below serves as the fallback. The
 // rule reproduces the Go walk, verified over the inheritance fixtures.
 func (d *Daemon) categoryInherits(agent *memory.Fragment, relContent string, patientID uint64) (uint64, bool) {
-	if root := d.inheritanceRule(); root != 0 {
-		if catID, found, ok := d.evalInheritRule(root, relContent, agent.ID, patientID); ok {
-			return catID, found
+	if root := d.compRule(inheritRuleTemplate, inheritSpec()); root != 0 {
+		if r, ok := d.evalRule(root, ruleQuery{from: agent.ID, patient: patientID, rel: relContent}); ok {
+			return r.id, r.hit
 		}
 	}
 	return d.categoryInheritsGo(agent, relContent, patientID)

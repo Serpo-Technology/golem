@@ -7,14 +7,6 @@ import (
 	"golem/internal/memory"
 )
 
-func setOf(ids []uint64) map[uint64]bool {
-	m := make(map[uint64]bool, len(ids))
-	for _, id := range ids {
-		m[id] = true
-	}
-	return m
-}
-
 func sameSet(a, b map[uint64]bool) bool {
 	if len(a) != len(b) {
 		return false
@@ -71,7 +63,7 @@ func TestCompositionalReachReproducesTransitivity(t *testing.T) {
 	if !ok {
 		t.Fatal("the set rule should run")
 	}
-	if want := d.comparativeReachGo(scale, cat.ID); !sameSet(setOf(r.set), want) {
+	if want := d.comparativeReachGo(scale, cat.ID); !sameSet(sliceToSet(r.set), want) {
 		t.Fatalf("compositional set %v disagrees with comparativeReach", r.set)
 	}
 
@@ -85,6 +77,54 @@ func TestCompositionalReachReproducesTransitivity(t *testing.T) {
 	}
 	if len(nr.set) != 1 || nr.set[0] != mouse.ID {
 		t.Fatalf("the direct-only reach should yield just the mouse, got %v", nr.set)
+	}
+}
+
+// The switched-over handlers run the compositional rule, not the Go fallback: after each kind
+// of reasoning query the rule for its template is ensured and cached, so a silent regression
+// that dropped a handler back to its Go walk would be caught here even though it would return
+// the same answer. This exercises the production spec constructors through the live routers.
+func TestReasoningRoutesThroughCompositionalRules(t *testing.T) {
+	d, s := testDaemon(t)
+
+	// A comparison chains through the transitive contains rule.
+	teachSizeScale(t, d)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	say(t, d, "the cat is bigger than the mouse")
+	say(t, d, "is the cat bigger than the mouse")
+	if d.reasonRuleID[transContainsRuleTemplate] == 0 {
+		t.Fatal("a comparison should route through the transitive contains rule")
+	}
+
+	// An inheritance guess runs the find rule.
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	catID := d.resolveConcept("cat").ID
+	s.SetLinkRel(animal.ID, catID, memory.RelGrounds, 0.5)
+	say(t, d, "an animal chased the mouse")
+	say(t, d, "did the cat chase the mouse")
+	if d.reasonRuleID[inheritRuleTemplate] == 0 {
+		t.Fatal("an inheritance guess should route through the find rule")
+	}
+
+	// A containment chain steps through the part-whole rule.
+	groundNoun(t, d, "leaf")
+	groundNoun(t, d, "tree")
+	groundNoun(t, d, "forest")
+	say(t, d, "the leaf is part of the tree")
+	say(t, d, "the tree is in the forest")
+	say(t, d, "is the leaf in the forest")
+	if d.reasonRuleID[partWholeRuleTemplate] == 0 {
+		t.Fatal("a containment chain should route through the part-whole rule")
 	}
 }
 
@@ -150,7 +190,7 @@ func TestCompositionalRuleReproducesPartWhole(t *testing.T) {
 	if !ok {
 		t.Fatal("the part-whole rule should run")
 	}
-	if want := setOf(d.partWholesGo(leaf.ID)); !sameSet(setOf(r.set), want) {
+	if want := sliceToSet(d.partWholesGo(leaf.ID)); !sameSet(sliceToSet(r.set), want) {
 		t.Fatalf("compositional wholes %v disagree with partWholes", r.set)
 	}
 	if len(r.set) != 1 || r.set[0] != tree.ID {

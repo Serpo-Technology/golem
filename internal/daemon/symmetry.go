@@ -14,7 +14,7 @@ import "golem/internal/memory"
 
 // symmetricRuleTemplate keys the one generic compositional symmetric rule, bound to the
 // queried relation at evaluation, so one object serves every symmetric relation.
-const symmetricRuleTemplate = "rule:comp:symmetric"
+const symmetricRuleTemplate = "rule:symmetric:contains"
 
 // markSymmetric records that a relation is symmetric: a self-edge on the relation concept,
 // matched to the transitive marker's weight so the learned property persists across naps.
@@ -33,13 +33,10 @@ func (d *Daemon) relationIsSymmetric(relID uint64) bool {
 // which reads as "does the reversed fact hold" -- reach from the query's target over the
 // queried relation and see whether it lands on the subject.
 func (d *Daemon) symmetricRule() uint64 {
-	if d.symmetricRuleID == 0 {
-		d.symmetricRuleID = d.ensureCompRule(symmetricRuleTemplate, compSpec{
-			result: resContains, edge: bindRel, role: agentRole, trans: transNo,
-			start: bindTo, ctarget: bindFrom,
-		})
-	}
-	return d.symmetricRuleID
+	return d.compRule(symmetricRuleTemplate, compSpec{
+		result: resContains, edge: bindRel, role: agentRole, trans: transNo,
+		start: bindTo, ctarget: bindFrom,
+	})
 }
 
 // symmetricHolds reports whether the agent stands in the relation to the patient by symmetry:
