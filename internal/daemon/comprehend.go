@@ -2680,31 +2680,27 @@ func (d *Daemon) assessProposition(agent *memory.Fragment, relContent string, pa
 			status: heldInferred, conf: categoryInheritConf, depth: 0, voiced: true})
 		return beliefInferred, categoryInheritConf, false, catID
 	}
-	sibs, err := d.featureSiblings(agent.ID, time.Now())
-	if err != nil {
+	// Resemblance proposes the neighbour, the graph disposes: the weighted-best support a concept
+	// the agent resembles gives this proposition, run as the resemblance rule (the composable part)
+	// against the graph, the Go weighted-max the fallback. A vector read that errors is the honest
+	// gap, weighed before the held self-conclusion as the source order has it.
+	r, ok := d.resembleSupport(agent, relContent, patient)
+	if !ok {
 		return beliefUnknown, 0, false, 0
 	}
 	best, bestDepth, bestFrom, bestSupposed, bestSib := 0.0, 0, uint64(0), false, uint64(0)
-	// A standing conclusion about this very proposition is evidence for it,
-	// whether GOLEM believes it or is only supposing it.
+	// A standing conclusion about this very proposition is evidence for it, whether GOLEM
+	// believes it or is only supposing it, weighed against the resemblance support.
 	if p := d.held.findID(relContent, agent.ID, patient.ID, heldInferred); p != nil {
 		best, bestDepth = p.conf, p.depth
 	}
 	if p := d.held.findID(relContent, agent.ID, patient.ID, heldHypothetical); p != nil && p.conf > best {
 		best, bestDepth, bestSupposed = p.conf, p.depth, true
 	}
-	for _, sib := range sibs {
-		// The patient itself is not evidence that the agent acts on it.
-		if sib.id == patient.ID {
-			continue
-		}
-		conf, depth, from, supposed, ok := d.propositionSupport(sib.id, relContent, patient.ID)
-		if !ok {
-			continue
-		}
-		if cand := sib.weight * conf; cand > best {
-			best, bestDepth, bestFrom, bestSupposed, bestSib = cand, depth, from, supposed, sib.id
-		}
+	// The resemblance support wins only if it strictly beats the held self-conclusion, so a held
+	// belief at position zero keeps a tie: the exact order the inline walk seeded and updated in.
+	if r.conf > best {
+		best, bestDepth, bestFrom, bestSupposed, bestSib = r.conf, r.depth, r.from, r.supposed, r.lender
 	}
 	if best >= inferenceFloor {
 		// A conclusion drawn from fact or belief is held as a belief a later step

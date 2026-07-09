@@ -69,3 +69,27 @@ func TestResembleLikeReachCannotFirm(t *testing.T) {
 		t.Fatal("a $like reach must never yield a firm hit through a sound result kind")
 	}
 }
+
+// The live resemblance guess runs through the compositional rule, not the Go fallback: a hedged
+// answer populates the rule cache, which only the rule path writes.
+func TestResembleRoutesThroughRule(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	groundNoun(t, d, "cat")
+	wolf := groundNoun(t, d, "wolf")
+	say(t, d, "a dog chased a cat")
+	feat := &memory.Fragment{Kind: memory.KindFeature, Channel: "feature", Content: "predator",
+		Template: "predator", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(feat); err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(dog.ID, feat.ID, memory.RelFeature, 1.0)
+	s.SetLinkRel(wolf.ID, feat.ID, memory.RelFeature, 1.0)
+
+	if got := say(t, d, "did the wolf chase the cat").Say; got != "Probably, the wolf chased the cat." {
+		t.Fatalf("the resemblance guess should be hedged: %q", got)
+	}
+	if d.reasonRuleID[resembleRuleTemplate] == 0 {
+		t.Fatal("the resemblance guess should run the compositional rule, populating its cache")
+	}
+}
