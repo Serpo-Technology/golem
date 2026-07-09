@@ -933,29 +933,21 @@ func (d *Daemon) planMultiHop(frame grammar.Frame, raw string) (string, bool) {
 	if innerRel == nil || innerSubj == nil || outerRel == nil {
 		return dontKnow()
 	}
-	seen := map[uint64]bool{}
-	var names []string
-	var focus *memory.Fragment
-	for _, mid := range d.gatherFacts(innerSubj, "agent", innerRel.Content) { // hop 1: the subject's patients
-		mf, err := d.fragmentsByIDsTiered([]uint64{mid.coID})
-		if err != nil || len(mf) != 1 {
-			continue
-		}
-		if focus == nil {
-			focus = mf[0]
-		}
-		for _, ag := range d.gatherFacts(mf[0], "patient", outerRel.Content) { // hop 2: who stood to each
-			if !seen[ag.coID] {
-				seen[ag.coID] = true
-				names = append(names, d.conceptName(ag.coID, ag.coGloss, frame.Lang))
-			}
-		}
-	}
-	if len(names) == 0 {
+	// The two-hop composition now runs as the nested-query rule (multiHopReach), the graph-walked
+	// counterpart of the hop-1-then-hop-2 walk; multiHopReachGo is the fallback. The parse above
+	// stays here because a nested clause does not parse standalone.
+	facts, focus, ok := d.multiHopReach(innerSubj.ID, innerRel.Content, outerRel.Content)
+	if !ok || len(facts) == 0 {
 		return dontKnow()
 	}
-	if focus != nil {
-		d.noteFocus(focus)
+	var names []string
+	for _, f := range facts {
+		names = append(names, d.conceptName(f.coID, f.coGloss, frame.Lang))
+	}
+	if focus != 0 {
+		if ff, err := d.fragmentsByIDsTiered([]uint64{focus}); err == nil && len(ff) == 1 {
+			d.noteFocus(ff[0])
+		}
 	}
 	return upperFirst(d.coordinatedNP(frame.Lang, names)) + ".", true
 }

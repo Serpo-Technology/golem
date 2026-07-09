@@ -23,8 +23,10 @@ const (
 	reachRule = "reach"
 
 	// agentRole is the role the built-in inferences reach in: the canonical orderings and the
-	// is-a and part-whole facts all write the standing concept as the agent.
-	agentRole = "agent"
+	// is-a and part-whole facts all write the standing concept as the agent. patientRole is its
+	// counterpart, the role a nested query's outer hop reaches (the agents standing to a concept).
+	agentRole   = "agent"
+	patientRole = "patient"
 
 	// isAEdge is the membership edge an inheritance reach climbs, so a member reaches the
 	// categories above it.

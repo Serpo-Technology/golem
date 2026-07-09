@@ -35,6 +35,12 @@ const (
 	// apply reach from a third concept over that relation, returning the first apply that reaches
 	// a non-empty set. It is the analogy fourth term (find the relation a->b, apply it from c).
 	resApply = "apply"
+	// resChain is a nested reach (a flat-map): its source reach yields concepts, and for EACH,
+	// an apply reach walks from that concept (bound as $chained), the results unioned. It is the
+	// multi-hop nested query ("who chased what the dog chased": the things the dog chased, then
+	// the agents that stand to each). Unlike resApply the source yields concepts not relations,
+	// each feeds the apply's START not its edge, and the fold is a union not a first-non-empty.
+	resChain = "chain"
 
 	// The reach parameters, each a leaf on the reach node: the edge to walk, the role, whether
 	// to close transitively, and an optional marker to filter facts by.
@@ -75,8 +81,10 @@ const (
 	bindTo      = "$to"
 	bindRel     = "$rel"
 	bindPatient = "$patient"
-	bindThird   = "$third" // the third query concept, for a three-place inference (analogy's c)
-	bindFound   = "$found" // a reach edge bound to the relation a connector reach discovered
+	bindThird   = "$third"   // the third query concept, for a three-place inference (analogy's c)
+	bindFound   = "$found"   // a reach edge bound to the relation a connector reach discovered
+	bindChained = "$chained" // a reach start bound to each concept a source reach yields (multi-hop)
+	bindRel2    = "$rel2"    // a second queried relation, the outer relation of a nested query
 	anyEdge     = "$any"
 
 	transYes = "yes"
@@ -89,7 +97,9 @@ const (
 type ruleQuery struct {
 	from, to, patient uint64
 	third             uint64 // the third input concept, for a three-place inference (analogy)
+	chained           uint64 // the concept a nested reach is currently applying from (multi-hop)
 	rel               string
+	rel2              string // a second queried relation, the outer relation of a nested query
 	foundRel          string // the relation a connector reach discovered, bound to a $found edge
 }
 
@@ -133,7 +143,8 @@ type compSpec struct {
 	testRel, testArg string
 	start, ctarget   string     // reach start binding and contains target binding, empty for the defaults ($from, $to)
 	land             string     // source-reach landing binding: makes it relation-valued (a connector)
-	apply            *reachSpec // a second reach for a resApply (find-then-apply) rule, nil otherwise
+	keep             string     // transYes to keep the source reach's start eligible as a reflexive landing
+	apply            *reachSpec // a second reach for a resApply / resChain rule, nil otherwise
 }
 
 // ensureCompRule creates (once) a durable compositional rule subgraph keyed by template and
@@ -152,7 +163,7 @@ func (d *Daemon) ensureCompRule(template string, spec compSpec) uint64 {
 	w := storeCodeWriter{d}
 	w.link(root.ID, w.add(spec.result), memory.RelGrounds)
 	w.link(root.ID, writeReach(w, reachSpec{edge: spec.edge, role: spec.role,
-		trans: spec.trans, filter: spec.filter, start: spec.start, land: spec.land}), resSourceRel)
+		trans: spec.trans, filter: spec.filter, start: spec.start, land: spec.land, keep: spec.keep}), resSourceRel)
 	if spec.apply != nil {
 		w.link(root.ID, writeReach(w, *spec.apply), resApplyRel)
 	}
@@ -224,6 +235,31 @@ func (d *Daemon) evalRule(root uint64, q ruleQuery) (ruleResult, bool) {
 		return ruleResult{kind: kind}, true
 	case resSet:
 		return ruleResult{kind: kind, set: reached}, true
+	case resChain:
+		// A nested reach: the source set is the first hop's reached concepts, and the apply reach
+		// walks from each (bound as $chained), the results unioned in walk order and deduped. This
+		// is the multi-hop query's two composed hops, the outer reach run once per inner concept.
+		apply := firstDest(g, root, resApplyRel)
+		if apply == 0 {
+			return ruleResult{}, false
+		}
+		seen := map[uint64]bool{}
+		var out []uint64
+		for _, mid := range reached {
+			qq := q
+			qq.chained = mid
+			sub, ok := d.reachSet(apply, qq)
+			if !ok {
+				return ruleResult{}, false
+			}
+			for _, id := range sub {
+				if !seen[id] {
+					seen[id] = true
+					out = append(out, id)
+				}
+			}
+		}
+		return ruleResult{kind: kind, set: out}, true
 	case resFind:
 		testRel := d.resolveRelBinding(g.content(firstDest(g, root, findRelRel)), q)
 		arg := d.resolveArgBinding(g.content(firstDest(g, root, findArgRel)), q)
@@ -361,6 +397,8 @@ func edgeToRel(edge string, q ruleQuery) string {
 		return ""
 	case bindFound:
 		return q.foundRel
+	case bindRel2:
+		return q.rel2
 	default:
 		return edge
 	}
@@ -439,6 +477,8 @@ func (d *Daemon) resolveArgBinding(leaf string, q ruleQuery) uint64 {
 		return q.from
 	case bindThird:
 		return q.third
+	case bindChained:
+		return q.chained
 	}
 	return 0
 }
