@@ -3,9 +3,21 @@ package daemon
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"golem/internal/memory"
 )
+
+// derivedPatients collects the patients of the derived facts worked out about an agent, for tests
+// that check a conclusion was drawn without pinning a relation's exact learned lemma.
+func derivedPatients(t *testing.T, d *Daemon, agent uint64) map[uint64]string {
+	t.Helper()
+	out := map[uint64]string{}
+	for _, f := range d.verifiedDerivedAbout(agent) {
+		out[f.Patient] = f.Kind
+	}
+	return out
+}
 
 // teachOutrankChain tells a told-transitive relation and a two-step ordering, so the closure
 // (cat outranks mouse) is a sound conclusion never directly told.
@@ -110,6 +122,79 @@ func TestDerivedFactCascadesOnRetraction(t *testing.T) {
 	}
 	if has, _ := s.HasDerived("outrank", cat.ID, mouse.ID); has {
 		t.Fatal("the stale derived row should be pruned")
+	}
+}
+
+// A categorical composition is worked out and voiced: the dog chased a cat and a cat is an animal, so
+// the dog chased an animal, a firm generalization spoken as reasoned.
+func TestDeriveFirmCategorical(t *testing.T) {
+	d, s := testDaemon(t)
+	dog := groundNoun(t, d, "dog")
+	cat := groundNoun(t, d, "cat")
+	animal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "animal",
+		Template: "abs:en:animal", Category: "noun", Limbic: d.chem.Snapshot(), Time: time.Now()}
+	if _, err := s.Encode(animal); err != nil {
+		t.Fatal(err)
+	}
+	animalW, _, err := s.WordNode("animal", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetLinkRel(animalW.ID, animal.ID, memory.RelNames, 0.8)
+	s.SetLinkRel(animal.ID, cat.ID, memory.RelGrounds, 0.5) // the animal category grounds in the cat
+	say(t, d, "the dog chased the cat")
+
+	d.deriveFirmAbout(dog, deriveCapPerNight)
+	if kind, ok := derivedPatients(t, d, dog.ID)[animal.ID]; !ok || kind != derivedCategorical {
+		t.Fatalf("the dog chasing an animal should be a categorical derived fact: kind=%q ok=%v", kind, ok)
+	}
+	if sum := say(t, d, "what do you know").Say; !strings.Contains(sum, "worked out") || !strings.Contains(sum, "animal") {
+		t.Fatalf("the census should show the categorical fact: %q", sum)
+	}
+}
+
+// A symmetric relation's reverse is worked out: told the cat matched the dog and match is symmetric,
+// GOLEM remembers the dog matched the cat.
+func TestDeriveFirmSymmetric(t *testing.T) {
+	d, _ := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	dog := groundNoun(t, d, "dog")
+	say(t, d, "the cat matched the dog")
+	say(t, d, "match is symmetric")
+
+	d.deriveFirmAbout(dog, deriveCapPerNight)
+	if kind, ok := derivedPatients(t, d, dog.ID)[cat.ID]; !ok || kind != derivedSymmetric {
+		t.Fatalf("the reverse of the symmetric fact should be worked out: kind=%q ok=%v", kind, ok)
+	}
+	// It answers firm and reasoned through the same live path.
+	if got := say(t, d, "did the dog match the cat").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the symmetric reverse should answer firm: %q", got)
+	}
+}
+
+// A containment chain is worked out but kept out of the verbal census: the leaf is on the tree and the
+// tree is in the forest, so the leaf is in the forest, remembered and queryable but not spoken as a verb.
+func TestDeriveFirmContainment(t *testing.T) {
+	d, s := testDaemon(t)
+	leaf := groundNoun(t, d, "leaf")
+	groundNoun(t, d, "tree")
+	forest := groundNoun(t, d, "forest")
+	say(t, d, "the leaf is on the tree")
+	say(t, d, "the tree is in the forest")
+
+	d.deriveFirmAbout(leaf, deriveCapPerNight)
+	if has, _ := s.HasDerived("in", leaf.ID, forest.ID); !has {
+		t.Fatal("the leaf being in the forest should be worked out")
+	}
+	if kind := derivedPatients(t, d, leaf.ID)[forest.ID]; kind != derivedContainment {
+		t.Fatalf("the containment should be recorded as such: %q", kind)
+	}
+	// The containment answers firm directly, but does not verbalize in the census (it reads as a place).
+	if got := say(t, d, "is the leaf in the forest").Say; !strings.HasPrefix(got, "Yes") {
+		t.Fatalf("the composed containment should answer firm: %q", got)
+	}
+	if sum := say(t, d, "what do you know").Say; strings.Contains(sum, "worked out") && strings.Contains(sum, "forest") {
+		t.Fatalf("a containment should stay out of the verbal census: %q", sum)
 	}
 }
 

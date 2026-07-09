@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"strconv"
 	"strings"
 
 	"golem/internal/grammar"
@@ -28,7 +29,10 @@ const (
 	// The census names at most a handful of worked-out facts, so "what do you know" stays a summary.
 	derivedSummaryCap = 5
 
-	derivedTransitive = "transitive"
+	derivedTransitive  = "transitive"
+	derivedCategorical = "categorical"
+	derivedSymmetric   = "symmetric"
+	derivedContainment = "containment"
 )
 
 // soundlyDerivesFirm reports whether a proposition is a FIRM DERIVED fact: a sound deduction
@@ -128,10 +132,20 @@ func (d *Daemon) reverifyDerived() int {
 	return dropped
 }
 
-// deriveFirmAbout works out and remembers the sound conclusions a concept newly stands in as agent,
-// bounded by the budget. This first kind is the told-transitive closure: for each relation the concept
-// was told is transitive, the concepts it reaches through the chain but was not directly told it
-// exceeds are firm derived facts. It returns how many fresh conclusions it drew.
+// derivedCand is one proposed sound conclusion about a topic (always as agent or figure): the relation,
+// the patient it stands to, and which deduction shape proposed it.
+type derivedCand struct {
+	rel     string
+	patient uint64
+	kind    string
+}
+
+// deriveFirmAbout works out and remembers the sound conclusions a concept newly stands in as agent (or
+// figure), bounded by the budget. It gathers candidates from each sound-deduction shape -- a
+// told-transitive closure, a symmetric reversal, a containment chain, and a categorical composition --
+// and keeps the ones that still derive firm and are not already observed, denied, or remembered. The
+// specific-fact shapes are proposed before the categorical generalization, so a tight budget keeps the
+// new specifics over "the dog chases animals". It returns how many fresh conclusions it drew.
 func (d *Daemon) deriveFirmAbout(topic *memory.Fragment, budget int) int {
 	if budget <= 0 || topic.Kind != memory.KindConcept || d.isSystemConcept(topic.ID) {
 		return 0
@@ -139,51 +153,154 @@ func (d *Daemon) deriveFirmAbout(topic *memory.Fragment, budget int) int {
 	if budget > deriveCapPerTopic {
 		budget = deriveCapPerTopic
 	}
+	var cands []derivedCand
+	seen := map[string]bool{}
+	propose := func(rel string, patient uint64, kind string) {
+		if patient == topic.ID {
+			return
+		}
+		k := rel + "|" + strconv.FormatUint(patient, 10)
+		if seen[k] {
+			return
+		}
+		seen[k] = true
+		cands = append(cands, derivedCand{rel, patient, kind})
+	}
+	// Specific new facts first, the categorical generalization last.
+	d.proposeTransitive(topic, propose)
+	d.proposeSymmetric(topic, propose)
+	d.proposeContainment(topic, propose)
+	d.proposeCategorical(topic, propose)
+	if len(cands) == 0 {
+		return 0
+	}
+
+	ids := make([]uint64, 0, len(cands))
+	for _, c := range cands {
+		ids = append(ids, c.patient)
+	}
+	frags, err := d.fragmentsByIDsTiered(ids)
+	if err != nil {
+		return 0
+	}
+	byID := make(map[uint64]*memory.Fragment, len(frags))
+	for _, f := range frags {
+		byID[f.ID] = f
+	}
 	drawn := 0
-	seenRel := map[string]bool{}
-	for _, f := range d.gatherFacts(topic, "agent", "") {
+	for _, c := range cands {
 		if drawn >= budget {
 			break
 		}
+		pf := byID[c.patient]
+		if pf == nil {
+			continue
+		}
+		// The gate re-confirms soundness AND that the fact is not already observed or denied, so only
+		// a genuinely new, sound conclusion is kept.
+		if !d.soundlyDerivesFirm(topic, c.rel, pf) {
+			continue
+		}
+		if has, err := d.store.HasDerived(c.rel, topic.ID, c.patient); err != nil || has {
+			continue
+		}
+		if err := d.store.SaveDerived(memory.DerivedFact{Rel: c.rel, Agent: topic.ID, Patient: c.patient,
+			AgentGloss: topic.Content, PatGloss: pf.Content, Kind: c.kind}); err != nil {
+			continue
+		}
+		drawn++
+	}
+	return drawn
+}
+
+// proposeTransitive proposes the told-transitive closure: for each relation the topic was told is
+// transitive, the concepts it reaches through the chain (comparativeReach) are candidates, the direct
+// orderings among them filtered out later by the not-observed gate.
+func (d *Daemon) proposeTransitive(topic *memory.Fragment, propose func(string, uint64, string)) {
+	seenRel := map[string]bool{}
+	for _, f := range d.gatherFacts(topic, "agent", "") {
 		if seenRel[f.rel] {
 			continue
 		}
 		seenRel[f.rel] = true
 		rel := d.resolveRelation(f.rel)
 		if rel == nil || !d.relationIsTransitive(rel.ID) {
-			continue // only a relation told transitive chains; an ordinary one derives nothing
-		}
-		reached := d.comparativeReach(rel, topic.ID)
-		ids := make([]uint64, 0, len(reached))
-		for id := range reached {
-			if id != topic.ID {
-				ids = append(ids, id)
-			}
-		}
-		frags, err := d.fragmentsByIDsTiered(ids)
-		if err != nil {
 			continue
 		}
-		for _, pf := range frags {
-			if drawn >= budget {
-				break
-			}
-			// The gate re-confirms soundness AND that the fact is not already observed or denied,
-			// so only a genuinely new, sound conclusion is kept.
-			if !d.soundlyDerivesFirm(topic, f.rel, pf) {
-				continue
-			}
-			if has, err := d.store.HasDerived(f.rel, topic.ID, pf.ID); err != nil || has {
-				continue
-			}
-			if err := d.store.SaveDerived(memory.DerivedFact{Rel: f.rel, Agent: topic.ID, Patient: pf.ID,
-				AgentGloss: topic.Content, PatGloss: pf.Content, Kind: derivedTransitive}); err != nil {
-				continue
-			}
-			drawn++
+		for reached := range d.comparativeReach(rel, topic.ID) {
+			propose(f.rel, reached, derivedTransitive)
 		}
 	}
-	return drawn
+}
+
+// proposeSymmetric proposes the reverse of a told symmetric fact: told X stands to the topic in a
+// relation marked symmetric, the topic stands to X in it too.
+func (d *Daemon) proposeSymmetric(topic *memory.Fragment, propose func(string, uint64, string)) {
+	for _, f := range d.gatherFacts(topic, "patient", "") { // f.coID stands to the topic in f.rel
+		if rel := d.resolveRelation(f.rel); rel != nil && d.relationIsSymmetric(rel.ID) {
+			propose(f.rel, f.coID, derivedSymmetric)
+		}
+	}
+}
+
+// proposeContainment proposes the places the topic is transitively inside through the chain of
+// placements and part-whole steps, the containment the graph composes but was never directly told.
+func (d *Daemon) proposeContainment(topic *memory.Fragment, propose func(string, uint64, string)) {
+	for place := range d.containmentReach(topic.ID, locativeChainDepth) {
+		propose(containmentPrep, place, derivedContainment)
+	}
+}
+
+// proposeCategorical proposes the categorical generalization of what the topic does: it acts on a
+// member of a category, so it acts on the category ("the dog chased an animal" from the dog chasing a
+// cat). A sound composition of a fact with a membership.
+func (d *Daemon) proposeCategorical(topic *memory.Fragment, propose func(string, uint64, string)) {
+	for _, f := range d.gatherFacts(topic, "agent", "") { // the topic stands to f.coID in f.rel
+		// A comparative or a placement does not generalize to a category the way an action does (a
+		// cat bigger than a mouse is not "bigger than an animal", and a leaf on a tree is not "on an
+		// animal"); those belong to the comparison and containment faculties, not this one.
+		if d.factIsComparative(f.rel) || d.factIsLocative(f.rel) {
+			continue
+		}
+		for _, cat := range d.categoriesOf(f.coID) {
+			propose(f.rel, cat, derivedCategorical)
+		}
+	}
+}
+
+// containmentReach collects every place a figure is transitively inside: its direct containments, the
+// containments of what it rests on or at (locativeGrounds), and of the whole it is part of
+// (partWholes), walked to a bounded depth. It mirrors locativelyInside's walk but gathers the places
+// rather than testing one, so the derivation can enumerate them. The figure itself is never a place.
+func (d *Daemon) containmentReach(figureID uint64, depth int) map[uint64]bool {
+	places := map[uint64]bool{}
+	seen := map[uint64]bool{}
+	var walk func(id uint64, dep int)
+	walk = func(id uint64, dep int) {
+		if dep <= 0 || seen[id] {
+			return
+		}
+		seen[id] = true
+		if frags, err := d.store.FragmentsByIDs([]uint64{id}); err == nil && len(frags) == 1 {
+			for _, f := range d.gatherFacts(frags[0], "agent", containmentPrep) { // id is in f.coID
+				places[f.coID] = true
+				walk(f.coID, dep-1) // and inside whatever that place is inside
+			}
+		}
+		for _, ground := range d.locativeGrounds(id) {
+			if ground != id {
+				walk(ground, dep-1) // a thing rests where its ground is
+			}
+		}
+		for _, whole := range d.partWholes(id) {
+			if whole != id {
+				walk(whole, dep-1) // a part is where its whole is
+			}
+		}
+	}
+	walk(figureID, depth)
+	delete(places, figureID)
+	return places
 }
 
 // derivedFocusFacts turns a concept's re-verified derived facts into the focusFact shape the fact
@@ -193,6 +310,9 @@ func (d *Daemon) deriveFirmAbout(topic *memory.Fragment, budget int) int {
 func (d *Daemon) derivedFocusFacts(agent uint64) []focusFact {
 	var facts []focusFact
 	for _, df := range d.verifiedDerivedAbout(agent) {
+		if df.Kind == derivedContainment {
+			continue // a containment reads as a place, not a verb clause, so it stays out of the spoken tier
+		}
 		facts = append(facts, focusFact{rel: df.Rel, focusRole: "agent", coGloss: df.PatGloss, coID: df.Patient})
 	}
 	return facts
@@ -212,8 +332,10 @@ func (d *Daemon) reasonedElaboration(frame grammar.Frame, focus *memory.Fragment
 	if len(facts) == 0 {
 		return "", false
 	}
+	// One clause only, like the hedged tier: the reasoning lead governs a single conclusion cleanly,
+	// where a second clause would trail after it reading as an unlabeled firm fact.
 	line, ok := d.renderFactsCapped(frame.Lang, d.conceptName(focus.ID, focus.Content, frame.Lang),
-		facts, true, true, describeClauseCap)
+		facts, true, true, 1)
 	if !ok {
 		return "", false
 	}
@@ -235,13 +357,17 @@ func (d *Daemon) derivedSummaryLine(lang string) string {
 	if err != nil {
 		return ""
 	}
-	// Collect a bounded sample and re-verify lazily: the census names at most derivedSummaryCap
-	// agents with a couple of facts each, so re-verify (a live graph walk per row) stops as soon as
-	// enough have survived rather than re-verifying the whole accumulated ledger for a short summary.
-	const factsPerAgent = 2
+	// Collect a bounded sample and re-verify lazily: the census names one fact for each of at most
+	// derivedSummaryCap agents, so re-verify (a live graph walk per row) stops as soon as enough have
+	// survived rather than re-verifying the whole accumulated ledger for a short summary. One fact per
+	// agent keeps each a single clause the shared "I have worked out that" lead coordinates cleanly.
+	const factsPerAgent = 1
 	byAgent := map[uint64][]focusFact{}
 	var order []uint64
 	for _, df := range facts {
+		if df.Kind == derivedContainment {
+			continue // a containment reads as a place, not a verb clause; keep it out of the census
+		}
 		known := byAgent[df.Agent] != nil
 		if !known && len(order) >= derivedSummaryCap {
 			continue // enough distinct agents already; do not re-verify rows for new ones
