@@ -120,6 +120,15 @@ CREATE TABLE IF NOT EXISTS beliefs (
 	depth       INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (rel, agent, patient)
 );
+CREATE TABLE IF NOT EXISTS derived (
+	rel         TEXT    NOT NULL,
+	agent       INTEGER NOT NULL,
+	patient     INTEGER NOT NULL,
+	agent_gloss TEXT    NOT NULL DEFAULT '',
+	pat_gloss   TEXT    NOT NULL DEFAULT '',
+	kind        TEXT    NOT NULL,
+	PRIMARY KEY (rel, agent, patient)
+);
 CREATE TABLE IF NOT EXISTS feature_universal (
 	feature_id INTEGER PRIMARY KEY,
 	frac       REAL    NOT NULL

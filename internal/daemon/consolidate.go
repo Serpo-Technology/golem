@@ -13,13 +13,15 @@ const consolidateReasonTopics = 8
 // to the observed graph, so the pass PROPOSES without asserting: an idle guess speaks "probably"
 // and fades unless it recurs, and only a conclusion that engagement re-draws rides the same
 // promotion a questioned one does. So the reasoning faculty runs unprompted while GOLEM rests,
-// and the glass box holds. It reads the day's strong episodes the way replay does (by stored
-// weight, so the pre-sleep quiet has not cooled them) and returns how many concepts it reasoned
-// over and how many fresh conclusions it drew, for the night's account.
-func (d *Daemon) consolidateReasoning() (topics, drawn int) {
+// and the glass box holds. Beside the hedged guesses it also works out the FIRM sound conclusions the
+// day newly enables (deriveFirmAbout) and remembers them, so knowledge grows and not only softens. It
+// reads the day's strong episodes the way replay does (by stored weight, so the pre-sleep quiet has
+// not cooled them) and returns how many concepts it reasoned over, how many hedged guesses it drew,
+// and how many firm conclusions it worked out, for the night's account.
+func (d *Daemon) consolidateReasoning() (topics, drawn, derived int) {
 	episodes, err := d.store.StrongSince(d.lastSleep, replayFloor, replayCap)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	seen := map[uint64]bool{}
 	var ids []uint64
@@ -45,7 +47,7 @@ func (d *Daemon) consolidateReasoning() (topics, drawn int) {
 	}
 	frags, err := d.fragmentsByIDsTiered(ids)
 	if err != nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	before := d.held.len()
 	for _, f := range frags {
@@ -56,7 +58,12 @@ func (d *Daemon) consolidateReasoning() (topics, drawn int) {
 			continue
 		}
 		topics++
+		// The hedged half: guess what the concept's resemblances imply.
 		d.drawInferenceAbout(f)
+		// The firm half: work out and remember the sound conclusions the day newly enables about it.
+		if derived < deriveCapPerNight {
+			derived += d.deriveFirmAbout(f, deriveCapPerNight-derived)
+		}
 	}
-	return topics, d.held.len() - before
+	return topics, d.held.len() - before, derived
 }

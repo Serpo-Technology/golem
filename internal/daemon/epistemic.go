@@ -352,7 +352,13 @@ func (d *Daemon) knowledgeSummary(lang string) string {
 			actions = append(actions, d.relationName(c.Content, lang))
 		}
 	}
-	return summaryLine(lang, capWords(kinds, 5), capWords(actions, 5))
+	line := summaryLine(lang, capWords(kinds, 5), capWords(actions, 5))
+	// What GOLEM has reasoned out, beyond what it was told: the census shows knowledge grown by
+	// working things out, spoken firm and labeled as reasoned.
+	if derived := d.derivedSummaryLine(lang); derived != "" {
+		line = strings.TrimRight(line, " ") + " " + derived + "."
+	}
+	return line
 }
 
 // summaryLine phrases the kinds and actions GOLEM holds in each tongue. English

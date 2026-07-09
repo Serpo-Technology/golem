@@ -2219,7 +2219,10 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// taught: GOLEM draws the guesses the day's concepts imply but nobody asked, held in mind for
 	// the coming day to volunteer, use, and (if they recur) remember. Held, never asserted, so the
 	// idle reasoning stays honest.
-	reasonedOver, drewFresh := d.consolidateReasoning()
+	reasonedOver, drewFresh, workedOut := d.consolidateReasoning()
+	// Drop any remembered conclusion the day's retractions or merges have unseated, so the derived
+	// ledger stays a pure function of the settled graph.
+	d.reverifyDerived()
 	d.topic = 0
 	d.lastDrewTopic = 0
 	d.lastRole = nil
@@ -2254,8 +2257,8 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	d.event(events.Event{Ev: "prune", Count: pruned})
 	d.event(events.Event{Ev: "merge", Count: merged})
 	d.event(events.Event{Ev: "sleep", Count: held})
-	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d concept(s) born, %d word(s) bonded, reasoned over %d concept(s) drawing %d fresh conclusion(s), %d held.\n",
-		d.sleeps, woven, pruned, merged, born, named, reasonedOver, drewFresh, held)
+	fmt.Fprintf(d.out, "zzz night %d: wove %d replay pair(s), pruned %d faded fragment(s), merged %d into prototypes, %d concept(s) born, %d word(s) bonded, reasoned over %d concept(s) drawing %d fresh conclusion(s) and working out %d, %d held.\n",
+		d.sleeps, woven, pruned, merged, born, named, reasonedOver, drewFresh, workedOut, held)
 	return pruned, merged, born
 }
 

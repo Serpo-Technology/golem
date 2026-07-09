@@ -125,6 +125,18 @@ func (d *Daemon) planEvidence(frame grammar.Frame, raw string) (string, bool) {
 		relContent = rf[0].Content
 	}
 	ev := d.propositionEvidence(agentID, relContent, patientID)
+	// A composed sound deduction (a transitive chain, a containment walk) leaves no moment of its
+	// own, so the tally reads empty and speakEvidence would admit "it's a guess". But it is not a
+	// guess: if it still derives firm, it is certain, and reasoned. This keeps the two epistemic
+	// probes consistent -- "why" already answers "I reasoned so" for the same claim.
+	if ev.moments == 0 && !ev.denied {
+		if frags, err := d.fragmentsByIDsTiered([]uint64{agentID, patientID}); err == nil && len(frags) == 2 {
+			byID := map[uint64]*memory.Fragment{frags[0].ID: frags[0], frags[1].ID: frags[1]}
+			if d.soundlyDerivesFirm(byID[agentID], relContent, byID[patientID]) {
+				return d.reasonedSureLine(lang), true
+			}
+		}
+	}
 	return d.speakEvidence(lang, ev), true
 }
 

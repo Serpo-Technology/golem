@@ -1164,6 +1164,13 @@ func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) st
 		}
 		d.claimFacts(focus, ordered) // a description asserts what it actually said
 	}
+	// Then what the focus has been REASONED to do: the sound conclusions worked out about it, firm
+	// (a sound deduction is certain) but labeled as reasoned, for relations not directly observed. It
+	// is the middle tier of the honesty gradient, between the seen and the likely, and it marks its
+	// relations so the hedge below does not also guess at them.
+	if reasoned, ok := d.reasonedElaboration(frame, focus, observed); ok {
+		parts = append(parts, reasoned)
+	}
 	// Then what the focus probably also does, from a near neighbour or a category it belongs
 	// to, for relations it has not been observed in, so the description shades from what is
 	// known to what is likely and stops at what can be grounded. When nothing is observed this

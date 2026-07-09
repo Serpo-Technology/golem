@@ -154,7 +154,7 @@ func TestConsolidationDrawsUnpromptedGuess(t *testing.T) {
 		t.Fatal("the guess should not be held before consolidation reasons")
 	}
 
-	topics, drawn := d.consolidateReasoning()
+	topics, drawn, _ := d.consolidateReasoning()
 	if topics == 0 {
 		t.Fatal("consolidation should reason over the day's concepts")
 	}
