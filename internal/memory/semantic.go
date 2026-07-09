@@ -98,18 +98,21 @@ const (
 	categoryClass = "class"
 )
 
-// ConceptCandidates lists episodic shapes recurrent enough to deserve a
-// concept and not yet distilled into one, most recurrent first.
-// Utterances are excluded: only lived experience earns an abstraction.
-func (s *Store) ConceptCandidates(minCount, limit int) ([]*Fragment, error) {
+// ConceptCandidates lists episodic shapes recurrent enough to deserve a concept
+// and not yet distilled into one, the strongest first. Recurrence is weighed by
+// SALIENCE MASS, not raw count: a routine, un-attended repeat contributes a
+// fraction of an attended one, so ambient repetition alone cannot earn a concept
+// while a few grounded, attended showings do. Utterances are excluded: only lived
+// experience earns an abstraction.
+func (s *Store) ConceptCandidates(minMass float64, limit int) ([]*Fragment, error) {
 	if limit < 1 {
 		return nil, nil
 	}
 	return s.query(`SELECT `+fragmentCols+` FROM fragments
-		WHERE kind = ? AND count >= ? AND channel NOT IN (?, ?)
+		WHERE kind = ? AND mass >= ? AND channel NOT IN (?, ?)
 		AND template NOT IN (SELECT template FROM fragments WHERE kind = ?)
-		ORDER BY count DESC, id DESC LIMIT ?`,
-		KindEpisodic, minCount, utteranceChannel, thoughtChannel, KindConcept, limit)
+		ORDER BY mass DESC, id DESC LIMIT ?`,
+		KindEpisodic, minMass, utteranceChannel, thoughtChannel, KindConcept, limit)
 }
 
 // Reground writes the missing grounds edges from every concept to the

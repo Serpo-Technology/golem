@@ -672,7 +672,9 @@ func glossFor(proto *memory.Fragment) string {
 // concepts one night may mint; dopamine decides how eagerly words bond.
 func (d *Daemon) growConcepts() (born, named int) {
 	budget := genesisCap
-	candidates, err := d.store.ConceptCandidates(memory.MergeThreshold, budget)
+	// A concept is earned by salience mass, not raw count: the merge threshold in full-mass units,
+	// so a few attended showings suffice while ambient repetition (fractional mass) does not.
+	candidates, err := d.store.ConceptCandidates(float64(memory.MergeThreshold), budget)
 	if err != nil {
 		fmt.Fprintf(d.out, "concept genesis error: %v\n", err)
 		return 0, 0

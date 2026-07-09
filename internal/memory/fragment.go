@@ -185,6 +185,7 @@ type Fragment struct {
 	Time     time.Time
 	Weight   float64  // synaptic weight; decays during sleep, drives pruning
 	Count    int      // occurrences this fragment stands for; above 1 it is a prototype
+	Mass     float64  // salience-weighted occurrence mass: a conscious occurrence weighs 1, a subliminal one less, and genesis gates on the summed mass so routine ambient repetition alone cannot mint a concept
 	Kind     string   // episodic, word, or concept; empty means episodic
 	Lang     string   // language tag on word nodes ("en", "tr"); empty elsewhere
 	Category string   // lemma category on concept nodes ("verb", "noun")

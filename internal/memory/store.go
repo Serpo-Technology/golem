@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS fragments (
 	at            INTEGER NOT NULL,
 	weight        REAL    NOT NULL,
 	count         INTEGER NOT NULL DEFAULT 1,
+	mass          REAL    NOT NULL DEFAULT 1.0,
 	kind          TEXT    NOT NULL DEFAULT 'episodic',
 	lang          TEXT    NOT NULL DEFAULT '',
 	category      TEXT    NOT NULL DEFAULT '',
@@ -183,10 +184,15 @@ func migrate(db *sql.DB) error {
 
 	addColumns := []struct{ name, decl string }{
 		{"count", `count INTEGER NOT NULL DEFAULT 1`},
+		{"mass", `mass REAL NOT NULL DEFAULT 1.0`},
 		{"kind", `kind TEXT NOT NULL DEFAULT 'episodic'`},
 		{"lang", `lang TEXT NOT NULL DEFAULT ''`},
 		{"category", `category TEXT NOT NULL DEFAULT ''`},
 		{"edited", `edited INTEGER NOT NULL DEFAULT 0`},
+	}
+	massExisted, err := hasColumn("fragments", "mass")
+	if err != nil {
+		return err
 	}
 	for _, col := range addColumns {
 		ok, err := hasColumn("fragments", col.name)
@@ -197,6 +203,14 @@ func migrate(db *sql.DB) error {
 			if _, err := db.Exec(`ALTER TABLE fragments ADD COLUMN ` + col.decl); err != nil {
 				return err
 			}
+		}
+	}
+	if !massExisted {
+		// A brain written before the mass column has every fragment at the ADD-COLUMN default (1.0),
+		// which would strand an already-recurrent shape below the genesis threshold. Backfill mass to
+		// count so genesis stays exactly count-gated for what the old brain already accumulated.
+		if _, err := db.Exec(`UPDATE fragments SET mass = count`); err != nil {
+			return err
 		}
 	}
 
@@ -238,15 +252,20 @@ func (s *Store) Encode(f *Fragment) (uint64, error) {
 	if f.Count < 1 {
 		f.Count = 1
 	}
+	if f.Mass <= 0 {
+		// A conscious occurrence weighs a full unit per count, so mass defaults to the count and
+		// genesis stays exactly count-gated; only the graded gate lowers an occurrence's mass.
+		f.Mass = float64(f.Count)
+	}
 	if f.Kind == "" {
 		f.Kind = KindEpisodic
 	}
 	res, err := s.db.Exec(`INSERT INTO fragments
-		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, mass, kind, lang, category, edited)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		f.Channel, f.Content, f.Template, f.Surprise,
 		f.Limbic.Dopamine, f.Limbic.Noradrenaline, f.Limbic.Serotonin,
-		f.Time.UnixNano(), f.Weight, f.Count, f.Kind, f.Lang, f.Category, boolToInt(f.Edited))
+		f.Time.UnixNano(), f.Weight, f.Count, f.Mass, f.Kind, f.Lang, f.Category, boolToInt(f.Edited))
 	if err != nil {
 		return 0, err
 	}
@@ -382,7 +401,7 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 }
 
 const fragmentCols = `id, channel, content, template, surprise,
-	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited`
+	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited, mass`
 
 func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var f Fragment
@@ -390,7 +409,7 @@ func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var edited int64
 	if err := rows.Scan(&f.ID, &f.Channel, &f.Content, &f.Template, &f.Surprise,
 		&f.Limbic.Dopamine, &f.Limbic.Noradrenaline, &f.Limbic.Serotonin,
-		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category, &edited); err != nil {
+		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category, &edited, &f.Mass); err != nil {
 		return nil, err
 	}
 	f.Time = time.Unix(0, at)
@@ -724,8 +743,9 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		surprise float64
 		weight   float64
 		count    int
+		mass     float64
 	}
-	rows, err := s.db.Query(`SELECT id, surprise, weight, count FROM fragments
+	rows, err := s.db.Query(`SELECT id, surprise, weight, count, mass FROM fragments
 		WHERE channel = ? AND template = ? AND kind = '`+KindEpisodic+`'
 		ORDER BY at DESC, id DESC`, channel, template)
 	if err != nil {
@@ -734,7 +754,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 	var members []member
 	for rows.Next() {
 		var m member
-		if err := rows.Scan(&m.id, &m.surprise, &m.weight, &m.count); err != nil {
+		if err := rows.Scan(&m.id, &m.surprise, &m.weight, &m.count, &m.mass); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -756,7 +776,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		}
 	}
 	fold := map[uint64]bool{proto.id: true}
-	total, maxWeight := proto.count, proto.weight
+	total, maxWeight, totalMass := proto.count, proto.weight, proto.mass
 	var absorbed []uint64
 	for _, m := range members[1:] {
 		if m.id == exemplar.id {
@@ -765,6 +785,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		fold[m.id] = true
 		absorbed = append(absorbed, m.id)
 		total += m.count
+		totalMass += m.mass
 		if m.weight > maxWeight {
 			maxWeight = m.weight
 		}
@@ -857,8 +878,8 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 			return 0, err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE fragments SET count = ?, weight = ? WHERE id = ?`,
-		total, maxWeight, proto.id); err != nil {
+	if _, err := tx.Exec(`UPDATE fragments SET count = ?, weight = ?, mass = ? WHERE id = ?`,
+		total, maxWeight, totalMass, proto.id); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {
