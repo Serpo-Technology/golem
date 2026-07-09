@@ -16,10 +16,12 @@ const analogyRuleTemplate = "rule:analogy:apply"
 // analogySpec is the analogy composition: a resApply whose source reach is the relation-valued
 // connector (any relation in the agent role, landing on $to, so it yields the relations $from
 // stands in to $to) and whose apply reach walks from $third over the discovered $found relation.
+// The apply reach keeps its start ($third): a proportion whose relation lands the third concept
+// on itself (c stands in the relation to c) is a valid fourth term, matching the Go walk.
 func analogySpec() compSpec {
 	return compSpec{
 		result: resApply, edge: anyEdge, role: agentRole, trans: transNo, land: bindTo,
-		apply: &reachSpec{edge: bindFound, role: agentRole, trans: transNo, start: bindThird},
+		apply: &reachSpec{edge: bindFound, role: agentRole, trans: transNo, start: bindThird, keep: transYes},
 	}
 }
 

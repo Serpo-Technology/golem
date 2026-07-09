@@ -1799,11 +1799,29 @@ func (d *Daemon) factIsComparative(relContent string) bool {
 // the fourth term. Grounded and glass-box: the relation is explicit, no vector
 // offset, so the analogy is the relation a:b shares with c:?. It returns the
 // relation and c's co-arguments under it, or false when a stands in no told
-// relation to b, or c stands in none of the relations a does.
+// relation to b, or c stands in none of the relations a does. The find-then-apply
+// walk now lives in the graph as the analogy rule and runs through the one evaluator
+// (evalRule over the analogy composition); the Go walk (analogizeGo) is the fallback
+// when no rule is stored or its shape is not one the evaluator runs.
 func (d *Daemon) analogize(a, b, c *memory.Fragment) (string, []focusFact, bool) {
 	if a == nil || b == nil || c == nil {
 		return "", nil, false
 	}
+	if root := d.analogyRule(); root != 0 {
+		if r, ok := d.evalRule(root, ruleQuery{from: a.ID, to: b.ID, third: c.ID}); ok {
+			if !r.hit {
+				return "", nil, false
+			}
+			return r.foundRel, d.gatherFacts(c, "agent", r.foundRel), true
+		}
+	}
+	return d.analogizeGo(a, b, c)
+}
+
+// analogizeGo is the hardcoded find-then-apply walk, the fallback for the analogy rule above:
+// it returns the first relation that holds a->b and that c also stands in, with c's
+// co-arguments under it. The rule reproduces it, verified over the analogy fixtures.
+func (d *Daemon) analogizeGo(a, b, c *memory.Fragment) (string, []focusFact, bool) {
 	for _, ab := range d.gatherFacts(a, "agent", "") {
 		if ab.coID != b.ID {
 			continue // the relation must be the one that actually holds a -> b

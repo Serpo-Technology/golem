@@ -36,7 +36,7 @@ func TestAnalogyRuleReproducesGoWalk(t *testing.T) {
 	if !ok || !r.hit || r.foundRel != "chase" {
 		t.Fatalf("the rule should find chase and the fourth term: ok=%v hit=%v rel=%q", ok, r.hit, r.foundRel)
 	}
-	relGo, ansGo, okGo := d.analogize(cat, mouse, dog)
+	relGo, ansGo, okGo := d.analogizeGo(cat, mouse, dog)
 	if !okGo || relGo != r.foundRel {
 		t.Fatalf("the Go walk should agree on the relation: %q vs %q", relGo, r.foundRel)
 	}
@@ -52,7 +52,7 @@ func TestAnalogyRuleReproducesGoWalk(t *testing.T) {
 	if !ok || r2.hit {
 		t.Fatalf("bird->dog has no relation, the rule should admit the gap: ok=%v hit=%v", ok, r2.hit)
 	}
-	if _, _, okGo := d.analogize(bird, dog, cat); okGo {
+	if _, _, okGo := d.analogizeGo(bird, dog, cat); okGo {
 		t.Fatal("the Go walk should also admit the gap")
 	}
 }
@@ -73,7 +73,7 @@ func TestAnalogyRuleTriesEveryConnectingRelation(t *testing.T) {
 
 	// The Go walk picks the productive (second) relation and fourth term; the rule must match
 	// it, and must NOT pick the first candidate chase (which the dog does not stand in).
-	relGo, ansGo, okGo := d.analogize(cat, mouse, dog)
+	relGo, ansGo, okGo := d.analogizeGo(cat, mouse, dog)
 	if !okGo || relGo == "chase" || !coIDSet(ansGo)[bird.ID] {
 		t.Fatalf("the Go walk should skip chase and pick the fear -> bird relation: rel=%q ans=%+v", relGo, ansGo)
 	}
@@ -94,5 +94,51 @@ func TestAnalogyRuleTriesEveryConnectingRelation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(sliceToSet(r.set), coIDSet(ansGo)) {
 		t.Fatalf("the rule and the Go walk should reach the same set: %v vs %v", r.set, ansGo)
+	}
+}
+
+// A reflexive fourth term is kept: when the connecting relation lands the third concept on
+// itself (the dog chased the dog), that self co-argument is a valid answer, matching the Go
+// walk. The apply reach keeps its start, so the rule does not drop it to a don't-know gap.
+func TestAnalogyKeepsReflexiveFourthTerm(t *testing.T) {
+	d, _ := testDaemon(t)
+	cat := groundNoun(t, d, "cat")
+	mouse := groundNoun(t, d, "mouse")
+	dog := groundNoun(t, d, "dog")
+	say(t, d, "the cat chased the mouse")
+	say(t, d, "the dog chased the dog") // the dog stands in chase only to itself
+
+	root := d.analogyRule()
+	r, ok := d.evalRule(root, ruleQuery{from: cat.ID, to: mouse.ID, third: dog.ID})
+	if !ok || !r.hit {
+		t.Fatalf("the reflexive fourth term (the dog) should carry through, not a gap: ok=%v hit=%v", ok, r.hit)
+	}
+	if !reflect.DeepEqual(sliceToSet(r.set), map[uint64]bool{dog.ID: true}) {
+		t.Fatalf("the fourth term should be the dog itself: %v", r.set)
+	}
+
+	// The rule agrees with the Go walk it replaced (which counts the self co-argument).
+	relGo, ansGo, okGo := d.analogizeGo(cat, mouse, dog)
+	if !okGo || relGo != r.foundRel || !reflect.DeepEqual(sliceToSet(r.set), coIDSet(ansGo)) {
+		t.Fatalf("the rule and the Go walk should agree on the reflexive case: rel %q/%q set %v/%v", r.foundRel, relGo, r.set, ansGo)
+	}
+}
+
+// The live analogy answer runs through the compositional rule, not the Go fallback: asking a
+// proportion answers it AND populates the rule cache, which only the rule path writes.
+func TestAnalogyRoutesThroughCompositionalRule(t *testing.T) {
+	d, _ := testDaemon(t)
+	groundNoun(t, d, "cat")
+	groundNoun(t, d, "mouse")
+	groundNoun(t, d, "dog")
+	groundNoun(t, d, "bird")
+	say(t, d, "the cat chased the mouse")
+	say(t, d, "the dog chased the bird")
+
+	if got := say(t, d, "the cat is to the mouse as the dog is to what").Say; got != "The bird." {
+		t.Fatalf("the proportion should yield the bird through the rule: %q", got)
+	}
+	if d.reasonRuleID[analogyRuleTemplate] == 0 {
+		t.Fatal("the analogy answer should run the compositional rule, populating its cache")
 	}
 }

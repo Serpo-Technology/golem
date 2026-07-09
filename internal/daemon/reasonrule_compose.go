@@ -46,6 +46,11 @@ const (
 	// then yields the relation of each landing hop (reachRelSet) rather than the co-argument. It
 	// is the connector of a find-then-apply rule (the relations by which one concept reaches another).
 	reachLandRel = "rland"
+	// reachKeepStartRel keeps the reach's start concept eligible as a landing of its own reach (a
+	// reflexive hop back to the start), rather than excluding it. The closure reaches exclude the
+	// start (a rank or transitive set is of OTHER concepts); a single-hop apply reach that must
+	// count a fourth term equal to its start (c stands in the relation to c itself) sets it.
+	reachKeepStartRel = "rkeep"
 
 	// resSourceRel links a result node to the reach it reads; findRelRel and findArgRel give a
 	// find result the relation to test at each reached concept and the argument to test against.
@@ -115,6 +120,7 @@ type reachSpec struct {
 	edge, role    string
 	trans, filter string
 	start, land   string
+	keep          string // transYes to keep the start concept eligible as a reflexive landing
 }
 
 // compSpec describes a compositional rule to build: the result primitive, the (source) reach
@@ -177,6 +183,9 @@ func writeReach(w storeCodeWriter, rs reachSpec) uint64 {
 	}
 	if rs.land != "" {
 		w.link(reach, w.add(rs.land), reachLandRel)
+	}
+	if rs.keep != "" {
+		w.link(reach, w.add(rs.keep), reachKeepStartRel)
 	}
 	return reach
 }
@@ -263,11 +272,11 @@ func (d *Daemon) evalApply(g codeGraph, root, connector uint64, q ruleQuery) (ru
 }
 
 // reachSet walks a reach node from the query's subject and returns the concepts reached, in
-// walk order and deduplicated (the subject itself excluded): the shared step of every
-// compositional rule. It reads the edge, role, transitivity, and optional marker filter off
-// the node, so which walk it runs is graph data. The traversal mirrors the hardcoded walks
-// (a stack, dedup by first sight), so a reach reproduces categoriesOf / comparativeReach /
-// partWholes exactly for the parameters those use.
+// walk order and deduplicated (the subject excluded unless the reach keeps it): the shared step
+// of every compositional rule. It reads the edge, role, transitivity, optional marker filter,
+// and the keep-start flag off the node, so which walk it runs is graph data. The traversal
+// mirrors the hardcoded walks (a stack, dedup by first sight), so a reach reproduces categoriesOf
+// / comparativeReach / partWholes exactly for the parameters those use.
 func (d *Daemon) reachSet(reach uint64, q ruleQuery) ([]uint64, bool) {
 	g := d.storeView()
 	if g.content(firstDest(g, reach, memory.RelGrounds)) != reachRule {
@@ -280,12 +289,18 @@ func (d *Daemon) reachSet(reach uint64, q ruleQuery) ([]uint64, bool) {
 	}
 	trans := g.content(firstDest(g, reach, reachTransRel)) == transYes
 	filter := g.content(firstDest(g, reach, reachFilterRel))
+	keepStart := g.content(firstDest(g, reach, reachKeepStartRel)) == transYes
 	start := q.from
 	if b := g.content(firstDest(g, reach, reachStartRel)); b != "" {
 		start = d.resolveArgBinding(b, q)
 	}
 	var reached []uint64
-	seen := map[uint64]bool{start: true}
+	// seen guards against re-walking a concept; the start is pre-seen so a closure reach is of
+	// OTHER concepts, unless the reach keeps its start (then a reflexive hop back to it counts).
+	seen := map[uint64]bool{}
+	if !keepStart {
+		seen[start] = true
+	}
 	stack := []uint64{start}
 	for len(stack) > 0 {
 		cur := stack[len(stack)-1]
