@@ -261,6 +261,7 @@ type ChannelStat struct {
 	Observed   int   `json:"observed"`
 	Conscious  int   `json:"conscious"`
 	Subliminal int   `json:"subliminal"` // encoded below consciousness (habituated but still learned)
+	Deduped    int   `json:"deduped"`    // a sub-conscious repeat folded into the current episode, not re-encoded
 	Suppressed int   `json:"suppressed"`
 	Dropped    int64 `json:"dropped"`
 }

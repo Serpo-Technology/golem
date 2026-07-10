@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -92,5 +93,101 @@ func TestGenesisDefaultMassEqualsCount(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("a full-salience template seen enough should earn a concept exactly as before")
+	}
+}
+
+// Sub-conscious mass is decayable: it bleeds each night so a percept that stops recurring fades below
+// the genesis threshold, while conscious mass, which carries no submass, is conserved across a night.
+// This is the time axis of faintness. It keeps every existing brain and all conscious genesis unchanged
+// (submass is zero there, so the decay is a no-op) while denying a spaced ambient drip an endless climb.
+func TestSubmassBleedsWhileConsciousMassIsConserved(t *testing.T) {
+	s, err := OpenStore(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	// A conscious prototype (mass == count, no submass) and a sub-conscious one (all mass is submass).
+	consc := &Fragment{Channel: "vision", Content: "c", Template: "c", Kind: KindEpisodic,
+		Weight: 1.0, Count: 5, Mass: 5, Time: time.Unix(0, 1)}
+	cid, err := s.Encode(consc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subl := &Fragment{Channel: "vision", Content: "s", Template: "s", Kind: KindEpisodic,
+		Weight: 0.35, Mass: 3.0, Submass: 3.0, Time: time.Unix(0, 2)}
+	sid, err := s.Encode(subl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Sleep(0.1, 0.01); err != nil {
+		t.Fatal(err)
+	}
+
+	frags, err := s.FragmentsByIDs([]uint64{cid, sid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range frags {
+		switch f.ID {
+		case cid:
+			if f.Mass != 5 || f.Submass != 0 {
+				t.Fatalf("conscious mass must be conserved with no submass: mass=%v submass=%v", f.Mass, f.Submass)
+			}
+		case sid:
+			if f.Submass >= 3.0 || f.Mass >= 3.0 {
+				t.Fatalf("sub-conscious mass must bleed below its start: mass=%v submass=%v", f.Mass, f.Submass)
+			}
+			if math.Abs(f.Mass-f.Submass) > 1e-9 {
+				t.Fatalf("a pure sub-conscious trace's mass is all submass: mass=%v submass=%v", f.Mass, f.Submass)
+			}
+		}
+	}
+}
+
+// A percept dripping one sub-conscious sighting per night never mints, because the bleed outpaces the
+// slow accrual; the same number of sightings CLUSTERED into one wake window (before any bleed) does mint.
+// This is what actually closes the ambient hole: recurrence must be dense enough to beat the decay, so
+// sustained cross-situational learning forms a concept while a sparse background drip fades away.
+func TestSpacedSubliminalDripDoesNotMintButClusterDoes(t *testing.T) {
+	drip := func(spaced bool) bool {
+		s, err := OpenStore(filepath.Join(t.TempDir(), "m.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+		const subMass = 0.3 // one sub-conscious sighting's mass, all of it decayable
+		for i := 0; i < 20; i++ {
+			f := &Fragment{Channel: "vision", Content: "kettle", Template: "kettle", Kind: KindEpisodic,
+				Weight: 0.35, Mass: subMass, Submass: subMass, Time: time.Unix(0, int64(i+1))}
+			if _, err := s.Encode(f); err != nil {
+				t.Fatal(err)
+			}
+			if spaced { // a night between each sighting bleeds the accrued submass
+				if _, err := s.Sleep(0.1, 0.01); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		if _, err := s.MergeDuplicates(); err != nil {
+			t.Fatal(err)
+		}
+		cands, err := s.ConceptCandidates(float64(MergeThreshold), 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cands {
+			if c.Template == "kettle" {
+				return true
+			}
+		}
+		return false
+	}
+	if drip(true) {
+		t.Fatal("a spaced drip must bleed away and never mint")
+	}
+	if !drip(false) {
+		t.Fatal("a dense cluster of the same sightings should mint before the bleed")
 	}
 }

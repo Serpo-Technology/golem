@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS fragments (
 	weight        REAL    NOT NULL,
 	count         INTEGER NOT NULL DEFAULT 1,
 	mass          REAL    NOT NULL DEFAULT 1.0,
+	submass       REAL    NOT NULL DEFAULT 0,
 	kind          TEXT    NOT NULL DEFAULT 'episodic',
 	lang          TEXT    NOT NULL DEFAULT '',
 	category      TEXT    NOT NULL DEFAULT '',
@@ -185,6 +186,7 @@ func migrate(db *sql.DB) error {
 	addColumns := []struct{ name, decl string }{
 		{"count", `count INTEGER NOT NULL DEFAULT 1`},
 		{"mass", `mass REAL NOT NULL DEFAULT 1.0`},
+		{"submass", `submass REAL NOT NULL DEFAULT 0`},
 		{"kind", `kind TEXT NOT NULL DEFAULT 'episodic'`},
 		{"lang", `lang TEXT NOT NULL DEFAULT ''`},
 		{"category", `category TEXT NOT NULL DEFAULT ''`},
@@ -261,11 +263,11 @@ func (s *Store) Encode(f *Fragment) (uint64, error) {
 		f.Kind = KindEpisodic
 	}
 	res, err := s.db.Exec(`INSERT INTO fragments
-		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, mass, kind, lang, category, edited)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		(channel, content, template, surprise, dopamine, noradrenaline, serotonin, at, weight, count, mass, submass, kind, lang, category, edited)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		f.Channel, f.Content, f.Template, f.Surprise,
 		f.Limbic.Dopamine, f.Limbic.Noradrenaline, f.Limbic.Serotonin,
-		f.Time.UnixNano(), f.Weight, f.Count, f.Mass, f.Kind, f.Lang, f.Category, boolToInt(f.Edited))
+		f.Time.UnixNano(), f.Weight, f.Count, f.Mass, f.Submass, f.Kind, f.Lang, f.Category, boolToInt(f.Edited))
 	if err != nil {
 		return 0, err
 	}
@@ -299,6 +301,17 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	if _, err := s.db.Exec(
 		`UPDATE fragments SET weight = weight * (1.0 - ? / (1.0 + surprise))
 		 WHERE kind = ?`, decay, KindEpisodic); err != nil {
+		return 0, err
+	}
+	// Sub-conscious mass bleeds each night, bounding what a repeated ambient percept
+	// can accrue. The decayable part is subtracted from the total mass so genesis (which
+	// still reads mass) sees only what recent recurrence has kept alive; the conscious
+	// part of a mixed prototype is conserved because it carries no submass. Rows with no
+	// submass (every conscious fragment, every fragment in a brain grown before this) are
+	// untouched, so conscious genesis and existing brains stay byte-identical.
+	if _, err := s.db.Exec(
+		`UPDATE fragments SET mass = mass - submass * ?, submass = submass * (1.0 - ?)
+		 WHERE submass > 0 AND kind = ?`, subMassDecay, subMassDecay, KindEpisodic); err != nil {
 		return 0, err
 	}
 	res, err := s.db.Exec(`DELETE FROM fragments WHERE weight <= ? AND kind = ?`, floor, KindEpisodic)
@@ -401,7 +414,7 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 }
 
 const fragmentCols = `id, channel, content, template, surprise,
-	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited, mass`
+	dopamine, noradrenaline, serotonin, at, weight, count, kind, lang, category, edited, mass, submass`
 
 func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var f Fragment
@@ -409,7 +422,7 @@ func scanFragment(rows *sql.Rows) (*Fragment, error) {
 	var edited int64
 	if err := rows.Scan(&f.ID, &f.Channel, &f.Content, &f.Template, &f.Surprise,
 		&f.Limbic.Dopamine, &f.Limbic.Noradrenaline, &f.Limbic.Serotonin,
-		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category, &edited, &f.Mass); err != nil {
+		&at, &f.Weight, &f.Count, &f.Kind, &f.Lang, &f.Category, &edited, &f.Mass, &f.Submass); err != nil {
 		return nil, err
 	}
 	f.Time = time.Unix(0, at)
@@ -701,6 +714,14 @@ const (
 	exemplarLinkWeight = 0.6
 )
 
+// subMassDecay is how much of a fragment's sub-conscious mass bleeds away each
+// night. A subliminal trace carries its genesis mass as decayable submass, so a
+// percept only crosses the genesis threshold when it recurs across enough distinct
+// episodes faster than the bleed. A sparse ambient drip fades to a bounded steady
+// state below threshold and never mints; sustained cross-situational recurrence
+// outpaces the bleed and does. Conscious mass carries no submass and never fades.
+const subMassDecay = 0.2
+
 // MergeDuplicates runs one merge pass and reports how many fragments were
 // absorbed into prototypes. Only moments merge; word and concept nodes
 // are already one node per form.
@@ -744,8 +765,9 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		weight   float64
 		count    int
 		mass     float64
+		submass  float64
 	}
-	rows, err := s.db.Query(`SELECT id, surprise, weight, count, mass FROM fragments
+	rows, err := s.db.Query(`SELECT id, surprise, weight, count, mass, submass FROM fragments
 		WHERE channel = ? AND template = ? AND kind = '`+KindEpisodic+`'
 		ORDER BY at DESC, id DESC`, channel, template)
 	if err != nil {
@@ -754,7 +776,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 	var members []member
 	for rows.Next() {
 		var m member
-		if err := rows.Scan(&m.id, &m.surprise, &m.weight, &m.count, &m.mass); err != nil {
+		if err := rows.Scan(&m.id, &m.surprise, &m.weight, &m.count, &m.mass, &m.submass); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -776,7 +798,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		}
 	}
 	fold := map[uint64]bool{proto.id: true}
-	total, maxWeight, totalMass := proto.count, proto.weight, proto.mass
+	total, maxWeight, totalMass, totalSubmass := proto.count, proto.weight, proto.mass, proto.submass
 	var absorbed []uint64
 	for _, m := range members[1:] {
 		if m.id == exemplar.id {
@@ -786,6 +808,7 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 		absorbed = append(absorbed, m.id)
 		total += m.count
 		totalMass += m.mass
+		totalSubmass += m.submass
 		if m.weight > maxWeight {
 			maxWeight = m.weight
 		}
@@ -878,8 +901,8 @@ func (s *Store) mergeGroup(channel, template string) (int, error) {
 			return 0, err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE fragments SET count = ?, weight = ?, mass = ? WHERE id = ?`,
-		total, maxWeight, totalMass, proto.id); err != nil {
+	if _, err := tx.Exec(`UPDATE fragments SET count = ?, weight = ?, mass = ?, submass = ? WHERE id = ?`,
+		total, maxWeight, totalMass, totalSubmass, proto.id); err != nil {
 		return 0, err
 	}
 	if err := tx.Commit(); err != nil {

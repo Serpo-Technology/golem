@@ -20,6 +20,7 @@
   "sleep_interval_sec": 600,
   "nightly_decay": 0.1,
   "prune_floor": 0.1,
+  "episode_gap_sec": 120,
 
   "channels": {
     "synthetic": false,

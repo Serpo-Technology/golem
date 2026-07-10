@@ -163,6 +163,10 @@ type Daemon struct {
 	governors    map[string]*tokenBucket
 	subGovernors map[string]*tokenBucket
 	pendingStorm map[string]int
+	// episodes tracks, per sub-conscious channel, when each template was last seen,
+	// so a percept repeated within one episode is de-duplicated instead of crediting
+	// genesis mass by sheer volume. Touched only for Subconscious channels.
+	episodes map[string]*episodeTracker
 
 	// pending holds the last proposal awaiting the operator's approve or
 	// deny.
@@ -531,6 +535,45 @@ type recentMoment struct {
 	heat     float64 // how warm the concept lending this moment is, for weighting an attention bond
 }
 
+// episodeTracker remembers, per sub-conscious channel, when each template was last
+// seen, so a percept repeated within one episode can be recognized and not re-credit
+// genesis mass. It holds two generations of a template->last-seen map: a read checks
+// both, a write lands in cur, and when cur fills it rotates over prev and starts
+// fresh, discarding the older generation in O(1). Memory is bounded at ~2*episodeCap
+// per channel, and a template that keeps recurring is never lost because every
+// occurrence rewrites it into cur.
+type episodeTracker struct {
+	cur, prev map[string]time.Time
+}
+
+// episodeCap bounds one generation of a channel's episode tracker. A channel with
+// more distinct live templates than this rotates, so a flood of ever-changing
+// templates cannot grow the map without bound.
+const episodeCap = 4096
+
+// seen records this occurrence of tpl at time at and reports whether it falls inside
+// the same episode as the previous one (the gap since last-seen is within window).
+// It is a SLIDING window: every occurrence rewrites last-seen, so a continuous stream
+// never gaps out and stays one episode. An out-of-order timestamp is treated as a
+// fresh episode, which only ever over-encodes, never drops wrongly.
+func (e *episodeTracker) seen(tpl string, at time.Time, window time.Duration) bool {
+	last, known := e.cur[tpl]
+	inCur := known
+	if !known {
+		last, known = e.prev[tpl]
+	}
+	same := known && !at.Before(last) && at.Sub(last) <= window
+	if e.cur == nil {
+		e.cur = make(map[string]time.Time)
+	}
+	if !inCur && len(e.cur) >= episodeCap {
+		e.prev = e.cur
+		e.cur = make(map[string]time.Time)
+	}
+	e.cur[tpl] = at
+	return same
+}
+
 // untrustedWeight is the starting weight of a moment from an untrusted
 // channel: half a memory, gone in half the nights.
 const untrustedWeight = 0.5
@@ -804,6 +847,7 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 		governors:    make(map[string]*tokenBucket),
 		subGovernors: make(map[string]*tokenBucket),
 		pendingStorm: make(map[string]int),
+		episodes:     make(map[string]*episodeTracker),
 		obs:          make(chan senses.Observation, 256),
 		reqs:         make(chan ipcReq),
 		stop:         make(chan struct{}),
@@ -947,6 +991,15 @@ func (d *Daemon) subGovernor(channel string) *tokenBucket {
 		d.subGovernors[channel] = b
 	}
 	return b
+}
+
+func (d *Daemon) episodeTrackerFor(channel string) *episodeTracker {
+	t, ok := d.episodes[channel]
+	if !ok {
+		t = &episodeTracker{}
+		d.episodes[channel] = t
+	}
+	return t
 }
 
 func (d *Daemon) calibrator(channel string) *attention.Calibrator {
@@ -1840,6 +1893,22 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		return wire.ObserveResult{Bits: bits}
 	}
 
+	// Cross-episode de-duplication, on a sub-conscious channel only. A percept already
+	// taken in during this episode (no gap longer than the episode window since it was
+	// last seen) has been learned; a repeat within the same continuous exposure must not
+	// re-credit genesis mass, or staring at one thing would mint a concept for it by sheer
+	// volume. Every occurrence, attended or not, slides the window; a below-consciousness
+	// repeat inside it is dropped, so a concept is earned by recurring across SEPARATE
+	// episodes, not by dwelling in one. The whole block is gated on Subconscious, so a
+	// flag-off or un-opted channel never allocates the tracker and stays byte-identical.
+	if d.cfg.Subconscious(o.Channel) {
+		sameEpisode := d.episodeTrackerFor(o.Channel).seen(tpl, o.At, d.cfg.EpisodeGap())
+		if subliminal && sameEpisode {
+			st.Deduped++
+			return wire.ObserveResult{Bits: bits}
+		}
+	}
+
 	// The refractory: past the burst allowance, a CONSCIOUS storm of surprises is
 	// counted instead of encoded, and later collapsed into one summary moment. The
 	// predictor and calibrator have already learned the line.
@@ -1887,8 +1956,12 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		// A below-consciousness trace is faint on both axes: a low weight so it fades
 		// in a few nights unless reinforced, and a low genesis mass so routine
 		// repetition earns a concept only by weight of numbers, not a few showings.
+		// Its whole mass is decayable submass, so it also fades in TIME: unless the
+		// percept recurs across episodes faster than the nightly bleed, its mass never
+		// reaches the genesis threshold.
 		frag.Weight = subliminalWeight
 		frag.Mass = subliminalMass
+		frag.Submass = subliminalMass
 	}
 	id, err := d.store.Encode(frag)
 	if err != nil {

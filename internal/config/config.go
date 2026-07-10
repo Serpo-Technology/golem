@@ -30,6 +30,7 @@ const (
 	defaultExecuteParallel   = 4
 	defaultAutoCueCooldown   = 60
 	defaultWebPollSec        = 900
+	defaultEpisodeGapSec     = 120
 )
 
 // actionDenylist is the set of command substrings GOLEM will always
@@ -127,13 +128,17 @@ type Config struct {
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A
-	// sub-conscious trace is faint on every axis (low weight, low genesis mass,
-	// throttled intake, no naming or episodic reach), but many repetitions of ONE
-	// template inside a single wake window can still accrue enough mass to mint a
-	// concept for it: keep this empty for a continuously active ambient channel
-	// (a camera, a busy feed) until cross-episode de-duplication counts a repeated
-	// percept once. It is safe today for a bounded, trusted teaching channel.
+	// sub-conscious trace is faint on every axis: low weight, low genesis mass that
+	// also decays in time, throttled intake, no naming or episodic reach, and repeats
+	// within one continuous exposure are de-duplicated (see EpisodeGapSec). So a concept
+	// is earned only by recurring across distinct episodes faster than the mass bleeds,
+	// not by dwelling on one thing; a continuous ambient stream credits once and fades.
 	SubconsciousChannels []string `json:"subconscious_channels"`
+	// EpisodeGapSec is the sub-conscious de-duplication window: a habituated percept
+	// seen again within this many seconds of its last sighting is the same continuous
+	// episode and does not re-credit genesis mass. Larger folds looser recurrence into
+	// one exposure (fewer, slower concepts); smaller treats spaced sightings as distinct.
+	EpisodeGapSec float64 `json:"episode_gap_sec"`
 
 	// ArchitectPubKey is the architect's Ed25519 public key, base64. The daemon
 	// holds only this public half and verifies the architect's signature against
@@ -261,6 +266,7 @@ func Default() Config {
 		SleepIntervalSec:   defaultSleepIntervalSec,
 		NightlyDecay:       defaultNightlyDecay,
 		PruneFloor:         defaultPruneFloor,
+		EpisodeGapSec:      defaultEpisodeGapSec,
 		// Senses and channels.
 		Channels: ChannelsConfig{
 			Vitals:    true,
@@ -297,6 +303,16 @@ func (c Config) CalmBeforeSleep() time.Duration {
 }
 func (c Config) SleepInterval() time.Duration {
 	return time.Duration(c.SleepIntervalSec * float64(time.Second))
+}
+
+// EpisodeGap is the sub-conscious de-duplication window as a duration. A
+// non-positive setting falls back to the default rather than collapsing the
+// window to zero, so an opted-in channel is never left without de-duplication.
+func (c Config) EpisodeGap() time.Duration {
+	if c.EpisodeGapSec <= 0 {
+		return defaultEpisodeGapSec * time.Second
+	}
+	return time.Duration(c.EpisodeGapSec * float64(time.Second))
 }
 func (c Config) AutoCueCooldown() time.Duration {
 	if c.AutoCueCooldownSec <= 0 {
