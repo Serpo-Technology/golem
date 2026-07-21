@@ -140,11 +140,133 @@ func (d *Daemon) grownConcepts() ([]*memory.Fragment, error) {
 	return out, nil
 }
 
+// abstractionIndex is the naming graph the abstraction pass walks, read once from the
+// store and held in memory for the pass. wordsByForm mirrors WordNodesByForms (keyed by
+// lower-cased content), namesByWord mirrors the outgoing "names" edges of a word node,
+// conceptByTemplate mirrors the concept-by-template lookup, and grounded is the set of
+// concepts carrying a grounding or feature edge (the complement of perceptless). The pass
+// mutates the graph as it runs, so its own naming and mint writes are folded back in
+// through the note methods, keeping the index a faithful mirror the later words read.
+type abstractionIndex struct {
+	wordsByForm       map[string][]*memory.Fragment
+	namesByWord       map[uint64]map[uint64]float64
+	conceptByTemplate map[string]*memory.Fragment
+	grounded          map[uint64]bool
+}
+
+// asciiLower folds only A-Z to a-z and leaves every other byte untouched, mirroring the
+// pure-Go SQLite driver's built-in lower(). The abstraction index keys each word node with
+// it, matching how WordNodesByForms folds the stored content (`lower(content)` in SQL); the
+// lookup side folds the query form with Go's Unicode ToLower, matching how that method folds
+// its argument, so the two-sided fold reproduces the store's exactly. A UTF-8 continuation
+// byte never lands in the A-Z range, so folding by byte cannot corrupt a rune.
+func asciiLower(s string) string {
+	var b []byte
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= 'A' && c <= 'Z' {
+			if b == nil {
+				b = []byte(s)
+			}
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	if b == nil {
+		return s
+	}
+	return string(b)
+}
+
+func (d *Daemon) buildAbstractionIndex() (*abstractionIndex, error) {
+	words, err := d.store.NodesByKind(memory.KindWord)
+	if err != nil {
+		return nil, err
+	}
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return nil, err
+	}
+	idx := &abstractionIndex{
+		wordsByForm:       make(map[string][]*memory.Fragment),
+		namesByWord:       make(map[uint64]map[uint64]float64),
+		conceptByTemplate: make(map[string]*memory.Fragment, len(concepts)),
+		grounded:          make(map[uint64]bool),
+	}
+	wordIDs := make([]uint64, 0, len(words))
+	for _, w := range words {
+		key := asciiLower(w.Content)
+		idx.wordsByForm[key] = append(idx.wordsByForm[key], w)
+		wordIDs = append(wordIDs, w.ID)
+	}
+	conceptIDs := make([]uint64, 0, len(concepts))
+	for _, c := range concepts {
+		// ConceptByTemplate keeps the first row a template matches; the first-written
+		// concept has the lower id, so seeding in store order (ascending id) leaves the
+		// same winner when a template is somehow shared.
+		if _, seen := idx.conceptByTemplate[c.Template]; !seen {
+			idx.conceptByTemplate[c.Template] = c
+		}
+		conceptIDs = append(conceptIDs, c.ID)
+	}
+	names, err := d.store.LinksFromRel(wordIDs, memory.RelNames)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range names {
+		idx.noteName(e.From, e.To, e.Weight)
+	}
+	for _, rel := range []string{memory.RelGrounds, memory.RelFeature} {
+		edges, err := d.store.LinksFromRel(conceptIDs, rel)
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range edges {
+			idx.grounded[e.From] = true
+		}
+	}
+	return idx, nil
+}
+
+// noteName folds a "names" edge write into the index, so a word processed later reads the
+// same naming graph the store now holds. wordNamesConcept only asks whether the edge
+// exists, but the real weight is kept so a weight-reading reader would see the store's.
+func (idx *abstractionIndex) noteName(from, to uint64, weight float64) {
+	m := idx.namesByWord[from]
+	if m == nil {
+		m = make(map[uint64]float64)
+		idx.namesByWord[from] = m
+	}
+	m[to] = weight
+}
+
+// noteConcept folds a freshly minted abstraction into the template lookup and marks it
+// grounded, since it is minted with its constellation, so a later word resolves it as the
+// store would rather than minting a duplicate.
+func (idx *abstractionIndex) noteConcept(c *memory.Fragment) {
+	if _, seen := idx.conceptByTemplate[c.Template]; !seen {
+		idx.conceptByTemplate[c.Template] = c
+	}
+	idx.grounded[c.ID] = true
+}
+
 func (d *Daemon) growAbstractions() (born int) {
 	pairs, err := d.store.NamingPairs()
 	if err != nil {
 		fmt.Fprintf(d.out, "abstraction error: %v\n", err)
 		return 0
+	}
+	// The abstraction pass resolves every candidate word against the naming graph
+	// dozens of times over; prefetch that graph once so those resolutions read memory
+	// instead of the single-writer store per word. The index is consulted only through
+	// the resolution helpers, which fall back to the store when it is absent, so the
+	// answers are identical whether or not the pass ran with it.
+	if !d.absIdxOff {
+		if idx, err := d.buildAbstractionIndex(); err != nil {
+			fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+			return 0
+		} else {
+			d.absIdx = idx
+			defer func() { d.absIdx = nil }()
+		}
 	}
 	byWord := map[uint64][]memory.NamingPair{}
 	wordIDs := make([]uint64, 0, len(pairs))
@@ -303,10 +425,15 @@ func (d *Daemon) growAbstractions() (born int) {
 		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })
 
 		tpl := "abs:" + w.Lang + ":" + w.Content
-		c, err := d.store.ConceptByTemplate(tpl)
-		if err != nil {
-			fmt.Fprintf(d.out, "abstraction error: %v\n", err)
-			return born
+		var c *memory.Fragment
+		if idx := d.absIdx; idx != nil {
+			c = idx.conceptByTemplate[tpl]
+		} else {
+			var err error
+			if c, err = d.store.ConceptByTemplate(tpl); err != nil {
+				fmt.Fprintf(d.out, "abstraction error: %v\n", err)
+				return born
+			}
 		}
 		// The full conditions gate a mint; an existing abstraction keeps
 		// refreshing while its core stands, however the drift around it
@@ -335,6 +462,8 @@ func (d *Daemon) growAbstractions() (born int) {
 		if ref := d.ostensiveReferent(w.ID, named, ostByWord[w.ID], ostTotal[w.ID]); ref != 0 {
 			if err := d.store.SetLinkRel(w.ID, ref, memory.RelNames, absNameWeight); err != nil {
 				fmt.Fprintf(d.out, "ostensive name error: %v\n", err)
+			} else if d.absIdx != nil {
+				d.absIdx.noteName(w.ID, ref, absNameWeight)
 			}
 			continue
 		}
@@ -392,6 +521,8 @@ func (d *Daemon) growAbstractions() (born int) {
 			if existing[target] > 0 || !d.isPerceptless(target) {
 				if err := d.store.SetLinkRel(w.ID, target, memory.RelNames, absNameWeight); err != nil {
 					fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
+				} else if d.absIdx != nil {
+					d.absIdx.noteName(w.ID, target, absNameWeight)
 				}
 			}
 			continue
@@ -421,6 +552,9 @@ func (d *Daemon) growAbstractions() (born int) {
 				fmt.Fprintf(d.out, "abstraction mint error: %v\n", err)
 				continue
 			}
+			if d.absIdx != nil {
+				d.absIdx.noteConcept(c)
+			}
 			born++
 			d.event(events.Event{Ev: "concept", ID: c.ID, Tpl: wire.Clip(tpl, 120), Outcome: "abstract"})
 		case len(core) < absRefreshFloor:
@@ -444,6 +578,8 @@ func (d *Daemon) growAbstractions() (born int) {
 		}
 		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, absNameWeight); err != nil {
 			fmt.Fprintf(d.out, "abstraction naming error: %v\n", err)
+		} else if d.absIdx != nil {
+			d.absIdx.noteName(w.ID, c.ID, absNameWeight)
 		}
 		// The percept the abstraction leans on most is its bridge across tongues:
 		// the other words that name that percept name the generalization too, so a
@@ -590,6 +726,17 @@ func (d *Daemon) namesOwnPercept(word *memory.Fragment, target uint64) bool {
 // wordNamesConcept reports whether a word form names a concept directly, the test
 // for whether a percept's caption head is its established name.
 func (d *Daemon) wordNamesConcept(form string, conceptID uint64) bool {
+	if idx := d.absIdx; idx != nil {
+		// WordNodesByForms matches SQLite lower(content) against a Go-lowered form, so the
+		// index mirrors that asymmetry: the key was folded ASCII-only like the column, and
+		// the lookup form is folded with Go's Unicode ToLower like the query argument.
+		for _, w := range idx.wordsByForm[strings.ToLower(form)] {
+			if _, ok := idx.namesByWord[w.ID][conceptID]; ok {
+				return true
+			}
+		}
+		return false
+	}
 	words, err := d.store.WordNodesByForms([]string{form})
 	if err != nil || len(words) == 0 {
 		return false
@@ -642,6 +789,8 @@ func (d *Daemon) inheritGroundingNames(abstraction *memory.Fragment, percept, an
 		}
 		if err := d.store.SetLinkRel(e.From, abstraction.ID, memory.RelNames, weight); err != nil {
 			fmt.Fprintf(d.out, "abstraction cross-name error: %v\n", err)
+		} else if d.absIdx != nil {
+			d.absIdx.noteName(e.From, abstraction.ID, weight)
 		}
 	}
 }
@@ -822,6 +971,14 @@ func (d *Daemon) growConcepts() (born, named int) {
 func (d *Daemon) perceptlessSet(ids []uint64) map[uint64]bool {
 	out := map[uint64]bool{}
 	if len(ids) == 0 {
+		return out
+	}
+	if idx := d.absIdx; idx != nil {
+		for _, id := range ids {
+			if !idx.grounded[id] {
+				out[id] = true
+			}
+		}
 		return out
 	}
 	grounded := map[uint64]bool{}

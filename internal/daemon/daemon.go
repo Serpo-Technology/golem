@@ -163,6 +163,14 @@ type Daemon struct {
 	governors    map[string]*tokenBucket
 	subGovernors map[string]*tokenBucket
 	pendingStorm map[string]int
+
+	// absIdx holds the naming graph prefetched once for a consolidation's abstraction
+	// pass, so the per-word resolution reads it from memory instead of a round-trip to
+	// the single-writer store for every word. It is set only while that pass runs.
+	absIdx *abstractionIndex
+	// absIdxOff runs the abstraction pass on the store directly, without the prefetched
+	// index, so a test can assert the two paths reach byte-identical results.
+	absIdxOff bool
 	// episodes tracks, per sub-conscious channel, when each template was last seen,
 	// so a percept repeated within one episode is de-duplicated instead of crediting
 	// genesis mass by sheer volume. Touched only for Subconscious channels.

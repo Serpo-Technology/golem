@@ -1037,32 +1037,39 @@ func (s *Store) linksFromWhere(ids []uint64, rel string) ([]LinkEdge, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	marks := make([]string, len(ids))
-	for i, id := range ids {
-		args[i] = id
-		marks[i] = "?"
-	}
-	q := `SELECT from_id, to_id, rel, weight FROM links
-		WHERE from_id IN (` + strings.Join(marks, ",") + `)`
-	if rel != "" {
-		q += ` AND rel = ?`
-		args = append(args, rel)
-	}
-	rows, err := s.db.Query(q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	var out []LinkEdge
-	for rows.Next() {
-		var e LinkEdge
-		if err := rows.Scan(&e.From, &e.To, &e.Rel, &e.Weight); err != nil {
+	for _, batch := range chunkIDs(ids) {
+		args := make([]any, len(batch))
+		marks := make([]string, len(batch))
+		for i, id := range batch {
+			args[i] = id
+			marks[i] = "?"
+		}
+		q := `SELECT from_id, to_id, rel, weight FROM links
+			WHERE from_id IN (` + strings.Join(marks, ",") + `)`
+		if rel != "" {
+			q += ` AND rel = ?`
+			args = append(args, rel)
+		}
+		rows, err := s.db.Query(q, args...)
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, e)
+		for rows.Next() {
+			var e LinkEdge
+			if err := rows.Scan(&e.From, &e.To, &e.Rel, &e.Weight); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out = append(out, e)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // StrengthenLinks is retrieval practice for edges: every traversed link
@@ -1125,14 +1132,46 @@ func (s *Store) FragmentsByIDs(ids []uint64) ([]*Fragment, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(ids))
-	marks := make([]string, len(ids))
-	for i, id := range ids {
-		args[i] = id
-		marks[i] = "?"
+	var out []*Fragment
+	for _, batch := range chunkIDs(ids) {
+		args := make([]any, len(batch))
+		marks := make([]string, len(batch))
+		for i, id := range batch {
+			args[i] = id
+			marks[i] = "?"
+		}
+		frags, err := s.query(`SELECT `+fragmentCols+` FROM fragments
+			WHERE id IN (`+strings.Join(marks, ",")+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, frags...)
 	}
-	return s.query(`SELECT `+fragmentCols+` FROM fragments
-		WHERE id IN (`+strings.Join(marks, ",")+`)`, args...)
+	return out, nil
+}
+
+// sqliteMaxVars bounds how many bound parameters a single statement may carry. SQLite
+// (>= 3.32) caps host parameters at 32766, so a bulk `id IN (...)` over a large brain is
+// split into batches below the ceiling; one query becomes one batch, unchanged, for any
+// id list under the cap (every current caller).
+const sqliteMaxVars = 30000
+
+// chunkIDs splits ids into batches that fit under sqliteMaxVars, leaving room for a
+// trailing bound parameter (a relation clause) alongside the IN list.
+func chunkIDs(ids []uint64) [][]uint64 {
+	const batch = sqliteMaxVars - 1
+	if len(ids) <= batch {
+		return [][]uint64{ids}
+	}
+	var out [][]uint64
+	for start := 0; start < len(ids); start += batch {
+		end := start + batch
+		if end > len(ids) {
+			end = len(ids)
+		}
+		out = append(out, ids[start:end])
+	}
+	return out
 }
 
 // AllLinks returns the whole association graph, for export.

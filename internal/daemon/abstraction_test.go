@@ -1,6 +1,9 @@
 package daemon
 
 import (
+	"fmt"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -8,6 +11,103 @@ import (
 	"golem/internal/memory"
 	"golem/wire"
 )
+
+// The prefetched abstraction index must reach exactly what resolving each word against the
+// store directly would: the same mints, naming and grounding edges, and weights. Two
+// identical brains are grown, one abstraction pass reading the index and one the store, and
+// every naming and grounding edge is compared. Minting and refreshing are both exercised, so
+// a word that reads a naming edge an earlier word wrote in the same pass is covered.
+func TestAbstractionIndexEqualsStorePath(t *testing.T) {
+	dump := func(idxOff bool) []string {
+		d, s := testDaemon(t)
+		d.absIdxOff = idxOff
+		disk, deploy := constellationDay(t, d, s)
+		for i := range 3 {
+			d.mintWords("trouble", "en", 0, []recentMoment{disk[i], deploy[i]}, false)
+		}
+		calm(d)
+		d.growConcepts()
+		d.growAbstractions() // mints the abstraction
+		d.growAbstractions() // refreshes the held constellation
+		return namingAndGroundingEdges(t, s)
+	}
+	idx, store := dump(false), dump(true)
+	if !reflect.DeepEqual(idx, store) {
+		t.Fatalf("the index path diverged from the store path:\n index=%v\n store=%v", idx, store)
+	}
+	if len(idx) == 0 {
+		t.Fatal("the fixture wrote no naming or grounding edges, so it proves nothing")
+	}
+}
+
+// The index folds a word form to look it up; that fold must match the store's lower() exactly,
+// or a word stored with a non-ASCII capital resolves one way through the index and another
+// through the store. This compares the two paths of wordNamesConcept on a Turkish word across
+// several query forms, so it both guards the fold and pins which fold the store actually uses.
+func TestAbstractionIndexFoldMatchesStore(t *testing.T) {
+	d, s := testDaemon(t)
+	concept := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "noon",
+		Template: "noon", Category: "noun", Time: time.Now()}
+	cid, err := s.Encode(concept)
+	if err != nil {
+		t.Fatal(err)
+	}
+	word := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: "Öğle", Lang: "tr", Time: time.Now()}
+	wid, err := s.Encode(word)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(wid, cid, memory.RelNames, 1.0); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := d.buildAbstractionIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, form := range []string{"Öğle", "öğle", "OGLE", "ogle"} {
+		d.absIdx = nil
+		store := d.wordNamesConcept(form, cid)
+		d.absIdx = idx
+		index := d.wordNamesConcept(form, cid)
+		d.absIdx = nil
+		if store != index {
+			t.Fatalf("fold mismatch for %q: store=%v index=%v", form, store, index)
+		}
+	}
+}
+
+// namingAndGroundingEdges returns every "names" and "grounds" edge out of a word or concept,
+// as sorted "from|to|rel|weight" rows, the writes the abstraction pass makes.
+func namingAndGroundingEdges(t *testing.T, s *memory.Store) []string {
+	t.Helper()
+	words, err := s.NodesByKind(memory.KindWord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	concepts, err := s.Concepts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]uint64, 0, len(words)+len(concepts))
+	for _, w := range words {
+		ids = append(ids, w.ID)
+	}
+	for _, c := range concepts {
+		ids = append(ids, c.ID)
+	}
+	var rows []string
+	for _, rel := range []string{memory.RelNames, memory.RelGrounds} {
+		edges, err := s.LinksFromRel(ids, rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range edges {
+			rows = append(rows, fmt.Sprintf("%d|%d|%s|%.6f", e.From, e.To, e.Rel, e.Weight))
+		}
+	}
+	sort.Strings(rows)
+	return rows
+}
 
 // constellationDay builds two concrete concepts from lived shapes and
 // returns one binding anchor per shape per situation.
