@@ -152,6 +152,7 @@ type abstractionIndex struct {
 	namesByWord       map[uint64]map[uint64]float64
 	conceptByTemplate map[string]*memory.Fragment
 	grounded          map[uint64]bool
+	relationByID      map[uint64]*memory.Fragment
 }
 
 // asciiLower folds only A-Z to a-z and leaves every other byte untouched, mirroring the
@@ -190,6 +191,7 @@ func (d *Daemon) buildAbstractionIndex() (*abstractionIndex, error) {
 		namesByWord:       make(map[uint64]map[uint64]float64),
 		conceptByTemplate: make(map[string]*memory.Fragment, len(concepts)),
 		grounded:          make(map[uint64]bool),
+		relationByID:      make(map[uint64]*memory.Fragment),
 	}
 	wordIDs := make([]uint64, 0, len(words))
 	for _, w := range words {
@@ -204,6 +206,9 @@ func (d *Daemon) buildAbstractionIndex() (*abstractionIndex, error) {
 		// same winner when a template is somehow shared.
 		if _, seen := idx.conceptByTemplate[c.Template]; !seen {
 			idx.conceptByTemplate[c.Template] = c
+		}
+		if c.Category == "relation" {
+			idx.relationByID[c.ID] = c
 		}
 		conceptIDs = append(conceptIDs, c.ID)
 	}
@@ -261,8 +266,9 @@ func (d *Daemon) growAbstractions() (born int) {
 	// answers are identical whether or not the pass ran with it.
 	if !d.absIdxOff {
 		if idx, err := d.buildAbstractionIndex(); err != nil {
+			// A prefetch failure is not fatal: the resolution helpers fall back to the store,
+			// reaching the same result the slower way rather than skipping the night's pass.
 			fmt.Fprintf(d.out, "abstraction error: %v\n", err)
-			return 0
 		} else {
 			d.absIdx = idx
 			defer func() { d.absIdx = nil }()
@@ -848,6 +854,19 @@ func (d *Daemon) growConcepts() (born, named int) {
 
 	if _, err := d.store.Reground(groundsWeight); err != nil {
 		fmt.Fprintf(d.out, "reground error: %v\n", err)
+	}
+
+	// The naming recount resolves each word's relation and grounding against the graph as it
+	// stands now, after the mints and the regrounding, so prefetch that graph once and read it
+	// from memory rather than a round-trip per word. The recount's own naming writes are batched
+	// at the very end, after every read, so this snapshot needs no in-pass refresh.
+	if !d.absIdxOff {
+		if idx, err := d.buildAbstractionIndex(); err != nil {
+			fmt.Fprintf(d.out, "concept genesis error: %v\n", err)
+		} else {
+			d.absIdx = idx
+			defer func() { d.absIdx = nil }()
+		}
 	}
 
 	pairs, err := d.store.NamingPairs()

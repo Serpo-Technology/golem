@@ -3261,6 +3261,45 @@ func (d *Daemon) resolveRelation(phrase string) *memory.Fragment {
 		// form, so the whole phrase is tried alongside its tokens.
 		forms = append([]string{strings.Join(tokens, " ")}, tokens...)
 	}
+	if idx := d.absIdx; idx != nil {
+		// Same resolution off the prefetched graph the consolidation passes hold: gather the
+		// distinct word nodes for the forms, sum each naming target's edge weight, and take the
+		// heaviest relation-category target, breaking a tie by the lowest id exactly as the
+		// store's FragmentsByIDs rowid order does.
+		seen := make(map[uint64]bool)
+		weight := make(map[uint64]float64)
+		for _, form := range forms {
+			for _, w := range idx.wordsByForm[strings.ToLower(form)] {
+				if seen[w.ID] {
+					continue
+				}
+				seen[w.ID] = true
+				for to, wgt := range idx.namesByWord[w.ID] {
+					weight[to] += wgt
+				}
+			}
+		}
+		if len(weight) == 0 {
+			return nil
+		}
+		targets := make([]uint64, 0, len(weight))
+		for to := range weight {
+			targets = append(targets, to)
+		}
+		sort.Slice(targets, func(i, j int) bool { return targets[i] < targets[j] })
+		var best *memory.Fragment
+		bestW := 0.0
+		for _, to := range targets {
+			f := idx.relationByID[to]
+			if f == nil {
+				continue
+			}
+			if best == nil || weight[to] > bestW {
+				best, bestW = f, weight[to]
+			}
+		}
+		return best
+	}
 	words, err := d.store.WordNodesByForms(forms)
 	if err != nil || len(words) == 0 {
 		return nil

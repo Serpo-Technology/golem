@@ -76,6 +76,66 @@ func TestAbstractionIndexFoldMatchesStore(t *testing.T) {
 	}
 }
 
+// resolveRelation off the index must reach the same relation the store would: the same
+// weight aggregation across a word's naming edges, the same relation-category filter, and the
+// same lowest-id tie-break. This builds two tied relations and a heavier noun co-namer and
+// checks the two paths agree across single, mixed-case, multi-token, and missing phrases.
+func TestResolveRelationIndexMatchesStore(t *testing.T) {
+	d, s := testDaemon(t)
+	mkConcept := func(content, cat string) uint64 {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+			Template: "rel:" + content, Category: cat, Time: time.Now()}
+		id, err := s.Encode(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	mkWord := func(content string) uint64 {
+		w := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: content, Lang: "en", Time: time.Now()}
+		id, err := s.Encode(w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	link := func(from, to uint64, wgt float64) {
+		if err := s.SetLinkRel(from, to, memory.RelNames, wgt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	relA := mkConcept("chase", "relation")
+	relB := mkConcept("pursue", "relation")
+	noun := mkConcept("dog", "noun")
+	runs := mkWord("runs")
+	sole := mkWord("sole")
+	link(runs, relA, 0.7) // tie in weight with relB, so the lower id (relA) must win
+	link(runs, relB, 0.7)
+	link(runs, noun, 0.9) // heavier, but not a relation, so it never wins
+	link(sole, relB, 0.5) // "runs sole" sums relB to 1.2, overtaking relA
+
+	idx, err := d.buildAbstractionIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fragID := func(f *memory.Fragment) uint64 {
+		if f == nil {
+			return 0
+		}
+		return f.ID
+	}
+	for _, phrase := range []string{"runs", "Runs", "sole", "dog", "missing", "runs sole"} {
+		d.absIdx = nil
+		store := fragID(d.resolveRelation(phrase))
+		d.absIdx = idx
+		index := fragID(d.resolveRelation(phrase))
+		d.absIdx = nil
+		if store != index {
+			t.Fatalf("resolveRelation mismatch for %q: store=%d index=%d", phrase, store, index)
+		}
+	}
+}
+
 // namingAndGroundingEdges returns every "names" and "grounds" edge out of a word or concept,
 // as sorted "from|to|rel|weight" rows, the writes the abstraction pass makes.
 func namingAndGroundingEdges(t *testing.T, s *memory.Store) []string {
