@@ -788,8 +788,15 @@ func printStatus(st *wire.StatusInfo) {
 		fmt.Println("  channels: none observed yet")
 	}
 	for name, ch := range st.Channels {
-		fmt.Printf("  channel %-10s observed %d, conscious %d, suppressed %d, dropped %d\n",
+		line := fmt.Sprintf("  channel %-10s observed %d, conscious %d, suppressed %d, dropped %d",
 			name, ch.Observed, ch.Conscious, ch.Suppressed, ch.Dropped)
+		// A channel that learns below consciousness shows what the gate let through faintly and
+		// what an episode folded away, so the sub-conscious stream is auditable; a channel that
+		// never learns sub-consciously omits the clause and reads exactly as before.
+		if ch.Subliminal > 0 || ch.Deduped > 0 {
+			line += fmt.Sprintf(", subliminal %d, deduped %d", ch.Subliminal, ch.Deduped)
+		}
+		fmt.Println(line)
 	}
 	if st.Sleeps > 0 {
 		fmt.Printf("  nights slept: %d (last %s)\n", st.Sleeps, time.Unix(st.LastSleepUnix, 0).Format("15:04:05"))
