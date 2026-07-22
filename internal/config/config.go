@@ -534,6 +534,21 @@ func (c Config) Subconscious(channel string) bool {
 	if !c.SubliminalEnabled || c.Untrusted(channel) {
 		return false
 	}
+	return c.Ambient(channel)
+}
+
+// Ambient reports whether a channel is declared background: an allow-listed
+// sub-conscious channel is a monitoring stream, not something attention is
+// directed at, so its observations stay context and never become episodic
+// figures. Unlike Subconscious this does not require SubliminalEnabled, because
+// the harm it guards (a fluctuating band that becomes conscious on a debut or a
+// state change entangling into attended concepts' company) comes from conscious
+// ambient episodes, not sub-conscious ones. A missing list makes it always false,
+// so a channels-off brain is unaffected.
+func (c Config) Ambient(channel string) bool {
+	if c.Untrusted(channel) {
+		return false
+	}
 	for _, ch := range c.SubconsciousChannels {
 		if ch == channel {
 			return true

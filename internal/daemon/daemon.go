@@ -1900,6 +1900,15 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	if subliminal && !d.cfg.Subconscious(o.Channel) {
 		return wire.ObserveResult{Bits: bits}
 	}
+	// A declared-ambient channel is a background monitoring stream: even when one of its
+	// observations clears the gate (a band's novel debut, a state change), it is context,
+	// not a figure attention is on. So it withholds salience, never warms the workspace, and
+	// never enters the episodic recent window, so it cannot become the temporal company that
+	// would entangle it into an attended concept's signature. A forced observation is attention
+	// the operator directed, so it is never background (this also keeps a teaching channel that
+	// was mislabeled ambient from silently losing its naming bind). An empty ambient list (every
+	// existing brain) makes this false, leaving the attended path byte-identical.
+	ambient := !forced && d.cfg.Ambient(o.Channel)
 
 	// Cross-episode de-duplication, on a sub-conscious channel only. A percept already
 	// taken in during this episode (no gap longer than the episode window since it was
@@ -1911,7 +1920,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	// flag-off or un-opted channel never allocates the tracker and stays byte-identical.
 	if d.cfg.Subconscious(o.Channel) {
 		sameEpisode := d.episodeTrackerFor(o.Channel).seen(tpl, o.At, d.cfg.EpisodeGap())
-		if subliminal && sameEpisode {
+		if (subliminal || ambient) && sameEpisode {
 			st.Deduped++
 			return wire.ObserveResult{Bits: bits}
 		}
@@ -1919,26 +1928,29 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 
 	// The refractory: past the burst allowance, a CONSCIOUS storm of surprises is
 	// counted instead of encoded, and later collapsed into one summary moment. The
-	// predictor and calibrator have already learned the line.
-	if !forced && conscious && !d.governor(o.Channel).take(o.At) {
+	// predictor and calibrator have already learned the line. A background ambient
+	// stream is not counted here: its surprises never summarize into a conscious storm
+	// moment, which would bind and re-introduce the entanglement the ambient path avoids.
+	if !forced && conscious && !ambient && !d.governor(o.Channel).take(o.At) {
 		st.Suppressed++
 		d.pendingStorm[o.Channel]++
 		return wire.ObserveResult{Bits: bits}
 	}
-	// The sub-conscious stream has its own refractory on its own budget. A faint
-	// trace is cheaply lost, so past the allowance an ambient flood is dropped
-	// rather than encoded: this keeps a never-silent channel from accruing genesis
-	// mass faster than the budget refills, without spending the conscious tokens or
-	// summarizing into a storm moment it never earned.
-	if subliminal && !d.subGovernor(o.Channel).take(o.At) {
+	// The background stream (sub-conscious traces and ambient bands alike) has its own
+	// refractory on its own budget. A faint trace is cheaply lost, so past the allowance an
+	// ambient flood is dropped rather than encoded: this keeps a never-silent channel from
+	// accruing genesis mass faster than the budget refills, without spending the conscious
+	// tokens or summarizing into a storm moment it never earned.
+	if (subliminal || ambient) && !d.subGovernor(o.Channel).take(o.At) {
 		st.Suppressed++
 		return wire.ObserveResult{Bits: bits}
 	}
 
 	// The salience of a surprise is what reaches consciousness: the alerting spike,
 	// the pressure to consolidate it phasically, the mark on time. A sub-conscious
-	// trace withholds all of it; it is learned, not noticed.
-	if !subliminal {
+	// trace withholds all of it; it is learned, not noticed. A background ambient
+	// observation withholds it too, however surprising the band change reads.
+	if !subliminal && !ambient {
 		if o.Channel != thoughtChannel {
 			d.lastSurprise = time.Now()
 		}
@@ -1960,13 +1972,14 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		// experience.
 		frag.Weight = untrustedWeight
 	}
-	if subliminal {
+	if subliminal || ambient {
 		// A below-consciousness trace is faint on both axes: a low weight so it fades
 		// in a few nights unless reinforced, and a low genesis mass so routine
 		// repetition earns a concept only by weight of numbers, not a few showings.
 		// Its whole mass is decayable submass, so it also fades in TIME: unless the
 		// percept recurs across episodes faster than the nightly bleed, its mass never
-		// reaches the genesis threshold.
+		// reaches the genesis threshold. A background ambient band is faint the same way,
+		// so a fluctuating monitor mints a concept only from genuine sustained recurrence.
 		frag.Weight = subliminalWeight
 		frag.Mass = subliminalMass
 		frag.Submass = subliminalMass
@@ -1976,20 +1989,21 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 		fmt.Fprintf(d.out, "memory error: %v\n", err)
 		return wire.ObserveResult{Bits: bits}
 	}
-	if subliminal {
+	if subliminal || ambient {
 		st.Subliminal++
 	} else {
 		st.Conscious++
 	}
 	d.encodesSinceSleep++
 	d.chem.BuildSleepNeed(limbic.SleepNeedPerEncode) // what was taken in must be slept on
-	if !subliminal {
+	if !subliminal && !ambient {
 		d.hot.Put(frag)
 		// A moment whose shape has a concept warms that concept: experience
 		// keeps working memory pointed at what is happening. The warming scales
 		// with the concept's information, so a high-frequency low-information
 		// node cannot pull the inner loop above real knowledge. A sub-conscious
-		// trace never warms the workspace: it is below attention by definition.
+		// trace never warms the workspace: it is below attention by definition,
+		// and a background ambient trace stays out for the same reason.
 		if c, err := d.store.ConceptByTemplate(tpl); err == nil && c != nil {
 			d.ws.excite(c.ID, exciteEncode*infoScale(c.Surprise))
 		}
@@ -2001,8 +2015,10 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	// Episodic adjacency and the naming window are attention-level: only attended
 	// moments link to the recent past, enter it, and can be what a spoken name
 	// points at. A sub-conscious trace stays out, so ambient repetition can neither
-	// crowd conscious moments out of the recent window nor capture an ostension.
-	if bind && !subliminal {
+	// crowd conscious moments out of the recent window nor capture an ostension; a
+	// background ambient observation stays out too, so a monitoring band can never
+	// become the temporal company that leaks into an attended concept's signature.
+	if bind && !subliminal && !ambient {
 		if linked := d.linkMoment(frag); len(linked) > 0 {
 			fmt.Fprintf(d.out, "      ~ #%d linked to %s\n", id, fmtIDs(linked))
 		}
@@ -2011,7 +2027,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 			d.recent = d.recent[len(d.recent)-32:]
 		}
 	}
-	return wire.ObserveResult{Bits: bits, Conscious: !subliminal, FragmentID: id}
+	return wire.ObserveResult{Bits: bits, Conscious: !subliminal && !ambient, FragmentID: id}
 }
 
 // linkMoment binds a new fragment to the recent past: every fragment

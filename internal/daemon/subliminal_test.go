@@ -165,6 +165,46 @@ func alphaWord(i int) string {
 	return s
 }
 
+// A declared-ambient channel is background: even a conscious band change encodes for genesis but
+// withholds salience and never enters the recent window, so it cannot become the temporal company
+// that would entangle an ambient band into an attended concept's signature. A forced observation
+// overrides ambient, since forcing is the operator directing attention.
+func TestAmbientChannelStaysBackground(t *testing.T) {
+	d, _ := testDaemon(t)
+	d.cfg.SubconsciousChannels = []string{"vitals"} // vitals is a background monitoring stream
+	d.cfg.SurpriseThreshold = 0.0
+
+	base := time.Unix(1_000_000, 0)
+	// The attended channel: a conscious percept binds into the recent window and spikes salience.
+	d.process(senses.Observation{Channel: "vision", Content: "a small copper kettle", At: base}, false, true)
+	if len(d.recent) != 1 {
+		t.Fatalf("an attended percept should enter the recent window: %d", len(d.recent))
+	}
+	naAttended := d.chem.Snapshot().Noradrenaline
+	if naAttended == 0 {
+		t.Fatal("an attended percept should spike noradrenaline")
+	}
+
+	// The ambient channel: a conscious band still encodes (so it can still mint from genuine
+	// recurrence) but stays background -- no recent-window entry, no salience.
+	r := d.process(senses.Observation{Channel: "vitals", Content: "cpu load normal", At: base.Add(time.Second)}, false, true)
+	if r.FragmentID == 0 {
+		t.Fatal("an ambient percept should still encode for genesis")
+	}
+	if len(d.recent) != 1 {
+		t.Fatalf("an ambient percept must not enter the recent window: %d", len(d.recent))
+	}
+	if d.chem.Snapshot().Noradrenaline > naAttended {
+		t.Fatal("an ambient percept must not spike noradrenaline")
+	}
+
+	// Forcing overrides ambient: operator-directed attention binds even on an ambient channel.
+	d.process(senses.Observation{Channel: "vitals", Content: "cpu load spiking", At: base.Add(2 * time.Second)}, true, true)
+	if len(d.recent) != 2 {
+		t.Fatalf("a forced ambient percept should bind, forcing overrides ambient: %d", len(d.recent))
+	}
+}
+
 // A subliminal observation withholds salience: it never spikes noradrenaline, so a routine percept
 // does not alarm the chemistry the way a conscious surprise does.
 func TestSubliminalWithholdsSalience(t *testing.T) {
