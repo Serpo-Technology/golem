@@ -34,8 +34,9 @@ obs() {
 # The taught percept is shown with attention directed at it, so it encodes at full
 # salience however routine repetition would otherwise habituate it below consciousness.
 # Companions stay ambient (plain obs), so the graded gate absorbs them without minting.
-# Under the quiet-room config this is identical to a plain observe (nothing habituates);
-# under the always-online config it is what lets a repeated demonstration still be learned.
+# A forced observation reads the same with the ambient sensors off or on, so one lesson
+# teaches identically either way; with sensors on it is what keeps a repeated
+# demonstration learnable once habituation would sink it below consciousness.
 fobs() {
   local i
   for i in 1 2 3; do

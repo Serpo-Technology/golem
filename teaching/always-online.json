@@ -1,7 +1,7 @@
 {
   "surprise_threshold": 0.3,
   "z_gate": 2.5,
-  "calibration_warmup": 5000,
+  "calibration_warmup": 30,
   "predictor_window": 256,
   "predictor_windows": {
     "syslog": 8192
@@ -23,7 +23,7 @@
 
   "channels": {
     "synthetic": false,
-    "vitals": false,
+    "vitals": true,
     "syslog": false,
     "watch_dirs": [],
     "tail_files": [],
@@ -34,6 +34,9 @@
   },
   "web_poll_sec": 900,
   "untrusted_channels": ["web"],
+
+  "subliminal_enabled": true,
+  "subconscious_channels": ["vitals"],
 
   "graduation_approvals": 3,
   "conflict_margin": 0.15,

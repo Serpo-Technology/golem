@@ -20,7 +20,8 @@ log() { print -r -- "$(date +%H:%M:%S) $*" }
 obs()   { local i; for i in 1 2 3; do $GOLEM observe vision "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 # The taught percept is shown with attention directed at it (full salience) so a repeated
 # showing is still learned once habituation would otherwise sink it below consciousness;
-# companions stay ambient. A no-op under the quiet room, the fix under always-online.
+# companions stay ambient. The force reads the same whether the sensors are off or on, so
+# one lesson teaches both ways.
 fobs()  { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 sayw()  { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 saytr() { local i; for i in 1 2 3; do $GOLEM tell --lang tr "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }

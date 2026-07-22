@@ -55,7 +55,7 @@ Publish the brain's TCP port to host loopback only, then point the adapters at i
 
 ```
 # seed the runtime folder once: a config and, if you have one, a brain
-cp teaching/clean-room-code.json runtime/config.json
+cp teaching/always-online.json runtime/config.json
 # cp <a snapshot>.db runtime/memory.db
 
 docker run -d --name golem-brain -p 127.0.0.1:7777:7777 \
