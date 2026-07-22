@@ -1918,7 +1918,7 @@ func (d *Daemon) process(o senses.Observation, forced, bind bool) wire.ObserveRe
 	// repeat inside it is dropped, so a concept is earned by recurring across SEPARATE
 	// episodes, not by dwelling in one. The whole block is gated on Subconscious, so a
 	// flag-off or un-opted channel never allocates the tracker and stays byte-identical.
-	if d.cfg.Subconscious(o.Channel) {
+	if d.cfg.Subconscious(o.Channel) || ambient {
 		sameEpisode := d.episodeTrackerFor(o.Channel).seen(tpl, o.At, d.cfg.EpisodeGap())
 		if (subliminal || ambient) && sameEpisode {
 			st.Deduped++

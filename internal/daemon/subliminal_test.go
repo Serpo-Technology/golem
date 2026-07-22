@@ -205,6 +205,28 @@ func TestAmbientChannelStaysBackground(t *testing.T) {
 	}
 }
 
+// A declared-ambient channel de-duplicates within an episode even with the graded gate off: a
+// conscious band re-firing the same template within the window is a repeat of one exposure, not a
+// fresh episode, so it must not re-credit genesis mass. This pins that the ambient dedup runs on
+// Ambient (which is independent of SubliminalEnabled), not only under Subconscious.
+func TestAmbientDedupsWithoutSubliminalFlag(t *testing.T) {
+	d, _ := testDaemon(t)
+	if d.cfg.SubliminalEnabled {
+		t.Fatal("this test needs SubliminalEnabled off to pin the Ambient-gated dedup")
+	}
+	d.cfg.SubconsciousChannels = []string{"vitals"} // ambient; SubliminalEnabled stays false (default)
+	d.cfg.SurpriseThreshold = 0.0
+
+	base := time.Unix(1_000_000, 0)
+	d.process(senses.Observation{Channel: "vitals", Content: "cpu load normal", At: base}, false, true)
+	before := d.stat("vitals").Deduped
+	// The same template within the episode window is one exposure, so it is de-duplicated.
+	d.process(senses.Observation{Channel: "vitals", Content: "cpu load normal", At: base.Add(5 * time.Second)}, false, true)
+	if got := d.stat("vitals").Deduped; got <= before {
+		t.Fatalf("a same-episode ambient repeat should de-duplicate even with the subliminal flag off: %d -> %d", before, got)
+	}
+}
+
 // A subliminal observation withholds salience: it never spikes noradrenaline, so a routine percept
 // does not alarm the chemistry the way a conscious surprise does.
 func TestSubliminalWithholdsSalience(t *testing.T) {
