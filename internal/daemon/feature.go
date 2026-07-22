@@ -81,11 +81,15 @@ func (d *Daemon) growFeatures() (built int) {
 			df[f.name]++
 		}
 	}
-	// Second pass: scale each candidate by its information, keep the sparse
-	// top, and write the signature. A frequent feature is discounted so it
-	// cannot crowd out a rarer but defining one, and the weight it leaves on
-	// the edge is what resemblance later ranks by.
+	// Second pass: scale each candidate by its information and keep the sparse
+	// top. A frequent feature is discounted so it cannot crowd out a rarer but
+	// defining one, and the weight it leaves on the edge is what resemblance later
+	// ranks by. The whole night's signatures are computed before any write, so the
+	// pass drops every old signature once, resolves the shared feature nodes once,
+	// and lands the new edges in one batch rather than a round-trip per concept.
 	n := len(concepts)
+	allIDs := make([]uint64, 0, len(concepts))
+	var names []string // every kept feature name, first-seen order, for one node resolve
 	for _, c := range concepts {
 		feats := candidates[c.ID]
 		for i := range feats {
@@ -100,22 +104,35 @@ func (d *Daemon) growFeatures() (built int) {
 		if len(feats) > featureTopK {
 			feats = feats[:featureTopK]
 		}
-		if err := d.store.DropRelFrom([]uint64{c.ID}, memory.RelFeature); err != nil {
-			fmt.Fprintf(d.out, "feature error: %v\n", err)
-			return built
-		}
+		candidates[c.ID] = feats
+		allIDs = append(allIDs, c.ID)
 		for _, fs := range feats {
-			node, err := d.store.FeatureNode(fs.name, time.Now())
-			if err != nil {
-				fmt.Fprintf(d.out, "feature mint error: %v\n", err)
+			names = append(names, fs.name)
+		}
+	}
+	if err := d.store.DropRelFrom(allIDs, memory.RelFeature); err != nil {
+		fmt.Fprintf(d.out, "feature error: %v\n", err)
+		return built
+	}
+	nodes, err := d.store.FeatureNodesByName(names, time.Now())
+	if err != nil {
+		fmt.Fprintf(d.out, "feature mint error: %v\n", err)
+		return built
+	}
+	edges := make([]memory.LinkEdge, 0, len(names))
+	for _, c := range concepts {
+		for _, fs := range candidates[c.ID] {
+			node, ok := nodes[fs.name]
+			if !ok {
 				continue
 			}
-			if err := d.store.SetLinkRel(c.ID, node.ID, memory.RelFeature, fs.share); err != nil {
-				fmt.Fprintf(d.out, "feature link error: %v\n", err)
-				continue
-			}
+			edges = append(edges, memory.LinkEdge{From: c.ID, To: node, Rel: memory.RelFeature, Weight: fs.share})
 			built++
 		}
+	}
+	if err := d.store.SetLinkRelBatch(edges); err != nil {
+		fmt.Fprintf(d.out, "feature link error: %v\n", err)
+		return built
 	}
 	if built > 0 {
 		d.event(events.Event{Ev: "feature", Count: built})

@@ -234,6 +234,49 @@ func (s *Store) FeatureNode(feature string, at time.Time) (*Fragment, error) {
 	return f, nil
 }
 
+// FeatureNodesByName resolves feature nodes for many attribute names at once and
+// returns a name->id map. It replaces the nightly feature pass's per-attribute
+// FeatureNode round-trip: the nodes that already exist are read in one chunked
+// query, and only genuinely new attributes are minted, in the order given so a
+// fresh grow assigns the same ids it always did. Names repeat heavily across
+// concepts, so the caller passes them in first-seen order and this dedupes.
+func (s *Store) FeatureNodesByName(names []string, at time.Time) (map[string]uint64, error) {
+	out := make(map[string]uint64, len(names))
+	seen := make(map[string]bool, len(names))
+	uniq := make([]string, 0, len(names))
+	for _, nm := range names {
+		if nm == "" || seen[nm] {
+			continue
+		}
+		seen[nm] = true
+		uniq = append(uniq, nm)
+	}
+	for start := 0; start < len(uniq); start += sqliteMaxVars - 1 {
+		end := start + sqliteMaxVars - 1
+		if end > len(uniq) {
+			end = len(uniq)
+		}
+		frags, err := s.FeaturesByNames(uniq[start:end])
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range frags {
+			out[f.Template] = f.ID
+		}
+	}
+	for _, nm := range uniq {
+		if _, ok := out[nm]; ok {
+			continue
+		}
+		f := &Fragment{Kind: KindFeature, Channel: "feature", Content: nm, Template: nm, Time: at}
+		if _, err := s.Encode(f); err != nil {
+			return nil, err
+		}
+		out[nm] = f.ID
+	}
+	return out, nil
+}
+
 // FeaturesByNames returns the feature nodes matching the given
 // attribute strings, for overlap lookups at recall time.
 func (s *Store) FeaturesByNames(names []string) ([]*Fragment, error) {
@@ -259,16 +302,22 @@ func (s *Store) DropRelFrom(ids []uint64, rel string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	args := make([]any, 0, len(ids)+1)
-	marks := make([]string, len(ids))
-	for i, id := range ids {
-		marks[i] = "?"
-		args = append(args, id)
+	// The whole feature pass drops every concept's old signature in one call, which
+	// can exceed the parameter ceiling on a large brain, so the delete is chunked.
+	for _, batch := range chunkIDs(ids) {
+		args := make([]any, 0, len(batch)+1)
+		marks := make([]string, len(batch))
+		for i, id := range batch {
+			marks[i] = "?"
+			args = append(args, id)
+		}
+		args = append(args, rel)
+		if _, err := s.db.Exec(`DELETE FROM links
+			WHERE from_id IN (`+strings.Join(marks, ",")+`) AND rel = ?`, args...); err != nil {
+			return err
+		}
 	}
-	args = append(args, rel)
-	_, err := s.db.Exec(`DELETE FROM links
-		WHERE from_id IN (`+strings.Join(marks, ",")+`) AND rel = ?`, args...)
-	return err
+	return nil
 }
 
 // LinksToRel returns the edges of one relation arriving at the given
