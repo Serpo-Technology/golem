@@ -19,7 +19,11 @@ GOLEM=${GOLEM:-golem}
 GAP=${GAP:-2}
 log() { print -r -- "$(date +%H:%M:%S) $*" }
 
-obs()   { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+# The taught percept (fobs) is attention-directed at full salience so a repeated showing is
+# still learned; companions and warmup throwaways stay ambient (obs) so habituation absorbs
+# them without minting.
+obs()   { local i; for i in 1 2 3; do $GOLEM observe vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+fobs()  { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 sayw()  { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 saytr() { local i; for i in 1 2 3; do $GOLEM tell --lang tr "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 nap()   { log "(nap: consolidate)"; $GOLEM sleep >/dev/null 2>&1; sleep "${BLOCKGAP:-8}" }
@@ -44,7 +48,7 @@ companion() { local na=${#adj[@]} nb=${#nn[@]}; obs "a $adj[$(( (ci % na) + 1 ))
 bi() {
   local cap=$1 en=$2 tr=$3 i
   log "block: $en / $tr -> $cap"
-  for i in 1 2 3 4 5 6; do obs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
+  for i in 1 2 3 4 5 6; do fobs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
   nap
 }
 
@@ -71,7 +75,7 @@ bi "a purple grape"   grape  üzüm
 # the category gathers a spread core and abstracts in each tongue, while the basic
 # names above stay concentrated on their percepts.
 log "=== food / yiyecek over the foods ==="
-food_scene() { obs "$1"; sayw food; saytr yiyecek; companion; companion; sleep $GAP }
+food_scene() { fobs "$1"; sayw food; saytr yiyecek; companion; companion; sleep $GAP }
 foodset=(
   "a red apple" "a yellow banana" "an orange carrot"
   "a green pear" "a white egg" "a purple grape"

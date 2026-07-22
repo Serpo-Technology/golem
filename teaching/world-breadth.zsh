@@ -18,7 +18,10 @@ GOLEM=${GOLEM:-golem}
 GAP=${GAP:-2}
 log() { print -r -- "$(date +%H:%M:%S) $*" }
 
-obs()   { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+# The taught percept (fobs) is attention-directed at full salience so a repeated showing is
+# still learned; companions stay ambient (obs) so habituation absorbs them without minting.
+obs()   { local i; for i in 1 2 3; do $GOLEM observe vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+fobs()  { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 sayw()  { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 saytr() { local i; for i in 1 2 3; do $GOLEM tell --lang tr "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 nap()   { log "(nap: consolidate)"; $GOLEM sleep >/dev/null 2>&1; sleep "${BLOCKGAP:-8}" }
@@ -41,7 +44,7 @@ companion() { local na=${#adj[@]} nb=${#nn[@]}; obs "a $adj[$(( (ci % na) + 1 ))
 bi() {
   local cap=$1 en=$2 tr=$3 i
   log "block: $en / $tr -> $cap"
-  for i in 1 2 3 4 5 6; do obs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
+  for i in 1 2 3 4 5 6; do fobs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
   nap
 }
 narrate() { log "narrate: $1"; sayw "$1"; sleep $GAP }
@@ -58,7 +61,7 @@ bi_rel() { log "rel: $1 / $2"; sayw "$1"; saytr "$2"; sleep $GAP }
 # only inside relation clauses (never shown) drifts toward the percepts it was
 # warmed beside. Showing it again, blocked and napped like a first teaching, keeps
 # its own percept the strongest company its name has.
-review() { local cap=$1 en=$2 tr=$3 i; log "review: $en / $tr"; for i in 1 2 3 4; do obs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done; nap }
+review() { local cap=$1 en=$2 tr=$3 i; log "review: $en / $tr"; for i in 1 2 3 4; do fobs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done; nap }
 
 $GOLEM status >/dev/null 2>&1 || { log "daemon unreachable at $GOLEM"; exit 1 }
 log "########## world breadth begins ##########"
@@ -80,14 +83,14 @@ bi "a thick golden honey" honey  bal
 
 # --- The plant category, named in both tongues over the members --------------
 log "=== plant / bitki over the cast ==="
-plant_scene() { obs "$1"; sayw plant; saytr bitki; companion; companion; sleep $GAP }
+plant_scene() { fobs "$1"; sayw plant; saytr bitki; companion; companion; sleep $GAP }
 plantset=("a tall green tree" "a bright red flower" "a green grass tuft" "a red garden rose" "a green oak leaf")
 for round in 1 2 3; do for c in $plantset; do plant_scene "$c"; done; done
 nap
 
 # --- The food category -------------------------------------------------------
 log "=== food / yiyecek over the cast ==="
-food_scene() { obs "$1"; sayw food; saytr yiyecek; companion; companion; sleep $GAP }
+food_scene() { fobs "$1"; sayw food; saytr yiyecek; companion; companion; sleep $GAP }
 foodset=("a shiny red apple" "a long orange carrot" "a yellow cheese wedge" "a thick golden honey")
 for round in 1 2 3; do for c in $foodset; do food_scene "$c"; done; done
 nap

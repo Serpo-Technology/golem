@@ -22,11 +22,13 @@ GOLEM=${GOLEM:-golem}
 GAP=${GAP:-2}
 log() { print -r -- "$(date +%H:%M:%S) $*" }
 
-# A taught percept is FORCED past the attention gate, so a repeated showing is
-# never predicted away and the percept accrues the showings a concept needs at
-# tight pacing. The deliberate sleep in nap() forms what is ready regardless of
-# how depleted sleep pressure is, so no recovery rest is needed.
-obs()   { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+# The taught percept (fobs) is shown with attention directed at it, so a repeated showing
+# is never predicted away and it accrues the showings a concept needs at tight pacing;
+# companions and warmup throwaways stay ambient (obs) so habituation absorbs them without
+# minting. The deliberate sleep in nap() forms what is ready regardless of how depleted
+# sleep pressure is, so no recovery rest is needed.
+obs()   { local i; for i in 1 2 3; do $GOLEM observe vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
+fobs()  { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 sayw()  { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 saytr() { local i; for i in 1 2 3; do $GOLEM tell --lang tr "$1" >/dev/null 2>&1 && { sleep 0.2; return 0 }; sleep 1; done; return 0 }
 # Consolidate, then idle past the naming-recency window before the next block, so
@@ -57,7 +59,7 @@ companion() { local na=${#adj[@]} nb=${#nn[@]}; obs "a $adj[$(( (ci % na) + 1 ))
 bi() {
   local cap=$1 en=$2 tr=$3 i
   log "block: $en / $tr -> $cap"
-  for i in 1 2 3 4 5 6; do obs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
+  for i in 1 2 3 4 5 6; do fobs "$cap"; sayw "$en"; saytr "$tr"; companion; companion; sleep $GAP; done
   nap
 }
 narrate() { log "narrate: $1"; sayw "$1"; sleep $GAP }
@@ -103,7 +105,7 @@ bi "a round clay plate"  plate  tabak
 # so the category gathers a spread core and abstracts (in each tongue), while the
 # basic names taught above stay concentrated on their percepts.
 log "=== animal / hayvan over the cast ==="
-cat_scene() { obs "$1"; sayw animal; saytr hayvan; companion; companion; sleep $GAP }
+cat_scene() { fobs "$1"; sayw animal; saytr hayvan; companion; companion; sleep $GAP }
 catset=(
   "a small brown dog" "a small gray mouse" "a gray rabbit" "a small black cat"
   "a gray wolf" "a small blue bird" "a silver fish" "a large brown horse"

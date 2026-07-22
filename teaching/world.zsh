@@ -18,6 +18,10 @@ GAP=${GAP:-3}
 log() { print -r -- "$(date +%H:%M:%S) $*" }
 
 obs()   { local i; for i in 1 2 3; do $GOLEM observe vision "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
+# The taught percept is shown with attention directed at it (full salience) so a repeated
+# showing is still learned once habituation would otherwise sink it below consciousness;
+# companions stay ambient. A no-op under the quiet room, the fix under always-online.
+fobs()  { local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 sayw()  { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 saytr() { local i; for i in 1 2 3; do $GOLEM tell --lang tr "$1" >/dev/null 2>&1 && { sleep 1; return 0 }; sleep 2; done; return 0 }
 nap()   { log "(nap: consolidate)"; $GOLEM sleep >/dev/null 2>&1; sleep 2 }
@@ -36,9 +40,9 @@ nn=(fountain archway corridor tunnel harbor plaza kiosk streetlamp balcony stair
 ci=0; CMP=""
 companion() { local na=${#adj[@]} nb=${#nn[@]}; CMP="a $adj[$(( (ci % na) + 1 ))] $nn[$(( (ci % nb) + 1 ))]"; ci=$((ci+1)) }
 
-scene()       { log "scene: $2"; obs "$1"; sayw "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
-scene_named() { log "scene: $2 + $3"; obs "$1"; sayw "$2"; sayw "$3"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
-scene_tr()    { log "scene(tr): $2"; obs "$1"; saytr "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene()       { log "scene: $2"; fobs "$1"; sayw "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene_named() { log "scene: $2 + $3"; fobs "$1"; sayw "$2"; sayw "$3"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene_tr()    { log "scene(tr): $2"; fobs "$1"; saytr "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
 narrate()     { log "narrate: $1"; sayw "$1"; sleep $GAP }
 
 $GOLEM status >/dev/null 2>&1 || { log "daemon unreachable at $GOLEM"; exit 1 }
