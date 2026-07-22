@@ -2358,13 +2358,15 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// Each concept's sparse signature rewrites from its current
 	// grounding, so resemblance stays current and auditable.
 	d.growFeatures()
-	// The embedder learns each concept's place in a continuous space from its
-	// own feature company, so the resemblance walk gains geometric neighbours.
-	d.growEmbeddings()
-	// The frames rich enough to map from are re-bound into holographic records, so a
-	// structural analogy can read the fourth term off the shape of one concept's roles
-	// carried onto another's.
-	d.growHolographic()
+	// The embedder learns each concept's place in a continuous space from its own
+	// feature company, so the resemblance walk gains geometric neighbours; its
+	// factorization is the nap's heaviest compute and runs off the committer while the
+	// holographic records encode alongside it. The frames rich enough to map from are
+	// re-bound into those records, so a structural analogy can read the fourth term off
+	// the shape of one concept's roles carried onto another's. The records read none of
+	// the embedding vectors, so the two proceed at once; the vectors are applied on the
+	// committer afterward, before any later pass reads resemblance.
+	d.growEmbeddingsOverlapped(d.growHolographic)
 	// A source's trust follows its record: a claim GOLEM has since grounded otherwise
 	// counts against it, an unchallenged night restores a little, so a voice earns or
 	// loses standing by how its tellings hold up rather than by decree alone.
