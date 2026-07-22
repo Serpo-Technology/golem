@@ -31,6 +31,19 @@ obs() {
   done
   log "  WARN observe failed 3x: $1"; sleep 1; return 0
 }
+# The taught percept is shown with attention directed at it, so it encodes at full
+# salience however routine repetition would otherwise habituate it below consciousness.
+# Companions stay ambient (plain obs), so the graded gate absorbs them without minting.
+# Under the quiet-room config this is identical to a plain observe (nothing habituates);
+# under the always-online config it is what lets a repeated demonstration still be learned.
+fobs() {
+  local i
+  for i in 1 2 3; do
+    $GOLEM observe --force vision "$1" >/dev/null 2>&1 && { sleep 1; return 0 }
+    log "  retry observe ($i): $1"; sleep 2
+  done
+  log "  WARN observe failed 3x: $1"; sleep 1; return 0
+}
 sayw() {
   local i
   for i in 1 2 3; do
@@ -72,10 +85,10 @@ companion() {
   ci=$((ci+1))
 }
 
-scene()       { log "scene: $2"; obs "$1"; sayw "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
-scene_named() { log "scene: $2 + $3"; obs "$1"; sayw "$2"; sayw "$3"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
-scene_named3(){ log "scene: $2 + $3 + $4"; obs "$1"; sayw "$2"; sayw "$3"; sayw "$4"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
-scene_tr()    { log "scene(tr): $2"; obs "$1"; saytr "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene()       { log "scene: $2"; fobs "$1"; sayw "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene_named() { log "scene: $2 + $3"; fobs "$1"; sayw "$2"; sayw "$3"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene_named3(){ log "scene: $2 + $3 + $4"; fobs "$1"; sayw "$2"; sayw "$3"; sayw "$4"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
+scene_tr()    { log "scene(tr): $2"; fobs "$1"; saytr "$2"; companion; obs "$CMP"; companion; obs "$CMP"; sleep $GAP }
 
 $GOLEM status >/dev/null 2>&1 || { log "daemon unreachable at $GOLEM"; exit 1 }
 log "########## curriculum begins ##########"
