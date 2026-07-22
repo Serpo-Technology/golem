@@ -529,48 +529,61 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 	// the shared moment; as patient, what acted on it, the agent. The relation
 	// that grounds the moment names the crossing. The role edges stay empty
 	// until comprehension writes propositions, so this is dormant until then.
-	roleCross := func(seedRole, partnerRole, key string) error {
-		held, err := d.store.LinksToRel([]uint64{seed}, seedRole)
-		if err != nil {
-			return err
-		}
-		for _, m := range held {
-			via := ""
-			if g, err := d.store.LinksToRel([]uint64{m.From}, memory.RelGrounds); err == nil && len(g) > 0 {
-				if rf, err := d.fragmentsByIDsTiered([]uint64{g[0].From}); err == nil && len(rf) > 0 {
-					via = rf[0].Content
-				}
-			}
-			partners, err := d.store.LinksFromRel([]uint64{m.From}, partnerRole)
-			if err != nil {
-				return err
-			}
-			for _, p := range partners {
-				pf, err := d.fragmentsByIDsTiered([]uint64{p.To})
-				if err != nil || len(pf) == 0 || pf[0].ID == seed {
-					continue
-				}
-				f := pf[0]
-				dests[key] = append(dests[key], walkDest{
-					id:      f.ID,
-					gloss:   f.Content,
-					kind:    f.Kind,
-					via:     via,
-					weight:  m.Weight * p.Weight * f.Weight,
-					stress:  f.Limbic.Noradrenaline,
-					recency: recencyOf(now, f.Time),
-				})
-			}
-		}
-		return nil
-	}
-	if err := roleCross(memory.RelAgent, memory.RelPatient, memory.RelPatient); err != nil {
+	if err := d.roleCrossInto(dests, seed, now, memory.RelAgent, memory.RelPatient, memory.RelPatient); err != nil {
 		return nil, err
 	}
-	if err := roleCross(memory.RelPatient, memory.RelAgent, memory.RelAgent); err != nil {
+	if err := d.roleCrossInto(dests, seed, now, memory.RelPatient, memory.RelAgent, memory.RelAgent); err != nil {
 		return nil, err
 	}
 
+	sortDests(dests)
+	return dests, nil
+}
+
+// roleCrossInto appends the seed's relation crossings for one direction into dests
+// under key: from each moment the seed fills seedRole of, reach the co-argument
+// filling partnerRole, the relation grounding the moment naming the crossing. It is
+// the shared body of the think-round walk and the fact-gathering walk, so both read
+// the identical crossings.
+func (d *Daemon) roleCrossInto(dests map[string][]walkDest, seed uint64, now time.Time, seedRole, partnerRole, key string) error {
+	held, err := d.store.LinksToRel([]uint64{seed}, seedRole)
+	if err != nil {
+		return err
+	}
+	for _, m := range held {
+		via := ""
+		if g, err := d.store.LinksToRel([]uint64{m.From}, memory.RelGrounds); err == nil && len(g) > 0 {
+			if rf, err := d.fragmentsByIDsTiered([]uint64{g[0].From}); err == nil && len(rf) > 0 {
+				via = rf[0].Content
+			}
+		}
+		partners, err := d.store.LinksFromRel([]uint64{m.From}, partnerRole)
+		if err != nil {
+			return err
+		}
+		for _, p := range partners {
+			pf, err := d.fragmentsByIDsTiered([]uint64{p.To})
+			if err != nil || len(pf) == 0 || pf[0].ID == seed {
+				continue
+			}
+			f := pf[0]
+			dests[key] = append(dests[key], walkDest{
+				id:      f.ID,
+				gloss:   f.Content,
+				kind:    f.Kind,
+				via:     via,
+				weight:  m.Weight * p.Weight * f.Weight,
+				stress:  f.Limbic.Noradrenaline,
+				recency: recencyOf(now, f.Time),
+			})
+		}
+	}
+	return nil
+}
+
+// sortDests orders every destination list by descending weight, gloss breaking a
+// tie, so a walk over them is deterministic.
+func sortDests(dests map[string][]walkDest) {
 	for rel := range dests {
 		list := dests[rel]
 		sort.Slice(list, func(i, j int) bool {
@@ -580,6 +593,25 @@ func (d *Daemon) walkableDests(seed uint64) (map[string][]walkDest, error) {
 			return list[i].gloss < list[j].gloss
 		})
 	}
+}
+
+// roleCrossings computes only the seed's agent and patient relation crossings, the
+// propositions it stands in. It is what gatherFacts needs: the full walkableDests
+// also walks grounds, temporal and successor company, names, and feature siblings,
+// none of which a fact walk reads, and that unused walk is the bulk of the nightly
+// holographic encode's cost. The crossings are the identical ones walkableDests
+// produces (shared roleCrossInto, same sort), so a fact set and every record and
+// answer built from it are unchanged.
+func (d *Daemon) roleCrossings(seed uint64) (map[string][]walkDest, error) {
+	now := time.Now()
+	dests := map[string][]walkDest{}
+	if err := d.roleCrossInto(dests, seed, now, memory.RelAgent, memory.RelPatient, memory.RelPatient); err != nil {
+		return nil, err
+	}
+	if err := d.roleCrossInto(dests, seed, now, memory.RelPatient, memory.RelAgent, memory.RelAgent); err != nil {
+		return nil, err
+	}
+	sortDests(dests)
 	return dests, nil
 }
 

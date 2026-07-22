@@ -729,7 +729,10 @@ func (d *Daemon) gatherFacts(focus *memory.Fragment, role, rel string) []focusFa
 			threadCovered[p.rel+"|patient"] = true
 		}
 	}
-	dests, err := d.walkableDests(focus.ID)
+	// A fact walk needs only the relation crossings, not the grounds, temporal,
+	// name, and feature destinations the full walk also gathers, so it takes the
+	// lean path that computes just those. The crossings are identical either way.
+	dests, err := d.roleCrossings(focus.ID)
 	if err != nil {
 		return out
 	}
