@@ -67,7 +67,7 @@ func (d *Daemon) holoRoleAtom(relID uint64, slot string) vsa.HV {
 // denied proposition is already filtered out and never enters the frame; determinism rests on the
 // fact set being graph-determined (a discourse-thread fact is a committed proposition, so it adds no
 // role-filler pair the graph walk does not already carry).
-func (d *Daemon) buildHoloRecord(c *memory.Fragment) (rec vsa.HV, fillers, relations int) {
+func (d *Daemon) buildHoloRecord(c *memory.Fragment, relCache map[string]*memory.Fragment) (rec vsa.HV, fillers, relations int) {
 	type pair struct {
 		relID  uint64
 		slot   string
@@ -77,7 +77,15 @@ func (d *Daemon) buildHoloRecord(c *memory.Fragment) (rec vsa.HV, fillers, relat
 	seenFiller := map[uint64]bool{}
 	seenRel := map[uint64]bool{}
 	for _, f := range d.gatherFacts(c, "", "") {
-		rel := d.resolveRelation(f.rel)
+		// The same handful of relations recur across every concept's facts, so their
+		// word-to-concept resolution is memoized for the pass. The graph is settled
+		// while records encode (only holographic vectors change), so a phrase resolves
+		// to the same concept throughout and the cache changes nothing.
+		rel, ok := relCache[f.rel]
+		if !ok {
+			rel = d.resolveRelation(f.rel)
+			relCache[f.rel] = rel
+		}
 		if rel == nil {
 			continue // a relation whose word names no concept cannot key an atom
 		}
@@ -125,8 +133,9 @@ func (d *Daemon) growHolographic() {
 	defer func() { d.threadProps = savedThread }()
 
 	built, totalFillers := 0, 0
+	relCache := map[string]*memory.Fragment{} // relation phrase -> concept, resolved once for the pass
 	for _, c := range concepts {
-		rec, fillers, _ := d.buildHoloRecord(c)
+		rec, fillers, _ := d.buildHoloRecord(c, relCache)
 		if rec == nil {
 			// Not a mappable frame (or no longer one): keep no stale record for a query to read.
 			d.store.DeleteHolo(c.ID)
