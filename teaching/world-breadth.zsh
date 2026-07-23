@@ -68,8 +68,8 @@ log "########## world breadth begins ##########"
 
 # --- Plants, each bilingual on its percept in its own block ------------------
 log "=== plants (bilingual) ==="
-bi "a tall green tree"   tree   ağaç
-bi "a bright red flower" flower çiçek
+bi "a tall green elm"   elm   ağaç
+bi "a bright red poppy" poppy gelincik
 bi "a green grass tuft"  grass  çimen
 bi "a red garden rose"   rose   gül
 bi "a green oak leaf"    leaf   yaprak
@@ -84,7 +84,7 @@ bi "a thick golden honey" honey  bal
 # --- The plant category, named in both tongues over the members --------------
 log "=== plant / bitki over the cast ==="
 plant_scene() { fobs "$1"; sayw plant; saytr bitki; companion; companion; sleep $GAP }
-plantset=("a tall green tree" "a bright red flower" "a green grass tuft" "a red garden rose" "a green oak leaf")
+plantset=("a tall green elm" "a bright red poppy" "a green grass tuft" "a red garden rose" "a green oak leaf")
 for round in 1 2 3; do for c in $plantset; do plant_scene "$c"; done; done
 nap
 

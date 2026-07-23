@@ -53,10 +53,10 @@ nap
 
 # --- Furniture ---------------------------------------------------------------
 teach "a wooden brown chair"   chair  furniture sandalye
-teach "a wide wooden table"    table  furniture masa
+teach "a low round coffeetable"    coffeetable  furniture sehpa
 teach "a soft brown couch"     couch  furniture kanepe
 teach "a tall wooden shelf"    shelf  furniture raf
-teach "a wide soft bed"        bed    furniture yatak
+teach "a wide soft mattress"        mattress    furniture şilte
 teach "a wooden brown desk"    desk   furniture sıra
 teach "a tall wooden cabinet"  cabinet furniture dolap
 nap
@@ -86,7 +86,7 @@ nap
 teach "a round clay pot"       pot    container tencere
 teach "a glass water bottle"   bottle container şişe
 teach "a woven straw basket"   basket container sepet
-teach "a brown leather bag"    bag    container çanta
+teach "a brown leather knapsack"    knapsack    container ""
 nap
 teach "a brown wooden drum"    drum   instrument davul
 teach "a silver metal flute"   flute  instrument flüt
@@ -95,8 +95,8 @@ teach "a golden brass trumpet" trumpet instrument trompet
 teach "a black grand piano"    piano  instrument piyano
 nap
 teach "a tall brick house"     house  building ev
-teach "a tall stone tower"     tower  building kule
-teach "a long stone bridge"    bridge building köprü
+teach "a tall stone obelisk"     obelisk  building ""
+teach "a long stone causeway"    causeway building ""
 teach "a large stone castle"   castle building kale
 teach "a tall glass skyscraper" skyscraper building gökdelen
 nap

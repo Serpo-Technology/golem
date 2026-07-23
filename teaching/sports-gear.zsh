@@ -66,19 +66,19 @@ teach "a long ashen oar"           oar     stick kürek
 nap
 
 # --- Gear --------------------------------------------------------------------
-teach "a scratched racing helmet"  helmet    gear kask
-teach "a padded batting glove"     glove     gear eldiven
-teach "a fogged swimming goggles"  goggles   gear ""
-teach "a bladed silver skate"      skate     gear paten
-teach "a waxed downhill ski"       ski       gear kayak
-teach "a decaled fiberglass snowboard" snowboard gear ""
+teach "a scratched racing helmet"  helmet    protective kask
+teach "a padded batting glove"     glove     protective eldiven
+teach "a fogged swimming goggles"  goggles   protective ""
+teach "a bladed silver skate"      skate     protective paten
+teach "a waxed downhill ski"       ski       protective kayak
+teach "a decaled fiberglass snowboard" snowboard protective ""
 nap
-teach "a waxed foam surfboard"     surfboard gear ""
-teach "a molded plastic shinguard" shinguard gear ""
-teach "a striped mesh jersey"      jersey    gear forma
-teach "a studded turf cleat"       cleat     gear krampon
-teach "a webbed climbing harness"  harness   gear ""
-teach "a tinted curved visor"      visor     gear ""
+teach "a waxed foam surfboard"     surfboard protective ""
+teach "a molded plastic shinguard" shinguard protective ""
+teach "a striped mesh jersey"      jersey    protective forma
+teach "a studded turf cleat"       cleat     protective krampon
+teach "a webbed climbing harness"  harness   protective ""
+teach "a tinted curved visor"      visor     protective ""
 nap
 
 # --- Use: players play, athletes wear ----------------------------------------

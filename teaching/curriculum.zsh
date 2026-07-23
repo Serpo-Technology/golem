@@ -152,23 +152,23 @@ for x in K L C N L N K C K C N L N C L K; do m $x; done; nap
 # --- Plants: vocabulary then the category ----------------------------------
 log "=== plant vocab: flower tree grass branch stone ==="
 pv() { case $1 in
-  F) scene "a tall yellow flower" "flower";;
-  T) scene "a tall green tree"    "tree";;
+  F) scene "a tall yellow sunflower" "sunflower";;
+  T) scene "a tall green elm"    "elm";;
   G) scene "a tall white grass"   "grass";;
   B) scene "a tall brown branch"  "branch";;
-  S) scene "a tall gray stone"    "stone";; esac }
+  S) scene "a tall gray boulder"    "boulder";; esac }
 for x in F T B S G  T G S F B  G B F T S  B S G F T  S F T B G  T G B S F; do pv $x; done
 log "=== Turkish: çiçek ağaç converge on flower tree ==="
 for x in çiçek ağaç çiçek ağaç çiçek ağaç; do
   case $x in
-  çiçek) scene_tr "a tall yellow flower" "çiçek";;
-  ağaç)  scene_tr "a tall green tree"    "ağaç";; esac
+  çiçek) scene_tr "a tall yellow sunflower" "çiçek";;
+  ağaç)  scene_tr "a tall green elm"    "ağaç";; esac
 done; nap
 
 log "=== plant over flower tree grass branch ==="
 p() { case $1 in
-  F) scene_named "a tall yellow flower" "flower" "plant";;
-  T) scene_named "a tall green tree"    "tree"   "plant";;
+  F) scene_named "a tall yellow sunflower" "sunflower" "plant";;
+  T) scene_named "a tall green elm"    "elm"   "plant";;
   G) scene_named "a tall white grass"   "grass"  "plant";;
   B) scene_named "a tall brown branch"  "branch" "plant";; esac }
 for x in F T G B  G B F T  B F T G  T G B F; do p $x; done; nap
@@ -187,7 +187,7 @@ log "=== thing over dog key tree, naming all three levels at once ==="
 th() { case $1 in
   D) scene_named3 "a small brown dog" "dog"  "animal" "thing";;
   K) scene_named3 "a brass key"       "key"  "metal"  "thing";;
-  T) scene_named3 "a tall green tree" "tree" "plant"  "thing";; esac }
+  T) scene_named3 "a tall green elm" "elm" "plant"  "thing";; esac }
 for x in D K T  K T D  T D K  D K T  K T D; do th $x; done; nap
 
 # --- Relations: narrate chasings so the chase relation grounds -------------

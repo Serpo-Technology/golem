@@ -73,7 +73,7 @@ teach "a shiny brass cymbal"    cymbal      percussion zil
 teach "a jingling round tambourine" tambourine percussion tef
 teach "a colorful wooden xylophone" xylophone percussion ksilofon
 teach "a huge hanging gong"     gong        percussion gong
-teach "a small steel triangle"  triangle    percussion ""
+teach "a small steel chime"  chime    percussion ""
 teach "a speckled shaking maraca" maraca    percussion marakas
 nap
 

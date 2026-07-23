@@ -68,7 +68,7 @@ teach "a large brown eagle"     eagle   bird kartal
 teach "a white gliding swan"    swan    bird kuğu
 teach "a green talking parrot"  parrot  bird papağan
 teach "a black cawing crow"     crow    bird karga
-teach "a red robin bird"        robin   bird nakış
+teach "a red robin"        robin   bird nakış
 teach "a small gray owl"        owl     bird baykuş
 teach "a white farm duck"       duck    bird ördek
 teach "a pink standing flamingo" flamingo bird flamingo

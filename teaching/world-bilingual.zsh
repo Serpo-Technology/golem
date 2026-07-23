@@ -82,8 +82,8 @@ bi "a small black cat"   cat    kedi
 bi "a small gray mouse"  mouse  fare
 bi "a gray rabbit"       rabbit tavşan
 bi "a gray wolf"         wolf   kurt
-bi "a small blue bird"   bird   kuş
-bi "a silver fish"       fish   balık
+bi "a small blue jay"   jay   alakarga
+bi "a silver sardine"       sardine   sardalya
 bi "a large brown horse" horse  at
 bi "a tiny gray snail"   snail  salyangoz
 bi "a green frog"        frog   kurbağa
@@ -94,8 +94,8 @@ bi "a spotted deer"      deer   geyik
 
 # --- Objects, bilingual ------------------------------------------------------
 log "=== objects (bilingual) ==="
-bi "a round red ball"    ball   top
-bi "a square wooden box" box    kutu
+bi "a round red bead"    bead   boncuk
+bi "a square wooden case" case    sandık
 bi "a white cup"         cup    fincan
 bi "a thick blue book"   book   kitap
 bi "a round clay plate"  plate  tabak
@@ -108,7 +108,7 @@ log "=== animal / hayvan over the cast ==="
 cat_scene() { fobs "$1"; sayw animal; saytr hayvan; companion; companion; sleep $GAP }
 catset=(
   "a small brown dog" "a small gray mouse" "a gray rabbit" "a small black cat"
-  "a gray wolf" "a small blue bird" "a silver fish" "a large brown horse"
+  "a gray wolf" "a small blue jay" "a silver sardine" "a large brown horse"
   "a tiny gray snail" "a green frog" "a large black bear" "a golden lion"
   "a brown owl" "a spotted deer"
 )
