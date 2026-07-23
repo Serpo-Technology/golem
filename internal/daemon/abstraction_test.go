@@ -822,6 +822,76 @@ func TestAbstractionBindsCrossTongueNameToPercept(t *testing.T) {
 	}
 }
 
+// A healthy category that comes to own exactly one of its members must keep abstracting,
+// not collapse its name onto that member. When a cast is re-grounded and one member is left
+// un-shown, its lone naming bond stays above the floor while the refreshed members' bonds
+// decay below it, so the class owns exactly one member. The company-based reading must still
+// read the word as the class it spans; the target logic re-homing "animal" onto the one bird
+// it still owns is the is-a break this guards against.
+func TestHealthyCategoryOwningOneMemberKeepsAbstracting(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	dog := feedShape(t, s, "vision", "a small brown dog", 4, base)
+	cat := feedShape(t, s, "vision", "a small black cat", 4, base.Add(time.Minute))
+	bird := feedShape(t, s, "vision", "a small blue bird", 4, base.Add(2*time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	mintOver := func(word, lang string, momentsets ...[]recentMoment) {
+		for i := range 3 {
+			anchors := make([]recentMoment, 0, len(momentsets))
+			for _, ms := range momentsets {
+				anchors = append(anchors, ms[i])
+			}
+			d.mintWords(word, lang, 0, anchors, false)
+		}
+		calm(d)
+		d.growConcepts()
+		d.growAbstractions()
+	}
+	// The English heads name their percepts, and "animal" said over all three abstracts.
+	mintOver("dog", "en", dog)
+	mintOver("cat", "en", cat)
+	mintOver("bird", "en", bird)
+	mintOver("animal", "en", dog, cat, bird)
+	absC, _ := s.ConceptByTemplate("abs:en:animal")
+	if absC == nil {
+		t.Fatal("animal over three named percepts should abstract into a category")
+	}
+	animalID := wordID(t, s, "animal")
+	dogC, catC, birdC := d.resolveConcept("dog"), d.resolveConcept("cat"), d.resolveConcept("bird")
+	if dogC == nil || catC == nil || birdC == nil {
+		t.Fatalf("dog, cat, bird should resolve: dog=%v cat=%v bird=%v", dogC, catC, birdC)
+	}
+	// Re-ground the cast: the bird is left un-shown, so its naming bond stays above the
+	// floor while the refreshed members' bonds decay below it. The class now owns one member.
+	if err := s.SetLinkRel(animalID, birdC.ID, memory.RelNames, namesWriteFloor+0.05); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []uint64{dogC.ID, catC.ID} {
+		if err := s.SetLinkRel(animalID, id, memory.RelNames, namesWriteFloor-0.05); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The category, now owning only the bird, must keep naming its class rather than collapse
+	// onto that one member. Re-run the abstraction pass without re-spreading the company.
+	d.growAbstractions()
+	if animalC := d.resolveConcept("animal"); animalC == nil || animalC.ID != absC.ID {
+		t.Fatalf("animal should still name its category, not re-home onto a member: got %v want abs %d", animalC, absC.ID)
+	}
+	edges, err := s.LinksFromRel([]uint64{animalID}, memory.RelNames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range edges {
+		if e.To == birdC.ID && e.Weight >= absNameWeight {
+			t.Fatalf("animal re-homed onto the bird at %.2f: a healthy category must not take its lone owned member as a name", e.Weight)
+		}
+	}
+}
+
 // groundedEpisode returns one surviving episode a concept grounds, the percept a
 // telling could have been pointed at.
 func groundedEpisode(t *testing.T, s *memory.Store, concept uint64) uint64 {

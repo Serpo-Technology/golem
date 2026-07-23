@@ -504,7 +504,14 @@ func (d *Daemon) growAbstractions() (born int) {
 					owned, ownedN = id, ownedN+1
 				}
 			}
-			if ownedN == 1 {
+			// A word that spreads across several named percepts and owns exactly one
+			// borrows that one ONLY when it is name-like. A word that would abstract into
+			// a category is not seeking a single referent: a class spans its members, so
+			// it must not re-home onto the one member it still owns when the others dip
+			// below the naming floor, which is just what a re-grounded cast leaves (the
+			// taught animals refreshed, one member un-shown, its bond alone above the
+			// floor). Such a word falls through and abstracts instead.
+			if ownedN == 1 && !healthy {
 				target = owned
 			}
 		}
