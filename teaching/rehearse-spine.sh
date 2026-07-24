@@ -50,11 +50,15 @@ replay() {
     esac
     [ "$line" = "$prev" ] && continue; prev="$line"
     ${line%% *} "${line#* }"
-    n=$((n+1)); [ $((n % 150)) -eq 0 ] && nap
+    n=$((n+1)); [ $((n % STEP)) -eq 0 ] && nap
   done < "$WORK/atoms"
   nap
 }
 $GOLEM status >/dev/null 2>&1 || { echo "daemon unreachable"; exit 1; }
-echo "rehearsing spine over $(wc -l < "$WORK/atoms") atoms, two rounds"
+# Nap interval scales with corpus size: aim for ~40 naps per round. Napping too
+# often (a fixed small interval over a large corpus) erodes the categories shown
+# early in a round before it ends, so a broad spine needs a wider stride.
+TOTAL=$(wc -l < "$WORK/atoms"); STEP=$((TOTAL / 40)); [ "$STEP" -lt 150 ] && STEP=150
+echo "rehearsing spine over $TOTAL atoms, two rounds, nap every $STEP"
 replay; replay
 echo "spine rehearsal complete"
