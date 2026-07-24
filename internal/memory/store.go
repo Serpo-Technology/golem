@@ -336,11 +336,11 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// weight, keeping the durable code subgraph intact across nights rather than thinning it
 	// toward the link floor where the orphan-link drop would erase the function.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
-		WHERE rel <> ? AND rel <> ?
+		WHERE rel <> ? AND rel <> ? AND rel <> ?
 		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))
 		AND to_id   NOT IN (SELECT id FROM fragments WHERE kind = ?)
 		AND from_id NOT IN (SELECT id FROM fragments WHERE kind = ?)`,
-		linkNightlyKeep, RelNames, RelComparativeForm, KindCodeNode, KindCodeNode); err != nil {
+		linkNightlyKeep, RelNames, RelComparativeForm, RelKindOf, KindCodeNode, KindCodeNode); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {
@@ -390,8 +390,9 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
 			AND id NOT IN (SELECT to_id FROM links WHERE rel = ? OR rel = ?)
 			AND id NOT IN (SELECT to_id FROM links WHERE rel = ?
-				AND from_id IN (SELECT id FROM fragments WHERE category = 'participant'))`,
-		KindConcept, RelGrounds, RelAgent, RelPatient, RelToldIsA); err != nil {
+				AND from_id IN (SELECT id FROM fragments WHERE category = 'participant'))
+			AND id NOT IN (SELECT to_id FROM links WHERE rel = ?)`,
+		KindConcept, RelGrounds, RelAgent, RelPatient, RelToldIsA, RelKindOf); err != nil {
 		return int(pruned), err
 	}
 	// A feature no concept carries describes nothing; it follows its

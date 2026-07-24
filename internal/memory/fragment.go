@@ -127,6 +127,17 @@ const (
 	// thing into a category the way a lived grounding does; the grounded machinery never
 	// reads it.
 	RelToldIsA = "toldisa"
+	// RelKindOf links a narrower category to a broader one it falls under, derived from
+	// the percept groundings alone: when every percept a kind grounds is also grounded by
+	// a strictly broader abstraction (every mammal seen was also seen as an animal), the
+	// kind is-a the broader one. It is DEFEASIBLE (an inductive read of finite samples,
+	// not a lived grounding), so it is read ONLY by the hedged is-a branch and answers
+	// "probably", never the firm "yes" a grounding earns; the grounded machinery
+	// (categoriesOf, isA, the firm-derived facts) never reads it, so a wrong or stale kind
+	// edge can only soften an answer, never assert a false membership. It lets a member
+	// reach a superordinate up the kind ladder even after the superordinate's own thin
+	// percept grounding has faded.
+	RelKindOf = "kindof"
 	// RelOstends links a word to the percept it was pointed at when it was uttered
 	// to name it: the freshly attended episode of an ostensive naming, weighted by
 	// how fresh that percept was. It is the salience the uniform naming company

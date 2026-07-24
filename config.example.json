@@ -36,6 +36,7 @@
   "web_poll_sec": 900,
   "untrusted_channels": ["web"],
   "subliminal_enabled": false,
+  "kind_ladder_enabled": false,
   "subconscious_channels": null,
   "architect_pubkey": "",
 

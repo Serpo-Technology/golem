@@ -125,6 +125,13 @@ type Config struct {
 	// than being dropped, so learning continues while attention only governs
 	// salience. Off by default, so the gate stays binary until a channel opts in.
 	SubliminalEnabled bool `json:"subliminal_enabled"`
+	// KindLadderEnabled turns on the kind ladder: consolidation derives a defeasible
+	// subcategory edge (a kind is-a a strictly broader category it is fully contained in),
+	// and an is-a question climbs it to reach a superordinate up the kind chain even after
+	// the superordinate's own thin percept grounding has faded. Read only by the hedged
+	// is-a branch, so it softens a "no" to a "probably" and never asserts a firm falsehood.
+	// Off by default, so a brain that never opts in is byte-identical to before.
+	KindLadderEnabled bool `json:"kind_ladder_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

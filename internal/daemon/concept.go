@@ -827,6 +827,125 @@ func glossFor(proto *memory.Fragment) string {
 	return proto.Template
 }
 
+const (
+	// kindLadderWeight is the fixed weight of a derived kind-ladder edge. It sits well above
+	// the link floor and is spared the nightly decay, so an edge laid on one healthy pass
+	// persists. It is not a confidence -- the edge is read only by the hedged is-a branch --
+	// only a durable presence above the prune floor.
+	kindLadderWeight = 0.5
+	// kindLadderMinCore is the smallest grounded core an abstraction needs before it is read
+	// as a category on the ladder. Two or three noisy percepts coincidentally nest inside all
+	// sorts of unrelated sets on a lived graph, so a real kind must have distilled a proper
+	// core first; this is what keeps the ladder from wiring a thin abstraction to everything
+	// that happens to contain its handful of members.
+	kindLadderMinCore = 4
+	// kindLadderOverlap is the fraction of a kind's members that must also fall under the
+	// broader category. Full containment is too brittle on a lived graph -- one stray
+	// grounding hides a real kind (mammal ends a night grounding one thing animal has not
+	// re-grounded) -- and a low bar admits unrelated categories that share a few members;
+	// four-fifths is the defeasible middle the hedged answer stands on. It also orients the
+	// arrow soundly: a narrow kind overlaps its superordinate heavily, but the broad
+	// superordinate overlaps the narrow kind only thinly, so the test passes one way, not both.
+	kindLadderOverlap = 0.8
+)
+
+// growKindLadder derives the kind ladder from the percept groundings alone: a defeasible
+// RelKindOf edge from a narrower category to a strictly broader one that fully contains
+// its grounded members. It runs right after growAbstractions, when every category's core
+// is freshest, so the containment is read while a superordinate is still richly grounded;
+// the edge is spared the nightly decay, so it outlives that superordinate's later
+// thinning, which is exactly when a member can no longer reach it directly. It reads only
+// the RelGrounds cores the corpus already lays -- no telling, no teaching change -- and
+// writes RelKindOf, which only the hedged is-a branch reads, never the grounded
+// machinery. Off (and a no-op that writes nothing) unless KindLadderEnabled.
+func (d *Daemon) growKindLadder() (laid int) {
+	if !d.cfg.KindLadderEnabled {
+		return 0
+	}
+	concepts, err := d.store.Concepts()
+	if err != nil {
+		return 0
+	}
+	// members[A] is the percept set A grounds. Only a real abstraction with a core of at least
+	// kindLadderMinCore is a candidate on either side, so a degenerate or thin abstraction is
+	// never read as a kind and never wired to whatever coincidentally contains its few members.
+	members := make(map[uint64]map[uint64]bool, len(concepts))
+	ids := make([]uint64, 0, len(concepts))
+	for _, c := range concepts {
+		if _, ok := abstractionLemma(c.Template); !ok {
+			continue
+		}
+		set := map[uint64]bool{}
+		for _, m := range d.categoryMembers(c.ID) {
+			set[m] = true
+		}
+		if len(set) < kindLadderMinCore {
+			continue
+		}
+		members[c.ID] = set
+		ids = append(ids, c.ID)
+	}
+	for _, a := range ids {
+		sa := members[a]
+		// A candidate broader is any abstraction that grounds one of A's members; gathering
+		// from A's members keeps this near-linear rather than a full pass over every pair.
+		cand := map[uint64]bool{}
+		for m := range sa {
+			groundedBy, err := d.store.LinksToRel([]uint64{m}, memory.RelGrounds)
+			if err != nil {
+				continue
+			}
+			for _, e := range groundedBy {
+				if e.From != a && members[e.From] != nil {
+					cand[e.From] = true
+				}
+			}
+		}
+		for b := range cand {
+			sb := members[b]
+			if len(sb) <= len(sa) {
+				continue // B must be STRICTLY broader: it excludes an equal-core synonym pair.
+			}
+			// Most of A's members fall under B: a defeasible containment that tolerates the
+			// few stray groundings a lived graph carries, while a category sharing only a few
+			// members with A (cross-cutting or unrelated) falls below the bar and lays no edge.
+			overlap := 0
+			for m := range sa {
+				if sb[m] {
+					overlap++
+				}
+			}
+			if float64(overlap) < kindLadderOverlap*float64(len(sa)) {
+				continue
+			}
+			// Keep the first orientation: if B was already made a kind of A on an earlier,
+			// richer pass (when A was the broader core), do not now invert it. Extensional
+			// containment is judged on the current grounding, so once the true superordinate
+			// thins below a kind, a naive pass would read the containment backward and lay the
+			// reversed edge; skipping when the reverse already stands keeps the sound
+			// orientation and forbids a two-cycle. The residual case, a superordinate never
+			// once grounded as the broader core (genuinely uneven teaching), can still orient
+			// the arrow by extension alone, but its only effect is a mildly-wrong hedge.
+			if rev, err := d.store.LinksFromRel([]uint64{b}, memory.RelKindOf); err == nil {
+				reversed := false
+				for _, e := range rev {
+					if e.To == a {
+						reversed = true
+						break
+					}
+				}
+				if reversed {
+					continue
+				}
+			}
+			if err := d.store.SetLinkRel(a, b, memory.RelKindOf, kindLadderWeight); err == nil {
+				laid++
+			}
+		}
+	}
+	return laid
+}
+
 // growConcepts is concept genesis, run during sleep: shapes that have
 // recurred into prototypes are distilled into concept nodes, every
 // concept is grounded to the episodes matching its shape, and words bond

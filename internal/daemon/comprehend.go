@@ -1448,8 +1448,15 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	// participant's told identity needs no grown category: "are you a daemon" reads
 	// the defeasible edge the telling laid on the self.
 	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
-	told := !grounded && (d.isCategory(cat) || d.isParticipant(member.ID)) && d.toldIsA(member.ID, cat.ID)
-	yes := grounded || told
+	// A kind ladder reaches a superordinate a member no longer grounds directly: a dog is a
+	// mammal, and mammal is fully contained in animal, so a dog is an animal. The ladder edge
+	// is a defeasible inductive read of the groundings, so the membership it carries is held
+	// hedged, never firm; the guard keeps kindSupersOf off entirely when the ladder is off.
+	derived := !grounded && d.cfg.KindLadderEnabled && d.isCategory(cat) && d.kindSupersOf(member.ID)[cat.ID]
+	told := !grounded && !derived && (d.isCategory(cat) || d.isParticipant(member.ID)) && d.toldIsA(member.ID, cat.ID)
+	// A derived or told membership answers a hedged "probably"; only a grounded one is firm.
+	hedged := told || derived
+	yes := grounded || hedged
 	// An affirmed membership leaves a bare trace: the membership machinery is
 	// its own record, so the probe re-reads it live (the tally, or the telling)
 	// rather than a stored copy. The "isa" word keys the claim, since no
@@ -1461,19 +1468,19 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	// "an I is a daemon", the article and agreement of a thing-noun.
 	if d.isParticipant(member.ID) {
 		word := upperFirst(d.gram.Word(frame.Lang, "yes"))
-		if told {
+		if hedged {
 			word = upperFirst(d.gram.Word(frame.Lang, "probably"))
 		} else if !yes {
 			word = upperFirst(d.gram.Word(frame.Lang, "no"))
 		}
-		return word + ", " + lowerFirst(d.sayParticipantIsA(frame.Lang, member.ID, cat, yes, told)), true
+		return word + ", " + lowerFirst(d.sayParticipantIsA(frame.Lang, member.ID, cat, yes, hedged)), true
 	}
 	memberName := grammar.Indefinite(d.conceptName(member.ID, member.Content, frame.Lang))
 	catName := grammar.Indefinite(d.conceptName(cat.ID, cat.Content, frame.Lang))
 	clause := d.realizeAs(frame.Lang, grammar.Frame{Force: grammar.ForceStatement,
 		Agent: grammar.Term{Phrase: memberName}, Action: grammar.Term{Phrase: "be"},
 		Patient: grammar.Term{Phrase: catName}, Negate: !yes}, d.chem.Snapshot())
-	if told {
+	if hedged {
 		return upperFirst(d.gram.Word(frame.Lang, "probably")) + ", " + lowerFirst(clause), true
 	}
 	word := d.gram.Word(frame.Lang, "yes")
@@ -2470,6 +2477,43 @@ func (d *Daemon) categoriesOf(memberID uint64) []uint64 {
 		}
 	}
 	return out
+}
+
+// kindSupersOf returns the categories a member reaches by climbing at least one derived
+// kind-ladder edge (RelKindOf): from the member's own grounded categories (a dog is a
+// mammal), and from itself if it is a category (a mammal), it follows the ladder to the
+// broader categories those fall under (an animal). It is read ONLY for the hedged is-a
+// answer -- a kind-ladder edge is a defeasible inductive read of the groundings, not a
+// lived membership -- so a category reached only through one is held probably, never firm.
+// It never enters categoriesOf/isA, so the grounded hierarchy stays purely grounded. On a
+// brain with no RelKindOf edges the climb reaches nothing, so the branch is inert.
+func (d *Daemon) kindSupersOf(memberID uint64) map[uint64]bool {
+	seeds := append([]uint64{}, d.categoriesOf(memberID)...)
+	if mf, err := d.fragmentsByIDsTiered([]uint64{memberID}); err == nil && len(mf) == 1 && d.isCategory(mf[0]) {
+		seeds = append(seeds, memberID)
+	}
+	reached := map[uint64]bool{}
+	seen := map[uint64]bool{}
+	stack := append([]uint64{}, seeds...)
+	for _, s := range seeds {
+		seen[s] = true
+	}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		supers, err := d.store.LinksFromRel([]uint64{n}, memory.RelKindOf)
+		if err != nil {
+			continue
+		}
+		for _, e := range supers {
+			reached[e.To] = true // a category reached across at least one kind hop
+			if !seen[e.To] {
+				seen[e.To] = true
+				stack = append(stack, e.To) // climb the ladder transitively
+			}
+		}
+	}
+	return reached
 }
 
 // isA reports whether a concept is a member of a category, directly or up the is-a
