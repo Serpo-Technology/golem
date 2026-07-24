@@ -106,10 +106,10 @@ for x in B L R C S S R B L C C L B S R; do v1 $x; done; nap
 # --- Category: animal over dog mouse rabbit cat ----------------------------
 log "=== animal over dog mouse rabbit cat ==="
 a() { case $1 in
-  D) scene_named "a small brown dog" "dog" "animal";;
-  M) scene_named "a small gray mouse" "mouse" "animal";;
-  R) scene_named "a gray rabbit" "rabbit" "animal";;
-  C) scene_named "a small black cat" "cat" "animal";; esac }
+  D) scene_named3 "a small brown dog" "dog" "mammal" "animal";;
+  M) scene_named3 "a small gray mouse" "mouse" "mammal" "animal";;
+  R) scene_named3 "a gray rabbit" "rabbit" "mammal" "animal";;
+  C) scene_named3 "a small black cat" "cat" "mammal" "animal";; esac }
 for x in D M R C  M C D R  R D C M  C R M D; do a $x; done; nap
 
 # --- Adjective: green by contrast across carriers --------------------------
@@ -129,10 +129,10 @@ for x in K S R  S R K  R K S  K R S; do t $x; done; nap
 
 # --- Metals: vocabulary then the category ----------------------------------
 log "=== review animals, ground key lantern, mint coin nail knife ==="
-scene_named "a small brown dog"  "dog"    "animal"
-scene_named "a small gray mouse" "mouse"  "animal"
-scene_named "a gray rabbit"      "rabbit" "animal"
-scene_named "a small black cat"  "cat"    "animal"
+scene_named3 "a small brown dog" "dog" "mammal" "animal"
+scene_named3 "a small gray mouse" "mouse" "mammal" "animal"
+scene_named3 "a gray rabbit" "rabbit" "mammal" "animal"
+scene_named3 "a small black cat" "cat" "mammal" "animal"
 scene "a brass key"     "key"
 scene "a brass lantern" "lantern"
 mv() { case $1 in
