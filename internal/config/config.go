@@ -133,6 +133,15 @@ type Config struct {
 	// is-a branch, so it softens a "no" to a "probably" and never asserts a firm falsehood.
 	// Off by default, so a brain that never opts in is byte-identical to before.
 	KindLadderEnabled bool `json:"kind_ladder_enabled"`
+	// OstensiveCoreEnabled decides a category's membership from what its word was
+	// POINTED at rather than from the company the word happened to keep. A word said
+	// over a percept earns one ostension edge to the freshest thing in view, while its
+	// naming company reaches every percept still in the window, so a dense teaching
+	// stream spreads the company across the whole room while the ostension stays on the
+	// thing meant. Where a word points at nothing the company still decides, so a
+	// category taught only in talk is untouched. Off by default, so a brain that never
+	// opts in is byte-identical to before.
+	OstensiveCoreEnabled bool `json:"ostensive_core_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

@@ -37,6 +37,7 @@
   "untrusted_channels": ["web"],
   "subliminal_enabled": false,
   "kind_ladder_enabled": false,
+  "ostensive_core_enabled": false,
   "subconscious_channels": null,
   "architect_pubkey": "",
 

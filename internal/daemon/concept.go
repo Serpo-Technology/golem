@@ -332,6 +332,21 @@ func (d *Daemon) growAbstractions() (born int) {
 		}
 	}
 	perceptless := d.perceptlessSet(conceptIDs)
+	// A member that is itself an abstraction was never pointed at and never could be:
+	// there is no percept to show for a class, so it earns no ostension however
+	// faithfully it was taught. It keeps the company bar, so the backbone a category
+	// builds over its narrower categories stands whatever the ostensive gate does to
+	// the percept members beside it.
+	abstractMember := map[uint64]bool{}
+	if d.cfg.OstensiveCoreEnabled {
+		if frs, err := d.store.FragmentsByIDs(conceptIDs); err == nil {
+			for _, f := range frs {
+				if _, ok := abstractionLemma(f.Template); ok {
+					abstractMember[f.ID] = true
+				}
+			}
+		}
+	}
 	company := make(map[uint64]map[uint64]bool, len(words))
 	for _, w := range words {
 		set := make(map[uint64]bool)
@@ -408,7 +423,18 @@ func (d *Daemon) growAbstractions() (born int) {
 			cut = rel
 		}
 		corrob, hasTwin := corroboratedBy(w)
-		var core []coreShare
+		// Two readings of the same company, kept apart because they answer different
+		// questions. The company core answers whether the word is a name or a class, which
+		// the guards below settle by how its company spreads over the percepts it might
+		// refer to, so they go on reading the whole company. The core answers what the word
+		// is a class OF, and there the company misleads: it reaches every percept still in
+		// the naming window, so a dense stretch of teaching spreads a word across the whole
+		// room, while the ostension stays on the one thing meant, a naming earning a single
+		// edge to the freshest percept in view. So membership follows the pointing wherever
+		// there was any, and the two readings coincide for a word never shown a thing.
+		ostended := ostByWord[w.ID]
+		ostensive := d.cfg.OstensiveCoreEnabled && len(ostended) > 0
+		var core, companyCore []coreShare
 		for _, s := range shares {
 			// A member is in the strongest's league on EITHER axis: the word-side
 			// share, which a small category's members hold, OR the concept-side
@@ -416,19 +442,29 @@ func (d *Daemon) growAbstractions() (born int) {
 			// word-side share thins to ~1/N. A stray co-namer sits below both. The
 			// concept-side floor is what stops a broad category dissolving the more
 			// faithfully it was taught.
-			if s.share < cut && s.pwc < absPwcFloor {
-				continue
-			}
+			kept := s.share >= cut || s.pwc >= absPwcFloor
 			// A percept no cross-tongue twin corroborates kept this word's company in
 			// one tongue only: an incidental scene-mate, not a member. Perceptless
 			// co-members (an abstraction reached relationally, not through a tongue's
 			// percepts) are exempt, since they have no percept company to corroborate.
 			if hasTwin && !perceptless[s.concept] && !corrob[s.concept] {
+				kept = false
+			}
+			if kept {
+				companyCore = append(companyCore, s)
+			}
+			if ostensive && !abstractMember[s.concept] {
+				if ostended[s.concept] > 0 {
+					core = append(core, s)
+				}
 				continue
 			}
-			core = append(core, s)
+			if kept {
+				core = append(core, s)
+			}
 		}
 		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })
+		sort.Slice(companyCore, func(i, j int) bool { return companyCore[i].concept < companyCore[j].concept })
 
 		tpl := "abs:" + w.Lang + ":" + w.Content
 		var c *memory.Fragment
@@ -444,7 +480,10 @@ func (d *Daemon) growAbstractions() (born int) {
 		// The full conditions gate a mint; an existing abstraction keeps
 		// refreshing while its core stands, however the drift around it
 		// moves.
-		healthy := w.Count >= absMinSituations && len(core) >= absRefreshFloor && maxShare < absConcentration
+		// Read from the company alone, as the name-or-class guards below need it: whether a
+		// word looks like a class is a fact about how its company spreads, and a word whose
+		// pointing happens to be thin is still a class if it was taught like one.
+		healthy := w.Count >= absMinSituations && len(companyCore) >= absRefreshFloor && maxShare < absConcentration
 		// A word that names a relation is a verb, every inflection of it too: its
 		// lived company is the relation's arguments, not a constellation, so
 		// abstracting it into a noun would only mint a shadow that shrouds the
@@ -457,7 +496,15 @@ func (d *Daemon) growAbstractions() (born int) {
 		for _, cs := range core {
 			coreIDs = append(coreIDs, cs.concept)
 		}
-		named := d.headNamedPercepts(coreIDs)
+		// The referent hunt below reads the company core, never the pointed-at one. Whether
+		// a word is a name is settled by how its company spreads over the percepts it might
+		// refer to, and narrowing that field to the pointing would hand a word whose whole
+		// ostension is one passing glance a firm name for the thing it glanced at.
+		namingIDs := make([]uint64, 0, len(companyCore))
+		for _, cs := range companyCore {
+			namingIDs = append(namingIDs, cs.concept)
+		}
+		named := d.headNamedPercepts(namingIDs)
 		// What the word was pointed at decides first, a basic name as much as a
 		// cross-tongue one: a word shown over one percept every telling is that percept's
 		// name, however its company spread to a scene-mate that lingered warm from the
@@ -479,7 +526,7 @@ func (d *Daemon) growAbstractions() (born int) {
 		// its neighbours, not a class above them, so no abstraction is minted and a
 		// shadow already grown stops refreshing and decays. A true superordinate
 		// ("animal") heads no member's caption and abstracts as before.
-		if d.headsCorePercept(w.Content, coreIDs) {
+		if d.headsCorePercept(w.Content, namingIDs) {
 			continue
 		}
 		// With no ostension to point the way, a word that names a single basic-level
@@ -551,7 +598,10 @@ func (d *Daemon) growAbstractions() (born int) {
 		}
 		switch {
 		case c == nil:
-			if !healthy || born >= absPerNight {
+			// A class of nothing is not worth minting: the pointing has to reach as many
+			// members as the refresh floor asks of one already grown, or the night would
+			// mint a node whose grounding the same pass then declines to write.
+			if !healthy || len(core) < absRefreshFloor || born >= absPerNight {
 				continue
 			}
 			c = &memory.Fragment{
