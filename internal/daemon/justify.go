@@ -382,7 +382,9 @@ func (d *Daemon) momentClause(lang string, agentID, patientID uint64, relContent
 // justifyIsA grounds an is-a claim live: a membership GOLEM has seen speaks
 // its tally, one it was only told owns the telling. The stub trace stores no
 // evidence because the membership machinery is its own record, re-read here
-// so the proof is always current.
+// so the proof is always current. A membership reached only by climbing the derived
+// kind ladder has no record of its own to speak, so nothing comes back and the reader
+// admits it has nothing to point at.
 func (d *Daemon) justifyIsA(lang string, memberID, catID uint64) string {
 	if d.isA(memberID, catID) || memberID == catID {
 		if tally, err := d.store.GroundingTally(); err == nil && tally[memberID] > 0 {

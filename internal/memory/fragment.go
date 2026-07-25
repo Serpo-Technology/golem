@@ -128,9 +128,12 @@ const (
 	// reads it.
 	RelToldIsA = "toldisa"
 	// RelKindOf links a narrower category to a broader one it falls under, derived from
-	// the percept groundings alone: when every percept a kind grounds is also grounded by
-	// a strictly broader abstraction (every mammal seen was also seen as an animal), the
-	// kind is-a the broader one. It is DEFEASIBLE (an inductive read of finite samples,
+	// the percept groundings alone: when a kind holding a settled core of its own grounds
+	// mostly percepts a strictly broader abstraction grounds as well (nearly every mammal
+	// seen was seen as an animal too), the kind is-a the broader one. Most rather than all,
+	// since one stray grounding on a lived graph would otherwise hide a real kind, and a
+	// core of its own, since a handful of percepts nest inside all sorts of unrelated sets.
+	// It is DEFEASIBLE (an inductive read of finite samples,
 	// not a lived grounding), so it is read ONLY by the hedged is-a branch and answers
 	// "probably", never the firm "yes" a grounding earns; the grounded machinery
 	// (categoriesOf, isA, the firm-derived facts) never reads it, so a wrong or stale kind

@@ -126,7 +126,8 @@ type Config struct {
 	// salience. Off by default, so the gate stays binary until a channel opts in.
 	SubliminalEnabled bool `json:"subliminal_enabled"`
 	// KindLadderEnabled turns on the kind ladder: consolidation derives a defeasible
-	// subcategory edge (a kind is-a a strictly broader category it is fully contained in),
+	// subcategory edge (a kind is-a a strictly broader category that grounds most of its
+	// members),
 	// and an is-a question climbs it to reach a superordinate up the kind chain even after
 	// the superordinate's own thin percept grounding has faded. Read only by the hedged
 	// is-a branch, so it softens a "no" to a "probably" and never asserts a firm falsehood.

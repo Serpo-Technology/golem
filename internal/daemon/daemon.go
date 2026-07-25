@@ -2355,8 +2355,8 @@ func (d *Daemon) sleepCycle() (pruned, merged, born int) {
 	// Words whose company is a stable cloud rather than one shape
 	// distil into abstractions grounded in their constellations.
 	born += d.growAbstractions()
-	// A kind fully contained in a broader category is-a that category: the ladder
-	// is derived here, cores freshest, and read by the hedged is-a branch alone.
+	// A kind whose members mostly fall under a broader category is-a that category: the
+	// ladder is derived here, cores freshest, and read by the hedged is-a branch alone.
 	d.growKindLadder()
 	// Each concept's sparse signature rewrites from its current
 	// grounding, so resemblance stays current and auditable.
@@ -2479,6 +2479,7 @@ func (d *Daemon) shutdown(listener net.Listener, sock string) {
 	}
 	d.growConcepts()
 	d.growAbstractions()
+	d.growKindLadder()
 	d.growFeatures()
 	d.growEmbeddings()
 	d.growHolographic()

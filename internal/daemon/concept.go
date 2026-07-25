@@ -487,8 +487,10 @@ func (d *Daemon) growAbstractions() (born int) {
 		// "kurt" names the wolf "wolf" already names, beside a nameless shape, so both
 		// tongues share one node rather than splitting a parallel abs:tr:kurt the
 		// propositions never reach. When the company spreads across SEVERAL named percepts
-		// and exactly one is already owned, that owned percept is the referent; an even
-		// split with no ostension to break it is left to abstract.
+		// and exactly one of them is already owned, that owned percept is the referent of a
+		// name-like word; a word already healthy as a category keeps its spread and abstracts
+		// instead (the guard below), and an even split with no ostension to break it is left
+		// to abstract too.
 		existing := make(map[uint64]float64, len(byWord[w.ID]))
 		for _, p := range byWord[w.ID] {
 			existing[p.Concept] = p.Existing
@@ -627,8 +629,11 @@ func (d *Daemon) growAbstractions() (born int) {
 // cat). A word that heads one of the very percepts it would generalize is that
 // percept's name, so it labels a thing rather than a class of things, and minting
 // an abstraction from it would only shadow the percept. A category word
-// ("animal") heads no member's caption, and an adjective ("green") heads none
-// either, so neither is caught. Abstractions and relations in the core are passed
+// ("animal") heads no member's caption as long as each caption names the member's own
+// kind, and an adjective ("green") heads none either, so neither is caught. A caption
+// ending in its own class word instead ("a small blue bird" for one bird among many)
+// makes that class word head a core percept, and the class then stops abstracting
+// altogether, so a caption names the species and leaves the class to the kind above it. Abstractions and relations in the core are passed
 // over: only a sensory percept's caption carries a basic-level head.
 func (d *Daemon) headsCorePercept(word string, coreIDs []uint64) bool {
 	frags, err := d.store.FragmentsByIDs(coreIDs)
@@ -850,9 +855,11 @@ const (
 )
 
 // growKindLadder derives the kind ladder from the percept groundings alone: a defeasible
-// RelKindOf edge from a narrower category to a strictly broader one that fully contains
-// its grounded members. It runs right after growAbstractions, when every category's core
-// is freshest, so the containment is read while a superordinate is still richly grounded;
+// RelKindOf edge from a narrower category to a strictly broader one that grounds most of
+// its members (kindLadderOverlap), both sides holding a settled core of their own
+// (kindLadderMinCore). It runs right after growAbstractions on a consolidation night, when
+// every category's core is freshest, so the containment is read while a superordinate is
+// still richly grounded;
 // the edge is spared the nightly decay, so it outlives that superordinate's later
 // thinning, which is exactly when a member can no longer reach it directly. It reads only
 // the RelGrounds cores the corpus already lays -- no telling, no teaching change -- and

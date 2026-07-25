@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# A locker of sporting equipment: many items across three kinds (ball, stick, gear),
+# A locker of sporting equipment: many items across three kinds (ball, stick, protective),
 # each shown on its own percept, named, placed under its kind and under the equipment
 # superordinate, and tied into the world by how a player uses it. The kinds abstract
 # from the shared naming; the play and wear relations weave the items to the athletes.

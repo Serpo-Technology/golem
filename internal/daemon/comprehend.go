@@ -1415,9 +1415,11 @@ func (d *Daemon) retractProposition(rel string, agent, patient uint64) []uint64 
 
 // planIsA answers an is-a question against the category hierarchy: "is a cat an
 // animal" holds because the animal category grounds in the cat, climbing the chain
-// so "is a cat a thing" holds through animal. An identity ("is a cat a cat") holds,
-// and anything else is denied plainly. It returns false when the turn is not an
-// is-a question or its terms ground in nothing.
+// so "is a cat a thing" holds through animal. An identity ("is a cat a cat") holds too.
+// Only a grounded membership is affirmed firmly: one resting on a telling, or one reached
+// by climbing a derived kind edge to a superordinate the member no longer grounds under,
+// is affirmed hedged, and what neither reaches is denied plainly. It returns false when
+// the turn is not an is-a question or its terms ground in nothing.
 func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	// An is-a question is a copular question with two grounded arguments: "is a cat
 	// an animal". The copula and the arguments are read from comprehension, not a
@@ -1459,7 +1461,8 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	yes := grounded || hedged
 	// An affirmed membership leaves a bare trace: the membership machinery is
 	// its own record, so the probe re-reads it live (the tally, or the telling)
-	// rather than a stored copy. The "isa" word keys the claim, since no
+	// rather than a stored copy, and a membership only the kind ladder reached has no
+	// record of its own to read back. The "isa" word keys the claim, since no
 	// relation concept carries a membership.
 	if yes {
 		d.traceClaim("isa", member.ID, cat.ID, "", nil)
@@ -2455,8 +2458,10 @@ func (d *Daemon) categoryMembers(catID uint64) []uint64 {
 
 // categoriesOf returns the categories a concept belongs to, directly and up the
 // is-a chain (the cat is an animal, an animal is a thing), so a member's whole
-// lineage is in hand for a query or an inheritance. The climb is the composition:
-// a fact of membership chained onto a fact of membership.
+// grounded lineage is in hand for a query or an inheritance. The climb is the
+// composition: a fact of membership chained onto a fact of membership. It reads the
+// groundings alone, so every category it returns is one the member's own percepts
+// earned; kindSupersOf is the separate hedged read that climbs the derived kind edges.
 func (d *Daemon) categoriesOf(memberID uint64) []uint64 {
 	var out []uint64
 	seen := map[uint64]bool{memberID: true}
@@ -2517,7 +2522,9 @@ func (d *Daemon) kindSupersOf(memberID uint64) map[uint64]bool {
 }
 
 // isA reports whether a concept is a member of a category, directly or up the is-a
-// chain, so a member belongs to every category above it.
+// chain, so a member belongs to every category above it. The chain is the grounded one;
+// a category reachable only across a derived kind edge is no member here, which is what
+// keeps a wrong ladder edge from ever asserting a firm membership.
 func (d *Daemon) isA(memberID, catID uint64) bool {
 	for _, c := range d.categoriesOf(memberID) {
 		if c == catID {

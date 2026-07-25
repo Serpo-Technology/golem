@@ -197,9 +197,10 @@ func (d *Daemon) sayIdentity(memberID uint64, name, lang string) string {
 
 // sayParticipantIsA speaks an identity clause about a participant: the
 // pronoun, the agreeing copula, and the predicate with its article. yes
-// affirms, and told marks nothing here beyond what the caller already said
-// with its lead word; the clause itself is the same either way.
-func (d *Daemon) sayParticipantIsA(lang string, memberID uint64, cat *memory.Fragment, yes, told bool) string {
+// affirms, and hedged marks nothing here beyond what the caller already said with its
+// lead word, whether a telling or a climbed kind edge stands behind it; the clause
+// itself is the same either way.
+func (d *Daemon) sayParticipantIsA(lang string, memberID uint64, cat *memory.Fragment, yes, hedged bool) string {
 	subject, cop, negCop, ok := d.participantPerson(memberID)
 	if !ok {
 		return ""

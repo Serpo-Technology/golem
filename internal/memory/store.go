@@ -335,6 +335,10 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// every edge into or out of a code node is spared the nightly decay and stands at full
 	// weight, keeping the durable code subgraph intact across nights rather than thinning it
 	// toward the link floor where the orphan-link drop would erase the function.
+	// A derived kind edge is spared too. It records that one category falls under a broader
+	// one, read off the groundings on a night when both still stood richly grounded, and its
+	// whole use is to be climbed after that broader grounding has thinned; fading it with
+	// disuse would take the rung away exactly when a member needs it.
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
 		WHERE rel <> ? AND rel <> ? AND rel <> ?
 		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))
@@ -385,6 +389,10 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// perceptual concept; it stands for a learned form-meaning fact, not a thing seen, so it
 	// is spared the grounding test. This is what lets a grammar pattern taught into the graph
 	// survive the night as a fluid weight rather than fade and re-grow only from the seed.
+	// A category at the far end of a derived kind edge is held as well, for the same reason
+	// the edge itself is spared the fade: the rung has to outlive the grounding that
+	// justified it, and this prune would otherwise take the superordinate a member still
+	// reaches through.
 	if _, err := s.db.Exec(`DELETE FROM fragments WHERE kind = ?
 		AND category NOT IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant')
 		AND id NOT IN (SELECT from_id FROM links WHERE rel = ?)
