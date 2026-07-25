@@ -101,9 +101,18 @@ Run it once, at the end of the whole grow, never between the scenes:
     docker exec golem-brain sh -c 'GOLEM=golem bash /root/teaching/rehearse-spine.sh \
       curriculum world menagerie flora artifacts vehicles ...'
 
-It re-shows percepts, so it also grows the brain by several megabytes. Check a
-category's grounding count afterwards to see the repair (a class that names itself
-while grounding almost nothing is the symptom to watch).
+It re-shows percepts, so it also grows the brain by several megabytes.
+
+The pass paces itself, and the pacing is the point. A told word binds to whatever
+percept is still inside the attention window, so scenes replayed back to back hand
+every category word the whole run of things shown before it, and the pass corrupts
+the naming company it exists to rebuild. A percept that differs from the one before
+it therefore waits the window out first, which costs a few seconds per change of
+percept and some hours over a broad corpus. `PAUSE` sets that wait.
+
+Check what a category's strongest company IS afterwards, not how much of it there
+is. Grounding counts rise either way; a smeared word shows up as a class whose
+firmest company is something unrelated to it.
 
 ## Against an existing daemon
 
