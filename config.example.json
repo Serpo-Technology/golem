@@ -38,6 +38,7 @@
   "subliminal_enabled": false,
   "kind_ladder_enabled": false,
   "ostensive_core_enabled": false,
+  "ostensive_naming_enabled": false,
   "subconscious_channels": null,
   "architect_pubkey": "",
 

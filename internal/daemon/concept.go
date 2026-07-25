@@ -71,6 +71,10 @@ const (
 	// takes several misses to fall, the way one coincidence took only a
 	// share of a night to form.
 	namesDepression = 0.08
+	// namesUnpointedKeep is the share a naming bond keeps when the pointing contradicts
+	// it. A scene-mate bond falls under the write floor within a couple of nights, while a
+	// bond whose pointing merely aged out of the graph has that long to be shown again.
+	namesUnpointedKeep = 0.5
 )
 
 // Abstraction by constellation: a word that never settles on one
@@ -1087,15 +1091,67 @@ func (d *Daemon) growConcepts() (born, named int) {
 		}
 	}
 	relConcept := map[uint64]bool{}
+	abstractConcept := map[uint64]bool{}
+	conceptHead := map[uint64]string{}
 	if cfrags, err := d.store.FragmentsByIDs(conceptIDs); err == nil {
 		for _, cf := range cfrags {
 			if cf.Category == "relation" {
 				relConcept[cf.ID] = true
 			}
+			if _, ok := abstractionLemma(cf.Template); ok {
+				abstractConcept[cf.ID] = true
+			}
+			if fields := strings.Fields(cf.Content); len(fields) > 0 {
+				conceptHead[cf.ID] = strings.ToLower(fields[len(fields)-1])
+			}
 		}
 	}
-	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
+	// What a word was pointed at, for the same reason the membership pass reads it: the
+	// company reaches whatever shared the window, so a word said in a busy stretch keeps
+	// company with the whole room, while a naming points at one thing. A word that was
+	// shown things is named against those things alone, and its shares are read over that
+	// company rather than the room, so what it does name stands at its true strength. A
+	// word shown nothing is recounted as before.
+	pointedAt := map[uint64]map[uint64]float64{}
+	if d.cfg.OstensiveNamingEnabled {
+		if ostPairs, err := d.store.OstensionPairs(); err == nil {
+			for _, p := range ostPairs {
+				if pointedAt[p.Word] == nil {
+					pointedAt[p.Word] = map[uint64]float64{}
+				}
+				pointedAt[p.Word][p.Concept] += p.Mass
+			}
+		}
+	}
+	// A concept with no percept to show for it cannot be pointed at, so it is judged on
+	// company as before: an abstraction, a relation, and anything perceptless.
 	perceptless := d.perceptlessSet(conceptIDs)
+	unpointable := func(c uint64) bool {
+		return abstractConcept[c] || relConcept[c] || perceptless[c]
+	}
+	pointedTotal := map[uint64]float64{}
+	// The KINDS a word was shown, by the head of each pointed-at caption. A pointing is one
+	// perishable edge to one episode, so a word shown two gloves a month apart may still hold
+	// the pointing for the later one alone, and asking whether it pointed at THIS glove would
+	// read that gap as evidence it never names gloves. Asking whether it points at a glove at
+	// all does not: a second exemplar of a kind cannot evict the first, while a word shown
+	// apples and standing beside a leaf still loses the leaf.
+	pointedKinds := map[uint64]map[string]bool{}
+	for _, p := range pairs {
+		if o := pointedAt[p.Word]; len(o) > 0 && (o[p.Concept] > 0 || unpointable(p.Concept)) {
+			pointedTotal[p.Word] += p.Cooc
+		}
+	}
+	for w, o := range pointedAt {
+		kinds := map[string]bool{}
+		for c := range o {
+			if h := conceptHead[c]; h != "" {
+				kinds[h] = true
+			}
+		}
+		pointedKinds[w] = kinds
+	}
+	gain := namesGainBase + namesDopamineGain*d.chem.Snapshot().Dopamine
 	nameEdges := make([]memory.LinkEdge, 0, len(pairs))
 	for _, p := range pairs {
 		// A participant's name is given by a telling ("you are golem"), not by
@@ -1114,7 +1170,16 @@ func (d *Daemon) growConcepts() (born, named int) {
 		// its mass there. The bond is set from the fresh ratio, down as
 		// well as up, so a word that drifts to new company loosens its
 		// old bonds at the next consolidation.
-		pcw := p.Cooc / (p.WordTotal + namesSmoothing)
+		// A word that was shown things is read against the things it was shown, so what
+		// it does name holds its true share instead of being divided by a room it never
+		// pointed at.
+		pointed := pointedAt[p.Word]
+		shown := len(pointed) > 0
+		wordTotal := p.WordTotal
+		if shown {
+			wordTotal = pointedTotal[p.Word]
+		}
+		pcw := p.Cooc / (wordTotal + namesSmoothing)
 		pwc := p.Cooc / (conceptTotal[p.Concept] + namesSmoothing)
 		w := math.Sqrt(pcw*pwc) * gain
 		if w > namesMaxWeight {
@@ -1126,6 +1191,16 @@ func (d *Daemon) growConcepts() (born, named int) {
 		// itself.
 		if verbWord[p.Word] && !relConcept[p.Concept] {
 			w = 0
+		} else if shown && !unpointable(p.Concept) && pointed[p.Concept] <= 0 &&
+			!pointedKinds[p.Word][conceptHead[p.Concept]] {
+			// The word was shown things, and nothing of this percept's kind was among
+			// them: it shared a window, which is not a naming. The bond is written DOWN
+			// rather than skipped, because a naming bond is spared the nightly fade, so
+			// a pair left unwritten would keep what it stands at forever; and down
+			// rather than to nothing, because a bond written to zero is deleted outright
+			// on the next sleep, and a word whose pointing merely aged out deserves to
+			// fade back over a few nights instead of losing its name irrecoverably.
+			w = p.Existing * namesUnpointedKeep
 		} else if p.WordTotal < namesEvidenceFloor {
 			// Starved company stops voting: a word whose lived company has thinned
 			// to crumbs keeps its earned bonds as they stand and births none, so a

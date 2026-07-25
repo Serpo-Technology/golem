@@ -139,3 +139,92 @@ func TestOstensiveCoreKeepsAbstractionMembers(t *testing.T) {
 		t.Fatal("the exemption must not disturb the percept members beside it")
 	}
 }
+
+// The naming recount reads the pointing too. A word shown one thing while a scene-mate
+// shared every window keeps its bond to what it was shown and loses the one it merely
+// stood beside, which is what decides the concept a bare noun resolves to.
+func TestOstensiveNamingDropsTheSceneMateBond(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	apple := feedShape(t, s, "vision", "a round red apple", 6, base)
+	leaf := feedShape(t, s, "vision", "a green oak leaf", 6, base.Add(time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	appleC, _ := s.ConceptByTemplate(attention.Normalize("a round red apple"))
+	leafC, _ := s.ConceptByTemplate(attention.Normalize("a green oak leaf"))
+	if appleC == nil || leafC == nil {
+		t.Fatalf("both shapes should distil: apple=%v leaf=%v", appleC, leafC)
+	}
+	// "apple" is said with both in the window every time, so company alone cannot tell
+	// which it names; it was shown the apple.
+	for i := range 5 {
+		d.mintWords("apple", "en", 0, []recentMoment{apple[i], leaf[i]}, false)
+	}
+	calm(d)
+	if err := s.SetLinkRel(wordID(t, s, "apple"), groundedEpisode(t, s, appleC.ID), memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.OstensiveNamingEnabled = true
+	d.growConcepts()
+	wid := wordID(t, s, "apple")
+	if w := edgeWeightRel(t, s, wid, leafC.ID, memory.RelNames); w >= namesWriteFloor {
+		t.Fatalf("the scene-mate it was never shown must not stay named, got %.3f", w)
+	}
+	if w := edgeWeightRel(t, s, wid, appleC.ID, memory.RelNames); w < namesWriteFloor {
+		t.Fatalf("the percept it was shown must keep its name, got %.3f", w)
+	}
+}
+
+// A pointing is one perishable edge to one episode, so a word taught two exemplars of a
+// kind months apart may hold the pointing for the later one alone. That gap is not
+// evidence it never named the earlier one, so the gate asks whether the word points at
+// the KIND, not at the individual: a second glove must not evict the first.
+func TestOstensiveNamingKeepsAnOlderExemplarOfTheSameKind(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-4 * time.Hour)
+	leather := feedShape(t, s, "vision", "a warm leather glove", 6, base)
+	batting := feedShape(t, s, "vision", "a padded batting glove", 6, base.Add(time.Minute))
+	pot := feedShape(t, s, "vision", "a round clay pot", 6, base.Add(2*time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	leatherC, _ := s.ConceptByTemplate(attention.Normalize("a warm leather glove"))
+	potC, _ := s.ConceptByTemplate(attention.Normalize("a round clay pot"))
+	battingC, _ := s.ConceptByTemplate(attention.Normalize("a padded batting glove"))
+	if leatherC == nil || potC == nil || battingC == nil {
+		t.Fatal("all three shapes should distil")
+	}
+	// The word kept company with both gloves and with the pot that shared their windows.
+	for i := range 5 {
+		d.mintWords("eldiven", "tr", 0, []recentMoment{leather[i], batting[i], pot[i]}, false)
+	}
+	calm(d)
+	d.growConcepts()
+	// Only the later glove's pointing survives, the way an older episode's does not.
+	if err := s.SetLinkRel(wordID(t, s, "eldiven"), groundedEpisode(t, s, battingC.ID), memory.RelOstends, linkWeight); err != nil {
+		t.Fatal(err)
+	}
+	wid := wordID(t, s, "eldiven")
+	gloveBefore := edgeWeightRel(t, s, wid, leatherC.ID, memory.RelNames)
+	potBefore := edgeWeightRel(t, s, wid, potC.ID, memory.RelNames)
+	if gloveBefore < namesWriteFloor || potBefore < namesWriteFloor {
+		t.Fatalf("setup: both should start out named, glove %.3f pot %.3f", gloveBefore, potBefore)
+	}
+	d.cfg.OstensiveNamingEnabled = true
+	d.growConcepts()
+	// The older glove keeps the ordinary recount, which reads its share against the
+	// company the word was shown and so lifts it, rather than being written down.
+	if w := edgeWeightRel(t, s, wid, leatherC.ID, memory.RelNames); w <= gloveBefore {
+		t.Fatalf("the older glove of the same kind must keep its name, got %.3f (was %.3f)", w, gloveBefore)
+	}
+	// The pot is no kind of glove, so its bond is written down and fades out over the
+	// next nights rather than surviving as a name.
+	if w := edgeWeightRel(t, s, wid, potC.ID, memory.RelNames); w >= potBefore {
+		t.Fatalf("the pot shared a window and is no glove: its bond must fall, got %.3f (was %.3f)", w, potBefore)
+	}
+}

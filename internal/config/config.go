@@ -142,6 +142,12 @@ type Config struct {
 	// category taught only in talk is untouched. Off by default, so a brain that never
 	// opts in is byte-identical to before.
 	OstensiveCoreEnabled bool `json:"ostensive_core_enabled"`
+	// OstensiveNamingEnabled applies the same pointing test to the nightly naming
+	// recount: a word that was shown things keeps its bond only to the ones it was
+	// shown, and its remaining shares are read against that company rather than the
+	// whole room. Held apart from the membership gate because naming is read by far
+	// more than is-a, so it can be turned off alone. Off by default.
+	OstensiveNamingEnabled bool `json:"ostensive_naming_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A
