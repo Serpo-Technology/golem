@@ -21,3 +21,5 @@ Dockerfile.probe
 # Secrets and per-machine settings: signing keys and the dotenv that holds them
 .env
 *.key
+
+__pycache__/
