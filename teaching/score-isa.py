@@ -42,7 +42,7 @@ TEACHING = os.path.join(REPO, "teaching")
 TRUTH = os.path.join(TEACHING, "isa-truth.json")
 
 ARTICLE = re.compile(r"^(?:a|an|the)\s+", re.I)
-ISA = re.compile(r"^(?:a|an|the)\s+(.+?)\s+(?:is|are)\s+(?:a|an|the)\s+(.+?)\.?$", re.I)
+ISA = re.compile(r"^(?:(?:an|a|the)\s+)?(.+?)\s+(?:is|are)\s+(?:an|a|the)\s+(.+?)\.?$", re.I)
 OBSERVE = re.compile(r"^observe\s+(?:--force\s+)?vision\s+(.+)$")
 TELL = re.compile(r"^tell\s+(?:--lang\s+(\w+)\s+)?(.+)$")
 

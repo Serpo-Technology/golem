@@ -21,6 +21,9 @@
   "andes": [
    "mountain"
   ],
+  "anger": [
+   "feeling"
+  ],
   "animal": [
    "thing"
   ],
@@ -139,6 +142,9 @@
   "cake": [
    "dish"
   ],
+  "calm": [
+   "feeling"
+  ],
   "camel": [
    "animal",
    "mammal"
@@ -225,6 +231,9 @@
   "corn": [
    "grain"
   ],
+  "courage": [
+   "quality"
+  ],
   "court": [
    "place"
   ],
@@ -257,11 +266,20 @@
   "dance": [
    "art"
   ],
+  "danger": [
+   "state"
+  ],
   "danube": [
    "river"
   ],
   "dark": [
    "quality"
+  ],
+  "day": [
+   "time"
+  ],
+  "death": [
+   "state"
   ],
   "deer": [
    "animal",
@@ -290,6 +308,9 @@
   "door": [
    "thing"
   ],
+  "down": [
+   "direction"
+  ],
   "drawing": [
    "art"
   ],
@@ -311,6 +332,9 @@
   "ear": [
    "part"
   ],
+  "east": [
+   "direction"
+  ],
   "ebro": [
    "river"
   ],
@@ -323,6 +347,9 @@
   "emerald": [
    "gem"
   ],
+  "evening": [
+   "time"
+  ],
   "everest": [
    "mountain"
   ],
@@ -331,6 +358,9 @@
   ],
   "factory": [
    "place"
+  ],
+  "faith": [
+   "quality"
   ],
   "falcon": [
    "animal",
@@ -341,6 +371,9 @@
   ],
   "father": [
    "person"
+  ],
+  "fear": [
+   "feeling"
   ],
   "feeling": [
    "idea"
@@ -379,7 +412,8 @@
    "utensil"
   ],
   "freedom": [
-   "idea"
+   "idea",
+   "state"
   ],
   "fridge": [
    "utensil"
@@ -409,6 +443,9 @@
   "ganges": [
    "river"
   ],
+  "generosity": [
+   "quality"
+  ],
   "geneva": [
    "city"
   ],
@@ -426,11 +463,17 @@
    "animal",
    "bird"
   ],
+  "grace": [
+   "quality"
+  ],
   "gray": [
    "colour"
   ],
   "green": [
    "colour"
+  ],
+  "grief": [
+   "feeling"
   ],
   "hail": [
    "weather"
@@ -454,6 +497,9 @@
   "head": [
    "part"
   ],
+  "health": [
+   "state"
+  ],
   "heart": [
    "part"
   ],
@@ -475,11 +521,29 @@
    "animal",
    "mammal"
   ],
+  "honesty": [
+   "quality"
+  ],
+  "honor": [
+   "quality"
+  ],
+  "hope": [
+   "feeling"
+  ],
   "hospital": [
    "place"
   ],
   "hot": [
    "quality"
+  ],
+  "hour": [
+   "time"
+  ],
+  "humility": [
+   "quality"
+  ],
+  "hunger": [
+   "state"
   ],
   "hunter": [
    "person"
@@ -503,6 +567,9 @@
    "animal",
    "creature"
   ],
+  "joy": [
+   "feeling"
+  ],
   "judge": [
    "person"
   ],
@@ -510,7 +577,8 @@
    "drink"
   ],
   "justice": [
-   "idea"
+   "idea",
+   "quality"
   ],
   "kettle": [
    "utensil"
@@ -520,6 +588,9 @@
   ],
   "kilimanjaro": [
    "mountain"
+  ],
+  "kindness": [
+   "quality"
   ],
   "king": [
    "person"
@@ -561,6 +632,9 @@
   "leather": [
    "material"
   ],
+  "left": [
+   "direction"
+  ],
   "leg": [
    "part"
   ],
@@ -577,6 +651,9 @@
   "library": [
    "place"
   ],
+  "life": [
+   "state"
+  ],
   "light": [
    "quality"
   ],
@@ -590,6 +667,12 @@
   "lobster": [
    "animal",
    "creature"
+  ],
+  "love": [
+   "feeling"
+  ],
+  "loyalty": [
+   "quality"
   ],
   "lung": [
    "part"
@@ -616,6 +699,9 @@
   "mediterranean": [
    "sea"
   ],
+  "mercy": [
+   "quality"
+  ],
   "metal": [
    "material"
   ],
@@ -639,6 +725,9 @@
   ],
   "money": [
    "idea"
+  ],
+  "month": [
+   "time"
   ],
   "moon": [
    "thing"
@@ -687,8 +776,17 @@
   "newyork": [
    "city"
   ],
+  "night": [
+   "time"
+  ],
   "nile": [
    "river"
+  ],
+  "noon": [
+   "time"
+  ],
+  "north": [
+   "direction"
   ],
   "nose": [
    "part"
@@ -763,8 +861,12 @@
   "pasta": [
    "dish"
   ],
+  "patience": [
+   "quality"
+  ],
   "peace": [
-   "idea"
+   "idea",
+   "state"
   ],
   "peacock": [
    "animal",
@@ -836,8 +938,14 @@
   "porridge": [
    "dish"
   ],
+  "poverty": [
+   "state"
+  ],
   "power": [
    "idea"
+  ],
+  "pride": [
+   "feeling"
   ],
   "purple": [
    "colour"
@@ -869,6 +977,9 @@
   "reptile": [
    "animal"
   ],
+  "rest": [
+   "state"
+  ],
   "rhine": [
    "river"
   ],
@@ -880,6 +991,9 @@
    "dish",
    "grain",
    "ingredient"
+  ],
+  "right": [
+   "direction"
   ],
   "ring": [
    "shape"
@@ -907,6 +1021,9 @@
   ],
   "rye": [
    "grain"
+  ],
+  "safety": [
+   "state"
   ],
   "sailor": [
    "person"
@@ -954,11 +1071,17 @@
    "animal",
    "mammal"
   ],
+  "season": [
+   "time"
+  ],
   "seine": [
    "river"
   ],
   "sentence": [
    "sign"
+  ],
+  "shame": [
+   "feeling"
   ],
   "shanghai": [
    "city"
@@ -972,6 +1095,9 @@
   ],
   "sharp": [
    "quality"
+  ],
+  "sickness": [
+   "state"
   ],
   "silver": [
    "colour",
@@ -991,6 +1117,12 @@
   ],
   "sky": [
    "thing"
+  ],
+  "slavery": [
+   "state"
+  ],
+  "sleep": [
+   "state"
   ],
   "slide": [
    "toy"
@@ -1026,6 +1158,9 @@
   ],
   "soup": [
    "dish"
+  ],
+  "south": [
+   "direction"
   ],
   "sphere": [
    "shape"
@@ -1077,6 +1212,9 @@
   "stove": [
    "utensil"
   ],
+  "strength": [
+   "quality"
+  ],
   "sugar": [
    "ingredient"
   ],
@@ -1115,6 +1253,9 @@
   ],
   "theater": [
    "place"
+  ],
+  "thirst": [
+   "state"
   ],
   "thunder": [
    "weather"
@@ -1155,6 +1296,9 @@
    "animal",
    "bird"
   ],
+  "up": [
+   "direction"
+  ],
   "urals": [
    "mountain"
   ],
@@ -1179,7 +1323,8 @@
    "mammal"
   ],
   "war": [
-   "idea"
+   "idea",
+   "state"
   ],
   "wasp": [
    "animal",
@@ -1189,7 +1334,14 @@
    "drink"
   ],
   "wealth": [
-   "idea"
+   "idea",
+   "state"
+  ],
+  "week": [
+   "time"
+  ],
+  "west": [
+   "direction"
   ],
   "wet": [
    "quality"
@@ -1215,7 +1367,8 @@
    "drink"
   ],
   "wisdom": [
-   "idea"
+   "idea",
+   "quality"
   ],
   "wolf": [
    "animal",
@@ -1235,11 +1388,17 @@
    "animal",
    "bug"
   ],
+  "worry": [
+   "feeling"
+  ],
   "writer": [
    "person"
   ],
   "yangtze": [
    "river"
+  ],
+  "year": [
+   "time"
   ],
   "yeast": [
    "ingredient"
