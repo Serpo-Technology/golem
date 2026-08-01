@@ -148,6 +148,13 @@ type Config struct {
 	// whole room. Held apart from the membership gate because naming is read by far
 	// more than is-a, so it can be turned off alone. Off by default.
 	OstensiveNamingEnabled bool `json:"ostensive_naming_enabled"`
+	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
+	// word names several. The word's own abstraction wins over a percept it merely
+	// drifted onto, and the perceptless node a telling minted for it loses to the thing
+	// once something has shown one. Without this a drifted bond, which the nightly fade
+	// spares and recall only strengthens, keeps the word pointing at the wrong thing for
+	// good. Off by default.
+	ResolveToOwnConceptEnabled bool `json:"resolve_to_own_concept_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

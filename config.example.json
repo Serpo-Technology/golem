@@ -39,6 +39,7 @@
   "kind_ladder_enabled": false,
   "ostensive_core_enabled": false,
   "ostensive_naming_enabled": false,
+  "resolve_to_own_concept_enabled": false,
   "subconscious_channels": null,
   "architect_pubkey": "",
 

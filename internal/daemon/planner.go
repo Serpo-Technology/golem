@@ -83,7 +83,7 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 		words = preferTongue(words, lang)
 	}
 	if err == nil && len(words) > 0 {
-		if f := d.voteNamed(words, tokens); f != nil {
+		if f := d.voteNamed(words, tokens, lang); f != nil {
 			return f
 		}
 	}
@@ -114,7 +114,7 @@ func (d *Daemon) resolveConceptLang(phrase, lang string) *memory.Fragment {
 // id. A word that names only an inherited abstraction still resolves through the
 // any-fallback. It returns nil when nothing votes, so the caller falls to the gloss or
 // fold path.
-func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string) *memory.Fragment {
+func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string, lang string) *memory.Fragment {
 	ids := make([]uint64, 0, len(words))
 	for _, w := range words {
 		ids = append(ids, w.ID)
@@ -168,8 +168,65 @@ func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string) *memory.Fr
 			perceptHead[strings.ToLower(fields[len(fields)-1])] = true
 		}
 	}
+	// Weight alone cannot tell a referent from a drift, and a naming bond is spared the
+	// nightly fade, so a bond a word wandered onto stands at whatever it climbed to for
+	// good. Two concepts are the word's own by construction and rank ahead of the rest
+	// however firmly it came to name them: the abstraction it generalizes, and, below
+	// everything, the perceptless placeholder a telling minted for it, which the thing
+	// itself supersedes as soon as anything shows it.
+	// The ranking below asks which concept is the WORD'S own, so it only means anything
+	// when the phrase is that one word. A described thing is not about its modifiers: "a
+	// yellow sour lemon" is a lemon, and letting yellow's class outrank it would answer a
+	// question nobody asked. So a phrase carrying more than one content word is left to
+	// the weight alone, which is what pools its tokens' votes onto the thing it names.
+	content := 0
+	for _, t := range tokens {
+		if d.gram.IsContentWord(lang, t) {
+			content++
+		}
+	}
+	ranked := d.cfg.ResolveToOwnConceptEnabled && content == 1
+	// The kinds actually SHOWN among the candidates, read off the percepts alone. A minted
+	// placeholder carries the bare word as its content, so it would otherwise report its
+	// own kind as shown and argue itself out of the running. Kept apart from perceptHead
+	// above, which the basic-level guard reads and which must not shift under it.
+	shownKind := map[string]bool{}
+	if ranked {
+		for _, f := range frags {
+			if _, ok := abstractionLemma(f.Template); ok {
+				continue
+			}
+			if _, ok := mintedNounLemma(f.Template); ok {
+				continue
+			}
+			if f.Category == "relation" {
+				continue
+			}
+			if fields := strings.Fields(f.Content); len(fields) > 0 {
+				shownKind[strings.ToLower(fields[len(fields)-1])] = true
+			}
+		}
+	}
+	rank := func(f *memory.Fragment) int {
+		if !ranked {
+			return 1
+		}
+		if lemma, ok := abstractionLemma(f.Template); ok && tokSet[lemma] {
+			return 2
+		}
+		// The placeholder gives way only to the thing itself, a percept whose own kind is
+		// this word. Where nothing of the kind was ever shown, the placeholder is still
+		// the best the word has, and demoting it would hand the word to whatever it
+		// happened to drift onto instead.
+		if lemma, ok := mintedNounLemma(f.Template); ok && tokSet[lemma] && shownKind[lemma] &&
+			d.isPerceptless(f.ID) {
+			return 0
+		}
+		return 1
+	}
 	var best, bestAny uint64
 	var bestW, bestAnyW float64
+	var bestR int
 	for _, f := range frags {
 		w := votes[f.ID]
 		if w > bestAnyW || (w == bestAnyW && f.ID > bestAny) {
@@ -190,8 +247,9 @@ func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string) *memory.Fr
 		if lemma, ok := abstractionLemma(f.Template); ok && (!tokSet[lemma] || perceptHead[lemma]) {
 			continue
 		}
-		if w > bestW || (w == bestW && f.ID > best) {
-			best, bestW = f.ID, w
+		r := rank(f)
+		if best == 0 || r > bestR || (r == bestR && (w > bestW || (w == bestW && f.ID > best))) {
+			best, bestW, bestR = f.ID, w, r
 		}
 	}
 	if best == 0 {
@@ -232,6 +290,20 @@ func preferTongue(words []*memory.Fragment, lang string) []*memory.Fragment {
 // template.
 func abstractionLemma(template string) (string, bool) {
 	if !strings.HasPrefix(template, "abs:") {
+		return "", false
+	}
+	parts := strings.SplitN(template, ":", 3)
+	if len(parts) != 3 || parts[2] == "" {
+		return "", false
+	}
+	return parts[2], true
+}
+
+// mintedNounLemma reads the word a perceptless placeholder stands for, the lemma in the
+// "noun:<lang>:<lemma>" template a telling mints when it names a thing nothing has shown
+// yet. Such a node holds the word's meaning only until the thing itself turns up.
+func mintedNounLemma(template string) (string, bool) {
+	if !strings.HasPrefix(template, "noun:") {
 		return "", false
 	}
 	parts := strings.SplitN(template, ":", 3)

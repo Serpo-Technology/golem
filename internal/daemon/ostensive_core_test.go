@@ -228,3 +228,122 @@ func TestOstensiveNamingKeepsAnOlderExemplarOfTheSameKind(t *testing.T) {
 		t.Fatalf("the pot shared a window and is no glove: its bond must fall, got %.3f (was %.3f)", w, potBefore)
 	}
 }
+
+// A word that has a category of its own refers to that category, however firmly it came
+// to name something else. A naming bond is spared the nightly fade and recall only lifts
+// it, so a bond a word wandered onto outranks its own abstraction for good otherwise, and
+// every question about the category is answered about the stray instead.
+func TestResolveToOwnAbstractionOverADriftedName(t *testing.T) {
+	d, s := testDaemon(t)
+	beetle := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision",
+		Content: "a small red beetle", Template: "a small red beetle", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(beetle); err != nil {
+		t.Fatal(err)
+	}
+	amph := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept",
+		Content: "amphibian", Template: "abs:en:amphibian", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(amph); err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := d.mintWordNode("amphibian", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The drift outweighs the word's own abstraction, which is the shape found on the
+	// grown brain: amphibian named a beetle at 0.96 against its own class at 0.80.
+	if err := s.SetLinkRel(w.ID, beetle.ID, memory.RelNames, 0.96); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(w.ID, amph.ID, memory.RelNames, absNameWeight); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.resolveConcept("amphibian"); got == nil || got.ID != beetle.ID {
+		t.Fatalf("without the rule the drifted name should win, got %v", got)
+	}
+	d.cfg.ResolveToOwnConceptEnabled = true
+	got := d.resolveConcept("amphibian")
+	if got == nil || got.ID != amph.ID {
+		t.Fatalf("the word should refer to its own class, got %v", got)
+	}
+}
+
+// The placeholder a telling mints for a thing nobody has shown yet gives way to the thing
+// itself. It is self-named at mint time above what a grounded reading can earn, and that
+// bond never decays, so the percept can never win it back on weight alone.
+func TestResolvePrefersTheShownThingOverAMintedPlaceholder(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-2 * time.Hour)
+	feedShape(t, s, "vision", "a shiny yellow gold", 4, base)
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	shown, _ := s.ConceptByTemplate(attention.Normalize("a shiny yellow gold"))
+	if shown == nil {
+		t.Fatal("the gold should distil into a concept")
+	}
+	placeholder := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept",
+		Content: "gold", Template: "noun:en:gold", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(placeholder); err != nil {
+		t.Fatal(err)
+	}
+	w, _, err := d.mintWordNode("gold", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(w.ID, placeholder.ID, memory.RelNames, 1.0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(w.ID, shown.ID, memory.RelNames, absNameWeight); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.resolveConcept("gold"); got == nil || got.ID != placeholder.ID {
+		t.Fatalf("without the rule the placeholder should win, got %v", got)
+	}
+	d.cfg.ResolveToOwnConceptEnabled = true
+	if got := d.resolveConcept("gold"); got == nil || got.ID != shown.ID {
+		t.Fatalf("the word should refer to the thing that was shown, got %v", got)
+	}
+}
+
+// A described thing is not about its modifiers. The ranking asks which concept is the
+// WORD'S own, which means nothing once the phrase carries more than one content word: "a
+// yellow sour lemon" is a lemon, and letting yellow's class outrank it answers a question
+// nobody asked, in the firm voice. So a described phrase is left to the weight alone.
+func TestOwnConceptRankingLeavesADescribedThingAlone(t *testing.T) {
+	d, s := testDaemon(t)
+	lemon := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision",
+		Content: "a yellow sour lemon", Template: "a yellow sour lemon", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(lemon); err != nil {
+		t.Fatal(err)
+	}
+	yellow := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept",
+		Content: "yellow", Template: "abs:en:yellow", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(yellow); err != nil {
+		t.Fatal(err)
+	}
+	head, _, err := d.mintWordNode("lemon", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, _, err := d.mintWordNode("yellow", "en", d.chem.Snapshot(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The head names the thing firmly; the modifier names a class of its own.
+	if err := s.SetLinkRel(head.ID, lemon.ID, memory.RelNames, 0.95); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(mod.ID, yellow.ID, memory.RelNames, 0.30); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.ResolveToOwnConceptEnabled = true
+	if got := d.resolveConcept("yellow sour lemon"); got == nil || got.ID != lemon.ID {
+		t.Fatalf("a described thing must resolve to what it names, got %v", got)
+	}
+	// The bare modifier still reaches its own class, which is the rule's whole point.
+	if got := d.resolveConcept("yellow"); got == nil || got.ID != yellow.ID {
+		t.Fatalf("a bare word should still reach its own class, got %v", got)
+	}
+}

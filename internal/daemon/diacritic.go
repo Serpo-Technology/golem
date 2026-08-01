@@ -151,7 +151,7 @@ func (d *Daemon) foldResolve(phrase, lang string) *memory.Fragment {
 	if !ok {
 		return nil
 	}
-	f := d.voteNamed(rows, []string{form})
+	f := d.voteNamed(rows, []string{form}, lang)
 	if f == nil {
 		return nil
 	}
