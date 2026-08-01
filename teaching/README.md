@@ -114,6 +114,24 @@ Check what a category's strongest company IS afterwards, not how much of it ther
 is. Grounding counts rise either way; a smeared word shows up as a class whose
 firmest company is something unrelated to it.
 
+## Scoring the is-a spine
+
+    python3 teaching/score-isa.py ~/.golem/snapshots/<brain>.db
+
+Counting grounding edges says a category is healthy when it has merely grown
+greedy, so this scores a brain against what the scenes actually taught. It reads
+the ground truth by dry-running every scene through a recording mock, which is
+the only way to see past the twenty different `teach` helpers, and reports:
+
+- precision, the share of grounded members that belong where they are grounded
+- recall, the share of taught memberships the brain actually laid
+- nameless concepts, percepts nothing names any more
+
+Judge a change on precision AND recall together. Shrinking every category back to
+a handful of members scores well on precision alone while losing most of what the
+brain knew. Pass `--wrong 20` to see the worst edges, and `--rebuild` after
+editing scenes, which refreshes the cached `isa-truth.json`.
+
 ## Against an existing daemon
 
     GOLEM=golem GAP=15 zsh teaching/curriculum.zsh
