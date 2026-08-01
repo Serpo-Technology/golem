@@ -52,12 +52,12 @@ log "########## world begins ##########"
 # --- More animals, each named and placed under the animal category ---------
 log "=== animals: wolf bird fish horse snail frog bear lion owl deer ==="
 cap() { case $1 in
-  W) print "a gray wolf";;       B) print "a small blue jay";;  F) print "a silver sardine";;
+  W) print "a gray wolf";;       B) print "a small blue jay";;  F) print "a small shiny sardine";;
   H) print "a large brown horse";; S) print "a tiny gray snail";; G) print "a green frog";;
   E) print "a large black bear";; L) print "a golden lion";;     O) print "a brown owl";;
   D) print "a spotted deer";; esac }
 name() { case $1 in
-  W) print wolf;; B) print bird;; F) print fish;; H) print horse;; S) print snail;;
+  W) print wolf;; B) print jay;; F) print sardine;; H) print horse;; S) print snail;;
   G) print frog;; E) print bear;; L) print lion;; O) print owl;; D) print deer;; esac }
 an() { scene_named "$(cap $1)" "$(name $1)" "animal" }
 for x in W B F H S  G E L O D  H S W L B  E D F O G  L H E W S; do an $x; done; nap
@@ -74,8 +74,8 @@ for x in A X C K P  X K A P C  C P X A K  K A P C X; do ob $x; done; nap
 # --- Turkish names converge on the same animal percepts --------------------
 log "=== Turkish: kurt kuş at balık aslan ==="
 tr() { case $1 in
-  K) scene_tr "a gray wolf" "kurt";;   U) scene_tr "a small blue jay" "kuş";;
-  A) scene_tr "a large brown horse" "at";; B) scene_tr "a silver sardine" "balık";;
+  K) scene_tr "a gray wolf" "kurt";;   U) scene_tr "a small blue jay" "alakarga";;
+  A) scene_tr "a large brown horse" "at";; B) scene_tr "a small shiny sardine" "sardalya";;
   L) scene_tr "a golden lion" "aslan";; esac }
 for x in K U A B L  U B K L A  A L U B K  K B A U L; do tr $x; done; nap
 
