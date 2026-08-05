@@ -43,6 +43,22 @@ for s in "$@"; do
   PATH="$WORK:$PATH" GOLEM=golem GAP=0 BLOCKGAP=0 zsh "$f" >/dev/null 2>&1
   grep -E '^(observe|tell)' "$CAPTURE" >> "$WORK/atoms"
 done
+# Gather each percept's own atoms together, keeping their order within the percept and
+# the percepts in the order the corpus first shows them. The corpus returns to a thing
+# five times across a block, so replaying in corpus order means the window has to be
+# cleared at nearly every showing; gathered, it is cleared once per thing. That is the
+# difference between a pause for each of 3500 showings and one for each of 624 things,
+# and it costs nothing, since what a percept needs is its own showings and the words
+# said over them, not the neighbours it happened to sit between.
+awk '
+  /^observe --force vision / {
+    cap = substr($0, length("observe --force vision ") + 1)
+    if (!(cap in seen)) { seen[cap] = ++n; order[n] = cap }
+    buf[cap] = buf[cap] $0 "\n"; next
+  }
+  /^tell / { if (cap != "") buf[cap] = buf[cap] $0 "\n"; next }
+  END { for (i = 1; i <= n; i++) printf "%s", buf[order[i]] }
+' "$WORK/atoms" > "$WORK/grouped" && mv "$WORK/grouped" "$WORK/atoms"
 # replay: forced observes -> re-show, names/is-a -> re-tell, skip companions
 fobs(){ local i; for i in 1 2 3; do $GOLEM observe --force vision "$1" >/dev/null 2>&1 && return 0; sleep 1; done; }
 sayw(){ local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && return 0; sleep 1; done; }
