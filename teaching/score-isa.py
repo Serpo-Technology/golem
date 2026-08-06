@@ -41,6 +41,17 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEACHING = os.path.join(REPO, "teaching")
 TRUTH = os.path.join(TEACHING, "isa-truth.json")
 
+# The bar the abstraction pass writes a grounding at, absPwcFloor in
+# internal/daemon/concept.go. A rung that has faded under it is one the pass declined to
+# refresh, and standingIsA will not climb it to reach a firm yes. Keep the two in step.
+#
+# COMPARE BRAINS AT THE SAME POINT IN THE NAP CYCLE. The engine admits a rung on a strict
+# less-than, and the pass writes most of them at exactly the bar: on the deliverable 1087
+# of 1598 sit on 0.1 to the digit. So a freshly written brain keeps all of them and a brain
+# one nap older has lost every one, which moves this figure further than any change to the
+# engine will. Scoring a saved snapshot against a napped one measures the nap.
+ABS_PWC_FLOOR = 0.10
+
 ARTICLE = re.compile(r"^(?:a|an|the)\s+", re.I)
 ISA = re.compile(r"^(?:(?:an|a|the)\s+)?(.+?)\s+(?:is|are)\s+(?:an|a|the)\s+(.+?)\.?$", re.I)
 OBSERVE = re.compile(r"^observe\s+(?:--force\s+)?vision\s+(.+)$")
@@ -172,7 +183,7 @@ def score(db, truth, anc, worst):
     # A concept does not ground itself. A self loop is no membership, and counting one
     # as correct flatters every brain that carries them.
     rows = con.execute("""
-        SELECT l.from_id, l.to_id, a.template, b.template FROM links l
+        SELECT l.from_id, l.to_id, a.template, b.template, l.weight FROM links l
         JOIN fragments a ON a.id = l.from_id AND a.template LIKE 'abs:%'
         JOIN fragments b ON b.id = l.to_id
         WHERE l.rel = 'grounds' AND l.from_id <> l.to_id""").fetchall()
@@ -203,7 +214,7 @@ def score(db, truth, anc, worst):
 
     ok = bad = unjudged = 0
     wrong = []
-    for _, _, cat, member in rows:
+    for _, _, cat, member, _ in rows:
         parts = cat.split(":", 2)
         if len(parts) != 3:
             continue
@@ -216,45 +227,58 @@ def score(db, truth, anc, worst):
             bad += 1
             wrong.append((parts[2], member))
 
-    # The climb, replicating daemon.categoriesOf exactly: every abstraction reachable by
-    # following grounds edges upward from the member, deduped by first sight, start
-    # excluded. Each reached category is a firm membership the brain would assert.
-    parents = {}
+    # The climb: every abstraction reachable by following grounds edges upward from the
+    # member, deduped by first sight, start excluded. Each reached category is a firm
+    # membership the brain asserts.
+    #
+    # Run it twice, because the engine no longer climbs the whole graph to reach a firm
+    # yes. planIsA asks standingIsA, which skips any rung that has faded under the bar the
+    # abstraction pass writes at, while inheritance, denial and the nightly derivations go
+    # on reading every edge. The barred figure is the one an answer is judged on; the full
+    # figure is what the rest of the engine still sees, and stays reported so a brain grown
+    # before the bar existed remains comparable.
     tpl = {}
-    for f, t, ct, mt in rows:
-        parents.setdefault(t, []).append(f)
+    for f, t, ct, mt, _ in rows:
         tpl[f], tpl[t] = ct, mt
-    cok = cbad = 0
-    worstRung = {}
-    for _, _, _, member in rows:
-        pass
-    members = {t for _, t, _, _ in rows if not tpl[t].startswith("abs:")}
-    for m in members:
-        r = reachOf(tpl[m])
-        if not r:
-            continue
-        seen, stack = {m}, [m]
-        while stack:
-            cur = stack.pop()
-            for p in parents.get(cur, ()):
-                if p in seen:
-                    continue
-                seen.add(p)
-                stack.append(p)
-                pt = tpl[p]
-                parts = pt.split(":", 2)
-                if len(parts) != 3 or parts[1] != "en":
-                    continue
-                if parts[2] in r:
-                    cok += 1
-                else:
-                    cbad += 1
-                    worstRung[pt] = worstRung.get(pt, 0) + 1
+    members = {t for _, t, _, _, _ in rows if not tpl[t].startswith("abs:")}
+
+    def climb(minWeight):
+        parents = {}
+        for f, t, _, _, w in rows:
+            if w >= minWeight:
+                parents.setdefault(t, []).append(f)
+        cok = cbad = 0
+        worstRung = {}
+        for m in members:
+            r = reachOf(tpl[m])
+            if not r:
+                continue
+            seen, stack = {m}, [m]
+            while stack:
+                cur = stack.pop()
+                for p in parents.get(cur, ()):
+                    if p in seen:
+                        continue
+                    seen.add(p)
+                    stack.append(p)
+                    pt = tpl[p]
+                    parts = pt.split(":", 2)
+                    if len(parts) != 3 or parts[1] != "en":
+                        continue
+                    if parts[2] in r:
+                        cok += 1
+                    else:
+                        cbad += 1
+                        worstRung[pt] = worstRung.get(pt, 0) + 1
+        return cok, cbad, worstRung
+
+    cok, cbad, worstRung = climb(ABS_PWC_FLOOR)
+    fok, fbad, _ = climb(0.0)
 
     # Recall over every membership the CORPUS teaches, never filtered to the categories
     # this brain happens to hold: a brain that forgets a broad word must not score as
     # having improved.
-    laid = set((c.split(":", 2)[2], norm(m)) for _, _, c, m in rows
+    laid = set((c.split(":", 2)[2], norm(m)) for _, _, c, m, _ in rows
                if not m.startswith("abs:") and c.startswith("abs:en:"))
     gold = {(c, caption) for caption, cats in anc.get("en", {}).items() for c in cats}
     found = len(gold & laid)
@@ -273,6 +297,8 @@ def score(db, truth, anc, worst):
             "precision": ok / judged if judged else 0.0,
             "closureJudged": cj, "closureCorrect": cok,
             "closure": cok / cj if cj else 0.0,
+            "fullJudged": fok + fbad, "fullCorrect": fok,
+            "full": fok / (fok + fbad) if fok + fbad else 0.0,
             "recall": found / len(gold) if gold else 0.0,
             "gold": len(gold), "nameless": nameless,
             "worstRung": sorted(worstRung.items(), key=lambda kv: -kv[1])[:5],
@@ -307,7 +333,9 @@ def main():
         print(f"  grounding edges {r['edges']:5}   judged {r['judged']:5}   unjudged {r['unjudged']:4}")
         print(f"  edge precision  {r['precision']:.4f}  ({r['correct']} correct, {r['wrong']} wrong)")
         print(f"  CLOSURE prec    {r['closure']:.4f}  ({r['closureCorrect']} of {r['closureJudged']} "
-              f"memberships the climb actually asserts)")
+              f"memberships a firm answer actually asserts)")
+        print(f"  closure, unbarred {r['full']:.4f}  ({r['fullCorrect']} of {r['fullJudged']} "
+              f"over every rung, which inheritance and the derivations still read)")
         print(f"  recall          {r['recall']:.4f}  ({r['gold']} memberships the corpus teaches)")
         print(f"  nameless concepts {r['nameless']}")
         for rung, n in r.get("worstRung", []):
