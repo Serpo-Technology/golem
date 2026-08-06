@@ -16,6 +16,14 @@ import (
 // channel predictor's state between runs (flushed at sleep and shutdown).
 type Store struct {
 	db *sql.DB
+	// SpareOstension keeps a pointing out of the nightly link fade. A pointing is read
+	// as a fact about what a word was shown, so fading it turns that reading off on a
+	// timer: the day a word's last pointing crosses the floor, its membership reverts in
+	// one night to the company reading the pointing was there to correct. It is not made
+	// immortal, since it hangs off an episode and follows that episode out on the prune,
+	// so it lasts exactly as long as the memory of what was shown. Off unless the daemon
+	// sets it, so a brain that never opts in fades exactly as before.
+	SpareOstension bool
 }
 
 func OpenStore(path string) (*Store, error) {
@@ -339,12 +347,18 @@ func (s *Store) Sleep(decay, floor float64) (int, error) {
 	// one, read off the groundings on a night when both still stood richly grounded, and its
 	// whole use is to be climbed after that broader grounding has thinned; fading it with
 	// disuse would take the rung away exactly when a member needs it.
+	spared := []any{RelNames, RelComparativeForm, RelKindOf}
+	if s.SpareOstension {
+		spared = append(spared, RelOstends)
+	}
+	holes := "rel <> ?" + strings.Repeat(" AND rel <> ?", len(spared)-1)
+	args := append(append([]any{linkNightlyKeep}, spared...), KindCodeNode, KindCodeNode)
 	if _, err := s.db.Exec(`UPDATE links SET weight = weight * ?
-		WHERE rel <> ? AND rel <> ? AND rel <> ?
+		WHERE `+holes+`
 		AND to_id NOT IN (SELECT id FROM fragments WHERE category IN ('construction', 'declgrammar', 'class', 'answer', 'source', 'number', 'participant'))
 		AND to_id   NOT IN (SELECT id FROM fragments WHERE kind = ?)
 		AND from_id NOT IN (SELECT id FROM fragments WHERE kind = ?)`,
-		linkNightlyKeep, RelNames, RelComparativeForm, RelKindOf, KindCodeNode, KindCodeNode); err != nil {
+		args...); err != nil {
 		return int(pruned), err
 	}
 	dropOrphanLinks := func() error {

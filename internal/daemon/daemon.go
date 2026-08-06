@@ -836,6 +836,10 @@ func New(home string, cfg config.Config, out io.Writer) (*Daemon, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Where membership is read off what a word was pointed at, the pointing has to
+	// outlast the attention window that recorded it, or the reading turns itself off
+	// on a timer and the category quietly goes back to being chosen by company.
+	store.SpareOstension = cfg.OstensiveCoreEnabled
 	mediaStore, err := memory.OpenMediaStore(home)
 	if err != nil {
 		store.Close()

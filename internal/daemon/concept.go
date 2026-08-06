@@ -438,6 +438,14 @@ func (d *Daemon) growAbstractions() (born int) {
 		// there was any, and the two readings coincide for a word never shown a thing.
 		ostended := ostByWord[w.ID]
 		ostensive := d.cfg.OstensiveCoreEnabled && len(ostended) > 0
+		// A word that was read off its pointing before, and has none left tonight, is about
+		// to have its class chosen by company again. The reading changes under an answer
+		// that will not look any different, so it is said out loud: a basis that changes in
+		// silence is the one thing the glass box cannot afford.
+		if d.cfg.OstensiveCoreEnabled && len(ostended) == 0 && d.namedAbstraction(w) {
+			d.event(events.Event{Ev: "concept", Tpl: wire.Clip("abs:"+w.Lang+":"+w.Content, 120),
+				Outcome: "unpointed"})
+		}
 		var core, companyCore []coreShare
 		for _, s := range shares {
 			// A member is in the strongest's league on EITHER axis: the word-side
@@ -2139,4 +2147,12 @@ func (d *Daemon) semanticSeeds(query string) ([]*memory.Fragment, []*wire.Fragme
 		}
 	}
 	return episodes, mediators
+}
+
+// namedAbstraction reports whether the word already names a class of its own, the mark
+// that an earlier pass read this word off its pointing. It is asked only to tell a word
+// whose reading is about to change from one that never had that reading at all.
+func (d *Daemon) namedAbstraction(w *memory.Fragment) bool {
+	c, err := d.store.ConceptByTemplate("abs:" + w.Lang + ":" + w.Content)
+	return err == nil && c != nil
 }
