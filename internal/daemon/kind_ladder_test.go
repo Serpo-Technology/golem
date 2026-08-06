@@ -285,3 +285,46 @@ func TestKindLadderFlagOffInert(t *testing.T) {
 		t.Fatalf("with the ladder off, an ungrounded membership must read no; got %q", r.Say)
 	}
 }
+
+// A grounding the abstraction pass has stopped refreshing fades for some eighty nights
+// before it reaches the link floor, and the climb reads weight nowhere, so a rung the
+// writer already judged unfit would go on handing a firm membership to everything beneath
+// it for all of that time. A member reached only through such a rung is not firmly a
+// member. Inheritance and the nightly derivations go on seeing the graph entire.
+func TestFadingRungCarriesNoFirmMembership(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(word, tpl string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: word,
+			Template: tpl, Category: "noun", Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	dog := mk("a small brown dog", "a small brown dog")
+	mammal := mk("mammal", "abs:en:mammal")
+	circle := mk("circle", "abs:en:circle")
+	// A rung the pass still writes, and one it has stopped refreshing.
+	if err := s.SetLinkRel(mammal.ID, dog.ID, memory.RelGrounds, absPwcFloor); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(circle.ID, mammal.ID, memory.RelGrounds, absPwcFloor*0.9); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.OstensiveCoreEnabled = true
+	if !d.standingIsA(dog.ID, mammal.ID) {
+		t.Fatal("a rung at the write floor still carries a firm membership")
+	}
+	if d.standingIsA(dog.ID, circle.ID) {
+		t.Fatal("a membership reached only through a fading rung must not be firm")
+	}
+	// The whole graph is still there for everything that is not a firm is-a answer.
+	if !d.isA(dog.ID, circle.ID) {
+		t.Fatal("categoriesOf must go on seeing the fading rung")
+	}
+	// With the gate off the reading is the old one, whatever the weights.
+	d.cfg.OstensiveCoreEnabled = false
+	if !d.standingIsA(dog.ID, circle.ID) {
+		t.Fatal("with the gate off the climb must be unchanged")
+	}
+}

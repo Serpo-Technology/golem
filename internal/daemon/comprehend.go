@@ -1449,7 +1449,7 @@ func (d *Daemon) planIsA(frame grammar.Frame) (string, bool) {
 	// since it rests on the telling, not on what GOLEM has seen the thing to be. A
 	// participant's told identity needs no grown category: "are you a daemon" reads
 	// the defeasible edge the telling laid on the self.
-	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.isA(member.ID, cat.ID))
+	grounded := member.ID == cat.ID || (d.isCategory(cat) && d.standingIsA(member.ID, cat.ID))
 	// A kind ladder reaches a superordinate a member no longer grounds directly: a dog is a
 	// mammal, and mammal is fully contained in animal, so a dog is an animal. The ladder edge
 	// is a defeasible inductive read of the groundings, so the membership it carries is held
@@ -2527,6 +2527,51 @@ func (d *Daemon) kindSupersOf(memberID uint64) map[uint64]bool {
 // keeps a wrong ladder edge from ever asserting a firm membership.
 func (d *Daemon) isA(memberID, catID uint64) bool {
 	for _, c := range d.categoriesOf(memberID) {
+		if c == catID {
+			return true
+		}
+	}
+	return false
+}
+
+// standingCategoriesOf is categoriesOf over the rungs the abstraction pass would still
+// write. A grounding it declines to refresh is not deleted, it fades, and it takes some
+// eighty nights to reach the link floor; the climb reads weight nowhere, so a rung the
+// writer has already judged unfit goes on handing a firm membership to everything beneath
+// it for all of that time. A member reached only through such a rung has not earned a firm
+// yes. The pass writes no grounding under absPwcFloor, so that is the bar, and the reading
+// is kept here rather than in categoriesOf so inheritance, denial and the nightly
+// derivations go on seeing the graph entire.
+func (d *Daemon) standingCategoriesOf(memberID uint64) []uint64 {
+	var out []uint64
+	seen := map[uint64]bool{memberID: true}
+	stack := []uint64{memberID}
+	for len(stack) > 0 {
+		m := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		cats, err := d.store.LinksToRel([]uint64{m}, memory.RelGrounds)
+		if err != nil {
+			continue
+		}
+		for _, e := range cats {
+			if e.Weight < absPwcFloor || seen[e.From] {
+				continue
+			}
+			seen[e.From] = true
+			out = append(out, e.From)
+			stack = append(stack, e.From)
+		}
+	}
+	return out
+}
+
+// standingIsA answers membership over those rungs alone, the reading planIsA holds to a
+// firm yes.
+func (d *Daemon) standingIsA(memberID, catID uint64) bool {
+	if !d.cfg.OstensiveCoreEnabled {
+		return d.isA(memberID, catID)
+	}
+	for _, c := range d.standingCategoriesOf(memberID) {
 		if c == catID {
 			return true
 		}
