@@ -164,6 +164,14 @@ func (d *Daemon) voteNamed(words []*memory.Fragment, tokens []string, lang strin
 		if f.Category == "relation" {
 			continue // a relation is not a thing with a basic-level name
 		}
+		// A placeholder a telling minted carries the bare word as its whole content, so it
+		// would report the word as its own basic kind and argue the word's real class out
+		// of the running: "bird" would look like the caption head of a thing, and the class
+		// over the jay and the robin would be set aside as that thing's shadow. It stands
+		// for a thing nothing has shown, which is no caption at all.
+		if _, ok := mintedNounLemma(f.Template); ok && d.cfg.ResolveToOwnConceptEnabled {
+			continue
+		}
 		if fields := strings.Fields(f.Content); len(fields) > 0 {
 			perceptHead[strings.ToLower(fields[len(fields)-1])] = true
 		}
