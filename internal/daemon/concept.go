@@ -653,10 +653,13 @@ func (d *Daemon) growAbstractions() (born int) {
 		// tells them apart is the pointing: a word shown percepts is a word for a kind
 		// of thing, whatever a passing clause minted for it, while a word carried
 		// wholly in talk was never shown anything at all.
-		if !ostensive {
-			if c := d.resolveConcept(w.Content); c != nil && d.isPerceptless(c.ID) {
+		// Read before the mint, since afterwards the word resolves to the class itself.
+		var placeholder *memory.Fragment
+		if p := d.resolveConcept(w.Content); p != nil && d.isPerceptless(p.ID) {
+			if !ostensive {
 				continue
 			}
+			placeholder = p
 		}
 		switch {
 		case c == nil:
@@ -686,6 +689,18 @@ func (d *Daemon) growAbstractions() (born int) {
 			d.event(events.Event{Ev: "concept", ID: c.ID, Tpl: wire.Clip(tpl, 120), Outcome: "abstract"})
 		case len(core) < absRefreshFloor:
 			continue // dissolved: decay carries the grounding away
+		}
+		// The placeholder an early telling minted holds everything the word was TOLD,
+		// while the class holds everything it was SHOWN, and the word now resolves to the
+		// class. Left apart, the brain denies its own lessons: a person was told to be an
+		// animal, the telling stayed on the stub, and the answer came back No. What was
+		// told follows the word to the node the word reaches.
+		if placeholder != nil && placeholder.ID != c.ID {
+			for _, rel := range []string{memory.RelToldIsA, memory.RelKindOf, memory.RelAgent, memory.RelPatient} {
+				if err := d.store.RepointLinks(placeholder.ID, c.ID, rel); err != nil {
+					fmt.Fprintf(d.out, "placeholder fold error: %v\n", err)
+				}
+			}
 		}
 		// The constellation is the grounding: each edge's weight is the member's
 		// reliability share in the word's company, written fresh each night so the

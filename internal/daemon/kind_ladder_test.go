@@ -328,3 +328,38 @@ func TestFadingRungCarriesNoFirmMembership(t *testing.T) {
 		t.Fatal("with the gate off the climb must be unchanged")
 	}
 }
+
+// A word talked about before anything had been shown one carries a bare placeholder, and
+// the class that grows for it later is a second node. Everything the word was TOLD stays
+// on the placeholder while the word comes to resolve to the class, so the brain answers No
+// to what it was taught. The telling has to follow the word.
+func TestToldMembershipFollowsTheWordToItsClass(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(word, tpl string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: word,
+			Template: tpl, Category: "noun", Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	stub := mk("person", "noun:en:person")
+	class := mk("person", "abs:en:person")
+	animal := mk("animal", "abs:en:animal")
+	if err := s.SetLinkRel(stub.ID, animal.ID, memory.RelToldIsA, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	// The word reaches the class, and the class was told nothing.
+	if d.toldIsA(class.ID, animal.ID) {
+		t.Fatal("the fixture should start with the telling stranded on the placeholder")
+	}
+	if err := s.RepointLinks(stub.ID, class.ID, memory.RelToldIsA); err != nil {
+		t.Fatal(err)
+	}
+	if !d.toldIsA(class.ID, animal.ID) {
+		t.Fatal("a person was told to be an animal; the class must carry the telling")
+	}
+	if d.toldIsA(stub.ID, animal.ID) {
+		t.Fatal("the telling should have one home, not two")
+	}
+}

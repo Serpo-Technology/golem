@@ -1014,6 +1014,37 @@ func (s *Store) DeleteLinksFrom(from uint64, rel string) error {
 	return err
 }
 
+// RepointLinks re-homes every edge of one relation touching a fragment onto another, on
+// whichever side it touches. A word talked about before anything was shown one is given a
+// bare placeholder, and the class that later grows for the same word is a second node: what
+// the placeholder was TOLD has to follow the word to the node the word now resolves to, or
+// the brain denies what it was taught.
+//
+// An edge the destination already holds is kept over the one arriving, since the
+// destination earned its own, and an edge that would close a loop on the destination is
+// dropped rather than written.
+func (s *Store) RepointLinks(old, dst uint64, rel string) error {
+	if old == dst || old == 0 || dst == 0 {
+		return nil
+	}
+	if _, err := s.db.Exec(`DELETE FROM links WHERE rel = ?
+		AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))`,
+		rel, old, dst, dst, old); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`UPDATE OR IGNORE links SET from_id = ? WHERE rel = ? AND from_id = ?`,
+		dst, rel, old); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`UPDATE OR IGNORE links SET to_id = ? WHERE rel = ? AND to_id = ?`,
+		dst, rel, old); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM links WHERE rel = ? AND (from_id = ? OR to_id = ?)`,
+		rel, old, old)
+	return err
+}
+
 // SetLinkRelBatch upserts many edges with SetLinkRel's semantics in a single
 // transaction over a prepared statement, so a consolidation pass that rewrites
 // thousands of edges pays one transaction's overhead instead of one per edge. The
