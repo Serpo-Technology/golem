@@ -79,23 +79,25 @@ def capture(scenes):
             if not os.path.exists(path):
                 continue
             open(cap, "w").close()
-            subprocess.run(["zsh", path], env=env, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=600)
+            r = subprocess.run(["zsh", path], env=env, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=600)
+            if r.returncode != 0:
+                raise SystemExit(f"scene {scene} exited {r.returncode}; truth would be "
+                                 f"silently short, which reads as higher precision")
             with open(cap) as f:
                 calls.extend(line.rstrip("\n") for line in f)
     return calls
 
 
 def build_truth(scenes):
-    """Read the call stream into names per caption and a kind graph."""
-    spoken = {}           # caption -> the words said over it: its name and its kinds
+    """Read the call stream into names per caption, per tongue, and a kind graph."""
+    spoken = {}           # lang -> caption -> the words said over it: its name and its kinds
     kinds = {}            # word -> set of words it was told to be a kind of
     current = None
     for call in capture(scenes):
         m = OBSERVE.match(call)
         if m:
             current = norm(m.group(1))
-            spoken.setdefault(current, set())
             continue
         m = TELL.match(call)
         if not m:
@@ -107,10 +109,13 @@ def build_truth(scenes):
             if sub and obj and sub != obj:
                 kinds.setdefault(sub, set()).add(obj)
             continue
-        # A short telling right after a showing is a name for what was shown.
-        if current and len(text.split()) <= 2 and lang == "en":
-            spoken[current].add(head(text))
-    return {"spoken": {k: sorted(v) for k, v in spoken.items() if v},
+        # A short telling right after a showing is a name for what was shown. Every
+        # tongue names, so the truth is kept per tongue: judging a Turkish category
+        # against English tellings counts a correct naming as a wrong edge.
+        if current and len(text.split()) <= 2:
+            spoken.setdefault(lang, {}).setdefault(current, set()).add(head(text))
+    return {"spoken": {lg: {k: sorted(v) for k, v in caps.items() if v}
+                       for lg, caps in spoken.items()},
             "kinds": {k: sorted(v) for k, v in kinds.items()}}
 
 
@@ -126,14 +131,21 @@ def closure(word, kinds, seen=None):
 
 
 def ancestors(truth):
-    """caption -> every category it legitimately belongs to, its own name included."""
-    spoken, kinds = truth["spoken"], truth["kinds"]
+    """lang -> caption -> every category it legitimately belongs to, its own name included.
+
+    The kind graph is stated in English tellings, so only the English side climbs it. A
+    tongue that merely names its percepts is judged on those namings alone, which is what
+    it was actually taught."""
+    kinds = truth["kinds"]
     out = {}
-    for caption, ns in spoken.items():
-        acc = set()
-        for n in ns:
-            acc |= closure(n, kinds)
-        out[caption] = acc
+    for lang, caps in truth["spoken"].items():
+        acc = {}
+        for caption, ns in caps.items():
+            reach = set()
+            for n in ns:
+                reach |= closure(n, kinds) if lang == "en" else {n}
+            acc[caption] = reach
+        out[lang] = acc
     return out
 
 
@@ -148,44 +160,104 @@ def load_truth(scenes, rebuild):
 
 
 def score(db, truth, anc, worst):
+    """Score a brain two ways: per edge, and over the closure the engine climbs.
+
+    The edge number is a diagnostic. The CLOSURE number is the one that governs an
+    answer: planIsA asks isA, isA asks categoriesOf, and categoriesOf climbs the
+    grounds edges TRANSITIVELY, so one wrong rung high in the graph hands every
+    member below it a firm membership. Counting edges charges that rung once; the
+    brain pays for it on every member it reaches. Score both, and judge on the second.
+    """
     con = sqlite3.connect("file:" + db + "?mode=ro", uri=True)
-    edges = con.execute("""
-        SELECT a.template, b.template FROM links l
+    # A concept does not ground itself. A self loop is no membership, and counting one
+    # as correct flatters every brain that carries them.
+    rows = con.execute("""
+        SELECT l.from_id, l.to_id, a.template, b.template FROM links l
         JOIN fragments a ON a.id = l.from_id AND a.template LIKE 'abs:%'
         JOIN fragments b ON b.id = l.to_id
-        WHERE l.rel = 'grounds'""").fetchall()
+        WHERE l.rel = 'grounds' AND l.from_id <> l.to_id""").fetchall()
     kinds = truth["kinds"]
+
+    def reachOf(member):
+        """What the corpus says this member belongs to, judged in its own tongue."""
+        if member.startswith("abs:"):
+            parts = member.split(":", 2)
+            if len(parts) != 3:
+                return None
+            sub = parts[2]
+            if parts[1] != "en":
+                return {sub}          # a tongue that names, judged on its namings
+            return closure(sub, kinds) if sub in kinds or sub in anc_words(anc) else None
+        return anc.get("en", {}).get(norm(member))
+
+    def judge(lemma, lang, member):
+        """None when the corpus says nothing about this member, else True or False."""
+        if lang != "en":
+            caps = anc.get(lang, {})
+            if member.startswith("abs:"):
+                return lemma == member.split(":", 2)[-1] or None
+            r = caps.get(norm(member))
+            return None if r is None else lemma in r
+        r = reachOf(member)
+        return None if not r else lemma in r
+
     ok = bad = unjudged = 0
     wrong = []
-    for cat, member in edges:
+    for _, _, cat, member in rows:
         parts = cat.split(":", 2)
         if len(parts) != 3:
             continue
-        lemma = parts[2]
-        if member.startswith("abs:"):
-            sub = member.split(":", 2)[-1]
-            reach = closure(sub, kinds) if sub in kinds or sub in anc_words(anc) else None
-        else:
-            reach = anc.get(norm(member))
-        if not reach:
+        v = judge(parts[2], parts[1], member)
+        if v is None:
             unjudged += 1
-            continue
-        if lemma in reach:
+        elif v:
             ok += 1
         else:
             bad += 1
-            wrong.append((lemma, member))
-    # Recall: of the memberships this brain could express, how many did it lay?
-    have = set(r[0].split(":", 2)[2] for r in con.execute(
-        "SELECT template FROM fragments WHERE template LIKE 'abs:en:%'"))
-    laid = set((c.split(":", 2)[2], norm(m)) for c, m in edges if not m.startswith("abs:"))
-    gold = set()
-    for caption, cats in anc.items():
-        for c in cats:
-            if c in have:
-                gold.add((c, caption))
+            wrong.append((parts[2], member))
+
+    # The climb, replicating daemon.categoriesOf exactly: every abstraction reachable by
+    # following grounds edges upward from the member, deduped by first sight, start
+    # excluded. Each reached category is a firm membership the brain would assert.
+    parents = {}
+    tpl = {}
+    for f, t, ct, mt in rows:
+        parents.setdefault(t, []).append(f)
+        tpl[f], tpl[t] = ct, mt
+    cok = cbad = 0
+    worstRung = {}
+    for _, _, _, member in rows:
+        pass
+    members = {t for _, t, _, _ in rows if not tpl[t].startswith("abs:")}
+    for m in members:
+        r = reachOf(tpl[m])
+        if not r:
+            continue
+        seen, stack = {m}, [m]
+        while stack:
+            cur = stack.pop()
+            for p in parents.get(cur, ()):
+                if p in seen:
+                    continue
+                seen.add(p)
+                stack.append(p)
+                pt = tpl[p]
+                parts = pt.split(":", 2)
+                if len(parts) != 3 or parts[1] != "en":
+                    continue
+                if parts[2] in r:
+                    cok += 1
+                else:
+                    cbad += 1
+                    worstRung[pt] = worstRung.get(pt, 0) + 1
+
+    # Recall over every membership the CORPUS teaches, never filtered to the categories
+    # this brain happens to hold: a brain that forgets a broad word must not score as
+    # having improved.
+    laid = set((c.split(":", 2)[2], norm(m)) for _, _, c, m in rows
+               if not m.startswith("abs:") and c.startswith("abs:en:"))
+    gold = {(c, caption) for caption, cats in anc.get("en", {}).items() for c in cats}
     found = len(gold & laid)
-    # A percept concept nothing names is a concept the brain can no longer talk about.
     nameless = con.execute("""
         SELECT COUNT(*) FROM fragments c
         WHERE c.kind = 'concept' AND c.template NOT LIKE 'abs:%'
@@ -195,18 +267,23 @@ def score(db, truth, anc, worst):
                           AND n.rel = 'names' AND n.weight >= 0.1)""").fetchone()[0]
     con.close()
     judged = ok + bad
-    return {"edges": len(edges), "judged": judged, "unjudged": unjudged,
+    cj = cok + cbad
+    return {"edges": len(rows), "judged": judged, "unjudged": unjudged,
             "correct": ok, "wrong": bad,
             "precision": ok / judged if judged else 0.0,
+            "closureJudged": cj, "closureCorrect": cok,
+            "closure": cok / cj if cj else 0.0,
             "recall": found / len(gold) if gold else 0.0,
             "gold": len(gold), "nameless": nameless,
+            "worstRung": sorted(worstRung.items(), key=lambda kv: -kv[1])[:5],
             "worst": wrong[:worst]}
 
 
 def anc_words(anc):
     out = set()
-    for cats in anc.values():
-        out |= cats
+    for caps in anc.values():
+        for cats in caps.values():
+            out |= cats
     return out
 
 
@@ -222,15 +299,19 @@ def main():
               sorted(f[:-4] for f in os.listdir(TEACHING) if f.endswith(".zsh")))
     truth = load_truth(scenes, args.rebuild)
     anc = ancestors(truth)
-    print(f"truth: {len(truth['spoken'])} captions, {len(truth['kinds'])} words with kinds "
+    print(f"truth: {sum(len(c) for c in truth['spoken'].values())} captions, {len(truth['kinds'])} words with kinds "
           f"({os.path.relpath(TRUTH, REPO)})")
     for db in args.brains:
         r = score(db, truth, anc, args.wrong)
         print(f"\n{os.path.basename(db)}")
         print(f"  grounding edges {r['edges']:5}   judged {r['judged']:5}   unjudged {r['unjudged']:4}")
-        print(f"  precision       {r['precision']:.4f}  ({r['correct']} correct, {r['wrong']} wrong)")
-        print(f"  recall          {r['recall']:.4f}  ({r['gold']} memberships the brain could express)")
+        print(f"  edge precision  {r['precision']:.4f}  ({r['correct']} correct, {r['wrong']} wrong)")
+        print(f"  CLOSURE prec    {r['closure']:.4f}  ({r['closureCorrect']} of {r['closureJudged']} "
+              f"memberships the climb actually asserts)")
+        print(f"  recall          {r['recall']:.4f}  ({r['gold']} memberships the corpus teaches)")
         print(f"  nameless concepts {r['nameless']}")
+        for rung, n in r.get("worstRung", []):
+            print(f"    worst rung: {rung} hands out {n} wrong memberships")
         for lemma, member in r["worst"]:
             print(f"    wrong: abs:en:{lemma} grounds {member}")
 
