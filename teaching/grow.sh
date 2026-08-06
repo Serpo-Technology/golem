@@ -10,7 +10,7 @@
 #   bash teaching/grow.sh <label> [<config.json>] [<scene>...]
 #
 #   label     names the snapshot directory under ~/.golem/snapshots/
-#   config    defaults to teaching/always-online.json
+#   config    defaults to teaching/ostensive.json
 #   scenes    default to the order in teaching/curriculum-order.txt
 #
 # GAP and BLOCKGAP pace the scenes as they do for the lessons themselves.
@@ -22,7 +22,10 @@
 set -u
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LABEL=${1:?usage: grow.sh <label> [config.json] [scene...]}
-CFG=${2:-$REPO/teaching/always-online.json}
+# The scenes now lean on the pointing passes: a word is shown its members and read off
+# what it was shown, and taught under a config that leaves those passes off the corpus
+# teaches one thing and the brain learns another. The standing config carries them.
+CFG=${2:-$REPO/teaching/ostensive.json}
 shift 2 2>/dev/null || shift 1
 SCENES=("$@")
 if [ ${#SCENES[@]} -eq 0 ]; then
