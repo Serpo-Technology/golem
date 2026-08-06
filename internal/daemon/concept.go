@@ -476,7 +476,13 @@ func (d *Daemon) growAbstractions() (born int) {
 		// the categories are climbed transitively and one bad edge puts everything the
 		// narrower class holds under the broader one. That is what let an oak reach animal
 		// through a category of parts.
-		if ostensive {
+		//
+		// This asks nothing of the pointing, so it runs for every category word, not only
+		// the ones that happen to have been shown something. A word carried wholly in talk
+		// is where the coverage test is needed MOST: it never earns a pointing, so its
+		// members are chosen by company alone, and it is exactly those words (a circle, a
+		// rectangle, an idea) whose rungs hand a firm membership to everything beneath them.
+		if d.cfg.OstensiveCoreEnabled {
 			held := make(map[uint64]bool, len(core))
 			for _, cs := range core {
 				held[cs.concept] = true
