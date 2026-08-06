@@ -26,9 +26,10 @@ DUPLICATE       A caption named two different things, so neither name can settle
                 reported too: it splits the word's pointing, which is tolerable but is
                 worth knowing before a grow.
 
-NEVER-SHOWN     A noun the corpus only talks about and never shows mints a perceptless
-                node, self-named at mint time above what a grounded reading can earn,
-                which forecloses the category for good.
+TALK-FIRST      A word the corpus talks about BEFORE it shows anything mints a
+                perceptless placeholder, self-named above what a grounded reading can
+                earn, which forecloses its category for the rest of the grow. Order is
+                the whole of it, so the scenes are walked in teaching order.
 """
 
 import argparse
@@ -65,13 +66,16 @@ def read(scenes):
         if not m:
             continue
         lang, text = m.group(1) or "en", m.group(2).strip()
-        if ISA.match(text):
-            order.append(("fact", text.lower()))
-            continue
         if current and len(text.split()) <= 2 and lang == "en":
             w = head(text)
             captions[current].append(w)
             order.append(("say", (current, w)))
+            continue
+        # Every other telling is a clause ABOUT things. It is where a placeholder gets
+        # minted, whether the clause states a kind ("a ball is a toy") or an event
+        # ("a cat chased a bird"), so both have to be walked.
+        if lang == "en":
+            order.append(("utter", text.lower()))
     return captions, order
 
 
@@ -130,22 +134,28 @@ def lint(captions, order):
     # A noun the corpus only ever talks about, never shows, mints a perceptless node
     # that the grounded reading can then never outrank. Asked of the whole corpus
     # rather than of the running order, since the scenes carry no fixed sequence.
-    shown = {head(c) for c in captions} | set(names) | classes
+    # A word first MET in a telling mints a perceptless placeholder, self-named above
+    # what any grounded reading can earn, and that placeholder then blocks its category
+    # from ever forming. So the order matters, not just the totals: a word the corpus
+    # shows at scene 9 but talks about at scene 2 is already lost by the time it is
+    # shown. This walks the corpus in teaching order for exactly that reason.
+    grounded = set()
     flagged = set()
+    everShown = {head(c) for c in captions} | set(names) | classes
     for kind, payload in order:
-        if kind != "fact":
-            continue
-        m = ISA.match(payload)
-        if not m:
-            continue
-        sub, obj = head(m.group(1)), head(m.group(2))
-        # Only the CATEGORY position matters, and only when it stands over something the
-        # corpus does show. A wholly perceptless vocabulary ("a builder is a person") is
-        # taught by talk on purpose; a category with grounded members that is itself only
-        # ever spoken of cannot become the abstraction those members need.
-        if obj and sub in shown and obj not in shown and obj not in flagged:
-            flagged.add(obj)
-            out["NEVER-SHOWN"].append(f"{obj!r} stands over shown things but is never shown: {payload!r}")
+        if kind == "show":
+            grounded.add(head(payload))
+        elif kind == "say":
+            grounded.add(payload[1])
+        elif kind == "utter":
+            for tok in re.sub(r"[^a-z ]", "", payload).split():
+                if tok in STOP or tok in grounded or tok in flagged:
+                    continue
+                if tok not in everShown:
+                    continue    # a wholly perceptless vocabulary is taught by talk on purpose
+                flagged.add(tok)
+                out["TALK-FIRST"].append(
+                    f"{tok!r} is talked about before anything shows it: {payload!r}")
     return out
 
 
@@ -155,13 +165,16 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--check", default="", help="only this check")
     args = ap.parse_args()
-    scenes = ([s for s in args.scenes.split(",") if s] or
-              sorted(f[:-4] for f in os.listdir(TEACHING) if f.endswith(".zsh")))
+    # Teaching order, never alphabetical: this check is about what precedes what.
+    order_file = os.path.join(TEACHING, "curriculum-order.txt")
+    default = [l.strip() for l in open(order_file)] if os.path.exists(order_file) else \
+              sorted(f[:-4] for f in os.listdir(TEACHING) if f.endswith(".zsh"))
+    scenes = [s for s in args.scenes.split(",") if s] or [s for s in default if s]
     captions, order = read(scenes)
     out = lint(captions, order)
     total = sum(len(v) for v in out.values())
     print(f"{len(scenes)} scenes, {len(captions)} captions")
-    for check in ("CAPTION-HEAD", "MODIFIER", "DUPLICATE", "NEVER-SHOWN"):
+    for check in ("CAPTION-HEAD", "MODIFIER", "DUPLICATE", "TALK-FIRST"):
         hits = out.get(check, [])
         print(f"  {check:13} {len(hits)}")
         if args.quiet or (args.check and args.check != check):
