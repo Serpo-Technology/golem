@@ -123,14 +123,45 @@ greedy, so this scores a brain against what the scenes actually taught. It reads
 the ground truth by dry-running every scene through a recording mock, which is
 the only way to see past the twenty different `teach` helpers, and reports:
 
-- precision, the share of grounded members that belong where they are grounded
-- recall, the share of taught memberships the brain actually laid
+- edge precision, the share of grounded members that belong where they are grounded
+- CLOSURE precision, the share of the memberships an answer actually rests on
+- recall, the share of taught memberships the brain laid
 - nameless concepts, percepts nothing names any more
+- the rungs that hand out the most wrong memberships
 
-Judge a change on precision AND recall together. Shrinking every category back to
-a handful of members scores well on precision alone while losing most of what the
-brain knew. Pass `--wrong 20` to see the worst edges, and `--rebuild` after
-editing scenes, which refreshes the cached `isa-truth.json`.
+Judge on the CLOSURE number. An is-a answer is not read off one edge: the climb
+follows the grounding edges transitively, so a single wrong rung high in the
+graph hands a firm membership to everything beneath it. Counting edges charges
+that rung once while the brain pays for it on every member it reaches, and the
+two can move in opposite directions. The worst-rung lines say where to look.
+
+Judge precision AND recall together. Shrinking every category back to a handful
+of members scores well on precision alone while losing most of what the brain
+knew. Pass `--wrong 20` to see the worst edges, and `--rebuild` after editing
+scenes, which refreshes the cached `isa-truth.json`.
+
+## Checking the scenes before a grow
+
+    python3 teaching/lint-scenes.py
+
+Four corpus faults break learning without erroring at teaching time, so the
+lesson runs clean and the damage appears nights later, in a category that will
+not form or a noun that resolves to its neighbour. The lint walks the scenes in
+teaching order and reports a percept captioned by its own class, a taught noun
+used inside another percept's caption, a caption standing for two things, and a
+word the corpus talks about before it shows anything. The last of those is the
+one that forecloses a category for good, and order is the whole of it, so it is
+read from `curriculum-order.txt` rather than alphabetically.
+
+## Growing one from empty
+
+    GAP=1 BLOCKGAP=6 bash teaching/grow.sh <label> teaching/ostensive.json
+
+Teaches every scene in `curriculum-order.txt` from an empty brain, checkpointing
+after each one, and closes with the spine rehearsal. The config argument decides
+which engine behaviour the brain is grown under and is recorded with it;
+`teaching/ostensive.json` is the standing config with the pointing-driven passes
+on, and `always-online.json` leaves them off.
 
 ## Against an existing daemon
 
