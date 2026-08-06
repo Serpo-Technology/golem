@@ -469,6 +469,40 @@ func (d *Daemon) growAbstractions() (born int) {
 		}
 		sort.Slice(core, func(i, j int) bool { return core[i].concept < core[j].concept })
 		sort.Slice(companyCore, func(i, j int) bool { return companyCore[i].concept < companyCore[j].concept })
+		// A class earns its place inside a broader class by what it covers, never by the
+		// company its word kept: most of what it grounds has to fall under the category
+		// it is being placed in. Company cannot tell a real rung from two words that
+		// shared a room, and a wrong rung here costs far more than a wrong percept, since
+		// the categories are climbed transitively and one bad edge puts everything the
+		// narrower class holds under the broader one. That is what let an oak reach animal
+		// through a category of parts.
+		if ostensive {
+			held := make(map[uint64]bool, len(core))
+			for _, cs := range core {
+				held[cs.concept] = true
+			}
+			kept := core[:0]
+			for _, cs := range core {
+				if !abstractMember[cs.concept] {
+					kept = append(kept, cs)
+					continue
+				}
+				sub, err := d.store.LinksFromRel([]uint64{cs.concept}, memory.RelGrounds)
+				if err != nil || len(sub) == 0 {
+					continue // grounds nothing, so there is no extension to place
+				}
+				covered := 0
+				for _, e := range sub {
+					if held[e.To] {
+						covered++
+					}
+				}
+				if float64(covered) >= kindLadderOverlap*float64(len(sub)) {
+					kept = append(kept, cs)
+				}
+			}
+			core = kept
+		}
 
 		tpl := "abs:" + w.Lang + ":" + w.Content
 		var c *memory.Fragment
@@ -597,8 +631,18 @@ func (d *Daemon) growAbstractions() (born int) {
 		// concept, grounded only in the propositions that use it, IS the abstraction,
 		// so minting an abs: node beside it would only duplicate it. Skip, and a
 		// duplicate already grown stops refreshing and decays.
-		if c := d.resolveConcept(w.Content); c != nil && d.isPerceptless(c.ID) {
-			continue
+		//
+		// Unless the word was shown things. A clause that mentions a thing before
+		// anything has shown one mints a bare placeholder for it, and that stub reads
+		// exactly like a genuine abstract noun here, so the guard would take a class
+		// word out of the running for good on the strength of an early telling. What
+		// tells them apart is the pointing: a word shown percepts is a word for a kind
+		// of thing, whatever a passing clause minted for it, while a word carried
+		// wholly in talk was never shown anything at all.
+		if !ostensive {
+			if c := d.resolveConcept(w.Content); c != nil && d.isPerceptless(c.ID) {
+				continue
+			}
 		}
 		switch {
 		case c == nil:
