@@ -36,7 +36,7 @@ floor nothing would encode. The lowered floor admits them until the predictor
 warms. A brain that is already taught can run the default config for normal
 operation; the lowered floor only matters while the predictor is cold.
 
-`kind_ladder_enabled` is off by default and belongs on for a corpus that teaches
+`kind_ladder_enabled` stands on by default and earns its place on a corpus that teaches
 three levels, a member under its kind and the kind under a superordinate, the way
 `menagerie.zsh` names a salmon a fish and an animal and the curriculum names a dog
 a mammal and an animal. With it on, the nightly pass lays a defeasible edge from a
@@ -160,8 +160,9 @@ read from `curriculum-order.txt` rather than alphabetically.
 Teaches every scene in `curriculum-order.txt` from an empty brain, checkpointing
 after each one, and closes with the spine rehearsal. The config argument decides
 which engine behaviour the brain is grown under and is recorded with it;
-`teaching/ostensive.json` is the standing config with the pointing-driven passes
-on, and `always-online.json` leaves them off.
+`teaching/ostensive.json` and `always-online.json` both carry the pointing-driven
+passes, which stand on by default and are written out in each file so a grow records
+what it was taught under.
 
 ## Against an existing daemon
 

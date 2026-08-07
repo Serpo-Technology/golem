@@ -7,13 +7,11 @@
     "syslog": 8192
   },
   "lateral_inhibition": 0.6,
-
   "encode_burst": 6,
   "encode_refill_sec": 2,
   "encode_bursts": {
     "web": 200
   },
-
   "sleep_pressure_gate": 0.8,
   "input_silence_sec": 1,
   "calm_before_sleep_sec": 1.5,
@@ -21,7 +19,6 @@
   "nightly_decay": 0.1,
   "prune_floor": 0.1,
   "episode_gap_sec": 120,
-
   "channels": {
     "synthetic": false,
     "vitals": true,
@@ -34,16 +31,17 @@
     "voice_name": ""
   },
   "web_poll_sec": 900,
-  "untrusted_channels": ["web"],
+  "untrusted_channels": [
+    "web"
+  ],
   "subliminal_enabled": false,
-  "kind_ladder_enabled": false,
-  "ostensive_core_enabled": false,
-  "ostensive_naming_enabled": false,
-  "resolve_to_own_concept_enabled": false,
-  "retire_declined_rungs_enabled": false,
+  "kind_ladder_enabled": true,
+  "ostensive_core_enabled": true,
+  "ostensive_naming_enabled": true,
+  "resolve_to_own_concept_enabled": true,
+  "retire_declined_rungs_enabled": true,
   "subconscious_channels": null,
   "architect_pubkey": "",
-
   "graduation_approvals": 3,
   "conflict_margin": 0.15,
   "auto_cue_cooldown_sec": 60,
@@ -51,10 +49,8 @@
   "execute_allowlist": [],
   "execute_timeout_sec": 30,
   "execute_parallel": 4,
-
   "runtime_enabled": false,
   "source_path": "",
   "main_package": "./cmd/golem",
-
   "listen_tcp": ""
 }

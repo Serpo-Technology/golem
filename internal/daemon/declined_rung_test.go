@@ -48,6 +48,7 @@ func rungWeight(t *testing.T, s *memory.Store, member uint64) float64 {
 // and then leaves it exactly where it was, to fade a fiftieth a night.
 func TestDeclinedRungIsLeftStandingWithoutRetirement(t *testing.T) {
 	d, s, circle := declinedRungSetup(t)
+	d.cfg.RetireDeclinedRungsEnabled = false // the reading this replaced
 	d.growAbstractions()
 	if w := rungWeight(t, s, circle); w < 0.4 {
 		t.Fatalf("without retirement a declined rung should be left untouched, got %.3f", w)

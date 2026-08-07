@@ -65,6 +65,7 @@ func grounds(t *testing.T, s *memory.Store, absTpl string, member uint64) bool {
 // quietly become a no-op.
 func TestSmearedCompanyAdmitsSceneMateWithoutOstensiveCore(t *testing.T) {
 	d, s, _, _, _, potC := smearedCategorySetup(t)
+	d.cfg.OstensiveCoreEnabled = false // the reading this replaced
 	d.growAbstractions()
 	if !grounds(t, s, "abs:en:animal", potC) {
 		t.Fatal("without the ostensive core the scene-mate should join the category on company alone")
@@ -235,6 +236,7 @@ func TestOstensiveNamingKeepsAnOlderExemplarOfTheSameKind(t *testing.T) {
 // every question about the category is answered about the stray instead.
 func TestResolveToOwnAbstractionOverADriftedName(t *testing.T) {
 	d, s := testDaemon(t)
+	d.cfg.ResolveToOwnConceptEnabled = false // the reading this replaced
 	beetle := &memory.Fragment{Kind: memory.KindConcept, Channel: "vision",
 		Content: "a small red beetle", Template: "a small red beetle", Category: "noun", Time: time.Now()}
 	if _, err := s.Encode(beetle); err != nil {
@@ -272,6 +274,7 @@ func TestResolveToOwnAbstractionOverADriftedName(t *testing.T) {
 // bond never decays, so the percept can never win it back on weight alone.
 func TestResolvePrefersTheShownThingOverAMintedPlaceholder(t *testing.T) {
 	d, s := testDaemon(t)
+	d.cfg.ResolveToOwnConceptEnabled = false // the reading this replaced
 	base := time.Now().Add(-2 * time.Hour)
 	feedShape(t, s, "vision", "a shiny yellow gold", 4, base)
 	if _, err := s.MergeDuplicates(); err != nil {

@@ -22,9 +22,9 @@
 set -u
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LABEL=${1:?usage: grow.sh <label> [config.json] [scene...]}
-# The scenes now lean on the pointing passes: a word is shown its members and read off
-# what it was shown, and taught under a config that leaves those passes off the corpus
-# teaches one thing and the brain learns another. The standing config carries them.
+# The scenes lean on the pointing passes: a word is shown its members and read off what
+# it was shown. They stand on by default and both teaching configs write them out, so a
+# grow records the reading it was taught under rather than inheriting it silently.
 CFG=${2:-$REPO/teaching/ostensive.json}
 shift 2 2>/dev/null || shift 1
 SCENES=("$@")

@@ -21,8 +21,8 @@ type Store struct {
 	// timer: the day a word's last pointing crosses the floor, its membership reverts in
 	// one night to the company reading the pointing was there to correct. It is not made
 	// immortal, since it hangs off an episode and follows that episode out on the prune,
-	// so it lasts exactly as long as the memory of what was shown. Off unless the daemon
-	// sets it, so a brain that never opts in fades exactly as before.
+	// so it lasts exactly as long as the memory of what was shown. The daemon sets it from
+	// the pointing gate, which stands on by default.
 	SpareOstension bool
 }
 
