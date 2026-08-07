@@ -77,11 +77,34 @@ fi
 
 docker rm -f "$NAME" >/dev/null 2>&1
 docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "$IMAGE" sleep infinity >/dev/null
+
+# A grow runs for hours and lands a checkpoint after every scene, so a run cut short by a
+# restarted engine or a closed lid should not have to begin again from nothing. With
+# RESUME=1 the scenes whose checkpoints are already on disk are taken as taught, the last
+# of them is loaded back in, and teaching picks up at the next one. Only an unbroken run
+# from the first scene counts: a checkpoint after a gap was grown from a brain this run
+# never made, and continuing from it would teach one history on top of another.
+SKIP=0
+LAST=
+if [ "${RESUME:-0}" = 1 ]; then
+  for s in "${SCENES[@]}"; do
+    [ -f "$OUT/after-$s.db" ] || break
+    SKIP=$((SKIP + 1)); LAST=$s
+  done
+fi
 docker exec "$NAME" sh -c 'rm -f /root/.golem/memory.db*'
+if [ -n "$LAST" ]; then
+  say "resuming after $LAST, $SKIP scene(s) already on disk"
+  docker cp "$OUT/after-$LAST.db" "$NAME:/root/.golem/memory.db" >/dev/null \
+    || { say "FATAL could not load $OUT/after-$LAST.db"; exit 1; }
+fi
 start_daemon
 say "growing '$LABEL' from empty over ${#SCENES[@]} scenes, config $(basename "$CFG")"
 
+taught=0
 for s in "${SCENES[@]}"; do
+  taught=$((taught + 1))
+  [ "$taught" -le "$SKIP" ] && continue
   [ -f "$REPO/teaching/$s.zsh" ] || { say "skip $s (no such scene)"; continue; }
   say "teaching $s"
   # The image carries the whole tree at /src, so the scenes and the rehearsal tool
