@@ -304,6 +304,38 @@ func (d *Daemon) growAbstractions() (born int) {
 	}
 	sort.Slice(words, func(i, j int) bool { return words[i].ID < words[j].ID })
 
+	// The concept-side share asks how much of a class's naming company one word accounts
+	// for, and a word that heads a class of its own dilutes every OTHER class it was ever
+	// said near. A mammal was kept company by fish and by moon, said in the same room and
+	// standing for nothing of it, and the two of them took the word animal's share of the
+	// mammals from a tenth to just under it: the rung was refused over three thousandths.
+	// A word that heads its own class now counts toward that class alone, so a class is
+	// measured against the words that stand for it and the words that have no class of
+	// their own, never against the neighbours it was taught beside.
+	if d.cfg.RetireDeclinedRungsEnabled {
+		var idx *abstractionIndex
+		if idx = d.absIdx; idx == nil {
+			if built, err := d.buildAbstractionIndex(); err == nil {
+				idx = built
+			}
+		}
+		if idx != nil {
+			ownClass := make(map[uint64]uint64, len(words))
+			for _, w := range words {
+				if c := idx.conceptByTemplate["abs:"+w.Lang+":"+w.Content]; c != nil {
+					ownClass[w.ID] = c.ID
+				}
+			}
+			clear(conceptTotal)
+			for _, p := range pairs {
+				if own, heads := ownClass[p.Word]; heads && own != p.Concept {
+					continue
+				}
+				conceptTotal[p.Concept] += p.Cooc
+			}
+		}
+	}
+
 	// A word's ostensive salience, apart from its naming company: what it was pointed
 	// at when it was uttered to name something. A name concentrates it on one percept,
 	// a category spreads it across the members it was said over, so it tells the two

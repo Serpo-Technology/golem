@@ -199,3 +199,57 @@ func TestAClassIsNotJudgedByTheSceneMateRule(t *testing.T) {
 		t.Fatalf("a class covering the category must be judged by coverage, not struck out as a scene-mate, got %.3f", w)
 	}
 }
+
+// The concept-side share asks what fraction of a class's naming company one word accounts
+// for, so every word ever said near that class sits in the denominator. A word that heads a
+// class of its own is standing for that one, and its company with a neighbour dilutes the
+// neighbour's real namers: a mammal was kept company by fish and by moon, which took the
+// word animal's share of the mammals just under the floor and cost the taxonomy its rung.
+func TestANeighbourClassWordDoesNotDiluteTheShare(t *testing.T) {
+	d, s, wid, catC, dogC, _ := smearedCategorySetup(t)
+	d.cfg.OstensiveCoreEnabled = true
+	d.growAbstractions()
+	animal, _ := s.ConceptByTemplate("abs:en:animal")
+	if animal == nil {
+		t.Fatal("the category should already have grown")
+	}
+	mammal := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "mammal",
+		Template: "abs:en:mammal", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(mammal); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []uint64{catC, dogC} {
+		if err := s.SetLinkRel(mammal.ID, m, memory.RelGrounds, linkWeight); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(animal.ID, m, memory.RelGrounds, linkWeight); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetLinkRel(wid, mammal.ID, memory.RelTemporal, 0.2); err != nil {
+		t.Fatal(err)
+	}
+	// A neighbour with a class of its own, said in the same room and standing for none of
+	// it, heavy enough to swamp the denominator on its own.
+	moon := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: "moon",
+		Template: "moon", Lang: "en", Time: time.Now()}
+	if _, err := s.Encode(moon); err != nil {
+		t.Fatal(err)
+	}
+	moonClass := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "moon",
+		Template: "abs:en:moon", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(moonClass); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(moon.ID, moonClass.ID, memory.RelTemporal, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(moon.ID, mammal.ID, memory.RelTemporal, 5.0); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.RetireDeclinedRungsEnabled = true
+	d.growAbstractions()
+	if w := edgeWeightRel(t, s, animal.ID, mammal.ID, memory.RelGrounds); w < absPwcFloor {
+		t.Fatalf("a neighbour's company must not dilute the class's own namers, got %.3f", w)
+	}
+}
