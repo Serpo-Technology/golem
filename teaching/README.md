@@ -162,7 +162,10 @@ after each one, and closes with the spine rehearsal. The config argument decides
 which engine behaviour the brain is grown under and is recorded with it;
 `teaching/ostensive.json` and `always-online.json` both carry the pointing-driven
 passes, which stand on by default and are written out in each file so a grow records
-what it was taught under.
+what it was taught under. `company-reading.json` is the same standing config with the
+five set false, which is the reading that came before and the control arm any
+comparison against them needs; an omitted key inherits the default rather than
+falling to false, so a control has to say so explicitly.
 
 ## Against an existing daemon
 
