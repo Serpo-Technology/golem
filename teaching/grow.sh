@@ -62,11 +62,21 @@ checkpoint() {
   start_daemon
 }
 
-say "building the image from the working tree"
-docker build -t "golem:$LABEL" "$REPO" >/dev/null || { say "FATAL build failed"; exit 1; }
+# One tag, reused. A tag named after the grow is never dangling, so a run of these
+# leaves a pile of images no prune can see, and by the next day nothing says which
+# engine any of them held. Two arms of a comparison MUST share an engine besides:
+# build once, then run the second arm with BUILD=0 against the very same image.
+IMAGE=${IMAGE:-golem:grow}
+if [ "${BUILD:-1}" = 1 ]; then
+  say "building $IMAGE from the working tree"
+  docker build -t "$IMAGE" "$REPO" >/dev/null || { say "FATAL build failed"; exit 1; }
+else
+  docker image inspect "$IMAGE" >/dev/null 2>&1 || { say "FATAL $IMAGE not built"; exit 1; }
+  say "reusing $IMAGE unbuilt, so this arm runs the engine the last one did"
+fi
 
 docker rm -f "$NAME" >/dev/null 2>&1
-docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "golem:$LABEL" sleep infinity >/dev/null
+docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "$IMAGE" sleep infinity >/dev/null
 docker exec "$NAME" sh -c 'rm -f /root/.golem/memory.db*'
 start_daemon
 say "growing '$LABEL' from empty over ${#SCENES[@]} scenes, config $(basename "$CFG")"
@@ -91,4 +101,7 @@ fi
 
 stop_daemon
 docker cp "$NAME:/root/.golem/memory.db" "$OUT/$LABEL-final.db" 2>/dev/null
+# The brain is on disk now and the container holds nothing else worth keeping. Set
+# KEEP=1 to leave it up for a post mortem on a grow that went wrong.
+[ "${KEEP:-0}" = 1 ] || docker rm -f "$NAME" >/dev/null 2>&1
 say "grow driver complete: $OUT/$LABEL-final.db"
