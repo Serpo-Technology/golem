@@ -131,7 +131,8 @@ type Config struct {
 	// and an is-a question climbs it to reach a superordinate up the kind chain even after
 	// the superordinate's own thin percept grounding has faded. Read only by the hedged
 	// is-a branch, so it softens a "no" to a "probably" and never asserts a firm falsehood.
-	// On by default: set it false for the reading that came before.
+	// Off by default: held apart from the pointing gate because the is-a measurements cannot
+	// see it at all, being read only by the hedged branch.
 	KindLadderEnabled bool `json:"kind_ladder_enabled"`
 	// OstensiveCoreEnabled decides a category's membership from what its word was
 	// POINTED at rather than from the company the word happened to keep. A word said
@@ -146,7 +147,9 @@ type Config struct {
 	// recount: a word that was shown things keeps its bond only to the ones it was
 	// shown, and its remaining shares are read against that company rather than the
 	// whole room. Held apart from the membership gate because naming is read by far
-	// more than is-a, so it can be turned off alone. On by default.
+	// more than is-a, so it can be turned off alone. Off by default: it carries none of the membership gain, and
+	// switched on under a brain grown without it, one surviving pointing is enough to write
+	// every other bond of that word down by half a night until it is dropped.
 	OstensiveNamingEnabled bool `json:"ostensive_naming_enabled"`
 	// RetireDeclinedRungsEnabled gives the coverage test teeth. A class earns its place
 	// inside a broader class by what it covers, and the test refuses the rungs that have
@@ -155,14 +158,17 @@ type Config struct {
 	// membership to everything beneath it for some seventy nights after the pass stopped
 	// believing it. A rung the pass declines is now written down deliberately, and down
 	// rather than away, so one demoted by a gap in the record can climb back. Only the
-	// rungs between two classes, which is what the coverage test judges. On by default.
+	// rungs between two classes, which is what the coverage test judges. Off by default: on a brain grown with the pointing
+	// gate it moves the closure precision by six ten-thousandths, and on one grown without it
+	// the whole accumulated backlog is declined at once on the first night.
 	RetireDeclinedRungsEnabled bool `json:"retire_declined_rungs_enabled"`
 	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
 	// word names several. The word's own abstraction wins over a percept it merely
 	// drifted onto, and the perceptless node a telling minted for it loses to the thing
 	// once something has shown one. Without this a drifted bond, which the nightly fade
 	// spares and recall only strengthens, keeps the word pointing at the wrong thing for
-	// good. On by default.
+	// good. Off by default: the is-a measurements cannot see it, since it settles resolution
+	// rather than membership.
 	ResolveToOwnConceptEnabled bool `json:"resolve_to_own_concept_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
@@ -325,19 +331,22 @@ func Default() Config {
 		ExecuteAllowlist:    []string{},
 		ExecuteTimeoutSec:   defaultExecuteTimeoutSec,
 		ExecuteParallel:     defaultExecuteParallel,
-		// A word is read off what it was shown. Each of these five moved one decision from
-		// the company a word happened to keep, which reaches every percept still in the room,
-		// onto the pointing, which stays on the thing meant. Grown from empty over the same
-		// forty-five scenes on one engine, with these on against these off and nothing else
-		// between the two, the memberships a firm answer asserts fall from 26147 to 1214
-		// while the true ones hold, and their precision goes from a twentieth to nine tenths.
-		// Recall and the count of concepts left nameless improve alongside, so there is no
-		// axis left on which the older reading is the better one.
-		KindLadderEnabled:          true,
-		OstensiveCoreEnabled:       true,
-		OstensiveNamingEnabled:     true,
-		ResolveToOwnConceptEnabled: true,
-		RetireDeclinedRungsEnabled: true,
+		// A category is read off what its word was shown, not off the company the word
+		// happened to keep. Grown from empty over the same forty-five scenes on one engine,
+		// this against the company reading and nothing else between the two, the memberships
+		// a firm answer asserts fall from 26147 to 1214 while the true ones hold, and their
+		// precision goes from a twentieth to nine tenths.
+		//
+		// It is the only one of the pointing settings that stands on by default, and the
+		// measurement is what decides that rather than caution. Held off one at a time over
+		// every checkpoint of that grow, this one costs 0.3116 of the closure precision and
+		// is worse on all forty-seven; the other four move it by 0.0006 at most, and two of
+		// them not at all. Alone it holds 0.9732 against 0.9738 for all five together. It is
+		// also the only one safe to switch on under a brain grown without it: the others read
+		// a record of pointings that was fading all the while they were off, and take a third
+		// of that brain's names down with them over five nights, where this one leaves them
+		// where the company reading does.
+		OstensiveCoreEnabled: true,
 		// Self-build.
 		RuntimeEnabled: false,
 		SourcePath:     "",
