@@ -96,7 +96,14 @@ const (
 	// is a strong namer of the tiger is independent of how many other animals it names), so
 	// a concept whose company is at least this fraction the category word's is a reliable
 	// member however broad the category, while a one-shot co-namer sits an order below.
-	absPwcFloor      = 0.10
+	absPwcFloor = 0.10
+	// absDeclinedKeep is what a class-over-class rung keeps when the coverage test turns
+	// it down. Half a night takes a rung from the top of the range under the membership
+	// bar in three nights rather than seventy, which is fast enough that a falsehood
+	// stops being answered firmly within a night or two of the pass disowning it, and
+	// slow enough that a rung declined once for a thin core is still there to be
+	// recovered by the next night that covers it.
+	absDeclinedKeep  = 0.5
 	absConcentration = 0.5 // a word this faithful to one concept is a name, an abstraction is not
 	// ostensiveDominance is the share of a word's whole ostension one percept must hold
 	// for the word to count as that percept's name. A name points at one thing every
@@ -716,6 +723,52 @@ func (d *Daemon) growAbstractions() (born int) {
 			}
 			if err := d.store.SetLinkRel(c.ID, cs.concept, memory.RelGrounds, gw); err != nil {
 				fmt.Fprintf(d.out, "abstraction grounding error: %v\n", err)
+			}
+		}
+		// Turning a rung down has to cost it something. The coverage test above decides
+		// which classes still belong inside this one, but a rung it refuses is only left
+		// out of the refresh, and left out it fades a fiftieth a night from as high as
+		// four tenths: some seventy nights during which it goes on handing a firm
+		// membership to everything it holds, long after the pass stopped believing it.
+		// What the pass declines tonight is written down instead.
+		//
+		// Down rather than out, because a rung can be declined for a night whose core came
+		// in thin rather than because it is wrong, and one night's thin evidence should not
+		// erase what many nights built. A rung that goes on being declined falls under the
+		// link floor in the end and the prune takes it, which is the right end for one
+		// nothing covers any more. That end is not a sentence, but neither is it undone by
+		// coverage alone: a class reaches a category by being proposed among its word's
+		// company, and only what the company proposes is judged here, so a retired rung
+		// returns by the road it first came and by no other.
+		//
+		// Only the rungs between two classes are touched, since those are what the coverage
+		// test judges; a percept member answers to the pointing instead.
+		if d.cfg.RetireDeclinedRungsEnabled && d.cfg.OstensiveCoreEnabled {
+			held := make(map[uint64]bool, len(core))
+			for _, cs := range core {
+				held[cs.concept] = true
+			}
+			if edges, err := d.store.LinksFromRel([]uint64{c.ID}, memory.RelGrounds); err == nil {
+				declined := make(map[uint64]float64, len(edges))
+				ids := make([]uint64, 0, len(edges))
+				for _, e := range edges {
+					if e.To == c.ID || held[e.To] {
+						continue
+					}
+					declined[e.To] = e.Weight
+					ids = append(ids, e.To)
+				}
+				if frs, err := d.store.FragmentsByIDs(ids); err == nil && len(ids) > 0 {
+					for _, f := range frs {
+						if _, ok := abstractionLemma(f.Template); !ok {
+							continue
+						}
+						if err := d.store.SetLinkRel(c.ID, f.ID, memory.RelGrounds,
+							declined[f.ID]*absDeclinedKeep); err != nil {
+							fmt.Fprintf(d.out, "declined rung error: %v\n", err)
+						}
+					}
+				}
 			}
 		}
 		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, absNameWeight); err != nil {

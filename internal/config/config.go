@@ -148,6 +148,15 @@ type Config struct {
 	// whole room. Held apart from the membership gate because naming is read by far
 	// more than is-a, so it can be turned off alone. Off by default.
 	OstensiveNamingEnabled bool `json:"ostensive_naming_enabled"`
+	// RetireDeclinedRungsEnabled gives the coverage test teeth. A class earns its place
+	// inside a broader class by what it covers, and the test refuses the rungs that have
+	// not earned it, but refusing costs the rung almost nothing: it is left to fade a
+	// fiftieth a night from as high as four tenths, so it goes on carrying a firm
+	// membership to everything beneath it for some seventy nights after the pass stopped
+	// believing it. A rung the pass declines is now written down deliberately, and down
+	// rather than away, so one demoted by a gap in the record can climb back. Only the
+	// rungs between two classes, which is what the coverage test judges. Off by default.
+	RetireDeclinedRungsEnabled bool `json:"retire_declined_rungs_enabled"`
 	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
 	// word names several. The word's own abstraction wins over a percept it merely
 	// drifted onto, and the perceptless node a telling minted for it loses to the thing
