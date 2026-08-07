@@ -3127,6 +3127,9 @@
     "fruit",
     "plant"
    ],
+   "a round red ball": [
+    "ball"
+   ],
    "a round red bead": [
     "bead"
    ],
@@ -3466,6 +3469,7 @@
    ],
    "a small blue jay": [
     "animal",
+    "bird",
     "jay"
    ],
    "a small blue kingfisher": [

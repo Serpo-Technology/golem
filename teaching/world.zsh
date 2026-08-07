@@ -108,6 +108,18 @@ for s in "a dog chased a cat" "a cat chased a mouse" "a dog chased a rabbit" "a 
          "a dog chased a cat" "a cat chased a mouse"; do narrate "$s"; done
 nap
 
+# --- The kinds the chasings speak of, shown before they are spoken of ------
+# A word first met in a clause is given a bare placeholder and its category is
+# foreclosed for the rest of the teaching, so the three the actions below name
+# are shown here first, each over the thing it is a kind of.
+log "=== bird, fish and ball, shown ==="
+for x in 1 2 3; do
+  scene_named "a small blue jay" "jay" "bird"
+  scene_named "a small shiny sardine" "sardine" "fish"
+  scene "a round red ball" "ball"
+done
+nap
+
 # --- Actions: chase and fetch over the wider cast --------------------------
 log "=== actions: chase, fetch ==="
 narrate "a wolf chased a rabbit"
