@@ -466,7 +466,18 @@ func (d *Daemon) growAbstractions() (born int) {
 			// one tongue only: an incidental scene-mate, not a member. Perceptless
 			// co-members (an abstraction reached relationally, not through a tongue's
 			// percepts) are exempt, since they have no percept company to corroborate.
-			if hasTwin && !perceptless[s.concept] && !corrob[s.concept] {
+			// The rule is about percepts, and it exempts the co-members that have no percept
+			// company to corroborate by asking whether they are perceptless. A grown class is
+			// not perceptless, since it grounds the very percepts it was distilled from, so it
+			// fell to a test written for scene-mates: a bird keeps a strong hold on the word
+			// animal, is corroborated by nothing in another tongue, and is struck out. A class
+			// answers to the coverage test below instead, which asks the question that suits
+			// it, so it is exempt here on the same ground the perceptless co-members are.
+			// Held with the retirement, because it only pays alongside it. On its own the
+			// exemption hands the coverage test more classes than it turns away, and the
+			// memberships a firm answer asserts go up faster than the true ones do.
+			classExempt := d.cfg.RetireDeclinedRungsEnabled && abstractMember[s.concept]
+			if hasTwin && !perceptless[s.concept] && !corrob[s.concept] && !classExempt {
 				kept = false
 			}
 			if kept {

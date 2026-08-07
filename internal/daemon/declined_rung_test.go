@@ -142,3 +142,60 @@ func TestRetirementLeavesPerceptMembersAlone(t *testing.T) {
 		t.Fatalf("a percept member is judged by the pointing, not by coverage, got %.3f", w)
 	}
 }
+
+// The corroboration rule reads a percept: a thing that kept a word's company in one tongue
+// alone, with no twin in the other to vouch for it, is a scene-mate and not a member. It
+// exempts the co-members that have no percept company to corroborate by asking whether they
+// are perceptless, and a grown class is not perceptless, since it grounds the percepts it
+// was distilled from. So a class fell to a rule written for scene-mates, and in a brain
+// taught two tongues it fell reliably: an English class is corroborated only by an
+// other-tongue word's company, which an English-minted abstraction rarely enters. The word
+// animal kept a bird among its firmest company and the rule struck it out, so the coverage
+// test that decides these rungs never saw it at all.
+func TestAClassIsNotJudgedByTheSceneMateRule(t *testing.T) {
+	d, s, wid, catC, dogC, potC := smearedCategorySetup(t)
+	d.cfg.OstensiveCoreEnabled = true
+	d.growAbstractions()
+	animal, _ := s.ConceptByTemplate("abs:en:animal")
+	if animal == nil {
+		t.Fatal("the category should already have grown")
+	}
+	// A class over what the category holds, in the category word's company, corroborated by
+	// nothing in the other tongue.
+	bird := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: "bird",
+		Template: "abs:en:bird", Category: "noun", Time: time.Now()}
+	if _, err := s.Encode(bird); err != nil {
+		t.Fatal(err)
+	}
+	// Over the members the category was pointed at, so the coverage test below has no
+	// quarrel with it and the scene-mate rule is the only thing that can strike it out.
+	for _, m := range []uint64{catC, dogC} {
+		if err := s.SetLinkRel(bird.ID, m, memory.RelGrounds, linkWeight); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(animal.ID, m, memory.RelGrounds, linkWeight); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = potC
+	if err := s.SetLinkRel(wid, bird.ID, memory.RelTemporal, 0.95); err != nil {
+		t.Fatal(err)
+	}
+	// An other-tongue word whose company is a subset of this one's, which is what makes the
+	// English word a twin and arms the rule.
+	tr := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: "hayvan",
+		Template: "hayvan", Lang: "tr", Time: time.Now()}
+	if _, err := s.Encode(tr); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []uint64{catC, dogC} {
+		if err := s.SetLinkRel(tr.ID, m, memory.RelTemporal, 0.9); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.cfg.RetireDeclinedRungsEnabled = true
+	d.growAbstractions()
+	if w := edgeWeightRel(t, s, animal.ID, bird.ID, memory.RelGrounds); w < absPwcFloor {
+		t.Fatalf("a class covering the category must be judged by coverage, not struck out as a scene-mate, got %.3f", w)
+	}
+}
