@@ -162,8 +162,10 @@ after each one, and closes with the spine rehearsal. The config argument decides
 which engine behaviour the brain is grown under and is recorded with it;
 `teaching/ostensive.json` and `always-online.json` both carry all five pointing-driven
 passes, which is what the deliverable brains were grown under. Only
-`ostensive_core_enabled` stands on by default; the other four are written out here
-because a grow should record what it was taught under rather than inherit it. `company-reading.json` is the same standing config with the
+`ostensive_core_enabled` and `resolve_to_own_concept_enabled` stand on by default, being
+the two that take nothing from a brain grown without them. The naming pass and the kind
+ladder are written out here because they earn their place on a grow from empty and are
+not safe to switch on under a brain that was grown without them. `company-reading.json` is the same standing config with the
 five set false, which is the reading that came before and the control arm any
 comparison against them needs; an omitted key inherits the default rather than
 falling to false, so a control has to say so explicitly.

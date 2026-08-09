@@ -158,9 +158,11 @@ type Config struct {
 	// membership to everything beneath it for some seventy nights after the pass stopped
 	// believing it. A rung the pass declines is now written down deliberately, and down
 	// rather than away, so one demoted by a gap in the record can climb back. Only the
-	// rungs between two classes, which is what the coverage test judges. Off by default: on a brain grown with the pointing
-	// gate it moves the closure precision by six ten-thousandths, and on one grown without it
-	// the whole accumulated backlog is declined at once on the first night.
+	// rungs between two classes, which is what the coverage test judges. Off by default. Grown
+	// from empty it costs edge precision: across the arms that carry the naming pass, every run
+	// with this on scores below every run without it, while what it gains elsewhere stays under
+	// the spread between two runs of one config. On a brain grown without it, the whole
+	// accumulated backlog is declined at once on the first night.
 	RetireDeclinedRungsEnabled bool `json:"retire_declined_rungs_enabled"`
 	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
 	// word names several. The word's own abstraction wins over a percept it merely
@@ -347,6 +349,13 @@ func Default() Config {
 		// of that brain's names down with them over five nights, where this one leaves them
 		// where the company reading does.
 		OstensiveCoreEnabled: true,
+		// A bare word is settled to the concept it is a word FOR. Grown from empty, the one
+		// arm that differs from its neighbour by this alone comes out with the same recall to
+		// four places and the same count of nameless concepts, and answers "is an oak a tree"
+		// yes where the other says no: every arm carrying it answers that question right and
+		// every arm without it answers it wrong. It costs a brain grown without it nothing,
+		// which is why it stands here beside the core rather than in the teaching configs.
+		ResolveToOwnConceptEnabled: true,
 		// Self-build.
 		RuntimeEnabled: false,
 		SourcePath:     "",
