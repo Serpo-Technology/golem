@@ -3,6 +3,7 @@ package daemon
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -262,6 +263,35 @@ func (idx *abstractionIndex) noteConcept(c *memory.Fragment) {
 		idx.conceptByTemplate[c.Template] = c
 	}
 	idx.grounded[c.ID] = true
+}
+
+// traceName reports every naming bond written for one word, with the path that wrote it, so a
+// bond nobody meant to write can be traced to its author instead of guessed at. Set
+// GOLEM_TRACE_NAME to the word. Off, it costs one string compare per write.
+var traceNameWord = os.Getenv("GOLEM_TRACE_NAME")
+
+func (d *Daemon) traceName(where string, wordID, target uint64, weight float64) {
+	want := traceNameWord
+	if want == "" {
+		return
+	}
+	frs, err := d.store.FragmentsByIDs([]uint64{wordID, target})
+	if err != nil {
+		return
+	}
+	var wc, tt string
+	for _, f := range frs {
+		if f.ID == wordID {
+			wc = f.Content
+		}
+		if f.ID == target {
+			tt = f.Template
+		}
+	}
+	if wc != want {
+		return
+	}
+	fmt.Fprintf(d.out, "NAMETRACE %-22s %q -> %s  w=%.4f\n", where, wc, tt, weight)
 }
 
 func (d *Daemon) growAbstractions() (born int) {
@@ -615,6 +645,7 @@ func (d *Daemon) growAbstractions() (born int) {
 		// telling, spreads its ostension and clears no single referent, so it falls
 		// through to the company-based reading and abstracts.
 		if ref := d.ostensiveReferent(w.ID, named, ostByWord[w.ID], ostTotal[w.ID]); ref != 0 {
+			d.traceName("ostensive-referent", w.ID, ref, absNameWeight)
 			if err := d.store.SetLinkRel(w.ID, ref, memory.RelNames, absNameWeight); err != nil {
 				fmt.Fprintf(d.out, "ostensive name error: %v\n", err)
 			} else if d.absIdx != nil {
@@ -683,6 +714,7 @@ func (d *Daemon) growAbstractions() (born int) {
 			// attention edge, not a referent; promoting it would launder one
 			// mis-binding into a firm name, the guard growConcepts already keeps.
 			if existing[target] > 0 || !d.isPerceptless(target) {
+				d.traceName("cross-tongue-reuse", w.ID, target, absNameWeight)
 				if err := d.store.SetLinkRel(w.ID, target, memory.RelNames, absNameWeight); err != nil {
 					fmt.Fprintf(d.out, "cross-tongue name error: %v\n", err)
 				} else if d.absIdx != nil {
@@ -814,6 +846,7 @@ func (d *Daemon) growAbstractions() (born int) {
 				}
 			}
 		}
+		d.traceName("own-abstraction", w.ID, c.ID, absNameWeight)
 		if err := d.store.SetLinkRel(w.ID, c.ID, memory.RelNames, absNameWeight); err != nil {
 			fmt.Fprintf(d.out, "abstraction naming error: %v\n", err)
 		} else if d.absIdx != nil {
@@ -1028,6 +1061,7 @@ func (d *Daemon) inheritGroundingNames(abstraction *memory.Fragment, percept, an
 		if weight > absNameWeight {
 			weight = absNameWeight
 		}
+		d.traceName("inherit-grounding", e.From, abstraction.ID, weight)
 		if err := d.store.SetLinkRel(e.From, abstraction.ID, memory.RelNames, weight); err != nil {
 			fmt.Fprintf(d.out, "abstraction cross-name error: %v\n", err)
 		} else if d.absIdx != nil {
@@ -1393,6 +1427,7 @@ func (d *Daemon) growConcepts() (born, named int) {
 		if p.Existing == 0 && w < namesWriteFloor {
 			continue
 		}
+		d.traceName("recount", p.Word, p.Concept, w)
 		nameEdges = append(nameEdges, memory.LinkEdge{From: p.Word, To: p.Concept, Rel: memory.RelNames, Weight: w})
 		if p.Existing == 0 {
 			named++
