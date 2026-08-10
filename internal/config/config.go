@@ -164,6 +164,17 @@ type Config struct {
 	// the spread between two runs of one config. On a brain grown without it, the whole
 	// accumulated backlog is declined at once on the first night.
 	RetireDeclinedRungsEnabled bool `json:"retire_declined_rungs_enabled"`
+	// UnshownNamesByOwnShareEnabled names a word that was never shown anything by its own
+	// company alone. The nightly recount blends the share of the word's company that lands on
+	// a concept with the share of that concept's company which is this word, and the second
+	// half exists to tell a naming from a passing warmth beside a percept. A word carried
+	// wholly in talk has no percept at all, so there is nothing for it to settle, and it does
+	// the one thing left to it: it divides by the company of the whole class, handing the word
+	// to whichever class is obscurest. A bat kept company with the animals at 0.62 and with a
+	// Turkish word for the moon at 0.43 and was named for the moon, four to one, because a
+	// hundred words are taught under animal and a handful under the moon; fifteen creatures
+	// ended up owning no other name. Off by default.
+	UnshownNamesByOwnShareEnabled bool `json:"unshown_names_by_own_share_enabled"`
 	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
 	// word names several. The word's own abstraction wins over a percept it merely
 	// drifted onto, and the perceptless node a telling minted for it loses to the thing

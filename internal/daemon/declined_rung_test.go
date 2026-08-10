@@ -254,3 +254,62 @@ func TestANeighbourClassWordDoesNotDiluteTheShare(t *testing.T) {
 		t.Fatalf("a neighbour's company must not dilute the class's own namers, got %.3f", w)
 	}
 }
+
+// A word taught wholly in talk keeps company with classes and with nothing that was ever
+// shown. The concept-side share exists to tell a naming from a warmth beside a percept, and
+// with no percept it settles nothing and only divides by the company of the whole class, so
+// the word goes to whichever class is obscurest. Here the right class keeps a firmer company
+// than the junk one and must win anyway.
+func TestAWordNeverShownIsNamedByItsOwnCompany(t *testing.T) {
+	d, s := testDaemon(t)
+	mk := func(tpl string) *memory.Fragment {
+		f := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: tpl,
+			Template: tpl, Category: "noun", Time: time.Now()}
+		if _, err := s.Encode(f); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	animal, moon := mk("abs:en:animal"), mk("abs:tr:ay")
+	// Both classes ground something, as they do on a grown brain: a class that grounds
+	// nothing is perceptless and earns no new name from company at all, by a separate rule.
+	for _, pair := range []struct {
+		cls *memory.Fragment
+		cap string
+	}{{animal, "a small brown dog"}, {moon, "a pale round luna"}} {
+		per := mk(pair.cap)
+		if err := s.SetLinkRel(pair.cls.ID, per.ID, memory.RelGrounds, linkWeight); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The junk class keeps a thin company, the right one the company of many words.
+	for i := range 30 {
+		w := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: "w" + string(rune('a'+i%26)) + string(rune('a'+i/26)),
+			Template: "w", Lang: "en", Time: time.Now()}
+		if _, err := s.Encode(w); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(w.ID, animal.ID, memory.RelTemporal, 0.6); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bat := &memory.Fragment{Kind: memory.KindWord, Channel: "word", Content: "bat",
+		Template: "bat", Lang: "en", Time: time.Now()}
+	if _, err := s.Encode(bat); err != nil {
+		t.Fatal(err)
+	}
+	// The word's own company: firmer with the right class than with the junk one.
+	if err := s.SetLinkRel(bat.ID, animal.ID, memory.RelTemporal, 0.62); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetLinkRel(bat.ID, moon.ID, memory.RelTemporal, 0.43); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.UnshownNamesByOwnShareEnabled = true
+	d.growConcepts()
+	got := edgeWeightRel(t, s, bat.ID, animal.ID, memory.RelNames)
+	junk := edgeWeightRel(t, s, bat.ID, moon.ID, memory.RelNames)
+	if got <= junk {
+		t.Fatalf("the class the word keeps firmer company with must win: animal %.4f, moon %.4f", got, junk)
+	}
+}

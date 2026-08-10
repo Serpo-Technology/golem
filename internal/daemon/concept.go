@@ -1332,6 +1332,18 @@ func (d *Daemon) growConcepts() (born, named int) {
 	unpointable := func(c uint64) bool {
 		return abstractConcept[c] || relConcept[c] || perceptless[c]
 	}
+	// A word taught wholly in talk keeps company with nothing that was ever shown. It has no
+	// percept for the concept-side share to weigh a naming against, which is the one thing
+	// that share is for, so applied to such a word it does nothing but punish the category
+	// many words were taught under.
+	unshown := map[uint64]bool{}
+	for _, p := range pairs {
+		if !unpointable(p.Concept) {
+			unshown[p.Word] = false
+		} else if _, seen := unshown[p.Word]; !seen {
+			unshown[p.Word] = true
+		}
+	}
 	pointedTotal := map[uint64]float64{}
 	// The KINDS a word was shown, by the head of each pointed-at caption. A pointing is one
 	// perishable edge to one episode, so a word shown two gloves a month apart may still hold
@@ -1385,6 +1397,15 @@ func (d *Daemon) growConcepts() (born, named int) {
 		pcw := p.Cooc / (wordTotal + namesSmoothing)
 		pwc := p.Cooc / (conceptTotal[p.Concept] + namesSmoothing)
 		w := math.Sqrt(pcw*pwc) * gain
+		// Nothing was ever shown for this word, so there is no percept for the
+		// concept-side share to weigh against, and dividing by a class's whole company
+		// hands the word to whichever class is obscurest: a bat kept company with the
+		// animals at 0.62 and with a Turkish word for the moon at 0.43, and the moon won
+		// four to one because a hundred words are taught under animal and a handful under
+		// the moon. Judged by its own company alone, the bat is an animal.
+		if d.cfg.UnshownNamesByOwnShareEnabled && unshown[p.Word] {
+			w = pcw * gain
+		}
 		if w > namesMaxWeight {
 			w = namesMaxWeight
 		}

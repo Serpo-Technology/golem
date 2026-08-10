@@ -52,5 +52,6 @@
   "runtime_enabled": false,
   "source_path": "",
   "main_package": "./cmd/golem",
-  "listen_tcp": ""
+  "listen_tcp": "",
+  "unshown_names_by_own_share_enabled": false
 }
