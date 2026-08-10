@@ -1,0 +1,211 @@
+# kind	question	expect	note
+isa-yes	is an acorn a nut	yes	
+isa-yes	is alexandria a city	yes	
+isa-yes	is an almond a nut	yes	
+isa-yes	is alps a landform	yes	
+isa-yes	is alps a mountain	yes	
+isa-yes	is amazon a landform	yes	
+isa-yes	is amazon a river	yes	
+isa-yes	is an amphibian an animal	yes	
+isa-yes	is andes a landform	yes	
+isa-yes	is andes a mountain	yes	
+isa-yes	is an anger a feeling	yes	
+isa-yes	is an anger an idea	yes	
+isa-yes	is an answer a sign	yes	
+isa-yes	is arctic a sea	yes	
+isa-yes	is an arm a part	yes	
+isa-yes	is atlantic a sea	yes	
+isa-yes	is atlas a mountain	yes	
+isa-yes	is a baby an animal	yes	
+isa-yes	is a baby a person	yes	
+isa-yes	is a baker an animal	yes	
+isa-yes	is a baker a person	yes	
+isa-yes	is a ball a shape	yes	
+isa-yes	is a ball a sphere	yes	
+isa-yes	is a ball a toy	yes	
+isa-yes	is a balloon a toy	yes	
+isa-yes	is baltic a sea	yes	
+isa-yes	is a bank a place	yes	
+isa-yes	is barcelona a city	yes	
+isa-yes	is a barley a grain	yes	
+isa-yes	is a bat a mammal	yes	
+isa-yes	is a beaver a mammal	yes	
+isa-yes	is a beer a drink	yes	
+isa-yes	is black colour	yes	
+isa-yes	is blue colour	yes	
+isa-yes	is a bone a part	yes	
+isa-yes	is a book a sign	yes	
+isa-yes	is a bowl a utensil	yes	
+isa-yes	is a box a cube	yes	
+isa-yes	is a box a shape	yes	
+isa-yes	is a boxing an activity	yes	
+isa-yes	is a bread a dish	yes	
+isa-yes	is bright quality	yes	
+isa-yes	is a bronze a gem	yes	
+isa-yes	is a brother a person	yes	
+isa-yes	is brown colour	yes	
+isa-yes	is a buffalo a mammal	yes	
+isa-yes	is busan a city	yes	
+isa-yes	is a butter an ingredient	yes	
+isa-yes	is a cake a dish	yes	
+isa-yes	is a calm a feeling	yes	
+isa-yes	is a calm an idea	yes	
+isa-yes	is a cheese an ingredient	yes	
+isa-yes	is a chess an activity	yes	
+isa-yes	is a chestnut a nut	yes	
+isa-yes	is a church a place	yes	
+isa-yes	is a circle a shape	yes	
+isa-yes	is a clay material	yes	
+isa-yes	is a cloth material	yes	
+isa-yes	is a cloud weather	yes	
+isa-yes	is a cocoa a drink	yes	
+isa-yes	is a coffee a drink	yes	
+isa-yes	is a coin a circle	yes	
+isa-yes	is cold quality	yes	
+isa-yes	is colour quality	yes	
+isa-yes	is a concrete material	yes	
+isa-yes	is a container an object	yes	
+isa-yes	is a corn a grain	yes	
+isa-yes	is a court a place	yes	
+isa-yes	is a crab a creature	yes	
+isa-yes	is a cream an ingredient	yes	
+isa-yes	is a cricket an insect	yes	
+isa-yes	is a cup a utensil	yes	
+isa-yes	is a cycling an activity	yes	
+isa-yes	is dance art	yes	
+isa-yes	is danger state	yes	
+isa-yes	is danube a river	yes	
+isa-yes	is a day a time	yes	
+isa-yes	is death state	yes	
+isa-yes	is a diamond a gem	yes	
+isa-yes	is a doll a toy	yes	
+isa-yes	is a down a direction	yes	
+isa-yes	is drawing art	yes	
+isa-yes	is a dumpling a dish	yes	
+isa-yes	is an eagle a bird	yes	
+isa-yes	is an ear a part	yes	
+isa-yes	is an east a direction	yes	
+isa-yes	is ebro a river	yes	
+isa-yes	is an emerald a gem	yes	
+isa-yes	is an evening a time	yes	
+isa-yes	is a falcon a bird	yes	
+isa-yes	is a fear a feeling	yes	
+isa-yes	is a fear an idea	yes	
+isa-yes	is film art	yes	
+isa-yes	is a flower a plant	yes	
+isa-yes	is a fog weather	yes	
+isa-yes	is a fork a utensil	yes	
+isa-yes	is freedom state	yes	
+isa-yes	is a frog an amphibian	yes	
+isa-yes	is a frost weather	yes	
+isa-yes	is a fruit a plant	yes	
+isa-yes	is furniture an object	yes	
+isa-yes	is a goose a bird	yes	
+isa-yes	is a hour a time	yes	
+isa-yes	is an instrument an object	yes	
+isa-yes	is a jellyfish a creature	yes	
+isa-yes	is a ladybug an insect	yes	
+isa-yes	is a language a sign	yes	
+isa-yes	is a left a direction	yes	
+isa-yes	is a lobster a creature	yes	
+isa-yes	is a moth an insect	yes	
+isa-yes	is a newt an amphibian	yes	
+isa-yes	is an oat a grain	yes	
+isa-yes	is a roof a triangle	yes	
+isa-yes	is a salamander an amphibian	yes	
+isa-yes	is a salmon a fish	yes	
+isa-yes	is a seahorse a fish	yes	
+isa-yes	is a shark a fish	yes	
+isa-yes	is a slug a bug	yes	
+isa-yes	is a snail a bug	yes	
+isa-yes	is a spider a bug	yes	
+isa-yes	is a tree a plant	yes	
+isa-yes	is a wheel a circle	yes	
+isa-yes	is a window a rectangle	yes	
+isa-no	is andes a plant	no	
+isa-no	is atlantic material	no	
+isa-no	is baltic quality	no	
+isa-no	is a beer weather	no	
+isa-no	is a bronze a tool	no	
+isa-no	is a builder a vehicle	no	
+isa-no	is a cliff an instrument	no	
+isa-no	is a coin furniture	no	
+isa-no	is a cylinder a bird	no	
+isa-no	is dry an insect	no	
+isa-no	is ebro a reptile	no	
+isa-no	is a fruit a gem	no	
+isa-no	is gray an animal	no	
+isa-no	is hard a plant	no	
+isa-no	is heavy material	no	
+isa-no	is honor weather	no	
+isa-no	is a lake a building	no	
+isa-no	is light an instrument	no	
+isa-no	is a miner colour	no	
+isa-no	is a neighbor a mammal	no	
+isa-no	is an ocean a reptile	no	
+isa-no	is an otter a flower	no	
+isa-no	is patience a vegetable	no	
+isa-no	is a penguin a fruit	no	
+isa-no	is a pilot a gem	no	
+isa-no	is a reptile material	no	
+isa-no	is a ring weather	no	
+isa-no	is a ruby weather	no	
+isa-no	is a shark a building	no	
+isa-no	is a sister clothing	no	
+isa-no	is a slug an instrument	no	
+isa-no	is soft furniture	no	
+isa-no	is a star colour	no	
+isa-no	is tiber an insect	no	
+isa-no	is urals a flower	no	
+isa-no	is a walrus a tree	no	
+isa-no	is a window a fruit	no	
+isa-no	is alps quality	no	
+isa-no	is amazon weather	no	
+isa-no	is an amphibian a landform	no	
+isa-no	is andes a tool	no	
+isa-no	is arctic an instrument	no	
+isa-no	is atlantic a shape	no	
+isa-no	is atlas colour	no	
+isa-no	is a baby a bird	no	
+isa-no	is a baker a fish	no	
+isa-no	is a ball a mammal	no	
+isa-no	is baltic a reptile	no	
+isa-no	is a bat a fruit	no	
+isa-no	is a beaver a gem	no	
+isa-no	is a beer an animal	no	
+isa-no	is a bird a plant	no	
+isa-no	is black a plant	no	
+isa-no	is blue weather	no	
+isa-no	is a box a vehicle	no	
+isa-no	is bright an instrument	no	
+isa-no	is a bronze furniture	no	
+isa-no	is a brother colour	no	
+isa-no	is brown a bird	no	
+isa-no	is a buffalo an insect	no	
+names	what is a banded iron chest	chest|furniture|storage	
+names	what is a big blue truck	landcar|truck|vehicle	
+names	what is a black leather jacket	clothing|garment|jacket	
+names	what is a blue clawed lobster	animal|crustacean|lobster	
+names	what is a branching red coral	animal|cnidarian|coral	
+names	what is a bright neon softball	ball|equipment|softball	
+names	what is a bright twisting kaleidoscope	kaleidoscope|plaything|toy	
+names	what is a broad iron axe	axe|handtool|tool	
+names	what is a brown leather knapsack	container|knapsack|thing	
+names	what is a calm careful doctor	doctor|person|worker	
+names	what is a chunky clay mug	dishware|kitchenware|mug	
+names	what is a colorful whirling pinwheel	pinwheel|plaything|toy	
+names	what is a curled glassy prawn	animal|crustacean|prawn	
+names	what is a dark green cedar	cedar|plant|tree	
+names	what is a deep silver ladle	kitchenware|ladle|utensil	
+names	what is a domed blue mosque	building|mosque|place	
+names	what is a fiery orange sunset	skylight|sunset|weather	
+names	what is a flat ridged griddle	cookware|griddle|kitchenware	
+names	what is a folding canvas cot	bed|cot|furniture	
+names	what is a geared steel winch	appliance|machine|winch	
+names	what is a golden brass trumpet	instrument|thing|trumpet	
+names	what is a gray wolf	animal|wolf	
+names	what is a green leaf	green	
+names	what is a green scaly lizard	animal|lizard|reptile	
+names	what is a heavy brown bear	animal|bear|mammal	
+regression	is a person an animal	yes	taught, answered no since the handoff
+regression	does a person show courage	yes	taught, answered no since the handoff
