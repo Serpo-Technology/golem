@@ -3,9 +3,13 @@ world
 world-bilingual
 world-breadth
 world-foods
+dishes-and-drinks
 flora
 menagerie
+more-menagerie
 people-kin
+trades
+body-parts
 tools-instruments
 clothing
 instruments-music
@@ -13,10 +17,12 @@ celestial
 weather-sky
 vehicles
 materials-minerals
+stuffs
 artifacts
 buildings
 furniture
 kitchenware
+kitchen-and-play
 containers
 sports-gear
 sealife
