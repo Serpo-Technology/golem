@@ -7,7 +7,7 @@ A firm answer and a hedge are counted apart rather than blended. A brain that he
 everything is not the same as one that answers, and a single accuracy number hides which
 of the two you have.
 """
-import json, os, re, subprocess, sys, time
+import json, os, re, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -20,9 +20,27 @@ def sh(*a, **k):
     return subprocess.run(a, capture_output=True, text=True, **k)
 
 
+def probeConfig():
+    """The given config with sleeping held off.
+
+    A run of two hundred questions takes about as long as the gap between nights, so the
+    daemon naps in the middle of it and every question asked while it sleeps comes back
+    with nothing. That is the harness answering, not the brain: the same questions asked
+    one at a time all answer. So the config is copied with the interval pushed out of
+    reach, and what the brain does not know is told apart from what it was too busy to say.
+    """
+    with open(CFG) as f:
+        cfg = json.load(f)
+    cfg["sleep_interval_sec"] = 999999
+    fd, path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w") as f:
+        json.dump(cfg, f)
+    return path
+
+
 def up():
     sh("docker", "rm", "-f", NAME)
-    sh("docker", "run", "-d", "--name", NAME, "-v", f"{os.path.abspath(CFG)}:/root/.golem/config.json:ro",
+    sh("docker", "run", "-d", "--name", NAME, "-v", f"{probeConfig()}:/root/.golem/config.json:ro",
        IMAGE, "sleep", "infinity")
     sh("docker", "cp", os.path.abspath(DB), f"{NAME}:/root/.golem/memory.db")
     sh("docker", "exec", "-d", NAME, "golem", "run")
@@ -61,8 +79,13 @@ def asked_about(q):
 
 
 def verdict(answer):
-    """Firm yes, hedged yes, firm no, hedged no, or nothing that answers the question."""
+    """Firm yes, hedged yes, firm no, hedged no, an owned ignorance, or no answer at all."""
     a = answer.lower()
+    # Saying so is not silence. A brain that has never been shown the thing and says as much
+    # is the honesty rail working, and counting it beside a wrong answer hides which of the
+    # two you are looking at.
+    if a.startswith("i do not know") or a.startswith("i don't know"):
+        return "unknown"
     if a.startswith("yes"):
         return "yes"
     if a.startswith("probably") or a.startswith("perhaps") or a.startswith("maybe"):
@@ -82,7 +105,7 @@ def main():
     for kind, q, expect, *rest in rows:
         ans = ask(q)
         v = verdict(ans)
-        t = tally.setdefault(kind, {"firm": 0, "hedged": 0, "wrong": 0, "silent": 0, "n": 0, "misread": 0})
+        t = tally.setdefault(kind, {"firm": 0, "hedged": 0, "wrong": 0, "silent": 0, "n": 0, "misread": 0, "unknown": 0})
         t["n"] += 1
         if kind == "names":
             ok = any(w and w in ans.lower() for w in expect.split("|"))
@@ -94,6 +117,8 @@ def main():
                 t["firm"] += 1
             elif v == "probably":
                 t["hedged"] += 1
+            elif v == "unknown":
+                t["unknown"] += 1
             elif v == "none":
                 t["silent"] += 1
             else:
@@ -104,6 +129,8 @@ def main():
         else:
             if v in ("no", "probably-no"):
                 t["firm" if v == "no" else "hedged"] += 1
+            elif v == "unknown":
+                t["unknown"] += 1
             elif v == "none":
                 t["silent"] += 1
             else:
@@ -112,8 +139,8 @@ def main():
     sh("docker", "rm", "-f", NAME)
 
     print(f"{os.path.basename(DB)}  under {os.path.basename(CFG)}")
-    print(f"{'group':12} {'n':>4} {'firm':>6} {'hedged':>7} {'wrong':>6} {'misread':>8} {'silent':>7}  {'firm+hedged':>12}")
-    tot = {"firm": 0, "hedged": 0, "wrong": 0, "silent": 0, "n": 0, "misread": 0}
+    print(f"{'group':12} {'n':>4} {'firm':>6} {'hedged':>7} {'wrong':>6} {'misread':>8} {'unknown':>8} {'silent':>7}  {'firm+hedged':>12}")
+    tot = {"firm": 0, "hedged": 0, "wrong": 0, "silent": 0, "n": 0, "misread": 0, "unknown": 0}
     for kind in ("isa-yes", "isa-no", "names", "regression"):
         t = tally.get(kind)
         if not t:
@@ -121,9 +148,9 @@ def main():
         for k in tot:
             tot[k] += t[k]
         acc = (t["firm"] + t["hedged"]) / t["n"] if t["n"] else 0
-        print(f"{kind:12} {t['n']:4} {t['firm']:6} {t['hedged']:7} {t['wrong']:6} {t.get('misread', 0):8} {t['silent']:7}  {acc:12.3f}")
+        print(f"{kind:12} {t['n']:4} {t['firm']:6} {t['hedged']:7} {t['wrong']:6} {t.get('misread', 0):8} {t.get('unknown', 0):8} {t['silent']:7}  {acc:12.3f}")
     acc = (tot["firm"] + tot["hedged"]) / tot["n"] if tot["n"] else 0
-    print(f"{'ALL':12} {tot['n']:4} {tot['firm']:6} {tot['hedged']:7} {tot['wrong']:6} {tot['misread']:8} {tot['silent']:7}  {acc:12.3f}")
+    print(f"{'ALL':12} {tot['n']:4} {tot['firm']:6} {tot['hedged']:7} {tot['wrong']:6} {tot['misread']:8} {tot['unknown']:8} {tot['silent']:7}  {acc:12.3f}")
     if tot["wrong"]:
         print(f"\nof {tot['wrong']} wrong answers, {tot['misread']} are about a different word "
               f"than the one asked about, so they are a failure to settle the word rather than "

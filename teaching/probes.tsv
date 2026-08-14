@@ -31,8 +31,8 @@ isa-yes	is a barley a grain	yes
 isa-yes	is a bat a mammal	yes	
 isa-yes	is a beaver a mammal	yes	
 isa-yes	is a beer a drink	yes	
-isa-yes	is black colour	yes	
-isa-yes	is blue colour	yes	
+isa-yes	is a black a colour	yes	
+isa-yes	is a blue a colour	yes	
 isa-yes	is a bone a part	yes	
 isa-yes	is a book a sign	yes	
 isa-yes	is a bowl a utensil	yes	
@@ -40,10 +40,10 @@ isa-yes	is a box a cube	yes
 isa-yes	is a box a shape	yes	
 isa-yes	is a boxing an activity	yes	
 isa-yes	is a bread a dish	yes	
-isa-yes	is bright quality	yes	
+isa-yes	is a bright a quality	yes	
 isa-yes	is a bronze a gem	yes	
 isa-yes	is a brother a person	yes	
-isa-yes	is brown colour	yes	
+isa-yes	is a brown a colour	yes	
 isa-yes	is a buffalo a mammal	yes	
 isa-yes	is busan a city	yes	
 isa-yes	is a butter an ingredient	yes	
@@ -55,15 +55,15 @@ isa-yes	is a chess an activity	yes
 isa-yes	is a chestnut a nut	yes	
 isa-yes	is a church a place	yes	
 isa-yes	is a circle a shape	yes	
-isa-yes	is a clay material	yes	
-isa-yes	is a cloth material	yes	
-isa-yes	is a cloud weather	yes	
+isa-yes	is a clay a material	yes	
+isa-yes	is a cloth a material	yes	
+isa-yes	is a cloud a weather	yes	
 isa-yes	is a cocoa a drink	yes	
 isa-yes	is a coffee a drink	yes	
 isa-yes	is a coin a circle	yes	
-isa-yes	is cold quality	yes	
-isa-yes	is colour quality	yes	
-isa-yes	is a concrete material	yes	
+isa-yes	is a cold a quality	yes	
+isa-yes	is a colour a quality	yes	
+isa-yes	is a concrete a material	yes	
 isa-yes	is a container an object	yes	
 isa-yes	is a corn a grain	yes	
 isa-yes	is a court a place	yes	
@@ -72,15 +72,15 @@ isa-yes	is a cream an ingredient	yes
 isa-yes	is a cricket an insect	yes	
 isa-yes	is a cup a utensil	yes	
 isa-yes	is a cycling an activity	yes	
-isa-yes	is dance art	yes	
-isa-yes	is danger state	yes	
+isa-yes	is a dance an art	yes	
+isa-yes	is a danger a state	yes	
 isa-yes	is danube a river	yes	
 isa-yes	is a day a time	yes	
-isa-yes	is death state	yes	
+isa-yes	is a death a state	yes	
 isa-yes	is a diamond a gem	yes	
 isa-yes	is a doll a toy	yes	
 isa-yes	is a down a direction	yes	
-isa-yes	is drawing art	yes	
+isa-yes	is a drawing an art	yes	
 isa-yes	is a dumpling a dish	yes	
 isa-yes	is an eagle a bird	yes	
 isa-yes	is an ear a part	yes	
@@ -91,15 +91,15 @@ isa-yes	is an evening a time	yes
 isa-yes	is a falcon a bird	yes	
 isa-yes	is a fear a feeling	yes	
 isa-yes	is a fear an idea	yes	
-isa-yes	is film art	yes	
+isa-yes	is a film an art	yes	
 isa-yes	is a flower a plant	yes	
-isa-yes	is a fog weather	yes	
+isa-yes	is a fog a weather	yes	
 isa-yes	is a fork a utensil	yes	
-isa-yes	is freedom state	yes	
+isa-yes	is a freedom a state	yes	
 isa-yes	is a frog an amphibian	yes	
-isa-yes	is a frost weather	yes	
+isa-yes	is a frost a weather	yes	
 isa-yes	is a fruit a plant	yes	
-isa-yes	is furniture an object	yes	
+isa-yes	is a furniture an object	yes	
 isa-yes	is a goose a bird	yes	
 isa-yes	is a hour a time	yes	
 isa-yes	is an instrument an object	yes	
@@ -123,49 +123,49 @@ isa-yes	is a tree a plant	yes
 isa-yes	is a wheel a circle	yes	
 isa-yes	is a window a rectangle	yes	
 isa-no	is andes a plant	no	
-isa-no	is atlantic material	no	
-isa-no	is baltic quality	no	
-isa-no	is a beer weather	no	
+isa-no	is atlantic a material	no	
+isa-no	is baltic a quality	no	
+isa-no	is a beer a weather	no	
 isa-no	is a bronze a tool	no	
 isa-no	is a builder a vehicle	no	
 isa-no	is a cliff an instrument	no	
-isa-no	is a coin furniture	no	
+isa-no	is a coin a furniture	no	
 isa-no	is a cylinder a bird	no	
-isa-no	is dry an insect	no	
+isa-no	is a dry an insect	no	
 isa-no	is ebro a reptile	no	
 isa-no	is a fruit a gem	no	
-isa-no	is gray an animal	no	
-isa-no	is hard a plant	no	
-isa-no	is heavy material	no	
-isa-no	is honor weather	no	
+isa-no	is a gray an animal	no	
+isa-no	is a hard a plant	no	
+isa-no	is a heavy a material	no	
+isa-no	is a honor a weather	no	
 isa-no	is a lake a building	no	
-isa-no	is light an instrument	no	
-isa-no	is a miner colour	no	
+isa-no	is a light an instrument	no	
+isa-no	is a miner a colour	no	
 isa-no	is a neighbor a mammal	no	
 isa-no	is an ocean a reptile	no	
 isa-no	is an otter a flower	no	
-isa-no	is patience a vegetable	no	
+isa-no	is a patience a vegetable	no	
 isa-no	is a penguin a fruit	no	
 isa-no	is a pilot a gem	no	
-isa-no	is a reptile material	no	
-isa-no	is a ring weather	no	
-isa-no	is a ruby weather	no	
+isa-no	is a reptile a material	no	
+isa-no	is a ring a weather	no	
+isa-no	is a ruby a weather	no	
 isa-no	is a shark a building	no	
-isa-no	is a sister clothing	no	
+isa-no	is a sister a clothing	no	
 isa-no	is a slug an instrument	no	
-isa-no	is soft furniture	no	
-isa-no	is a star colour	no	
+isa-no	is a soft a furniture	no	
+isa-no	is a star a colour	no	
 isa-no	is tiber an insect	no	
 isa-no	is urals a flower	no	
 isa-no	is a walrus a tree	no	
 isa-no	is a window a fruit	no	
-isa-no	is alps quality	no	
-isa-no	is amazon weather	no	
+isa-no	is alps a quality	no	
+isa-no	is amazon a weather	no	
 isa-no	is an amphibian a landform	no	
 isa-no	is andes a tool	no	
 isa-no	is arctic an instrument	no	
 isa-no	is atlantic a shape	no	
-isa-no	is atlas colour	no	
+isa-no	is atlas a colour	no	
 isa-no	is a baby a bird	no	
 isa-no	is a baker a fish	no	
 isa-no	is a ball a mammal	no	
@@ -174,13 +174,13 @@ isa-no	is a bat a fruit	no
 isa-no	is a beaver a gem	no	
 isa-no	is a beer an animal	no	
 isa-no	is a bird a plant	no	
-isa-no	is black a plant	no	
-isa-no	is blue weather	no	
+isa-no	is a black a plant	no	
+isa-no	is a blue a weather	no	
 isa-no	is a box a vehicle	no	
-isa-no	is bright an instrument	no	
-isa-no	is a bronze furniture	no	
-isa-no	is a brother colour	no	
-isa-no	is brown a bird	no	
+isa-no	is a bright an instrument	no	
+isa-no	is a bronze a furniture	no	
+isa-no	is a brother a colour	no	
+isa-no	is a brown a bird	no	
 isa-no	is a buffalo an insect	no	
 names	what is a banded iron chest	chest|furniture|storage	
 names	what is a big blue truck	landcar|truck|vehicle	

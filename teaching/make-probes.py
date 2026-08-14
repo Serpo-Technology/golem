@@ -54,8 +54,15 @@ CONSONANT_U = {"utensil", "uniform", "unicorn", "university", "union"}
 
 
 def named(w):
-    """How the word is asked after: bare when it names one particular thing, or none."""
-    if (closure(w) & PROPER) or (set(kinds.get(w) or []) & ABSTRACT) or w in MASS:
+    """How the word is asked after, in the shape the corpus itself uses.
+
+    The lessons say it one way: `kindof` utters "a $n is a $k", articles on both sides. A
+    question in any other shape is a question about a form the brain was never taught, and
+    it comes back parsed as a noun phrase: "is a clay material" is answered "a clay material
+    is a material". Only a proper name, which the lessons never put an article on, stays
+    bare.
+    """
+    if closure(w) & PROPER:
         return w
     return art(w) + w
 
@@ -67,9 +74,7 @@ def art(w):
 
 
 def asked(cat):
-    """How the category is asked after, on the far side of the question."""
-    if cat in MASS:
-        return cat
+    """How the category is asked after: always with its article, as the lessons say it."""
     return art(cat) + cat
 
 
