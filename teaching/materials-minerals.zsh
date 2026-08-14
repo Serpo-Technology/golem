@@ -67,10 +67,13 @@ nap
 
 # --- Minerals ----------------------------------------------------------------
 teach "a clear shiny quartz"       quartz    mineral kuvars
-teach "a sparkling clear diamond"  diamond   mineral elmas
-teach "a deep red ruby"            ruby      mineral yakut
-teach "a rich green emerald"       emerald   mineral zümrüt
-teach "a deep blue sapphire"       sapphire  mineral safir
+# The gems are said to be gems here, where they are shown, and not only in the
+# lesson that talks about them. A category word never uttered over a thing earns no
+# pointing, so it binds to whatever it was near: gem named a ship for a whole grow.
+teach "a sparkling clear diamond"  diamond   gem     elmas
+teach "a deep red ruby"            ruby      gem     yakut
+teach "a rich green emerald"       emerald   gem     zümrüt
+teach "a deep blue sapphire"       sapphire  gem     safir
 teach "a fine white salt"          salt      mineral tuz
 teach "a damp brown clay"          clay      mineral kil
 teach "a fine yellow sand"         sand      mineral kum

@@ -11,6 +11,10 @@ import (
 // verb whose Turkish stem names a known relation. A clause with no such
 // evidence keeps the English default, so a fresh brain is unchanged until its
 // Turkish lexicon has actually grown.
+// settleTongueFirst reports whether the tongue of an untagged clause is settled before its
+// words are resolved rather than after. Off, the reading is the one that came before.
+func (d *Daemon) settleTongueFirst() bool { return d.cfg.SettleTongueFirstEnabled }
+
 func (d *Daemon) sniffTurkish(content string) bool {
 	// Language detection stays on exact and morphological evidence: the diacritic fold
 	// is turned off around this probe, since sniffTurkish itself resolves through the

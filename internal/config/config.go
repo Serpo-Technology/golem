@@ -175,6 +175,12 @@ type Config struct {
 	// hundred words are taught under animal and a handful under the moon; fifteen creatures
 	// ended up owning no other name. Off by default.
 	UnshownNamesByOwnShareEnabled bool `json:"unshown_names_by_own_share_enabled"`
+	// SettleTongueFirstEnabled settles the tongue of an untagged clause before its words are
+	// looked up rather than after. A word resolves through its tongue, and resolving with no
+	// tongue pools every node of the same form, so an English gem draws the votes of a
+	// Turkish stem of gemi, the ship, and "what is a gem" answers that a gem is a vehicle.
+	// The same clause tagged answers about a gem. Off by default.
+	SettleTongueFirstEnabled bool `json:"settle_tongue_first_enabled"`
 	// ResolveToOwnConceptEnabled settles which concept a bare noun refers to when its
 	// word names several. The word's own abstraction wins over a percept it merely
 	// drifted onto, and the perceptless node a telling minted for it loses to the thing

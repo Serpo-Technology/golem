@@ -2872,19 +2872,38 @@ func (d *Daemon) handle(req wire.Request, reply chan wire.Response) (resp wire.R
 		// pass (sniffTurkish toggles it off around its own probe below).
 		d.restored = map[string]restoredNote{}
 		d.foldEnabled = true
-		frame := d.gram.ParseHint(req.Content, req.Lang, d.resolveIn(req.Lang))
-		if req.Lang == "" && d.gram.Detect(req.Content) == "" && d.sniffTurkish(req.Content) {
-			// An untagged clause no closed-class token places: the lexicon GOLEM
-			// has grown gets a vote before English is assumed, so a bare Turkish
-			// telling answers in its own tongue. A clause detection already
-			// placed is never second-guessed.
-			frame = d.gram.ParseHint(req.Content, "tr", d.resolveIn("tr"))
-			if frame.Lang == "" {
-				frame.Lang = "tr"
+		// A word is resolved through the tongue it was said in, so the tongue has to be
+		// settled BEFORE the words are looked up. Settled after, as it was, an untagged
+		// clause resolves with no tongue at all and pools every node of the same form: the
+		// English gem draws the votes of a Turkish stem of gemi, the ship, and "what is a
+		// gem" answers that a gem is a vehicle. The same clause tagged answers about a gem.
+		lang := req.Lang
+		if lang == "" {
+			if det := d.gram.Detect(req.Content); det != "" {
+				lang = det
+			} else if d.settleTongueFirst() && d.sniffTurkish(req.Content) {
+				// An untagged clause no closed-class token places: the lexicon GOLEM
+				// has grown gets a vote before English is assumed, so a bare Turkish
+				// telling answers in its own tongue. A clause detection already
+				// placed is never second-guessed.
+				lang = "tr"
+			} else {
+				lang = "en" // the default tongue when none was detected or tagged
+			}
+		}
+		frame := d.gram.ParseHint(req.Content, lang, d.resolveIn(lang))
+		if !d.settleTongueFirst() {
+			// The older order, kept so a brain that has not opted in reads as it did.
+			frame = d.gram.ParseHint(req.Content, req.Lang, d.resolveIn(req.Lang))
+			if req.Lang == "" && d.gram.Detect(req.Content) == "" && d.sniffTurkish(req.Content) {
+				frame = d.gram.ParseHint(req.Content, "tr", d.resolveIn("tr"))
+				if frame.Lang == "" {
+					frame.Lang = "tr"
+				}
 			}
 		}
 		if frame.Lang == "" {
-			frame.Lang = "en" // English is the default tongue when none was detected or tagged
+			frame.Lang = lang
 		}
 		// The question-side construction traversal drives the shapes it reads completely: the
 		// copular is-a, the comparison, and its degree question carry every field their planners

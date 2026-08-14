@@ -64,5 +64,6 @@
   "ostensive_core_enabled": true,
   "ostensive_naming_enabled": true,
   "resolve_to_own_concept_enabled": true,
-  "retire_declined_rungs_enabled": false
+  "retire_declined_rungs_enabled": false,
+  "settle_tongue_first_enabled": true
 }

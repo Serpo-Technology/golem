@@ -53,5 +53,6 @@
   "source_path": "",
   "main_package": "./cmd/golem",
   "listen_tcp": "",
-  "unshown_names_by_own_share_enabled": false
+  "unshown_names_by_own_share_enabled": false,
+  "settle_tongue_first_enabled": false
 }
