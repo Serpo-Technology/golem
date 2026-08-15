@@ -26,6 +26,11 @@ LABEL=${1:?usage: grow.sh <label> [config.json] [scene...]}
 # it was shown. They stand on by default and both teaching configs write them out, so a
 # grow records the reading it was taught under rather than inheriting it silently.
 CFG=${2:-$REPO/teaching/ostensive.json}
+# The config is bind-mounted, and docker reads a relative path as a named volume rather
+# than a file, so it fails with a message about volume names that says nothing about the
+# real mistake. Resolve it here and say plainly when it is not there.
+[ -f "$CFG" ] || { printf 'FATAL config %s not found\n' "$CFG"; exit 1; }
+CFG="$(cd "$(dirname "$CFG")" && pwd)/$(basename "$CFG")"
 shift 2 2>/dev/null || shift 1
 SCENES=("$@")
 if [ ${#SCENES[@]} -eq 0 ]; then
@@ -77,6 +82,23 @@ fi
 
 docker rm -f "$NAME" >/dev/null 2>&1
 docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "$IMAGE" sleep infinity >/dev/null
+
+# The image carries the engine and the scenes together, so two arms that differ in what
+# they teach would otherwise differ in engine too, and the comparison would measure both
+# at once. PATCH names a directory of scene files copied over /src/teaching once the
+# container is up: the binary stays the one the image was built with, and only the lesson
+# changes. Point it at the older scenes to grow the control for a corpus change.
+if [ -n "${PATCH:-}" ]; then
+  [ -d "$PATCH" ] || { say "FATAL PATCH directory $PATCH not found"; exit 1; }
+  n=0
+  for f in "$PATCH"/*.zsh; do
+    [ -e "$f" ] || break
+    docker cp "$f" "$NAME:/src/teaching/$(basename "$f")" >/dev/null \
+      || { say "FATAL could not patch $(basename "$f")"; exit 1; }
+    n=$((n + 1))
+  done
+  say "patched $n scene(s) over the image, so this arm teaches a different corpus on the same engine"
+fi
 
 # A grow runs for hours and lands a checkpoint after every scene, so a run cut short by a
 # restarted engine or a closed lid should not have to begin again from nothing. With
