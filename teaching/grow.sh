@@ -81,7 +81,13 @@ else
 fi
 
 docker rm -f "$NAME" >/dev/null 2>&1
-docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "$IMAGE" sleep infinity >/dev/null
+# Stop here if the container did not come up. Carrying on is worse than it looks: every
+# later step addresses the container by name, so a run whose own container failed will sit
+# in start_daemon's poll until ANOTHER run of the same label creates one, then adopt it and
+# teach a second copy of every scene into it alongside its rightful owner. That corrupts the
+# arm quietly, since both processes log success.
+docker run -d --name "$NAME" -v "$CFG:/root/.golem/config.json:ro" "$IMAGE" sleep infinity >/dev/null \
+  || { say "FATAL could not create container $NAME"; exit 1; }
 
 # The image carries the engine and the scenes together, so two arms that differ in what
 # they teach would otherwise differ in engine too, and the comparison would measure both
