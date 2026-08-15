@@ -1699,13 +1699,39 @@ func (d *Daemon) lemmatizeForms(lang string, forms []string) []string {
 // morphological reduction that already names a concept (so an inflection keys
 // on its lemma), else the surface. Resolving each candidate is what tells a real
 // stem from a mangled one, a mangled stem names nothing, so the surface stands.
+// A stem is accepted for naming something, but naming something is a weak test when
+// stripping a noun's ending happens to leave another real word. The verb rule takes
+// "clothing" down to "cloth", the corpus teaches cloth as a material, and the garments
+// mint onto it. So the reduction the verb morphology produced is held to what it exists
+// for and must land on a relation, while a reduction the case morphology produced keeps
+// the looser test, since a case stem is meant to reach a noun.
 func (d *Daemon) baseForMint(lang, tok string) string {
+	verb := ""
+	if d.cfg.VerbStemNamesRelationEnabled {
+		verb = d.gram.Lemma(lang, tok)
+	}
 	for _, cand := range d.gram.StemCandidates(lang, tok) {
-		if d.formNamesConcept(cand) {
-			return cand
+		if !d.formNamesConcept(cand) {
+			continue
 		}
+		if cand == verb && d.resolveRelation(cand) == nil && !d.isCaseStem(lang, tok, cand) {
+			continue
+		}
+		return cand
 	}
 	return tok
+}
+
+// isCaseStem reports whether a candidate is one the case morphology offers, which the
+// verb guard lets through: the two readings can agree on a form, and a cased tongue
+// reducing its noun is the reading that should stand.
+func (d *Daemon) isCaseStem(lang, surface, cand string) bool {
+	for _, s := range d.gram.CaseStems(lang, surface) {
+		if s == cand {
+			return true
+		}
+	}
+	return false
 }
 
 // formNamesConcept reports whether a word form has a node that already names

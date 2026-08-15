@@ -501,6 +501,58 @@ func TestMintKeepsNounWithVerbLikeEnding(t *testing.T) {
 	}
 }
 
+// Stripping a noun's ending can leave another real word: "clothing" reduces to "cloth",
+// which the corpus teaches as a material, so the garments mint onto the material and no
+// clothing category forms. Requiring a verb reduction to land on a relation separates the
+// two, while a real inflection and a cased noun both still key on their base.
+func TestVerbStemMustNameRelationToClaimANoun(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+
+	name := func(form, lang, content, template, category string) uint64 {
+		c, err := s.Encode(&memory.Fragment{Kind: memory.KindConcept, Channel: "concept",
+			Content: content, Template: template, Category: category,
+			Limbic: d.chem.Snapshot(), Time: now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, _, err := s.WordNode(form, lang, d.chem.Snapshot(), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetLinkRel(w.ID, c, memory.RelNames, opNameWeight); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	name("cloth", "en", "a folded gray cloth", "a folded gray cloth", "noun")
+	rel := name("chase", "en", "chase", "rel:en:chase", "relation")
+	name("kedi", "tr", "a small black cat", "a small black cat", "noun")
+
+	// Off, the reduction stands as it did, so a brain grown without the flag is untouched.
+	if got := d.baseForMint("en", "clothing"); got != "cloth" {
+		t.Fatalf("with the guard off the reduction should stand, got %q", got)
+	}
+
+	d.cfg.VerbStemNamesRelationEnabled = true
+
+	if got := d.baseForMint("en", "clothing"); got != "clothing" {
+		t.Fatalf("a garment word should not mint onto the material, got %q", got)
+	}
+	// The reduction the guard exists for still lands: "chase" names a relation.
+	if got := d.resolveRelation(d.gram.Lemma("en", "chased")); got == nil || got.ID != rel {
+		t.Fatal("the inflection should reach the relation through its lemma")
+	}
+	if got := d.baseForMint("en", "chased"); got != "chase" {
+		t.Fatalf("an inflected relation should key on its lemma, got %q", got)
+	}
+	// A cased noun reduces through the case morphology, which the guard lets through.
+	if got := d.baseForMint("tr", "kediyi"); got != "kedi" {
+		t.Fatalf("an accusative should key on its noun, got %q", got)
+	}
+}
+
 // A percept-less concept gathers neither stray names nor duplicate nodes from the
 // company it keeps, even in a brain busy with featured concepts. Abstract words used
 // alike -- a model and an llm that both predict and learn -- co-occur heavily, and

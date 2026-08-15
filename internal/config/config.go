@@ -189,6 +189,20 @@ type Config struct {
 	// good. Off by default: the is-a measurements cannot see it, since it settles resolution
 	// rather than membership.
 	ResolveToOwnConceptEnabled bool `json:"resolve_to_own_concept_enabled"`
+	// VerbStemNamesRelationEnabled requires a verb reduction to land on a relation before
+	// a new word is minted onto it. Minting reduces a form to a base that already names
+	// something, so "chased" reinforces "chase" instead of shadowing it, and the guard
+	// against a mangled reduction is that a mangled stem names nothing. That guard holds
+	// while the wreckage is nonsense: "building" yields "build" and "boxing" yields "boxe",
+	// neither of which names anything, so both words stand whole. It fails on the one case
+	// where stripping a noun's ending leaves another real word. "clothing" yields "cloth",
+	// the corpus teaches cloth as a material, so the garments were minted onto it: thirty
+	// seven shirts and coats and shoes became kinds of cloth and no clothing category ever
+	// formed. With this on, a reduction the verb morphology produced is taken only when its
+	// base names a relation, which is the case the reduction exists for; a reduction the case
+	// morphology produced is untouched, so a Turkish accusative still keys on its noun.
+	// Off by default.
+	VerbStemNamesRelationEnabled bool `json:"verb_stem_names_relation_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A
