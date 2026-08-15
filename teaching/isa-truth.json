@@ -1409,6 +1409,26 @@
  },
  "spoken": {
   "en": {
+   "a armed downy octopus": [
+    "animal",
+    "mollusk",
+    "octopus"
+   ],
+   "a ashen city pigeon": [
+    "animal",
+    "bird",
+    "pigeon"
+   ],
+   "a ashen patient donkey": [
+    "animal",
+    "donkey",
+    "mammal"
+   ],
+   "a ashen sleek shark": [
+    "animal",
+    "fish",
+    "shark"
+   ],
    "a banded iron chest": [
     "chest",
     "furniture",
@@ -1419,6 +1439,10 @@
     "morningstar",
     "weapon"
    ],
+   "a bare walking foot": [
+    "foot",
+    "part"
+   ],
    "a beaded evening purse": [
     "bag",
     "container",
@@ -1428,6 +1452,18 @@
     "accessory",
     "clothing",
     "necklace"
+   ],
+   "a bearded pale barley": [
+    "barley",
+    "grain"
+   ],
+   "a beating scarlet heart": [
+    "heart",
+    "part"
+   ],
+   "a bent bare arm": [
+    "arm",
+    "part"
    ],
    "a bent forked slingshot": [
     "plaything",
@@ -1448,6 +1484,18 @@
     "crowbar",
     "handtool",
     "tool"
+   ],
+   "a bent scribbling writer": [
+    "person",
+    "writer"
+   ],
+   "a bent stitching tailor": [
+    "person",
+    "tailor"
+   ],
+   "a bent strong leg": [
+    "leg",
+    "part"
    ],
    "a big blue truck": [
     "landcar",
@@ -1518,6 +1566,11 @@
     "animal",
     "mammal",
     "zebra"
+   ],
+   "a black-and-white magpie": [
+    "animal",
+    "bird",
+    "magpie"
    ],
    "a bladed silver skate": [
     "equipment",
@@ -1673,6 +1726,11 @@
     "taxi",
     "vehicle"
    ],
+   "a bright-tailed proud peacock": [
+    "animal",
+    "bird",
+    "peacock"
+   ],
    "a brilliant white sirius": [
     "sirius",
     "space",
@@ -1767,6 +1825,10 @@
     "person",
     "worker"
    ],
+   "a busy young builder": [
+    "builder",
+    "person"
+   ],
    "a calm careful doctor": [
     "doctor",
     "person",
@@ -1792,6 +1854,10 @@
     "relative",
     "sister"
    ],
+   "a chilled amber juice": [
+    "drink",
+    "juice"
+   ],
    "a chipped ceramic plate": [
     "dishware",
     "kitchenware",
@@ -1802,6 +1868,11 @@
     "jug",
     "vessel"
    ],
+   "a chirping small cricket": [
+    "animal",
+    "cricket",
+    "insect"
+   ],
    "a chrome golf club": [
     "club",
     "equipment",
@@ -1811,6 +1882,10 @@
     "dishware",
     "kitchenware",
     "mug"
+   ],
+   "a clear chilled water": [
+    "drink",
+    "water"
    ],
    "a clear half-circle protractor": [
     "device",
@@ -1826,6 +1901,10 @@
     "machine",
     "mechanism",
     "ratchet"
+   ],
+   "a cloudy chilled lemonade": [
+    "drink",
+    "lemonade"
    ],
    "a cluttered writing desk": [
     "desk",
@@ -1892,6 +1971,11 @@
     "crustacean",
     "prawn"
    ],
+   "a curled tiny seahorse": [
+    "animal",
+    "fish",
+    "seahorse"
+   ],
    "a curved cavalry saber": [
     "blade",
     "saber",
@@ -1953,6 +2037,7 @@
     "space"
    ],
    "a deep blue sapphire": [
+    "gem",
     "material",
     "mineral",
     "sapphire"
@@ -1963,6 +2048,7 @@
     "weather"
    ],
    "a deep red ruby": [
+    "gem",
     "material",
     "mineral",
     "ruby"
@@ -1970,6 +2056,10 @@
    "a deep silver ladle": [
     "kitchenware",
     "ladle",
+    "utensil"
+   ],
+   "a deep tempered sink": [
+    "sink",
     "utensil"
    ],
    "a deep wooden bowl": [
@@ -2012,6 +2102,15 @@
     "mosque",
     "place"
    ],
+   "a downy rosy lung": [
+    "lung",
+    "part"
+   ],
+   "a downy rosy worm": [
+    "animal",
+    "bug",
+    "worm"
+   ],
    "a drawstring leather pouch": [
     "bag",
     "container",
@@ -2021,6 +2120,28 @@
     "iron",
     "material",
     "metal"
+   ],
+   "a dusky scarlet wine": [
+    "drink",
+    "wine"
+   ],
+   "a dusky slender rye": [
+    "grain",
+    "rye"
+   ],
+   "a dusty pale moth": [
+    "animal",
+    "insect",
+    "moth"
+   ],
+   "a dusty stooped miner": [
+    "miner",
+    "person"
+   ],
+   "a eight-legged patient spider": [
+    "animal",
+    "bug",
+    "spider"
    ],
    "a faint swarming krill": [
     "animal",
@@ -2072,6 +2193,19 @@
     "mineral",
     "sand"
    ],
+   "a five-armed amber starfish": [
+    "animal",
+    "creature",
+    "starfish"
+   ],
+   "a fizzy sweet soda": [
+    "drink",
+    "soda"
+   ],
+   "a flaked pale oat": [
+    "grain",
+    "oat"
+   ],
    "a flat angular tangram": [
     "puzzle",
     "tangram",
@@ -2081,6 +2215,10 @@
     "material",
     "slate",
     "stone"
+   ],
+   "a flat golden pancake": [
+    "dish",
+    "pancake"
    ],
    "a flat gray flounder": [
     "animal",
@@ -2112,6 +2250,11 @@
     "paddle",
     "stick"
    ],
+   "a flat-tailed dripping beaver": [
+    "animal",
+    "beaver",
+    "mammal"
+   ],
    "a floating blue balloon": [
     "balloon",
     "plaything",
@@ -2122,10 +2265,18 @@
     "cnidarian",
     "jellyfish"
    ],
+   "a foaming amber beer": [
+    "beer",
+    "drink"
+   ],
    "a fogged swimming goggles": [
     "equipment",
     "goggles",
     "protective"
+   ],
+   "a folded straw-coloured omelette": [
+    "dish",
+    "omelette"
    ],
    "a folding canvas cot": [
     "bed",
@@ -2197,6 +2348,10 @@
     "container",
     "thing"
    ],
+   "a glossy russet chestnut": [
+    "chestnut",
+    "nut"
+   ],
    "a glossy wooden violin": [
     "instrument",
     "stringinstrument",
@@ -2220,6 +2375,10 @@
    "a golden lion": [
     "animal",
     "lion"
+   ],
+   "a golden ripe wheat": [
+    "grain",
+    "wheat"
    ],
    "a grand royal palace": [
     "building",
@@ -2337,6 +2496,10 @@
     "mechanism",
     "pulley"
    ],
+   "a hanging wooden swing": [
+    "swing",
+    "toy"
+   ],
    "a hard blue steel": [
     "material",
     "metal",
@@ -2423,10 +2586,20 @@
     "polearm",
     "weapon"
    ],
+   "a hooked swift falcon": [
+    "animal",
+    "bird",
+    "falcon"
+   ],
    "a hooped oak barrel": [
     "barrel",
     "container",
     "vessel"
+   ],
+   "a horned ashen rhino": [
+    "animal",
+    "mammal",
+    "rhino"
    ],
    "a hovering red helicopter": [
     "aircraft",
@@ -2468,6 +2641,19 @@
     "machine",
     "powerplant"
    ],
+   "a humming chilled fridge": [
+    "fridge",
+    "utensil"
+   ],
+   "a humped humped camel": [
+    "animal",
+    "camel",
+    "mammal"
+   ],
+   "a iced layered cake": [
+    "cake",
+    "dish"
+   ],
    "a jagged bright lightning": [
     "lightning",
     "skylight",
@@ -2482,6 +2668,10 @@
     "instrument",
     "percussion",
     "tambourine"
+   ],
+   "a kind steady nurse": [
+    "nurse",
+    "person"
    ],
    "a labeled tin canister": [
     "canister",
@@ -2556,6 +2746,10 @@
     "thing",
     "vehicle"
    ],
+   "a leafy tossed salad": [
+    "dish",
+    "salad"
+   ],
    "a lidded soup tureen": [
     "dishware",
     "kitchenware",
@@ -2627,6 +2821,11 @@
     "plant",
     "vegetable"
    ],
+   "a long pale squid": [
+    "animal",
+    "mollusk",
+    "squid"
+   ],
    "a long red scarf": [
     "clothing",
     "scarf",
@@ -2696,6 +2895,11 @@
     "bus",
     "landcar",
     "vehicle"
+   ],
+   "a long-legged tall ostrich": [
+    "animal",
+    "bird",
+    "ostrich"
    ],
    "a looped wire whisk": [
     "kitchenware",
@@ -2777,6 +2981,18 @@
     "peeler",
     "utensil"
    ],
+   "a open steady hand": [
+    "hand",
+    "part"
+   ],
+   "a open wide mouth": [
+    "mouth",
+    "part"
+   ],
+   "a open-mouthed loud singer": [
+    "person",
+    "singer"
+   ],
    "a padded batting glove": [
     "equipment",
     "glove",
@@ -2802,6 +3018,10 @@
     "mist",
     "weather"
    ],
+   "a pale egg-shaped almond": [
+    "almond",
+    "nut"
+   ],
    "a pale hovering cuttlefish": [
     "animal",
     "cuttlefish",
@@ -2816,6 +3036,32 @@
     "luna",
     "moon",
     "space"
+   ],
+   "a pallid chilled milk": [
+    "drink",
+    "milk"
+   ],
+   "a pallid coastal seagull": [
+    "animal",
+    "bird",
+    "seagull"
+   ],
+   "a pallid keen tooth": [
+    "part",
+    "tooth"
+   ],
+   "a pallid long-necked goose": [
+    "animal",
+    "bird",
+    "goose"
+   ],
+   "a pallid steamed rice": [
+    "dish",
+    "rice"
+   ],
+   "a papery tan peanut": [
+    "nut",
+    "peanut"
    ],
    "a patched army knapsack": [
     "bag",
@@ -2835,6 +3081,10 @@
    "a perforated metal colander": [
     "colander",
     "kitchenware",
+    "utensil"
+   ],
+   "a pewter pronged fork": [
+    "fork",
     "utensil"
    ],
    "a pink farm pig": [
@@ -2867,6 +3117,11 @@
     "person",
     "worker"
    ],
+   "a plump farm turkey": [
+    "animal",
+    "bird",
+    "turkey"
+   ],
    "a plush velvet sofa": [
     "furniture",
     "seat",
@@ -2886,6 +3141,11 @@
     "cue",
     "equipment",
     "stick"
+   ],
+   "a pouched coastal pelican": [
+    "animal",
+    "bird",
+    "pelican"
    ],
    "a proud crowned king": [
     "king",
@@ -2915,6 +3175,10 @@
     "flower",
     "lily",
     "plant"
+   ],
+   "a quiet watchful hunter": [
+    "hunter",
+    "person"
    ],
    "a quiet white glider": [
     "aircraft",
@@ -3012,6 +3276,7 @@
    ],
    "a rich green emerald": [
     "emerald",
+    "gem",
     "material",
     "mineral"
    ],
@@ -3039,6 +3304,10 @@
     "engine",
     "machine",
     "powerplant"
+   ],
+   "a robed grave judge": [
+    "judge",
+    "person"
    ],
    "a rocking wicker cradle": [
     "bed",
@@ -3074,6 +3343,10 @@
     "material",
     "sandstone",
     "stone"
+   ],
+   "a round baked pie": [
+    "dish",
+    "pie"
    ],
    "a round brown hat": [
     "clothing",
@@ -3117,6 +3390,10 @@
     "orange",
     "plant"
    ],
+   "a round pallid pearl": [
+    "gem",
+    "pearl"
+   ],
    "a round pressure gauge": [
     "device",
     "gauge",
@@ -3132,6 +3409,18 @@
    ],
    "a round red bead": [
     "bead"
+   ],
+   "a round sliced pizza": [
+    "dish",
+    "pizza"
+   ],
+   "a round small hazelnut": [
+    "hazelnut",
+    "nut"
+   ],
+   "a round tilted head": [
+    "head",
+    "part"
    ],
    "a round wall barometer": [
     "barometer",
@@ -3178,6 +3467,10 @@
     "landcar",
     "vehicle"
    ],
+   "a russet capped acorn": [
+    "acorn",
+    "nut"
+   ],
    "a rustic wooden cabin": [
     "building",
     "cabin",
@@ -3202,6 +3495,22 @@
     "couch",
     "furniture",
     "seat"
+   ],
+   "a scalding amber tea": [
+    "drink",
+    "tea"
+   ],
+   "a scalding clear soup": [
+    "dish",
+    "soup"
+   ],
+   "a scalding dusky cocoa": [
+    "cocoa",
+    "drink"
+   ],
+   "a scalding forged oven": [
+    "oven",
+    "utensil"
    ],
    "a scarred oily workbench": [
     "furniture",
@@ -3232,6 +3541,15 @@
     "machine",
     "powerplant",
     "reactor"
+   ],
+   "a seated unhurried driver": [
+    "driver",
+    "person"
+   ],
+   "a shaggy sooty buffalo": [
+    "animal",
+    "buffalo",
+    "mammal"
    ],
    "a sharp flat chisel": [
     "chisel",
@@ -3282,6 +3600,11 @@
     "building",
     "steeple",
     "tower"
+   ],
+   "a sharp-eyed russet hawk": [
+    "animal",
+    "bird",
+    "hawk"
    ],
    "a shimmering green aurora": [
     "aurora",
@@ -3397,6 +3720,11 @@
     "crib",
     "furniture"
    ],
+   "a sleek ashen seal": [
+    "animal",
+    "mammal",
+    "seal"
+   ],
    "a sleek elevated monorail": [
     "monorail",
     "rail",
@@ -3406,6 +3734,24 @@
     "vehicle",
     "watercraft",
     "yacht"
+   ],
+   "a sleek steep slide": [
+    "slide",
+    "toy"
+   ],
+   "a sleek straw-coloured salamander": [
+    "amphibian",
+    "animal",
+    "salamander"
+   ],
+   "a sleek streamside otter": [
+    "animal",
+    "mammal",
+    "otter"
+   ],
+   "a sleek warm skin": [
+    "part",
+    "skin"
    ],
    "a slender pointed minaret": [
     "building",
@@ -3577,6 +3923,10 @@
     "mandolin",
     "stringinstrument"
    ],
+   "a small quick finger": [
+    "finger",
+    "part"
+   ],
    "a small red beetle": [
     "animal",
     "beetle",
@@ -3590,6 +3940,15 @@
    "a small red fox": [
     "animal",
     "fox",
+    "mammal"
+   ],
+   "a small round ear": [
+    "ear",
+    "part"
+   ],
+   "a small russet bat": [
+    "animal",
+    "bat",
     "mammal"
    ],
    "a small shiny sardine": [
@@ -3635,6 +3994,10 @@
     "thing",
     "vehicle",
     "watercraft"
+   ],
+   "a smiling near friend": [
+    "friend",
+    "person"
    ],
    "a smiling painted doll": [
     "doll",
@@ -3696,10 +4059,28 @@
     "snow",
     "weather"
    ],
+   "a sooty forged stove": [
+    "stove",
+    "utensil"
+   ],
+   "a sooty steaming coffee": [
+    "coffee",
+    "drink"
+   ],
+   "a sooty waddling penguin": [
+    "animal",
+    "bird",
+    "penguin"
+   ],
    "a sparkling clear diamond": [
     "diamond",
+    "gem",
     "material",
     "mineral"
+   ],
+   "a spattered absorbed painter": [
+    "painter",
+    "person"
    ],
    "a speckled gray granite": [
     "granite",
@@ -3731,14 +4112,34 @@
     "powerplant",
     "turbine"
    ],
+   "a spiny small hedgehog": [
+    "animal",
+    "hedgehog",
+    "mammal"
+   ],
    "a splintered wooden crate": [
     "box",
     "container",
     "crate"
    ],
+   "a spotted damp newt": [
+    "amphibian",
+    "animal",
+    "newt"
+   ],
    "a spotted deer": [
     "animal",
     "deer"
+   ],
+   "a spotted golden leopard": [
+    "animal",
+    "leopard",
+    "mammal"
+   ],
+   "a spotted scarlet ladybug": [
+    "animal",
+    "insect",
+    "ladybug"
    ],
    "a spotted volcanic io": [
     "io",
@@ -3768,6 +4169,10 @@
     "kitchenware",
     "teapot"
    ],
+   "a stacked cut sandwich": [
+    "dish",
+    "sandwich"
+   ],
    "a stacked metal bunk": [
     "bed",
     "bunk",
@@ -3783,10 +4188,19 @@
     "rain",
     "weather"
    ],
+   "a steamed folded dumpling": [
+    "dish",
+    "dumpling"
+   ],
    "a stern armored soldier": [
     "person",
     "soldier",
     "worker"
+   ],
+   "a still tall heron": [
+    "animal",
+    "bird",
+    "heron"
    ],
    "a stitched white baseball": [
     "ball",
@@ -3808,6 +4222,10 @@
     "mill",
     "place"
    ],
+   "a straight small nose": [
+    "nose",
+    "part"
+   ],
    "a straight steel axle": [
     "axle",
     "machine",
@@ -3817,6 +4235,10 @@
     "device",
     "ruler",
     "tool"
+   ],
+   "a straw-coloured kerneled corn": [
+    "corn",
+    "grain"
    ],
    "a streaking bright meteor": [
     "meteor",
@@ -3852,6 +4274,16 @@
     "animal",
     "fish",
     "mackerel"
+   ],
+   "a striped stinging wasp": [
+    "animal",
+    "insect",
+    "wasp"
+   ],
+   "a striped woodland woodpecker": [
+    "animal",
+    "bird",
+    "woodpecker"
    ],
    "a striped woolen sock": [
     "clothing",
@@ -4063,6 +4495,14 @@
     "food",
     "honey"
    ],
+   "a thick russet stew": [
+    "dish",
+    "stew"
+   ],
+   "a thick warm porridge": [
+    "dish",
+    "porridge"
+   ],
    "a thin dueling rapier": [
     "blade",
     "rapier",
@@ -4157,10 +4597,27 @@
     "machine",
     "mill"
    ],
+   "a tusked weighty walrus": [
+    "animal",
+    "mammal",
+    "walrus"
+   ],
    "a twangy round banjo": [
     "banjo",
     "instrument",
     "stringinstrument"
+   ],
+   "a twisted parched pasta": [
+    "dish",
+    "pasta"
+   ],
+   "a uniformed alert pilot": [
+    "person",
+    "pilot"
+   ],
+   "a unyielding pallid bone": [
+    "bone",
+    "part"
    ],
    "a vast copper vat": [
     "container",
@@ -4177,10 +4634,18 @@
     "material",
     "stone"
    ],
+   "a vivid open eye": [
+    "eye",
+    "part"
+   ],
    "a warm brown bronze": [
     "bronze",
     "material",
     "metal"
+   ],
+   "a warm crusty bread": [
+    "bread",
+    "dish"
    ],
    "a warm gentle aunt": [
     "aunt",
@@ -4212,6 +4677,15 @@
     "glove",
     "thing"
    ],
+   "a warty russet toad": [
+    "amphibian",
+    "animal",
+    "toad"
+   ],
+   "a waving nearby neighbor": [
+    "neighbor",
+    "person"
+   ],
    "a waving purple anemone": [
     "anemone",
     "animal",
@@ -4226,6 +4700,10 @@
     "equipment",
     "protective",
     "surfboard"
+   ],
+   "a weathered patient fisher": [
+    "fisher",
+    "person"
    ],
    "a weathered strong farmer": [
     "farmer",
@@ -4308,6 +4786,11 @@
     "clothing",
     "headwear",
     "turban"
+   ],
+   "a wide ashen hippo": [
+    "animal",
+    "hippo",
+    "mammal"
    ],
    "a wide chopping machete": [
     "blade",
@@ -4496,17 +4979,50 @@
    ]
   },
   "tr": {
+   "a armed downy octopus": [
+    "ahtapot"
+   ],
+   "a ashen city pigeon": [
+    "g\u00fcvercin"
+   ],
+   "a ashen patient donkey": [
+    "e\u015fek"
+   ],
+   "a ashen sleek shark": [
+    "k\u00f6pekbal\u0131\u011f\u0131"
+   ],
    "a banded iron chest": [
     "sand\u0131k"
    ],
+   "a bare walking foot": [
+    "ayak"
+   ],
    "a beaded silver necklace": [
     "kolye"
+   ],
+   "a bearded pale barley": [
+    "arpa"
+   ],
+   "a beating scarlet heart": [
+    "kalp"
+   ],
+   "a bent bare arm": [
+    "kol"
    ],
    "a bent forked slingshot": [
     "sapan"
    ],
    "a bent horn bow": [
     "yay"
+   ],
+   "a bent scribbling writer": [
+    "yazar"
+   ],
+   "a bent stitching tailor": [
+    "terzi"
+   ],
+   "a bent strong leg": [
+    "bacak"
    ],
    "a big blue truck": [
     "kamyon"
@@ -4543,6 +5059,9 @@
    ],
    "a black striped zebra": [
     "zebra"
+   ],
+   "a black-and-white magpie": [
+    "saksa\u011fan"
    ],
    "a bladed silver skate": [
     "paten"
@@ -4596,6 +5115,9 @@
    "a bright yellow taxi": [
     "taksi"
    ],
+   "a bright-tailed proud peacock": [
+    "tavusku\u015fu"
+   ],
    "a broad green maple": [
     "ak\u00e7aa\u011fa\u00e7"
    ],
@@ -4648,8 +5170,14 @@
    "a chipped stoneware jug": [
     "testi"
    ],
+   "a chirping small cricket": [
+    "c\u0131rc\u0131rb\u00f6ce\u011fi"
+   ],
    "a chunky clay mug": [
     "kupa"
+   ],
+   "a clear chilled water": [
+    "su"
    ],
    "a clear half-circle protractor": [
     "iletki"
@@ -4717,6 +5245,9 @@
    "a deep silver ladle": [
     "kep\u00e7e"
    ],
+   "a deep tempered sink": [
+    "lavabo"
+   ],
    "a deep wooden bowl": [
     "kase"
    ],
@@ -4726,11 +5257,26 @@
    "a domed blue mosque": [
     "cami"
    ],
+   "a downy rosy worm": [
+    "solucan"
+   ],
    "a drawstring leather pouch": [
     "kese"
    ],
    "a dull gray iron": [
     "demir"
+   ],
+   "a dusky scarlet wine": [
+    "\u015farap"
+   ],
+   "a dusky slender rye": [
+    "\u00e7avdar"
+   ],
+   "a dusty pale moth": [
+    "g\u00fcve"
+   ],
+   "a eight-legged patient spider": [
+    "\u00f6r\u00fcmcek"
    ],
    "a fast black motorcycle": [
     "motosiklet"
@@ -4753,6 +5299,12 @@
    "a fine yellow sand": [
     "kum"
    ],
+   "a five-armed amber starfish": [
+    "denizy\u0131ld\u0131z\u0131"
+   ],
+   "a flaked pale oat": [
+    "yulaf"
+   ],
    "a flat gray flounder": [
     "pisi"
    ],
@@ -4769,6 +5321,9 @@
    ],
    "a floating glowing jellyfish": [
     "denizanas\u0131"
+   ],
+   "a foaming amber beer": [
+    "bira"
    ],
    "a frozen distant pluto": [
     "pl\u00fcton"
@@ -4788,6 +5343,9 @@
    "a glass water bottle": [
     "\u015fi\u015fe"
    ],
+   "a glossy russet chestnut": [
+    "kestane"
+   ],
    "a glossy wooden violin": [
     "keman"
    ],
@@ -4800,6 +5358,9 @@
    "a golden lion": [
     "aslan",
     "hayvan"
+   ],
+   "a golden ripe wheat": [
+    "bu\u011fday"
    ],
    "a grand royal palace": [
     "saray"
@@ -4876,6 +5437,9 @@
    "a hanging rope pulley": [
     "makara"
    ],
+   "a hanging wooden swing": [
+    "sal\u0131ncak"
+   ],
    "a hard blue steel": [
     "\u00e7elik"
    ],
@@ -4906,6 +5470,15 @@
    "a heavy steel hammer": [
     "\u00e7eki\u00e7"
    ],
+   "a hollow beacon": [
+    "de\u011ferlidir",
+    "k\u0131rm\u0131z\u0131d\u0131r",
+    "serttir",
+    "so\u011fuktur"
+   ],
+   "a hooked swift falcon": [
+    "\u015fahin"
+   ],
    "a hooped oak barrel": [
     "f\u0131\u00e7\u0131"
    ],
@@ -4930,6 +5503,15 @@
    "a humming brass dynamo": [
     "dinamo"
    ],
+   "a humming chilled fridge": [
+    "buzdolab\u0131"
+   ],
+   "a humped humped camel": [
+    "deve"
+   ],
+   "a iced layered cake": [
+    "pasta"
+   ],
    "a jagged bright lightning": [
     "\u015fim\u015fek"
    ],
@@ -4938,6 +5520,9 @@
    ],
    "a jingling round tambourine": [
     "tef"
+   ],
+   "a kind steady nurse": [
+    "hem\u015fire"
    ],
    "a large black bear": [
     "ay\u0131",
@@ -4980,6 +5565,9 @@
    "a large white plane": [
     "u\u00e7ak"
    ],
+   "a leafy tossed salad": [
+    "salata"
+   ],
    "a light throwing javelin": [
     "cirit"
    ],
@@ -5004,6 +5592,9 @@
    "a long orange carrot": [
     "havu\u00e7",
     "yiyecek"
+   ],
+   "a long pale squid": [
+    "kalamar"
    ],
    "a long red scarf": [
     "atk\u0131"
@@ -5038,6 +5629,9 @@
    "a long yellow bus": [
     "otob\u00fcs"
    ],
+   "a long-legged tall ostrich": [
+    "deveku\u015fu"
+   ],
    "a loud black motorcycle": [
     "motosiklet"
    ],
@@ -5062,6 +5656,15 @@
    "a narrow floating shelf": [
     "raf"
    ],
+   "a open steady hand": [
+    "el"
+   ],
+   "a open wide mouth": [
+    "a\u011f\u0131z"
+   ],
+   "a open-mouthed loud singer": [
+    "\u015fark\u0131c\u0131"
+   ],
    "a padded batting glove": [
     "eldiven"
    ],
@@ -5071,17 +5674,41 @@
    "a pale drifting mist": [
     "pus"
    ],
+   "a pale egg-shaped almond": [
+    "badem"
+   ],
    "a pale layered limestone": [
     "kire\u00e7ta\u015f\u0131"
    ],
    "a pale round luna": [
     "ay"
    ],
+   "a pallid chilled milk": [
+    "s\u00fct"
+   ],
+   "a pallid coastal seagull": [
+    "mart\u0131"
+   ],
+   "a pallid keen tooth": [
+    "di\u015f"
+   ],
+   "a pallid long-necked goose": [
+    "kaz"
+   ],
+   "a pallid steamed rice": [
+    "pilav"
+   ],
+   "a papery tan peanut": [
+    "yerf\u0131st\u0131\u011f\u0131"
+   ],
    "a patient standing teacher": [
     "\u00f6\u011fretmen"
    ],
    "a perforated metal colander": [
     "s\u00fczge\u00e7"
+   ],
+   "a pewter pronged fork": [
+    "\u00e7atal"
    ],
    "a pink farm pig": [
     "domuz"
@@ -5101,6 +5728,9 @@
    "a plump cheerful baker": [
     "f\u0131r\u0131nc\u0131"
    ],
+   "a plump farm turkey": [
+    "hindi"
+   ],
    "a plush velvet sofa": [
     "kanepe"
    ],
@@ -5112,6 +5742,9 @@
    ],
    "a polished tapered cue": [
     "isteka"
+   ],
+   "a pouched coastal pelican": [
+    "pelikan"
    ],
    "a proud crowned king": [
     "kral"
@@ -5136,6 +5769,9 @@
     "s\u0131cakt\u0131r",
     "tatl\u0131d\u0131r",
     "tuzludur"
+   ],
+   "a quiet watchful hunter": [
+    "avc\u0131"
    ],
    "a quiet white glider": [
     "plan\u00f6r"
@@ -5202,6 +5838,9 @@
    "a roaring steam engine": [
     "motor"
    ],
+   "a robed grave judge": [
+    "yarg\u0131\u00e7"
+   ],
    "a rosy glowing sunrise": [
     "g\u00fcndo\u011fumu"
    ],
@@ -5232,11 +5871,20 @@
    "a round orange orange": [
     "portakal"
    ],
+   "a round pallid pearl": [
+    "inci"
+   ],
    "a round red apple": [
     "elma"
    ],
    "a round red bead": [
     "boncuk"
+   ],
+   "a round small hazelnut": [
+    "f\u0131nd\u0131k"
+   ],
+   "a round tilted head": [
+    "ba\u015f"
    ],
    "a round wall barometer": [
     "barometre"
@@ -5256,11 +5904,23 @@
    "a round wooden shield": [
     "kalkan"
    ],
+   "a russet capped acorn": [
+    "palamudu"
+   ],
    "a rustic wooden cabin": [
     "kul\u00fcbe"
    ],
    "a rusty water pump": [
     "pompa"
+   ],
+   "a scalding amber tea": [
+    "\u00e7ay"
+   ],
+   "a scalding clear soup": [
+    "\u00e7orba"
+   ],
+   "a scalding forged oven": [
+    "f\u0131r\u0131n"
    ],
    "a scattered cardboard jigsaw": [
     "yapboz"
@@ -5270,6 +5930,12 @@
    ],
    "a sealed nuclear reactor": [
     "reakt\u00f6r"
+   ],
+   "a seated unhurried driver": [
+    "\u015fof\u00f6r"
+   ],
+   "a shaggy sooty buffalo": [
+    "bizon"
    ],
    "a sharp flat chisel": [
     "keski"
@@ -5291,6 +5957,9 @@
    ],
    "a sharp toothed saw": [
     "testere"
+   ],
+   "a sharp-eyed russet hawk": [
+    "atmaca"
    ],
    "a shiny black grand piano": [
     "piyano"
@@ -5350,8 +6019,20 @@
    "a slatted pine crib": [
     "be\u015fik"
    ],
+   "a sleek ashen seal": [
+    "fok"
+   ],
    "a sleek luxury yacht": [
     "yat"
+   ],
+   "a sleek steep slide": [
+    "kayd\u0131rak"
+   ],
+   "a sleek straw-coloured salamander": [
+    "semender"
+   ],
+   "a sleek warm skin": [
+    "deri"
    ],
    "a slender pointed minaret": [
     "minare"
@@ -5432,6 +6113,9 @@
    "a small pear-shaped mandolin": [
     "mandolin"
    ],
+   "a small quick finger": [
+    "parmak"
+   ],
    "a small red beetle": [
     "b\u00f6cek"
    ],
@@ -5440,6 +6124,12 @@
    ],
    "a small red fox": [
     "tilki"
+   ],
+   "a small round ear": [
+    "kulak"
+   ],
+   "a small russet bat": [
+    "yarasa"
    ],
    "a small shiny sardine": [
     "hayvan",
@@ -5459,6 +6149,9 @@
    ],
    "a small wooden boat": [
     "tekne"
+   ],
+   "a smiling near friend": [
+    "arkada\u015f"
    ],
    "a smiling painted doll": [
     "bebek"
@@ -5487,8 +6180,20 @@
    "a soft white snow": [
     "kar"
    ],
+   "a sooty forged stove": [
+    "ocak"
+   ],
+   "a sooty steaming coffee": [
+    "kahve"
+   ],
+   "a sooty waddling penguin": [
+    "penguen"
+   ],
    "a sparkling clear diamond": [
     "elmas"
+   ],
+   "a spattered absorbed painter": [
+    "ressam"
    ],
    "a speckled gray granite": [
     "granit"
@@ -5505,12 +6210,21 @@
    "a spinning wind turbine": [
     "t\u00fcrbin"
    ],
+   "a spiny small hedgehog": [
+    "kirpi"
+   ],
    "a splintered wooden crate": [
     "kasa"
    ],
    "a spotted deer": [
     "geyik",
     "hayvan"
+   ],
+   "a spotted golden leopard": [
+    "leopar"
+   ],
+   "a spotted scarlet ladybug": [
+    "u\u011furb\u00f6ce\u011fi"
    ],
    "a springy steel tongs": [
     "ma\u015fa"
@@ -5530,6 +6244,9 @@
    "a steady silver rain": [
     "ya\u011fmur"
    ],
+   "a steamed folded dumpling": [
+    "mant\u0131"
+   ],
    "a stern armored soldier": [
     "asker"
    ],
@@ -5539,8 +6256,14 @@
    "a stout old mill": [
     "de\u011firmen"
    ],
+   "a straight small nose": [
+    "burun"
+   ],
    "a straight wooden ruler": [
     "cetvel"
+   ],
+   "a straw-coloured kerneled corn": [
+    "m\u0131s\u0131r"
    ],
    "a striped drifting balloon": [
     "balon"
@@ -5553,6 +6276,12 @@
    ],
    "a striped quick mackerel": [
     "uskumru"
+   ],
+   "a striped stinging wasp": [
+    "e\u015fekar\u0131s\u0131"
+   ],
+   "a striped woodland woodpecker": [
+    "a\u011fa\u00e7kakan"
    ],
    "a striped woolen sock": [
     "\u00e7orap"
@@ -5656,6 +6385,9 @@
     "bal",
     "yiyecek"
    ],
+   "a thick russet stew": [
+    "g\u00fcve\u00e7"
+   ],
    "a thin glass thermometer": [
     "termometre"
    ],
@@ -5678,14 +6410,29 @@
    "a turning stone mill": [
     "de\u011firmen"
    ],
+   "a twisted parched pasta": [
+    "makarna"
+   ],
+   "a uniformed alert pilot": [
+    "pilot"
+   ],
+   "a unyielding pallid bone": [
+    "kemik"
+   ],
    "a vast empty warehouse": [
     "depo"
    ],
    "a veined white marble": [
     "mermer"
    ],
+   "a vivid open eye": [
+    "g\u00f6z"
+   ],
    "a warm brown bronze": [
     "bronz"
+   ],
+   "a warm crusty bread": [
+    "ekmek"
    ],
    "a warm gentle aunt": [
     "teyze"
@@ -5705,14 +6452,14 @@
    "a warm wool glove": [
     "eldiven"
    ],
+   "a warty russet toad": [
+    "kurba\u011fa"
+   ],
+   "a waving nearby neighbor": [
+    "kom\u015fu"
+   ],
    "a waxed downhill ski": [
     "kayak"
-   ],
-   "a weary turret": [
-    "de\u011ferlidir",
-    "k\u0131rm\u0131z\u0131d\u0131r",
-    "serttir",
-    "so\u011fuktur"
    ],
    "a weathered strong farmer": [
     "\u00e7ift\u00e7i"

@@ -55,5 +55,19 @@ teach "a dusky slender rye" rye grain "çavdar"
 teach "a golden ripe wheat" wheat grain "buğday"
 teach "a round pallid pearl" pearl gem "inci"
 
+# Five things already shown elsewhere are ingredients, and the word was never once said over
+# any of them: it was only ever told, so it had nothing to point at. Said here, where the
+# things can be shown again.
+#
+# The other categories in the same state are left alone, and deliberately. The corpus tells
+# that a diamond is a shape and a football is an activity, but what it SHOWS under those
+# names is a gem and a leather ball, so saying the category over the percept would teach
+# that a gem is a shape. That is polysemy, not a missing utterance, and it wants a second
+# percept for the second sense rather than a second word over the first.
+for g in "a white egg" "a flaked pale oat" "a pallid steamed rice" "a fine white salt" "a golden ripe wheat"; do
+  fobs "$g"; sayw "ingredient"; comp; sleep $GAP
+  fobs "$g"; sayw "ingredient"; comp; sleep $GAP
+done
+
 nap
 log "########## stuffs complete ##########"
