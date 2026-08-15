@@ -74,6 +74,14 @@ teach "a sparkling clear diamond"  diamond   gem     elmas
 teach "a deep red ruby"            ruby      gem     yakut
 teach "a rich green emerald"       emerald   gem     zümrüt
 teach "a deep blue sapphire"       sapphire  gem     safir
+
+# A gem is a mineral as well, and a word earns its membership by being said over the thing
+# rather than beside it. The four above are said to be gems where they are shown; these two
+# rounds say mineral over the same four, so neither reading is bought at the other's expense.
+for g in "a sparkling clear diamond" "a deep red ruby" "a rich green emerald" "a deep blue sapphire"; do
+  fobs "$g"; sayw "mineral"; comp; sleep $GAP
+  fobs "$g"; sayw "mineral"; comp; sleep $GAP
+done
 teach "a fine white salt"          salt      mineral tuz
 teach "a damp brown clay"          clay      mineral kil
 teach "a fine yellow sand"         sand      mineral kum
