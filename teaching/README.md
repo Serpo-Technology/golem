@@ -216,6 +216,24 @@ falling to false, so a control has to say so explicitly.
   open, and the absolute surprise floor lowered so a fresh brain's cold
   predictor still admits the everyday captions. A warmed brain can run the
   default config once it is taught.
+- `more-menagerie.zsh`, `body-parts.zsh`, `dishes-and-drinks.zsh`, `trades.zsh`,
+  `stuffs.zsh`, `kitchen-and-play.zsh` show the hundred and nineteen words the
+  older scenes named a kind for and never put in front of the eye. A word with no
+  percept has nothing to mean: before these, `bat` was named for a Turkish word
+  for the moon and every question about one was answered about the moon. Grown
+  from empty against the same corpus without them, they are worth about a seventh
+  of the whole question set, which is more than any engine setting has moved it.
+- `make-probes.py` writes `probes.tsv`, the question set, from what the corpus
+  teaches: a membership it states directly or up the chain, a denial drawn only
+  between categories that cannot both hold, and what a shown thing is called. Ask
+  in the shape the lessons use, "a wood is a material", articles on both sides; a
+  question in any other shape comes back parsed as a noun phrase.
+- `run-probes.py <image> <brain.db> <config>` asks the whole set and counts firm
+  answers, hedges, wrong answers, answers about a different word than the one
+  asked about, owned ignorance, and silence apart. `--wrong` lists what it got
+  wrong. Its own replicate noise is about 0.043, measured by growing one config
+  twice, so a change smaller than that is not visible here and has to be argued
+  from the questions it targeted.
 - `snapshot.sh` save, restore, and list the brain's snapshots (its fluid
   weights) under `~/.golem/snapshots`.
 - `rehearse-spine.sh` the repair pass described above: it dry-runs the scenes you
