@@ -22,12 +22,12 @@ sayw() { local i; for i in 1 2 3; do $GOLEM tell "$1" >/dev/null 2>&1 && { sleep
 fact() { log "fact: $1"; sayw "$1"; sleep $GAP }
 nap()  { log "(nap: consolidate)"; $GOLEM sleep >/dev/null 2>&1; sleep "${BLOCKGAP:-8}" }
 
-log "=== the furniture of the mind: shape, guide, spark ==="
+log "=== the furniture of the mind: mould, guide, spark ==="
 
 # Both an idea and a notion shape a plan: the first shared use, the column that
 # starts to draw the two together in the usage space.
-fact "an idea shapes a plan"
-fact "a notion shapes a plan"
+fact "an idea moulds a plan"
+fact "a notion moulds a plan"
 
 # Both guide a choice: a second shared use, deepening the likeness.
 fact "an idea guides a choice"
@@ -44,7 +44,7 @@ nap
 # the other, so each is the ground for an inference: does a notion shape a goal (the
 # idea does), does an idea spark a problem (the notion does). The hedged yes rides
 # the usage nearness the three shared uses built.
-fact "an idea shapes a goal"
+fact "an idea moulds a goal"
 fact "a notion sparks a problem"
 nap
 

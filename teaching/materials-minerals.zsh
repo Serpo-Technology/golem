@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 # The stuff things are made of: many substances across four kinds (metal, stone, mineral,
 # fuel), each shown on its own percept, named, placed under its kind and under the
-# material superordinate, then tied to the work that wins and shapes them. The kinds
+# material superordinate, then tied to the work that wins and moulds them. The kinds
 # abstract from the shared naming; the relations bind substance to labor. Builds on an
 # existing world.
 #
@@ -99,6 +99,6 @@ log "=== labor ==="
 fact "a smith forged an iron";     fact "a smith forged a steel";  fact "a miner dug a coal"
 fact "a miner dug a gold";         fact "a jeweler cut a diamond"; fact "a jeweler set a ruby"
 fact "a mason cut a granite";      fact "a mason laid a marble";   fact "a fire burned a coal"
-fact "a smith shaped a bronze";    fact "a miner found a silver";  fact "a potter used a clay"
+fact "a smith moulded a bronze";    fact "a miner found a silver";  fact "a potter used a clay"
 nap
 log "########## materials and minerals complete ##########"

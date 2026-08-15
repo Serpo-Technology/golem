@@ -23,13 +23,19 @@ nn=(fountain archway corridor tunnel harbor plaza kiosk streetlamp balcony stair
 ci=0
 comp() { obs "a $adj[$(( (ci % ${#adj[@]}) + 1 ))] $nn[$(( (ci % ${#nn[@]}) + 1 ))]"; ci=$((ci+1)) }
 
-# teach: caption name kind tr  -- placed under its kind and under "thing".
+# The kinds this corpus states to be objects. Clothing and buildings are not among them and
+# keep the thing rung alone.
+isobject() { [[ $1 == (tool|furniture|vehicle|instrument|container) ]] }
+
+# teach: caption name kind tr  -- placed under its kind, under "object" where it is one, and
+# under "thing". The object rung is said over the thing itself because a word carried only in
+# a stated fact has no percept to mean.
 teach() {
   local cap=$1 name=$2 kind=$3 tr=$4 i
   log "teach: $name ($kind)"
   for i in 1 2 3 4 5; do
     fobs "$cap"; sayw "$name"
-    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && sayw "thing"
+    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && { isobject "$kind" && sayw "object"; sayw "thing" }
     (( i == 4 )) && { [ -n "$tr" ] && saytr "$tr" }
     (( i == 5 )) && sayw "$kind"
     comp; sleep $GAP

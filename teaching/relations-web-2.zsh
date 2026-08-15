@@ -28,7 +28,7 @@ block "a cat caught a mouse" "a dog barked at a stranger" "a bird built a nest" 
 log "=== people work ==="
 block "a farmer plowed a field" "a fisher mended a net" "a smith heated an iron" "a baker kneaded a dough" \
   "a weaver spun a thread" "a mason laid a brick" "a shepherd herded a sheep" "a hunter tracked a deer" \
-  "a miller ground a grain" "a potter shaped a clay" "a carpenter sawed a plank" "a sailor tied a rope" \
+  "a miller ground a grain" "a potter moulded a clay" "a carpenter sawed a plank" "a sailor tied a rope" \
   "a merchant sold a good" "a scholar read a book" "a doctor mixed a medicine" "a soldier carried a shield"; nap
 
 log "=== things made of / hold ==="
@@ -38,9 +38,9 @@ block "a barrel held a wine" "a jar held a honey" "a sack held a grain" "a chest
   "a roof covered a house" "a fence bounded a field" "a well held a water" "a lamp lit a room"; nap
 
 log "=== nature acts ==="
-block "a river carved a valley" "a wind shaped a dune" "a rain filled a lake" "a frost cracked a stone" \
+block "a river carved a valley" "a wind moulded a dune" "a rain filled a lake" "a frost cracked a stone" \
   "a fire cleared a forest" "a flood covered a field" "a sun dried a soil" "a snow capped a mountain" \
-  "a wave shaped a shore" "a root split a rock" "a vine climbed a wall" "a moss covered a stone" \
+  "a wave moulded a shore" "a root split a rock" "a vine climbed a wall" "a moss covered a stone" \
   "a cloud hid a sun" "a storm bent a tree" "a spring fed a stream" "a glacier carved a fjord"; nap
 
 log "=== who has what ==="

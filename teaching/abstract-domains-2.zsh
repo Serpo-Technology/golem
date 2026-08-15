@@ -5,7 +5,7 @@
 # carries to the other as a hedged guess.
 #
 #   - PURPOSE:  an aim and a purpose both drive an effort, guide a task, serve a quest.
-#   - DESIRE:   a hope and a wish both fuel a dream, stir a mood, spur an urge.
+#   - DESIRE:   a hope and a wish both nourish a dream, stir a mood, spur an urge.
 #   - VALUE:    a value and a merit both raise a quality, weigh a standard, mark a level.
 #
 # Build on an existing world: restore the latest snapshot first.
@@ -33,14 +33,14 @@ fact "a purpose guides a deal"
 nap
 
 log "=== desire: a hope and a wish, used alike ==="
-fact "a hope fuels a dream"
-fact "a wish fuels a dream"
+fact "a hope nourishes a dream"
+fact "a wish nourishes a dream"
 fact "a hope stirs a mood"
 fact "a wish stirs a mood"
 fact "a hope spurs an urge"
 fact "a wish spurs an urge"
 nap
-fact "a hope fuels a spirit"
+fact "a hope nourishes a spirit"
 fact "a wish stirs a plan"
 nap
 

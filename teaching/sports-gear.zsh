@@ -26,12 +26,17 @@ nn=(fountain archway corridor tunnel harbor plaza kiosk streetlamp balcony stair
 ci=0
 comp() { obs "a $adj[$(( (ci % ${#adj[@]}) + 1 ))] $nn[$(( (ci % ${#nn[@]}) + 1 ))]"; ci=$((ci+1)) }
 
-# teach: caption name subkind tr   -- five showings, named at three levels, bilingual.
+# teach: caption name subkind tr   -- five showings, named at three levels, bilingual, and
+# at its shape where the kind carries one. The corpus states that a ball is a sphere and a
+# sphere is a shape, and a word only stated has no percept to mean, so the shape is said
+# over the round things themselves. The first showing carries it so each word keeps its own
+# window.
 teach() {
   local cap=$1 name=$2 kind=$3 tr=$4 i
   log "teach: $name ($kind)"
   for i in 1 2 3 4 5; do
     fobs "$cap"; sayw "$name"
+    (( i == 1 )) && { [[ $kind == ball ]] && { sayw "sphere"; sayw "shape" } }
     (( i == 2 )) && sayw "$kind"; (( i == 3 )) && sayw "equipment"
     (( i == 4 )) && { [ -n "$tr" ] && saytr "$tr" }
     (( i == 5 )) && sayw "$kind"

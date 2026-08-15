@@ -1432,6 +1432,7 @@
    "a banded iron chest": [
     "chest",
     "furniture",
+    "object",
     "storage"
    ],
    "a barbed round morningstar": [
@@ -1446,6 +1447,7 @@
    "a beaded evening purse": [
     "bag",
     "container",
+    "object",
     "purse"
    ],
    "a beaded silver necklace": [
@@ -1483,6 +1485,7 @@
    "a bent iron crowbar": [
     "crowbar",
     "handtool",
+    "object",
     "tool"
    ],
    "a bent scribbling writer": [
@@ -1499,6 +1502,7 @@
    ],
    "a big blue truck": [
     "landcar",
+    "object",
     "truck",
     "vehicle"
    ],
@@ -1524,16 +1528,19 @@
    ],
    "a black cordless drill": [
     "drill",
+    "object",
     "powertool",
     "tool"
    ],
    "a black diving submarine": [
+    "object",
     "submarine",
     "vehicle",
     "watercraft"
    ],
    "a black grand piano": [
     "instrument",
+    "object",
     "piano",
     "thing"
    ],
@@ -1555,6 +1562,7 @@
    "a black slim clarinet": [
     "clarinet",
     "instrument",
+    "object",
     "windinstrument"
    ],
    "a black spotted domino": [
@@ -1595,6 +1603,7 @@
    ],
    "a blue cutting jigsaw": [
     "jigsaw",
+    "object",
     "powertool",
     "tool"
    ],
@@ -1621,7 +1630,10 @@
    "a bolted oak coffer": [
     "box",
     "coffer",
-    "container"
+    "container",
+    "cube",
+    "object",
+    "shape"
    ],
    "a branching red coral": [
     "animal",
@@ -1665,10 +1677,13 @@
    "a bright neon softball": [
     "ball",
     "equipment",
-    "softball"
+    "shape",
+    "softball",
+    "sphere"
    ],
    "a bright orange kayak": [
     "kayak",
+    "object",
     "vehicle",
     "watercraft"
    ],
@@ -1723,6 +1738,7 @@
    ],
    "a bright yellow taxi": [
     "landcar",
+    "object",
     "taxi",
     "vehicle"
    ],
@@ -1749,6 +1765,7 @@
    "a broad iron axe": [
     "axe",
     "handtool",
+    "object",
     "tool"
    ],
    "a broad mottled halibut": [
@@ -1789,6 +1806,7 @@
    "a brown leather knapsack": [
     "container",
     "knapsack",
+    "object",
     "thing"
    ],
    "a brown open sandal": [
@@ -1803,6 +1821,7 @@
    "a brown wooden drum": [
     "drum",
     "instrument",
+    "object",
     "thing"
    ],
    "a bubbling black cauldron": [
@@ -1813,12 +1832,14 @@
    "a bulging burlap sack": [
     "bag",
     "container",
+    "object",
     "sack"
    ],
    "a bulky nylon duffel": [
     "bag",
     "container",
-    "duffel"
+    "duffel",
+    "object"
    ],
    "a busy round cook": [
     "cook",
@@ -1866,6 +1887,7 @@
    "a chipped stoneware jug": [
     "container",
     "jug",
+    "object",
     "vessel"
    ],
    "a chirping small cricket": [
@@ -1889,6 +1911,7 @@
    ],
    "a clear half-circle protractor": [
     "device",
+    "object",
     "protractor",
     "tool"
    ],
@@ -1909,11 +1932,13 @@
    "a cluttered writing desk": [
     "desk",
     "furniture",
+    "object",
     "table"
    ],
    "a coiled brass horn": [
     "horn",
     "instrument",
+    "object",
     "windinstrument"
    ],
    "a coiled chambered nautilus": [
@@ -1933,6 +1958,7 @@
    ],
    "a colorful wooden xylophone": [
     "instrument",
+    "object",
     "percussion",
     "xylophone"
    ],
@@ -1953,13 +1979,17 @@
    ],
    "a crowded white ferry": [
     "ferry",
+    "object",
     "vehicle",
     "watercraft"
    ],
    "a crushed cardboard carton": [
     "box",
     "carton",
-    "container"
+    "container",
+    "cube",
+    "object",
+    "shape"
    ],
    "a crusty clinging barnacle": [
     "animal",
@@ -1984,6 +2014,7 @@
    "a curved garden hoe": [
     "handtool",
     "hoe",
+    "object",
     "tool"
    ],
    "a curved yew bow": [
@@ -2080,6 +2111,7 @@
    "a dented metal locker": [
     "furniture",
     "locker",
+    "object",
     "storage"
    ],
    "a dim orange titan": [
@@ -2114,6 +2146,7 @@
    "a drawstring leather pouch": [
     "bag",
     "container",
+    "object",
     "pouch"
    ],
    "a dull gray iron": [
@@ -2155,15 +2188,18 @@
    ],
    "a fast black motorcycle": [
     "motorcycle",
+    "object",
     "thing",
     "vehicle"
    ],
    "a fast military jet": [
     "aircraft",
     "jet",
+    "object",
     "vehicle"
    ],
    "a fast underground subway": [
+    "object",
     "rail",
     "subway",
     "vehicle"
@@ -2233,6 +2269,7 @@
     "kitchenware"
    ],
    "a flat rubber raft": [
+    "object",
     "raft",
     "vehicle",
     "watercraft"
@@ -2283,12 +2320,14 @@
    "a folding canvas cot": [
     "bed",
     "cot",
-    "furniture"
+    "furniture",
+    "object"
    ],
    "a frilly white bassinet": [
     "bassinet",
     "bed",
-    "furniture"
+    "furniture",
+    "object"
    ],
    "a frozen distant pluto": [
     "pluto",
@@ -2298,7 +2337,9 @@
    "a frozen rubber puck": [
     "ball",
     "equipment",
-    "puck"
+    "puck",
+    "shape",
+    "sphere"
    ],
    "a fuzzy brown teddy": [
     "figure",
@@ -2313,10 +2354,13 @@
    "a fuzzy yellow tennisball": [
     "ball",
     "equipment",
+    "shape",
+    "sphere",
     "tennisball"
    ],
    "a galvanized metal pail": [
     "container",
+    "object",
     "pail",
     "vessel"
    ],
@@ -2342,12 +2386,14 @@
    ],
    "a gilded royal throne": [
     "furniture",
+    "object",
     "seat",
     "throne"
    ],
    "a glass water bottle": [
     "bottle",
     "container",
+    "object",
     "thing"
    ],
    "a glossy russet chestnut": [
@@ -2356,6 +2402,7 @@
    ],
    "a glossy wooden violin": [
     "instrument",
+    "object",
     "stringinstrument",
     "violin"
    ],
@@ -2366,11 +2413,13 @@
    ],
    "a golden brass trumpet": [
     "instrument",
+    "object",
     "thing",
     "trumpet"
    ],
    "a golden curved saxophone": [
     "instrument",
+    "object",
     "saxophone",
     "windinstrument"
    ],
@@ -2428,6 +2477,7 @@
    ],
    "a green farm tractor": [
     "landcar",
+    "object",
     "tractor",
     "vehicle"
    ],
@@ -2551,6 +2601,7 @@
    "a heavy leather rucksack": [
     "bag",
     "container",
+    "object",
     "rucksack"
    ],
    "a heavy loaded crossbow": [
@@ -2565,6 +2616,7 @@
    ],
    "a heavy pounding jackhammer": [
     "jackhammer",
+    "object",
     "powertool",
     "tool"
    ],
@@ -2581,6 +2633,7 @@
    "a heavy steel hammer": [
     "hammer",
     "handtool",
+    "object",
     "thing",
     "tool"
    ],
@@ -2597,6 +2650,7 @@
    "a hooped oak barrel": [
     "barrel",
     "container",
+    "object",
     "vessel"
    ],
    "a horned ashen rhino": [
@@ -2607,6 +2661,7 @@
    "a hovering red helicopter": [
     "aircraft",
     "helicopter",
+    "object",
     "vehicle"
    ],
    "a howling fierce gale": [
@@ -2616,12 +2671,14 @@
    ],
    "a huge brass tuba": [
     "instrument",
+    "object",
     "tuba",
     "windinstrument"
    ],
    "a huge hanging gong": [
     "gong",
     "instrument",
+    "object",
     "percussion"
    ],
    "a huge iron boiler": [
@@ -2630,6 +2687,7 @@
     "machine"
    ],
    "a huge steel ship": [
+    "object",
     "ship",
     "vehicle",
     "watercraft"
@@ -2669,6 +2727,7 @@
    ],
    "a jingling round tambourine": [
     "instrument",
+    "object",
     "percussion",
     "tambourine"
    ],
@@ -2679,18 +2738,23 @@
    "a labeled tin canister": [
     "canister",
     "container",
+    "object",
     "vessel"
    ],
    "a lacquered ebony casket": [
     "box",
     "casket",
-    "container"
+    "container",
+    "cube",
+    "object",
+    "shape"
    ],
    "a large black bear": [
     "animal",
     "bear"
    ],
    "a large blue truck": [
+    "object",
     "thing",
     "truck",
     "vehicle"
@@ -2703,6 +2767,7 @@
    "a large brown cello": [
     "cello",
     "instrument",
+    "object",
     "stringinstrument"
    ],
    "a large brown eagle": [
@@ -2745,6 +2810,7 @@
     "thing"
    ],
    "a large white plane": [
+    "object",
     "plane",
     "thing",
     "vehicle"
@@ -2761,7 +2827,8 @@
    "a lidded wicker hamper": [
     "bag",
     "container",
-    "hamper"
+    "hamper",
+    "object"
    ],
    "a light throwing javelin": [
     "javelin",
@@ -2785,6 +2852,7 @@
    ],
    "a long brass telescope": [
     "device",
+    "object",
     "telescope",
     "tool"
    ],
@@ -2805,11 +2873,13 @@
    ],
    "a long mahogany sideboard": [
     "furniture",
+    "object",
     "sideboard",
     "storage"
    ],
    "a long metal rake": [
     "handtool",
+    "object",
     "rake",
     "tool"
    ],
@@ -2837,9 +2907,11 @@
    "a long silver airship": [
     "aircraft",
     "airship",
+    "object",
     "vehicle"
    ],
    "a long silver train": [
+    "object",
     "thing",
     "train",
     "vehicle"
@@ -2850,6 +2922,7 @@
     "fish"
    ],
    "a long speeding train": [
+    "object",
     "rail",
     "train",
     "vehicle"
@@ -2862,6 +2935,7 @@
    "a long stone bench": [
     "bench",
     "furniture",
+    "object",
     "seat"
    ],
    "a long stone causeway": [
@@ -2871,6 +2945,7 @@
    ],
    "a long stone trough": [
     "container",
+    "object",
     "trough",
     "vessel"
    ],
@@ -2880,6 +2955,7 @@
     "scarf"
    ],
    "a long wooden shovel": [
+    "object",
     "shovel",
     "thing",
     "tool"
@@ -2897,6 +2973,7 @@
    "a long yellow bus": [
     "bus",
     "landcar",
+    "object",
     "vehicle"
    ],
    "a long-legged tall ostrich": [
@@ -2911,12 +2988,14 @@
    ],
    "a loud angle grinder": [
     "grinder",
+    "object",
     "powertool",
     "tool"
    ],
    "a loud black motorcycle": [
     "landcar",
     "motorcycle",
+    "object",
     "vehicle"
    ],
    "a loud diesel generator": [
@@ -2937,6 +3016,7 @@
    "a low round coffeetable": [
     "coffeetable",
     "furniture",
+    "object",
     "thing"
    ],
    "a massive blunt warhammer": [
@@ -2945,12 +3025,14 @@
     "weapon"
    ],
    "a metal garden rake": [
+    "object",
     "rake",
     "thing",
     "tool"
    ],
    "a mirrored double wardrobe": [
     "furniture",
+    "object",
     "storage",
     "wardrobe"
    ],
@@ -2962,15 +3044,19 @@
    "a muddy leather football": [
     "ball",
     "equipment",
-    "football"
+    "football",
+    "shape",
+    "sphere"
    ],
    "a narrow birch canoe": [
     "canoe",
+    "object",
     "vehicle",
     "watercraft"
    ],
    "a narrow floating shelf": [
     "furniture",
+    "object",
     "shelf",
     "storage"
    ],
@@ -3003,17 +3089,20 @@
    ],
    "a padded tilting recliner": [
     "furniture",
+    "object",
     "recliner",
     "seat"
    ],
    "a painted clay amphora": [
     "amphora",
     "container",
+    "object",
     "vessel"
    ],
    "a painted corner cupboard": [
     "cupboard",
     "furniture",
+    "object",
     "storage"
    ],
    "a pale drifting mist": [
@@ -3070,7 +3159,8 @@
    "a patched army knapsack": [
     "bag",
     "container",
-    "knapsack"
+    "knapsack",
+    "object"
    ],
    "a patient standing teacher": [
     "person",
@@ -3080,7 +3170,9 @@
    "a pebbled orange basketball": [
     "ball",
     "basketball",
-    "equipment"
+    "equipment",
+    "shape",
+    "sphere"
    ],
    "a perforated metal colander": [
     "colander",
@@ -3128,17 +3220,20 @@
    ],
    "a plush velvet sofa": [
     "furniture",
+    "object",
     "seat",
     "sofa"
    ],
    "a polished acoustic guitar": [
     "guitar",
     "instrument",
+    "object",
     "stringinstrument"
    ],
    "a polished granite counter": [
     "counter",
     "furniture",
+    "object",
     "table"
    ],
    "a polished tapered cue": [
@@ -3187,6 +3282,7 @@
    "a quiet white glider": [
     "aircraft",
     "glider",
+    "object",
     "vehicle"
    ],
    "a red apple": [
@@ -3204,19 +3300,22 @@
     "yoyo"
    ],
    "a red city tram": [
+    "object",
     "rail",
     "tram",
     "vehicle"
    ],
    "a red fast car": [
     "car",
+    "object",
     "thing",
     "vehicle"
    ],
    "a red folding accordion": [
     "accordion",
     "instrument",
-    "keyboard"
+    "keyboard",
+    "object"
    ],
    "a red garden rose": [
     "flower",
@@ -3231,6 +3330,7 @@
    "a red racing car": [
     "car",
     "landcar",
+    "object",
     "vehicle"
    ],
    "a red robin": [
@@ -3254,12 +3354,14 @@
     "tie"
    ],
    "a red steel wrench": [
+    "object",
     "thing",
     "tool",
     "wrench"
    ],
    "a red two-wheeled bicycle": [
     "bicycle",
+    "object",
     "thing",
     "vehicle"
    ],
@@ -3301,6 +3403,7 @@
    ],
    "a roaring red chainsaw": [
     "chainsaw",
+    "object",
     "powertool",
     "tool"
    ],
@@ -3316,7 +3419,8 @@
    "a rocking wicker cradle": [
     "bed",
     "cradle",
-    "furniture"
+    "furniture",
+    "object"
    ],
    "a rocky tumbling asteroid": [
     "asteroid",
@@ -3336,6 +3440,7 @@
    "a rough metal file": [
     "file",
     "handtool",
+    "object",
     "tool"
    ],
    "a rough pearl oyster": [
@@ -3367,6 +3472,7 @@
    ],
    "a round clay pot": [
     "container",
+    "object",
     "pot",
     "thing"
    ],
@@ -3387,6 +3493,7 @@
    "a round handheld magnifier": [
     "device",
     "magnifier",
+    "object",
     "tool"
    ],
    "a round orange orange": [
@@ -3401,6 +3508,7 @@
    "a round pressure gauge": [
     "device",
     "gauge",
+    "object",
     "tool"
    ],
    "a round red apple": [
@@ -3429,6 +3537,7 @@
    "a round wall barometer": [
     "barometer",
     "device",
+    "object",
     "tool"
    ],
    "a round white onion": [
@@ -3439,6 +3548,7 @@
    "a round wooden drum": [
     "drum",
     "instrument",
+    "object",
     "percussion"
    ],
    "a round wooden hoop": [
@@ -3449,6 +3559,7 @@
    "a round wooden mallet": [
     "handtool",
     "mallet",
+    "object",
     "tool"
    ],
    "a round wooden shield": [
@@ -3469,6 +3580,7 @@
    "a rugged green jeep": [
     "jeep",
     "landcar",
+    "object",
     "vehicle"
    ],
    "a russet capped acorn": [
@@ -3488,7 +3600,10 @@
    "a rusty steel bin": [
     "bin",
     "box",
-    "container"
+    "container",
+    "cube",
+    "object",
+    "shape"
    ],
    "a rusty water pump": [
     "appliance",
@@ -3498,6 +3613,7 @@
    "a sagging corduroy couch": [
     "couch",
     "furniture",
+    "object",
     "seat"
    ],
    "a scalding amber tea": [
@@ -3518,6 +3634,7 @@
    ],
    "a scarred oily workbench": [
     "furniture",
+    "object",
     "table",
     "workbench"
    ],
@@ -3534,11 +3651,13 @@
    "a scuffed canvas satchel": [
     "bag",
     "container",
+    "object",
     "satchel"
    ],
    "a sealed cedar cask": [
     "cask",
     "container",
+    "object",
     "vessel"
    ],
    "a sealed nuclear reactor": [
@@ -3558,6 +3677,7 @@
    "a sharp flat chisel": [
     "chisel",
     "handtool",
+    "object",
     "tool"
    ],
    "a sharp gray flint": [
@@ -3567,6 +3687,7 @@
    ],
    "a sharp steel axe": [
     "axe",
+    "object",
     "thing",
     "tool"
    ],
@@ -3576,6 +3697,7 @@
     "utensil"
    ],
    "a sharp steel saw": [
+    "object",
     "saw",
     "thing",
     "tool"
@@ -3597,6 +3719,7 @@
    ],
    "a sharp toothed saw": [
     "handtool",
+    "object",
     "saw",
     "tool"
    ],
@@ -3617,12 +3740,14 @@
    ],
    "a shiny adjustable wrench": [
     "handtool",
+    "object",
     "tool",
     "wrench"
    ],
    "a shiny black grand piano": [
     "instrument",
     "keyboard",
+    "object",
     "piano"
    ],
    "a shiny black shoe": [
@@ -3633,10 +3758,12 @@
    "a shiny brass cymbal": [
     "cymbal",
     "instrument",
+    "object",
     "percussion"
    ],
    "a shiny brass trumpet": [
     "instrument",
+    "object",
     "trumpet",
     "windinstrument"
    ],
@@ -3651,6 +3778,7 @@
    ],
    "a shiny weighing scale": [
     "device",
+    "object",
     "scale",
     "tool"
    ],
@@ -3682,20 +3810,24 @@
    "a silver lab microscope": [
     "device",
     "microscope",
+    "object",
     "tool"
    ],
    "a silver metal flute": [
     "flute",
     "instrument",
+    "object",
     "thing"
    ],
    "a silver slender flute": [
     "flute",
     "instrument",
+    "object",
     "windinstrument"
    ],
    "a silver soaring plane": [
     "aircraft",
+    "object",
     "plane",
     "vehicle"
    ],
@@ -3712,17 +3844,20 @@
    "a slanted oak lectern": [
     "furniture",
     "lectern",
+    "object",
     "table"
    ],
    "a slatted oak chair": [
     "chair",
     "furniture",
+    "object",
     "seat"
    ],
    "a slatted pine crib": [
     "bed",
     "crib",
-    "furniture"
+    "furniture",
+    "object"
    ],
    "a sleek ashen seal": [
     "animal",
@@ -3731,10 +3866,12 @@
    ],
    "a sleek elevated monorail": [
     "monorail",
+    "object",
     "rail",
     "vehicle"
    ],
    "a sleek luxury yacht": [
+    "object",
     "vehicle",
     "watercraft",
     "yacht"
@@ -3765,6 +3902,7 @@
    "a slender silver flask": [
     "container",
     "flask",
+    "object",
     "vessel"
    ],
    "a slender steel javelin": [
@@ -3774,6 +3912,7 @@
    ],
    "a sliding brass trombone": [
     "instrument",
+    "object",
     "trombone",
     "windinstrument"
    ],
@@ -3790,10 +3929,12 @@
    "a slim silver bicycle": [
     "bicycle",
     "landcar",
+    "object",
     "vehicle"
    ],
    "a slim wooden oboe": [
     "instrument",
+    "object",
     "oboe",
     "windinstrument"
    ],
@@ -3830,11 +3971,13 @@
    "a small brass compass": [
     "compass",
     "device",
+    "object",
     "tool"
    ],
    "a small brass nightstand": [
     "furniture",
     "nightstand",
+    "object",
     "table"
    ],
    "a small brown dog": [
@@ -3900,6 +4043,7 @@
    ],
    "a small gripping pliers": [
     "handtool",
+    "object",
     "pliers",
     "tool"
    ],
@@ -3925,6 +4069,7 @@
    "a small pear-shaped mandolin": [
     "instrument",
     "mandolin",
+    "object",
     "stringinstrument"
    ],
    "a small quick finger": [
@@ -3968,10 +4113,12 @@
    "a small steel chime": [
     "chime",
     "instrument",
+    "object",
     "percussion"
    ],
    "a small steel drill": [
     "drill",
+    "object",
     "thing",
     "tool"
    ],
@@ -3979,6 +4126,7 @@
     "knife"
    ],
    "a small steel screwdriver": [
+    "object",
     "screwdriver",
     "thing",
     "tool"
@@ -3995,6 +4143,7 @@
    ],
    "a small wooden boat": [
     "boat",
+    "object",
     "thing",
     "vehicle",
     "watercraft"
@@ -4031,6 +4180,7 @@
    "a soft brown couch": [
     "couch",
     "furniture",
+    "object",
     "thing"
    ],
    "a soft pale tin": [
@@ -4094,6 +4244,7 @@
    "a speckled shaking maraca": [
     "instrument",
     "maraca",
+    "object",
     "percussion"
    ],
    "a spiked iron mace": [
@@ -4124,7 +4275,10 @@
    "a splintered wooden crate": [
     "box",
     "container",
-    "crate"
+    "crate",
+    "cube",
+    "object",
+    "shape"
    ],
    "a spotted damp newt": [
     "amphibian",
@@ -4166,6 +4320,7 @@
    "a squat glass jar": [
     "container",
     "jar",
+    "object",
     "vessel"
    ],
    "a squat porcelain teapot": [
@@ -4180,7 +4335,8 @@
    "a stacked metal bunk": [
     "bed",
     "bunk",
-    "furniture"
+    "furniture",
+    "object"
    ],
    "a steady northern polaris": [
     "polaris",
@@ -4209,7 +4365,9 @@
    "a stitched white baseball": [
     "ball",
     "baseball",
-    "equipment"
+    "equipment",
+    "shape",
+    "sphere"
    ],
    "a stout infantry pike": [
     "pike",
@@ -4237,6 +4395,7 @@
    ],
    "a straight wooden ruler": [
     "device",
+    "object",
     "ruler",
     "tool"
    ],
@@ -4257,11 +4416,13 @@
    "a striped cotton tote": [
     "bag",
     "container",
+    "object",
     "tote"
    ],
    "a striped drifting balloon": [
     "aircraft",
     "balloon",
+    "object",
     "vehicle"
    ],
    "a striped mesh jersey": [
@@ -4322,7 +4483,8 @@
    "a swaying rope hammock": [
     "bed",
     "furniture",
-    "hammock"
+    "hammock",
+    "object"
    ],
    "a swift cratered mercury": [
     "mercury",
@@ -4339,6 +4501,8 @@
     "equipment",
     "marble",
     "plaything",
+    "shape",
+    "sphere",
     "toy"
    ],
    "a tall bearded sailor": [
@@ -4373,6 +4537,7 @@
    "a tall glass cabinet": [
     "cabinet",
     "furniture",
+    "object",
     "storage"
    ],
    "a tall glass skyscraper": [
@@ -4388,6 +4553,7 @@
    "a tall golden harp": [
     "harp",
     "instrument",
+    "object",
     "stringinstrument"
    ],
    "a tall gray boulder": [
@@ -4430,6 +4596,7 @@
    ],
    "a tall marble urn": [
     "container",
+    "object",
     "urn",
     "vessel"
    ],
@@ -4454,12 +4621,14 @@
    ],
    "a tall white rocket": [
     "aircraft",
+    "object",
     "rocket",
     "vehicle"
    ],
    "a tall wooden cabinet": [
     "cabinet",
     "furniture",
+    "object",
     "thing"
    ],
    "a tall wooden granary": [
@@ -4470,15 +4639,18 @@
    "a tall wooden pipe organ": [
     "instrument",
     "keyboard",
+    "object",
     "organ"
    ],
    "a tall wooden shelf": [
     "furniture",
+    "object",
     "shelf",
     "thing"
    ],
    "a tall wooden stool": [
     "furniture",
+    "object",
     "seat",
     "stool"
    ],
@@ -4514,6 +4686,7 @@
    ],
    "a thin glass thermometer": [
     "device",
+    "object",
     "thermometer",
     "tool"
    ],
@@ -4535,6 +4708,7 @@
    "a tight metal clamp": [
     "clamp",
     "handtool",
+    "object",
     "tool"
    ],
    "a tilted teal uranus": [
@@ -4563,6 +4737,7 @@
    ],
    "a tiny hawaiian ukulele": [
     "instrument",
+    "object",
     "stringinstrument",
     "ukulele"
    ],
@@ -4594,6 +4769,7 @@
    "a towering walnut bookcase": [
     "bookcase",
     "furniture",
+    "object",
     "storage"
    ],
    "a turning stone mill": [
@@ -4609,6 +4785,7 @@
    "a twangy round banjo": [
     "banjo",
     "instrument",
+    "object",
     "stringinstrument"
    ],
    "a twisted parched pasta": [
@@ -4625,6 +4802,7 @@
    ],
    "a vast copper vat": [
     "container",
+    "object",
     "vat",
     "vessel"
    ],
@@ -4663,6 +4841,7 @@
    ],
    "a warm reddish viola": [
     "instrument",
+    "object",
     "stringinstrument",
     "viola"
    ],
@@ -4735,6 +4914,7 @@
     "kitchenware"
    ],
    "a white billowing sailboat": [
+    "object",
     "sailboat",
     "vehicle",
     "watercraft"
@@ -4749,6 +4929,7 @@
    ],
    "a white delivery van": [
     "landcar",
+    "object",
     "van",
     "vehicle"
    ],
@@ -4809,17 +4990,20 @@
    ],
    "a wide digging shovel": [
     "handtool",
+    "object",
     "shovel",
     "tool"
    ],
    "a wide oak dresser": [
     "dresser",
     "furniture",
+    "object",
     "storage"
    ],
    "a wide soft mattress": [
     "furniture",
     "mattress",
+    "object",
     "thing"
    ],
    "a wide straw hat": [
@@ -4829,6 +5013,7 @@
    ],
    "a wide wooden tub": [
     "container",
+    "object",
     "tub",
     "vessel"
    ],
@@ -4840,16 +5025,19 @@
    "a wooden brown chair": [
     "chair",
     "furniture",
+    "object",
     "thing"
    ],
    "a wooden brown desk": [
     "desk",
     "furniture",
+    "object",
     "thing"
    ],
    "a wooden brown guitar": [
     "guitar",
     "instrument",
+    "object",
     "thing"
    ],
    "a wooden sliding abacus": [
@@ -4873,6 +5061,7 @@
    "a worn leather armchair": [
     "armchair",
     "furniture",
+    "object",
     "seat"
    ],
    "a woven leather sling": [
@@ -4883,17 +5072,22 @@
    "a woven straw basket": [
     "basket",
     "container",
+    "object",
     "thing"
    ],
    "a woven straw caddy": [
     "box",
     "caddy",
-    "container"
+    "container",
+    "cube",
+    "object",
+    "shape"
    ],
    "a woven willow basket": [
     "bag",
     "basket",
-    "container"
+    "container",
+    "object"
    ],
    "a yellow banana": [
     "banana",
@@ -4910,11 +5104,13 @@
    ],
    "a yellow handled screwdriver": [
     "handtool",
+    "object",
     "screwdriver",
     "tool"
    ],
    "a yellow long bus": [
     "bus",
+    "object",
     "thing",
     "vehicle"
    ],
@@ -4941,9 +5137,11 @@
    "an old carved lute": [
     "instrument",
     "lute",
+    "object",
     "stringinstrument"
    ],
    "an old electric trolley": [
+    "object",
     "rail",
     "trolley",
     "vehicle"
@@ -4960,6 +5158,7 @@
    ],
    "an old wooden wagon": [
     "landcar",
+    "object",
     "vehicle",
     "wagon"
    ],
@@ -4968,6 +5167,7 @@
     "food"
    ],
    "an orange electric sander": [
+    "object",
     "powertool",
     "sander",
     "tool"
@@ -4980,7 +5180,8 @@
    "an ornate antique harpsichord": [
     "harpsichord",
     "instrument",
-    "keyboard"
+    "keyboard",
+    "object"
    ]
   },
   "tr": {

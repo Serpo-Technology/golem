@@ -26,13 +26,16 @@ nn=(fountain archway corridor tunnel harbor plaza kiosk streetlamp balcony stair
 ci=0
 comp() { obs "a $adj[$(( (ci % ${#adj[@]}) + 1 ))] $nn[$(( (ci % ${#nn[@]}) + 1 ))]"; ci=$((ci+1)) }
 
-# teach: caption name subkind tr   -- five showings, named at three levels, bilingual.
+# teach: caption name subkind tr   -- five showings, named at four levels, bilingual. The
+# corpus states that a container is an object, and a word only stated has no percept to
+# mean, so the rung is said over the thing itself the way every other rung is.
 teach() {
   local cap=$1 name=$2 kind=$3 tr=$4 i
   log "teach: $name ($kind)"
   for i in 1 2 3 4 5; do
     fobs "$cap"; sayw "$name"
-    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && sayw "container"
+    (( i == 1 )) && { [[ $kind == box ]] && { sayw "cube"; sayw "shape" } }
+    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && { sayw "container"; sayw "object" }
     (( i == 4 )) && { [ -n "$tr" ] && saytr "$tr" }
     (( i == 5 )) && sayw "$kind"
     comp; sleep $GAP

@@ -32,7 +32,7 @@ teach() {
   log "teach: $name ($kind)"
   for i in 1 2 3 4 5; do
     fobs "$cap"; sayw "$name"
-    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && sayw "vehicle"
+    (( i == 2 )) && sayw "$kind"; (( i == 3 )) && { sayw "vehicle"; sayw "object" }
     (( i == 4 )) && { [ -n "$tr" ] && saytr "$tr" }
     (( i == 5 )) && sayw "$kind"
     comp; sleep $GAP
