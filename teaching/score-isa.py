@@ -282,6 +282,57 @@ def score(db, truth, anc, worst):
                if not m.startswith("abs:") and c.startswith("abs:en:"))
     gold = {(c, caption) for caption, cats in anc.get("en", {}).items() for c in cats}
     found = len(gold & laid)
+
+    # THE DIRECT FIGURE ABOVE UNDERSTATES THE BRAIN BY ABOUT HALF, so read the climb figure
+    # below beside it. Precision is scored over the transitive climb; recall over direct
+    # edges alone was not, and two large classes of membership can never appear in it:
+    # a caption's own head noun, which headsCorePercept deliberately refuses to mint as an
+    # abstraction, and an ancestor reached only through an is-a fact, which no pass writes a
+    # direct edge for. Together they are half of what the corpus teaches, so the direct
+    # figure reads as a leaking store when the store is holding what it was ever asked to.
+    #
+    # The misses split two ways, and the two want opposite fixes. ABSENT means the brain
+    # holds no abs:en:<word> node at all, so the corpus only ever talked about that word and
+    # nothing grounds it; showing it is the fix. THIN means the node exists but the climb
+    # does not reach it from this member, which is a rung that was never written or has faded.
+    held = {r[0].split(":", 2)[2] for r in con.execute(
+        "SELECT template FROM fragments WHERE kind = 'concept' AND template LIKE 'abs:en:%'")}
+    byCaption = {}
+    for _, t, _, mt, _ in rows:
+        if not mt.startswith("abs:"):
+            byCaption.setdefault(norm(mt), set()).add(t)
+    upward = {}
+    for f, t, _, _, w in rows:
+        if w >= ABS_PWC_FLOOR:
+            upward.setdefault(t, []).append(f)
+    reached = absent = thin = 0
+    absentWords, thinWords = {}, {}
+    for caption, cats in anc.get("en", {}).items():
+        ids = byCaption.get(norm(caption))
+        if not ids:
+            continue
+        seen, stack, got = set(ids), list(ids), set()
+        while stack:
+            for p in upward.get(stack.pop(), ()):
+                if p in seen:
+                    continue
+                seen.add(p)
+                stack.append(p)
+                parts = tpl[p].split(":", 2)
+                if len(parts) == 3 and parts[1] == "en":
+                    got.add(parts[2])
+        own = head(caption)
+        for c in cats:
+            if c in got or c == own:   # a basic word names the thing, it is not a class of it
+                reached += 1
+            elif c in held:
+                thin += 1
+                thinWords[c] = thinWords.get(c, 0) + 1
+            else:
+                absent += 1
+                absentWords[c] = absentWords.get(c, 0) + 1
+    climbable = reached + thin + absent
+
     nameless = con.execute("""
         SELECT COUNT(*) FROM fragments c
         WHERE c.kind = 'concept' AND c.template NOT LIKE 'abs:%'
@@ -301,6 +352,11 @@ def score(db, truth, anc, worst):
             "full": fok / (fok + fbad) if fok + fbad else 0.0,
             "recall": found / len(gold) if gold else 0.0,
             "gold": len(gold), "nameless": nameless,
+            "climbRecall": reached / climbable if climbable else 0.0,
+            "climbReached": reached, "climbable": climbable,
+            "missAbsent": absent, "missThin": thin,
+            "absentWords": sorted(absentWords.items(), key=lambda kv: -kv[1])[:6],
+            "thinWords": sorted(thinWords.items(), key=lambda kv: -kv[1])[:6],
             "worstRung": sorted(worstRung.items(), key=lambda kv: -kv[1])[:5],
             "worst": wrong[:worst]}
 
@@ -336,7 +392,14 @@ def main():
               f"memberships a firm answer actually asserts)")
         print(f"  closure, unbarred {r['full']:.4f}  ({r['fullCorrect']} of {r['fullJudged']} "
               f"over every rung, which inheritance and the derivations still read)")
-        print(f"  recall          {r['recall']:.4f}  ({r['gold']} memberships the corpus teaches)")
+        print(f"  recall, direct  {r['recall']:.4f}  ({r['gold']} memberships the corpus teaches, "
+              f"counting only the ones a direct edge could ever carry)")
+        print(f"  RECALL, climbed {r['climbRecall']:.4f}  ({r['climbReached']} of {r['climbable']} "
+              f"reached the way an answer reaches them)")
+        print(f"    missed, absent {r['missAbsent']:5}  no node at all, so the corpus only talked "
+              f"about it: {', '.join(f'{w} {n}' for w, n in r['absentWords'])}")
+        print(f"    missed, thin   {r['missThin']:5}  the node exists and the climb misses it: "
+              f"{', '.join(f'{w} {n}' for w, n in r['thinWords'])}")
         print(f"  nameless concepts {r['nameless']}")
         for rung, n in r.get("worstRung", []):
             print(f"    worst rung: {rung} hands out {n} wrong memberships")

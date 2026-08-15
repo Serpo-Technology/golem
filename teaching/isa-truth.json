@@ -2184,6 +2184,7 @@
     "utensil"
    ],
    "a fine white salt": [
+    "ingredient",
     "material",
     "mineral",
     "salt"
@@ -2204,6 +2205,7 @@
    ],
    "a flaked pale oat": [
     "grain",
+    "ingredient",
     "oat"
    ],
    "a flat angular tangram": [
@@ -2378,6 +2380,7 @@
    ],
    "a golden ripe wheat": [
     "grain",
+    "ingredient",
     "wheat"
    ],
    "a grand royal palace": [
@@ -3057,6 +3060,7 @@
    ],
    "a pallid steamed rice": [
     "dish",
+    "ingredient",
     "rice"
    ],
    "a papery tan peanut": [
@@ -4750,7 +4754,8 @@
    ],
    "a white egg": [
     "egg",
-    "food"
+    "food",
+    "ingredient"
    ],
    "a white farm duck": [
     "animal",
