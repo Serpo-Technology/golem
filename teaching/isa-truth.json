@@ -1412,28 +1412,33 @@
    "a armed downy octopus": [
     "animal",
     "mollusk",
-    "octopus"
+    "octopus",
+    "thing"
    ],
    "a ashen city pigeon": [
     "animal",
     "bird",
-    "pigeon"
+    "pigeon",
+    "thing"
    ],
    "a ashen patient donkey": [
     "animal",
     "donkey",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a ashen sleek shark": [
     "animal",
     "fish",
-    "shark"
+    "shark",
+    "thing"
    ],
    "a banded iron chest": [
     "chest",
     "furniture",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a barbed round morningstar": [
     "bludgeon",
@@ -1448,7 +1453,8 @@
     "bag",
     "container",
     "object",
-    "purse"
+    "purse",
+    "thing"
    ],
    "a beaded silver necklace": [
     "accessory",
@@ -1486,15 +1492,18 @@
     "crowbar",
     "handtool",
     "object",
+    "thing",
     "tool"
    ],
    "a bent scribbling writer": [
     "person",
+    "thing",
     "writer"
    ],
    "a bent stitching tailor": [
     "person",
-    "tailor"
+    "tailor",
+    "thing"
    ],
    "a bent strong leg": [
     "leg",
@@ -1503,13 +1512,15 @@
    "a big blue truck": [
     "landcar",
     "object",
+    "thing",
     "truck",
     "vehicle"
    ],
    "a big red barn": [
     "barn",
     "building",
-    "place"
+    "place",
+    "thing"
    ],
    "a black brittle charcoal": [
     "charcoal",
@@ -1519,22 +1530,26 @@
    "a black buzzing fly": [
     "animal",
     "fly",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a black cawing crow": [
     "animal",
     "bird",
-    "crow"
+    "crow",
+    "thing"
    ],
    "a black cordless drill": [
     "drill",
     "object",
     "powertool",
+    "thing",
     "tool"
    ],
    "a black diving submarine": [
     "object",
     "submarine",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -1563,6 +1578,7 @@
     "clarinet",
     "instrument",
     "object",
+    "thing",
     "windinstrument"
    ],
    "a black spotted domino": [
@@ -1573,12 +1589,14 @@
    "a black striped zebra": [
     "animal",
     "mammal",
+    "thing",
     "zebra"
    ],
    "a black-and-white magpie": [
     "animal",
     "bird",
-    "magpie"
+    "magpie",
+    "thing"
    ],
    "a bladed silver skate": [
     "equipment",
@@ -1588,12 +1606,14 @@
    "a blazing yellow sun": [
     "space",
     "star",
-    "sun"
+    "sun",
+    "thing"
    ],
    "a blue clawed lobster": [
     "animal",
     "crustacean",
-    "lobster"
+    "lobster",
+    "thing"
    ],
    "a blue cotton shirt": [
     "clothing",
@@ -1605,6 +1625,7 @@
     "jigsaw",
     "object",
     "powertool",
+    "thing",
     "tool"
    ],
    "a blue denim shorts": [
@@ -1620,6 +1641,7 @@
    "a blue small violet": [
     "flower",
     "plant",
+    "thing",
     "violet"
    ],
    "a blush pink dawn": [
@@ -1633,12 +1655,14 @@
     "container",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a branching red coral": [
     "animal",
     "cnidarian",
-    "coral"
+    "coral",
+    "thing"
    ],
    "a brass key": [
     "key",
@@ -1657,11 +1681,13 @@
    "a bright arching rainbow": [
     "rainbow",
     "skylight",
+    "thing",
     "weather"
    ],
    "a bright blue vega": [
     "space",
     "star",
+    "thing",
     "vega"
    ],
    "a bright cubic rubik": [
@@ -1672,7 +1698,8 @@
    "a bright happy daughter": [
     "daughter",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a bright neon softball": [
     "ball",
@@ -1684,6 +1711,7 @@
    "a bright orange kayak": [
     "kayak",
     "object",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -1699,7 +1727,8 @@
    ],
    "a bright red poppy": [
     "plant",
-    "poppy"
+    "poppy",
+    "thing"
    ],
    "a bright seaside villa": [
     "building",
@@ -1709,12 +1738,14 @@
    "a bright skipping girl": [
     "child",
     "girl",
-    "person"
+    "person",
+    "thing"
    ],
    "a bright tailed comet": [
     "comet",
     "smallbody",
-    "space"
+    "space",
+    "thing"
    ],
    "a bright twisting kaleidoscope": [
     "kaleidoscope",
@@ -1724,6 +1755,7 @@
    "a bright veiled venus": [
     "planet",
     "space",
+    "thing",
     "venus"
    ],
    "a bright wooden blocks": [
@@ -1740,21 +1772,25 @@
     "landcar",
     "object",
     "taxi",
+    "thing",
     "vehicle"
    ],
    "a bright-tailed proud peacock": [
     "animal",
     "bird",
-    "peacock"
+    "peacock",
+    "thing"
    ],
    "a brilliant white sirius": [
     "sirius",
     "space",
-    "star"
+    "star",
+    "thing"
    ],
    "a broad green maple": [
     "maple",
     "plant",
+    "thing",
     "tree"
    ],
    "a broad heavy cutlass": [
@@ -1766,16 +1802,19 @@
     "axe",
     "handtool",
     "object",
+    "thing",
     "tool"
    ],
    "a broad mottled halibut": [
     "animal",
     "fish",
-    "halibut"
+    "halibut",
+    "thing"
    ],
    "a broad muscular smith": [
     "person",
     "smith",
+    "thing",
     "worker"
    ],
    "a broad oval platter": [
@@ -1786,17 +1825,20 @@
    "a brown farm cow": [
     "animal",
     "cow",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a brown freshwater crayfish": [
     "animal",
     "crayfish",
-    "crustacean"
+    "crustacean",
+    "thing"
    ],
    "a brown fuzzy kiwi": [
     "fruit",
     "kiwi",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a brown leather belt": [
     "accessory",
@@ -1816,7 +1858,8 @@
    ],
    "a brown owl": [
     "animal",
-    "owl"
+    "owl",
+    "thing"
    ],
    "a brown wooden drum": [
     "drum",
@@ -1833,26 +1876,31 @@
     "bag",
     "container",
     "object",
-    "sack"
+    "sack",
+    "thing"
    ],
    "a bulky nylon duffel": [
     "bag",
     "container",
     "duffel",
-    "object"
+    "object",
+    "thing"
    ],
    "a busy round cook": [
     "cook",
     "person",
+    "thing",
     "worker"
    ],
    "a busy young builder": [
     "builder",
-    "person"
+    "person",
+    "thing"
    ],
    "a calm careful doctor": [
     "doctor",
     "person",
+    "thing",
     "worker"
    ],
    "a carved white rockinghorse": [
@@ -1868,12 +1916,14 @@
    "a cheerful running boy": [
     "boy",
     "child",
-    "person"
+    "person",
+    "thing"
    ],
    "a cheerful young sister": [
     "person",
     "relative",
-    "sister"
+    "sister",
+    "thing"
    ],
    "a chilled amber juice": [
     "drink",
@@ -1888,12 +1938,14 @@
     "container",
     "jug",
     "object",
+    "thing",
     "vessel"
    ],
    "a chirping small cricket": [
     "animal",
     "cricket",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a chrome golf club": [
     "club",
@@ -1913,6 +1965,7 @@
     "device",
     "object",
     "protractor",
+    "thing",
     "tool"
    ],
    "a clear shiny quartz": [
@@ -1933,18 +1986,21 @@
     "desk",
     "furniture",
     "object",
-    "table"
+    "table",
+    "thing"
    ],
    "a coiled brass horn": [
     "horn",
     "instrument",
     "object",
+    "thing",
     "windinstrument"
    ],
    "a coiled chambered nautilus": [
     "animal",
     "mollusk",
-    "nautilus"
+    "nautilus",
+    "thing"
    ],
    "a cold gray sleet": [
     "precipitation",
@@ -1960,6 +2016,7 @@
     "instrument",
     "object",
     "percussion",
+    "thing",
     "xylophone"
    ],
    "a cozy knit sweater": [
@@ -1980,6 +2037,7 @@
    "a crowded white ferry": [
     "ferry",
     "object",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -1989,22 +2047,26 @@
     "container",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a crusty clinging barnacle": [
     "animal",
     "barnacle",
-    "crustacean"
+    "crustacean",
+    "thing"
    ],
    "a curled glassy prawn": [
     "animal",
     "crustacean",
-    "prawn"
+    "prawn",
+    "thing"
    ],
    "a curled tiny seahorse": [
     "animal",
     "fish",
-    "seahorse"
+    "seahorse",
+    "thing"
    ],
    "a curved cavalry saber": [
     "blade",
@@ -2015,6 +2077,7 @@
     "handtool",
     "hoe",
     "object",
+    "thing",
     "tool"
    ],
    "a curved yew bow": [
@@ -2035,7 +2098,8 @@
    "a dark clustered mussel": [
     "animal",
     "mollusk",
-    "mussel"
+    "mussel",
+    "thing"
    ],
    "a dark crumbly peat": [
     "fuel",
@@ -2045,6 +2109,7 @@
    "a dark green cedar": [
     "cedar",
     "plant",
+    "thing",
     "tree"
    ],
    "a dark porous basalt": [
@@ -2065,7 +2130,8 @@
    "a deep blue neptune": [
     "neptune",
     "planet",
-    "space"
+    "space",
+    "thing"
    ],
    "a deep blue sapphire": [
     "gem",
@@ -2112,11 +2178,13 @@
     "furniture",
     "locker",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a dim orange titan": [
     "moon",
     "space",
+    "thing",
     "titan"
    ],
    "a dim purple dusk": [
@@ -2127,12 +2195,14 @@
    "a distant blazing rigel": [
     "rigel",
     "space",
-    "star"
+    "star",
+    "thing"
    ],
    "a domed blue mosque": [
     "building",
     "mosque",
-    "place"
+    "place",
+    "thing"
    ],
    "a downy rosy lung": [
     "lung",
@@ -2141,13 +2211,15 @@
    "a downy rosy worm": [
     "animal",
     "bug",
+    "thing",
     "worm"
    ],
    "a drawstring leather pouch": [
     "bag",
     "container",
     "object",
-    "pouch"
+    "pouch",
+    "thing"
    ],
    "a dull gray iron": [
     "iron",
@@ -2165,21 +2237,25 @@
    "a dusty pale moth": [
     "animal",
     "insect",
-    "moth"
+    "moth",
+    "thing"
    ],
    "a dusty stooped miner": [
     "miner",
-    "person"
+    "person",
+    "thing"
    ],
    "a eight-legged patient spider": [
     "animal",
     "bug",
-    "spider"
+    "spider",
+    "thing"
    ],
    "a faint swarming krill": [
     "animal",
     "crustacean",
-    "krill"
+    "krill",
+    "thing"
    ],
    "a faint yellow haze": [
     "cloudform",
@@ -2196,12 +2272,14 @@
     "aircraft",
     "jet",
     "object",
+    "thing",
     "vehicle"
    ],
    "a fast underground subway": [
     "object",
     "rail",
     "subway",
+    "thing",
     "vehicle"
    ],
    "a fiery orange sunset": [
@@ -2233,7 +2311,8 @@
    "a five-armed amber starfish": [
     "animal",
     "creature",
-    "starfish"
+    "starfish",
+    "thing"
    ],
    "a fizzy sweet soda": [
     "drink",
@@ -2261,7 +2340,8 @@
    "a flat gray flounder": [
     "animal",
     "fish",
-    "flounder"
+    "flounder",
+    "thing"
    ],
    "a flat ridged griddle": [
     "cookware",
@@ -2271,6 +2351,7 @@
    "a flat rubber raft": [
     "object",
     "raft",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -2282,7 +2363,8 @@
    "a flat winged ray": [
     "animal",
     "fish",
-    "ray"
+    "ray",
+    "thing"
    ],
    "a flat wooden paddle": [
     "equipment",
@@ -2292,7 +2374,8 @@
    "a flat-tailed dripping beaver": [
     "animal",
     "beaver",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a floating blue balloon": [
     "balloon",
@@ -2302,7 +2385,8 @@
    "a floating glowing jellyfish": [
     "animal",
     "cnidarian",
-    "jellyfish"
+    "jellyfish",
+    "thing"
    ],
    "a foaming amber beer": [
     "beer",
@@ -2321,13 +2405,15 @@
     "bed",
     "cot",
     "furniture",
-    "object"
+    "object",
+    "thing"
    ],
    "a frilly white bassinet": [
     "bassinet",
     "bed",
     "furniture",
-    "object"
+    "object",
+    "thing"
    ],
    "a frozen distant pluto": [
     "pluto",
@@ -2362,6 +2448,7 @@
     "container",
     "object",
     "pail",
+    "thing",
     "vessel"
    ],
    "a geared steel winch": [
@@ -2372,7 +2459,8 @@
    "a giant banded jupiter": [
     "jupiter",
     "planet",
-    "space"
+    "space",
+    "thing"
    ],
    "a giant bolt ballista": [
     "ballista",
@@ -2382,12 +2470,14 @@
    "a giggling wobbling toddler": [
     "child",
     "person",
+    "thing",
     "toddler"
    ],
    "a gilded royal throne": [
     "furniture",
     "object",
     "seat",
+    "thing",
     "throne"
    ],
    "a glass water bottle": [
@@ -2404,6 +2494,7 @@
     "instrument",
     "object",
     "stringinstrument",
+    "thing",
     "violin"
    ],
    "a glowing hot furnace": [
@@ -2421,11 +2512,13 @@
     "instrument",
     "object",
     "saxophone",
+    "thing",
     "windinstrument"
    ],
    "a golden lion": [
     "animal",
-    "lion"
+    "lion",
+    "thing"
    ],
    "a golden ripe wheat": [
     "grain",
@@ -2445,20 +2538,24 @@
    "a gray gentle grandmother": [
     "grandmother",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a gray hopping kangaroo": [
     "animal",
     "kangaroo",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a gray rabbit": [
     "animal",
     "mammal",
-    "rabbit"
+    "rabbit",
+    "thing"
    ],
    "a gray wolf": [
     "animal",
+    "thing",
     "wolf"
    ],
    "a gray woolen trousers": [
@@ -2478,21 +2575,26 @@
    "a green farm tractor": [
     "landcar",
     "object",
+    "thing",
     "tractor",
     "vehicle"
    ],
    "a green frog": [
     "animal",
-    "frog"
+    "frog",
+    "thing"
    ],
    "a green grass tuft": [
     "grass",
-    "plant"
+    "plant",
+    "thing",
+    "tuft"
    ],
    "a green jumping grasshopper": [
     "animal",
     "grasshopper",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a green leaf": [
     "green"
@@ -2500,16 +2602,19 @@
    "a green leafy lettuce": [
     "lettuce",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a green long cucumber": [
     "cucumber",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a green oak leaf": [
     "leaf",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a green padded vest": [
     "clothing",
@@ -2527,22 +2632,26 @@
    "a green round pea": [
     "pea",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a green scaly lizard": [
     "animal",
     "lizard",
-    "reptile"
+    "reptile",
+    "thing"
    ],
    "a green sour lime": [
     "fruit",
     "lime",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a green talking parrot": [
     "animal",
     "bird",
-    "parrot"
+    "parrot",
+    "thing"
    ],
    "a hanging rope pulley": [
     "machine",
@@ -2576,7 +2685,8 @@
    "a heavy brown bear": [
     "animal",
     "bear",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a heavy dark lead": [
     "lead",
@@ -2602,7 +2712,8 @@
     "bag",
     "container",
     "object",
-    "rucksack"
+    "rucksack",
+    "thing"
    ],
    "a heavy loaded crossbow": [
     "crossbow",
@@ -2618,6 +2729,7 @@
     "jackhammer",
     "object",
     "powertool",
+    "thing",
     "tool"
    ],
    "a heavy rubber mallet": [
@@ -2645,23 +2757,27 @@
    "a hooked swift falcon": [
     "animal",
     "bird",
-    "falcon"
+    "falcon",
+    "thing"
    ],
    "a hooped oak barrel": [
     "barrel",
     "container",
     "object",
+    "thing",
     "vessel"
    ],
    "a horned ashen rhino": [
     "animal",
     "mammal",
-    "rhino"
+    "rhino",
+    "thing"
    ],
    "a hovering red helicopter": [
     "aircraft",
     "helicopter",
     "object",
+    "thing",
     "vehicle"
    ],
    "a howling fierce gale": [
@@ -2672,6 +2788,7 @@
    "a huge brass tuba": [
     "instrument",
     "object",
+    "thing",
     "tuba",
     "windinstrument"
    ],
@@ -2679,7 +2796,8 @@
     "gong",
     "instrument",
     "object",
-    "percussion"
+    "percussion",
+    "thing"
    ],
    "a huge iron boiler": [
     "appliance",
@@ -2689,6 +2807,7 @@
    "a huge steel ship": [
     "object",
     "ship",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -2709,7 +2828,8 @@
    "a humped humped camel": [
     "animal",
     "camel",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a iced layered cake": [
     "cake",
@@ -2729,16 +2849,19 @@
     "instrument",
     "object",
     "percussion",
-    "tambourine"
+    "tambourine",
+    "thing"
    ],
    "a kind steady nurse": [
     "nurse",
-    "person"
+    "person",
+    "thing"
    ],
    "a labeled tin canister": [
     "canister",
     "container",
     "object",
+    "thing",
     "vessel"
    ],
    "a lacquered ebony casket": [
@@ -2747,11 +2870,13 @@
     "container",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a large black bear": [
     "animal",
-    "bear"
+    "bear",
+    "thing"
    ],
    "a large blue truck": [
     "object",
@@ -2762,22 +2887,26 @@
    "a large blue tuna": [
     "animal",
     "fish",
+    "thing",
     "tuna"
    ],
    "a large brown cello": [
     "cello",
     "instrument",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "a large brown eagle": [
     "animal",
     "bird",
-    "eagle"
+    "eagle",
+    "thing"
    ],
    "a large brown horse": [
     "animal",
-    "horse"
+    "horse",
+    "thing"
    ],
    "a large elegant mansion": [
     "building",
@@ -2787,22 +2916,26 @@
    "a large gray elephant": [
     "animal",
     "elephant",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a large gray whale": [
     "animal",
     "mammal",
+    "thing",
     "whale"
    ],
    "a large green crocodile": [
     "animal",
     "crocodile",
-    "reptile"
+    "reptile",
+    "thing"
    ],
    "a large speckled cod": [
     "animal",
     "cod",
-    "fish"
+    "fish",
+    "thing"
    ],
    "a large stone castle": [
     "building",
@@ -2828,7 +2961,8 @@
     "bag",
     "container",
     "hamper",
-    "object"
+    "object",
+    "thing"
    ],
    "a light throwing javelin": [
     "javelin",
@@ -2838,7 +2972,8 @@
    "a lively young brother": [
     "brother",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a long arched viaduct": [
     "bridge",
@@ -2854,6 +2989,7 @@
     "device",
     "object",
     "telescope",
+    "thing",
     "tool"
    ],
    "a long evening gown": [
@@ -2864,23 +3000,27 @@
    "a long green eel": [
     "animal",
     "eel",
-    "fish"
+    "fish",
+    "thing"
    ],
    "a long green snake": [
     "animal",
     "reptile",
-    "snake"
+    "snake",
+    "thing"
    ],
    "a long mahogany sideboard": [
     "furniture",
     "object",
     "sideboard",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a long metal rake": [
     "handtool",
     "object",
     "rake",
+    "thing",
     "tool"
    ],
    "a long moving conveyor": [
@@ -2892,12 +3032,14 @@
     "carrot",
     "food",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a long pale squid": [
     "animal",
     "mollusk",
-    "squid"
+    "squid",
+    "thing"
    ],
    "a long red scarf": [
     "clothing",
@@ -2908,6 +3050,7 @@
     "aircraft",
     "airship",
     "object",
+    "thing",
     "vehicle"
    ],
    "a long silver train": [
@@ -2919,11 +3062,13 @@
    "a long slithering eel": [
     "animal",
     "eel",
-    "fish"
+    "fish",
+    "thing"
    ],
    "a long speeding train": [
     "object",
     "rail",
+    "thing",
     "train",
     "vehicle"
    ],
@@ -2936,7 +3081,8 @@
     "bench",
     "furniture",
     "object",
-    "seat"
+    "seat",
+    "thing"
    ],
    "a long stone causeway": [
     "building",
@@ -2946,6 +3092,7 @@
    "a long stone trough": [
     "container",
     "object",
+    "thing",
     "trough",
     "vessel"
    ],
@@ -2974,12 +3121,14 @@
     "bus",
     "landcar",
     "object",
+    "thing",
     "vehicle"
    ],
    "a long-legged tall ostrich": [
     "animal",
     "bird",
-    "ostrich"
+    "ostrich",
+    "thing"
    ],
    "a looped wire whisk": [
     "kitchenware",
@@ -2990,12 +3139,14 @@
     "grinder",
     "object",
     "powertool",
+    "thing",
     "tool"
    ],
    "a loud black motorcycle": [
     "landcar",
     "motorcycle",
     "object",
+    "thing",
     "vehicle"
    ],
    "a loud diesel generator": [
@@ -3034,6 +3185,7 @@
     "furniture",
     "object",
     "storage",
+    "thing",
     "wardrobe"
    ],
    "a molded plastic shinguard": [
@@ -3051,6 +3203,7 @@
    "a narrow birch canoe": [
     "canoe",
     "object",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -3058,7 +3211,8 @@
     "furniture",
     "object",
     "shelf",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a narrow wooden footbridge": [
     "bridge",
@@ -3080,7 +3234,8 @@
    ],
    "a open-mouthed loud singer": [
     "person",
-    "singer"
+    "singer",
+    "thing"
    ],
    "a padded batting glove": [
     "equipment",
@@ -3091,19 +3246,22 @@
     "furniture",
     "object",
     "recliner",
-    "seat"
+    "seat",
+    "thing"
    ],
    "a painted clay amphora": [
     "amphora",
     "container",
     "object",
+    "thing",
     "vessel"
    ],
    "a painted corner cupboard": [
     "cupboard",
     "furniture",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a pale drifting mist": [
     "cloudform",
@@ -3117,7 +3275,8 @@
    "a pale hovering cuttlefish": [
     "animal",
     "cuttlefish",
-    "mollusk"
+    "mollusk",
+    "thing"
    ],
    "a pale layered limestone": [
     "limestone",
@@ -3127,7 +3286,8 @@
    "a pale round luna": [
     "luna",
     "moon",
-    "space"
+    "space",
+    "thing"
    ],
    "a pallid chilled milk": [
     "drink",
@@ -3136,7 +3296,8 @@
    "a pallid coastal seagull": [
     "animal",
     "bird",
-    "seagull"
+    "seagull",
+    "thing"
    ],
    "a pallid keen tooth": [
     "part",
@@ -3145,7 +3306,8 @@
    "a pallid long-necked goose": [
     "animal",
     "bird",
-    "goose"
+    "goose",
+    "thing"
    ],
    "a pallid steamed rice": [
     "dish",
@@ -3160,11 +3322,13 @@
     "bag",
     "container",
     "knapsack",
-    "object"
+    "object",
+    "thing"
    ],
    "a patient standing teacher": [
     "person",
     "teacher",
+    "thing",
     "worker"
    ],
    "a pebbled orange basketball": [
@@ -3186,22 +3350,26 @@
    "a pink farm pig": [
     "animal",
     "mammal",
-    "pig"
+    "pig",
+    "thing"
    ],
    "a pink garden orchid": [
     "flower",
     "orchid",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a pink standing flamingo": [
     "animal",
     "bird",
-    "flamingo"
+    "flamingo",
+    "thing"
    ],
    "a playful gray dolphin": [
     "animal",
     "dolphin",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a pleated plaid skirt": [
     "clothing",
@@ -3211,30 +3379,35 @@
    "a plump cheerful baker": [
     "baker",
     "person",
+    "thing",
     "worker"
    ],
    "a plump farm turkey": [
     "animal",
     "bird",
+    "thing",
     "turkey"
    ],
    "a plush velvet sofa": [
     "furniture",
     "object",
     "seat",
-    "sofa"
+    "sofa",
+    "thing"
    ],
    "a polished acoustic guitar": [
     "guitar",
     "instrument",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "a polished granite counter": [
     "counter",
     "furniture",
     "object",
-    "table"
+    "table",
+    "thing"
    ],
    "a polished tapered cue": [
     "cue",
@@ -3244,16 +3417,19 @@
    "a pouched coastal pelican": [
     "animal",
     "bird",
-    "pelican"
+    "pelican",
+    "thing"
    ],
    "a proud crowned king": [
     "king",
     "person",
+    "thing",
     "worker"
    ],
    "a puffy white cloud": [
     "cloud",
     "cloudform",
+    "thing",
     "weather"
    ],
    "a purple grape": [
@@ -3263,26 +3439,31 @@
    "a purple round eggplant": [
     "eggplant",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a purple round grape": [
     "fruit",
     "grape",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a purple tall lily": [
     "flower",
     "lily",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a quiet watchful hunter": [
     "hunter",
-    "person"
+    "person",
+    "thing"
    ],
    "a quiet white glider": [
     "aircraft",
     "glider",
     "object",
+    "thing",
     "vehicle"
    ],
    "a red apple": [
@@ -3302,6 +3483,7 @@
    "a red city tram": [
     "object",
     "rail",
+    "thing",
     "tram",
     "vehicle"
    ],
@@ -3315,31 +3497,37 @@
     "accordion",
     "instrument",
     "keyboard",
-    "object"
+    "object",
+    "thing"
    ],
    "a red garden rose": [
     "flower",
     "plant",
-    "rose"
+    "rose",
+    "thing"
    ],
    "a red juicy strawberry": [
     "fruit",
     "plant",
-    "strawberry"
+    "strawberry",
+    "thing"
    ],
    "a red racing car": [
     "car",
     "landcar",
     "object",
+    "thing",
     "vehicle"
    ],
    "a red robin": [
     "animal",
     "bird",
-    "robin"
+    "robin",
+    "thing"
    ],
    "a red round tomato": [
     "plant",
+    "thing",
     "tomato",
     "vegetable"
    ],
@@ -3368,7 +3556,8 @@
    "a red wild poppy": [
     "flower",
     "plant",
-    "poppy"
+    "poppy",
+    "thing"
    ],
    "a reddish brown copper": [
     "copper",
@@ -3378,6 +3567,7 @@
    "a regal crowned queen": [
     "person",
     "queen",
+    "thing",
     "worker"
    ],
    "a rich green emerald": [
@@ -3389,12 +3579,14 @@
    "a ridged buried clam": [
     "animal",
     "clam",
-    "mollusk"
+    "mollusk",
+    "thing"
    ],
    "a ringed pale saturn": [
     "planet",
     "saturn",
-    "space"
+    "space",
+    "thing"
    ],
    "a rising cabin elevator": [
     "appliance",
@@ -3405,6 +3597,7 @@
     "chainsaw",
     "object",
     "powertool",
+    "thing",
     "tool"
    ],
    "a roaring steam engine": [
@@ -3414,13 +3607,15 @@
    ],
    "a robed grave judge": [
     "judge",
-    "person"
+    "person",
+    "thing"
    ],
    "a rocking wicker cradle": [
     "bed",
     "cradle",
     "furniture",
-    "object"
+    "object",
+    "thing"
    ],
    "a rocky tumbling asteroid": [
     "asteroid",
@@ -3441,12 +3636,14 @@
     "file",
     "handtool",
     "object",
+    "thing",
     "tool"
    ],
    "a rough pearl oyster": [
     "animal",
     "mollusk",
-    "oyster"
+    "oyster",
+    "thing"
    ],
    "a rough tan sandstone": [
     "material",
@@ -3465,6 +3662,7 @@
    "a round brown potato": [
     "plant",
     "potato",
+    "thing",
     "vegetable"
    ],
    "a round clay plate": [
@@ -3494,12 +3692,14 @@
     "device",
     "magnifier",
     "object",
+    "thing",
     "tool"
    ],
    "a round orange orange": [
     "fruit",
     "orange",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a round pallid pearl": [
     "gem",
@@ -3509,12 +3709,14 @@
     "device",
     "gauge",
     "object",
+    "thing",
     "tool"
    ],
    "a round red apple": [
     "apple",
     "fruit",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a round red ball": [
     "ball"
@@ -3538,18 +3740,21 @@
     "barometer",
     "device",
     "object",
+    "thing",
     "tool"
    ],
    "a round white onion": [
     "onion",
     "plant",
+    "thing",
     "vegetable"
    ],
    "a round wooden drum": [
     "drum",
     "instrument",
     "object",
-    "percussion"
+    "percussion",
+    "thing"
    ],
    "a round wooden hoop": [
     "hoop",
@@ -3560,6 +3765,7 @@
     "handtool",
     "mallet",
     "object",
+    "thing",
     "tool"
    ],
    "a round wooden shield": [
@@ -3581,6 +3787,7 @@
     "jeep",
     "landcar",
     "object",
+    "thing",
     "vehicle"
    ],
    "a russet capped acorn": [
@@ -3595,7 +3802,8 @@
    "a rusty red mars": [
     "mars",
     "planet",
-    "space"
+    "space",
+    "thing"
    ],
    "a rusty steel bin": [
     "bin",
@@ -3603,7 +3811,8 @@
     "container",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a rusty water pump": [
     "appliance",
@@ -3614,7 +3823,8 @@
     "couch",
     "furniture",
     "object",
-    "seat"
+    "seat",
+    "thing"
    ],
    "a scalding amber tea": [
     "drink",
@@ -3636,6 +3846,7 @@
     "furniture",
     "object",
     "table",
+    "thing",
     "workbench"
    ],
    "a scattered cardboard jigsaw": [
@@ -3652,12 +3863,14 @@
     "bag",
     "container",
     "object",
-    "satchel"
+    "satchel",
+    "thing"
    ],
    "a sealed cedar cask": [
     "cask",
     "container",
     "object",
+    "thing",
     "vessel"
    ],
    "a sealed nuclear reactor": [
@@ -3667,17 +3880,20 @@
    ],
    "a seated unhurried driver": [
     "driver",
-    "person"
+    "person",
+    "thing"
    ],
    "a shaggy sooty buffalo": [
     "animal",
     "buffalo",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a sharp flat chisel": [
     "chisel",
     "handtool",
     "object",
+    "thing",
     "tool"
    ],
    "a sharp gray flint": [
@@ -3721,6 +3937,7 @@
     "handtool",
     "object",
     "saw",
+    "thing",
     "tool"
    ],
    "a sharp white steeple": [
@@ -3731,7 +3948,8 @@
    "a sharp-eyed russet hawk": [
     "animal",
     "bird",
-    "hawk"
+    "hawk",
+    "thing"
    ],
    "a shimmering green aurora": [
     "aurora",
@@ -3741,6 +3959,7 @@
    "a shiny adjustable wrench": [
     "handtool",
     "object",
+    "thing",
     "tool",
     "wrench"
    ],
@@ -3748,7 +3967,8 @@
     "instrument",
     "keyboard",
     "object",
-    "piano"
+    "piano",
+    "thing"
    ],
    "a shiny black shoe": [
     "clothing",
@@ -3759,11 +3979,13 @@
     "cymbal",
     "instrument",
     "object",
-    "percussion"
+    "percussion",
+    "thing"
    ],
    "a shiny brass trumpet": [
     "instrument",
     "object",
+    "thing",
     "trumpet",
     "windinstrument"
    ],
@@ -3780,6 +4002,7 @@
     "device",
     "object",
     "scale",
+    "thing",
     "tool"
    ],
    "a shiny yellow gold": [
@@ -3800,17 +4023,20 @@
    "a sideways scuttling crab": [
     "animal",
     "crab",
-    "crustacean"
+    "crustacean",
+    "thing"
    ],
    "a silver darting herring": [
     "animal",
     "fish",
-    "herring"
+    "herring",
+    "thing"
    ],
    "a silver lab microscope": [
     "device",
     "microscope",
     "object",
+    "thing",
     "tool"
    ],
    "a silver metal flute": [
@@ -3823,18 +4049,21 @@
     "flute",
     "instrument",
     "object",
+    "thing",
     "windinstrument"
    ],
    "a silver soaring plane": [
     "aircraft",
     "object",
     "plane",
+    "thing",
     "vehicle"
    ],
    "a silver swimming salmon": [
     "animal",
     "fish",
-    "salmon"
+    "salmon",
+    "thing"
    ],
    "a silver wrist watch": [
     "accessory",
@@ -3845,33 +4074,39 @@
     "furniture",
     "lectern",
     "object",
-    "table"
+    "table",
+    "thing"
    ],
    "a slatted oak chair": [
     "chair",
     "furniture",
     "object",
-    "seat"
+    "seat",
+    "thing"
    ],
    "a slatted pine crib": [
     "bed",
     "crib",
     "furniture",
-    "object"
+    "object",
+    "thing"
    ],
    "a sleek ashen seal": [
     "animal",
     "mammal",
-    "seal"
+    "seal",
+    "thing"
    ],
    "a sleek elevated monorail": [
     "monorail",
     "object",
     "rail",
+    "thing",
     "vehicle"
    ],
    "a sleek luxury yacht": [
     "object",
+    "thing",
     "vehicle",
     "watercraft",
     "yacht"
@@ -3883,12 +4118,14 @@
    "a sleek straw-coloured salamander": [
     "amphibian",
     "animal",
-    "salamander"
+    "salamander",
+    "thing"
    ],
    "a sleek streamside otter": [
     "animal",
     "mammal",
-    "otter"
+    "otter",
+    "thing"
    ],
    "a sleek warm skin": [
     "part",
@@ -3903,6 +4140,7 @@
     "container",
     "flask",
     "object",
+    "thing",
     "vessel"
    ],
    "a slender steel javelin": [
@@ -3913,6 +4151,7 @@
    "a sliding brass trombone": [
     "instrument",
     "object",
+    "thing",
     "trombone",
     "windinstrument"
    ],
@@ -3930,55 +4169,65 @@
     "bicycle",
     "landcar",
     "object",
+    "thing",
     "vehicle"
    ],
    "a slim wooden oboe": [
     "instrument",
     "object",
     "oboe",
+    "thing",
     "windinstrument"
    ],
    "a slow green turtle": [
     "animal",
     "reptile",
+    "thing",
     "turtle"
    ],
    "a slow spiral snail": [
     "animal",
     "mollusk",
-    "snail"
+    "snail",
+    "thing"
    ],
    "a small black ant": [
     "animal",
     "ant",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a small black cat": [
     "animal",
     "cat",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a small blue jay": [
     "animal",
     "bird",
-    "jay"
+    "jay",
+    "thing"
    ],
    "a small blue kingfisher": [
     "animal",
     "bird",
-    "kingfisher"
+    "kingfisher",
+    "thing"
    ],
    "a small brass compass": [
     "compass",
     "device",
     "object",
+    "thing",
     "tool"
    ],
    "a small brass nightstand": [
     "furniture",
     "nightstand",
     "object",
-    "table"
+    "table",
+    "thing"
    ],
    "a small brown dog": [
     "animal",
@@ -3989,22 +4238,26 @@
    "a small brown gecko": [
     "animal",
     "gecko",
-    "reptile"
+    "reptile",
+    "thing"
    ],
    "a small brown monkey": [
     "animal",
     "mammal",
-    "monkey"
+    "monkey",
+    "thing"
    ],
    "a small brown sparrow": [
     "animal",
     "bird",
-    "sparrow"
+    "sparrow",
+    "thing"
    ],
    "a small brown squirrel": [
     "animal",
     "mammal",
-    "squirrel"
+    "squirrel",
+    "thing"
    ],
    "a small electric motor": [
     "machine",
@@ -4029,22 +4282,26 @@
    "a small gray mouse": [
     "animal",
     "mammal",
-    "mouse"
+    "mouse",
+    "thing"
    ],
    "a small gray owl": [
     "animal",
     "bird",
-    "owl"
+    "owl",
+    "thing"
    ],
    "a small green hydra": [
     "animal",
     "cnidarian",
-    "hydra"
+    "hydra",
+    "thing"
    ],
    "a small gripping pliers": [
     "handtool",
     "object",
     "pliers",
+    "thing",
     "tool"
    ],
    "a small iron nail": [
@@ -4054,7 +4311,8 @@
    "a small lumpy phobos": [
     "moon",
     "phobos",
-    "space"
+    "space",
+    "thing"
    ],
    "a small metal jack": [
     "jack",
@@ -4064,13 +4322,15 @@
    "a small orange goldfish": [
     "animal",
     "fish",
-    "goldfish"
+    "goldfish",
+    "thing"
    ],
    "a small pear-shaped mandolin": [
     "instrument",
     "mandolin",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "a small quick finger": [
     "finger",
@@ -4079,17 +4339,20 @@
    "a small red beetle": [
     "animal",
     "beetle",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a small red cherry": [
     "cherry",
     "fruit",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a small red fox": [
     "animal",
     "fox",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a small round ear": [
     "ear",
@@ -4098,23 +4361,27 @@
    "a small russet bat": [
     "animal",
     "bat",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a small shiny sardine": [
     "animal",
     "fish",
-    "sardine"
+    "sardine",
+    "thing"
    ],
    "a small smiling baby": [
     "baby",
     "child",
-    "person"
+    "person",
+    "thing"
    ],
    "a small steel chime": [
     "chime",
     "instrument",
     "object",
-    "percussion"
+    "percussion",
+    "thing"
    ],
    "a small steel drill": [
     "drill",
@@ -4134,7 +4401,8 @@
    "a small striped bass": [
     "animal",
     "bass",
-    "fish"
+    "fish",
+    "thing"
    ],
    "a small thatched cottage": [
     "building",
@@ -4150,7 +4418,8 @@
    ],
    "a smiling near friend": [
     "friend",
-    "person"
+    "person",
+    "thing"
    ],
    "a smiling painted doll": [
     "doll",
@@ -4160,12 +4429,14 @@
    "a smoky brick factory": [
     "building",
     "factory",
-    "place"
+    "place",
+    "thing"
    ],
    "a smooth icy europa": [
     "europa",
     "moon",
-    "space"
+    "space",
+    "thing"
    ],
    "a smooth maple rollingpin": [
     "kitchenware",
@@ -4191,7 +4462,8 @@
    "a soft slimy slug": [
     "animal",
     "mollusk",
-    "slug"
+    "slug",
+    "thing"
    ],
    "a soft velvet robe": [
     "clothing",
@@ -4224,7 +4496,8 @@
    "a sooty waddling penguin": [
     "animal",
     "bird",
-    "penguin"
+    "penguin",
+    "thing"
    ],
    "a sparkling clear diamond": [
     "diamond",
@@ -4234,7 +4507,8 @@
    ],
    "a spattered absorbed painter": [
     "painter",
-    "person"
+    "person",
+    "thing"
    ],
    "a speckled gray granite": [
     "granite",
@@ -4245,7 +4519,8 @@
     "instrument",
     "maraca",
     "object",
-    "percussion"
+    "percussion",
+    "thing"
    ],
    "a spiked iron mace": [
     "bludgeon",
@@ -4270,7 +4545,8 @@
    "a spiny small hedgehog": [
     "animal",
     "hedgehog",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a splintered wooden crate": [
     "box",
@@ -4278,31 +4554,37 @@
     "crate",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a spotted damp newt": [
     "amphibian",
     "animal",
-    "newt"
+    "newt",
+    "thing"
    ],
    "a spotted deer": [
     "animal",
-    "deer"
+    "deer",
+    "thing"
    ],
    "a spotted golden leopard": [
     "animal",
     "leopard",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a spotted scarlet ladybug": [
     "animal",
     "insect",
-    "ladybug"
+    "ladybug",
+    "thing"
    ],
    "a spotted volcanic io": [
     "io",
     "moon",
-    "space"
+    "space",
+    "thing"
    ],
    "a springy steel tongs": [
     "kitchenware",
@@ -4321,6 +4603,7 @@
     "container",
     "jar",
     "object",
+    "thing",
     "vessel"
    ],
    "a squat porcelain teapot": [
@@ -4336,12 +4619,14 @@
     "bed",
     "bunk",
     "furniture",
-    "object"
+    "object",
+    "thing"
    ],
    "a steady northern polaris": [
     "polaris",
     "space",
-    "star"
+    "star",
+    "thing"
    ],
    "a steady silver rain": [
     "precipitation",
@@ -4355,12 +4640,14 @@
    "a stern armored soldier": [
     "person",
     "soldier",
+    "thing",
     "worker"
    ],
    "a still tall heron": [
     "animal",
     "bird",
-    "heron"
+    "heron",
+    "thing"
    ],
    "a stitched white baseball": [
     "ball",
@@ -4377,12 +4664,14 @@
    "a stout jolly uncle": [
     "person",
     "relative",
+    "thing",
     "uncle"
    ],
    "a stout old mill": [
     "building",
     "mill",
-    "place"
+    "place",
+    "thing"
    ],
    "a straight small nose": [
     "nose",
@@ -4397,6 +4686,7 @@
     "device",
     "object",
     "ruler",
+    "thing",
     "tool"
    ],
    "a straw-coloured kerneled corn": [
@@ -4417,12 +4707,14 @@
     "bag",
     "container",
     "object",
+    "thing",
     "tote"
    ],
    "a striped drifting balloon": [
     "aircraft",
     "balloon",
     "object",
+    "thing",
     "vehicle"
    ],
    "a striped mesh jersey": [
@@ -4433,21 +4725,25 @@
    "a striped orange tiger": [
     "animal",
     "mammal",
+    "thing",
     "tiger"
    ],
    "a striped quick mackerel": [
     "animal",
     "fish",
-    "mackerel"
+    "mackerel",
+    "thing"
    ],
    "a striped stinging wasp": [
     "animal",
     "insect",
+    "thing",
     "wasp"
    ],
    "a striped woodland woodpecker": [
     "animal",
     "bird",
+    "thing",
     "woodpecker"
    ],
    "a striped woolen sock": [
@@ -4458,7 +4754,8 @@
    "a striped yellow bee": [
     "animal",
     "bee",
-    "insect"
+    "insect",
+    "thing"
    ],
    "a strung graphite racket": [
     "equipment",
@@ -4478,18 +4775,21 @@
    "a sturdy young son": [
     "person",
     "relative",
-    "son"
+    "son",
+    "thing"
    ],
    "a swaying rope hammock": [
     "bed",
     "furniture",
     "hammock",
-    "object"
+    "object",
+    "thing"
    ],
    "a swift cratered mercury": [
     "mercury",
     "planet",
-    "space"
+    "space",
+    "thing"
    ],
    "a swinging chained flail": [
     "bludgeon",
@@ -4508,6 +4808,7 @@
    "a tall bearded sailor": [
     "person",
     "sailor",
+    "thing",
     "worker"
    ],
    "a tall brick house": [
@@ -4517,12 +4818,14 @@
    ],
    "a tall brown branch": [
     "branch",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a tall calm father": [
     "father",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a tall carved obelisk": [
     "building",
@@ -4532,13 +4835,15 @@
    "a tall dark pine": [
     "pine",
     "plant",
+    "thing",
     "tree"
    ],
    "a tall glass cabinet": [
     "cabinet",
     "furniture",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a tall glass skyscraper": [
     "building",
@@ -4554,7 +4859,8 @@
     "harp",
     "instrument",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "a tall gray boulder": [
     "boulder"
@@ -4572,11 +4878,13 @@
    "a tall green oak": [
     "oak",
     "plant",
+    "thing",
     "tree"
    ],
    "a tall green palm": [
     "palm",
     "plant",
+    "thing",
     "tree"
    ],
    "a tall jousting lance": [
@@ -4597,13 +4905,15 @@
    "a tall marble urn": [
     "container",
     "object",
+    "thing",
     "urn",
     "vessel"
    ],
    "a tall spotted giraffe": [
     "animal",
     "giraffe",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a tall stone obelisk": [
     "building",
@@ -4617,12 +4927,14 @@
    ],
    "a tall white grass": [
     "grass",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a tall white rocket": [
     "aircraft",
     "object",
     "rocket",
+    "thing",
     "vehicle"
    ],
    "a tall wooden cabinet": [
@@ -4634,13 +4946,15 @@
    "a tall wooden granary": [
     "building",
     "granary",
-    "place"
+    "place",
+    "thing"
    ],
    "a tall wooden pipe organ": [
     "instrument",
     "keyboard",
     "object",
-    "organ"
+    "organ",
+    "thing"
    ],
    "a tall wooden shelf": [
     "furniture",
@@ -4652,12 +4966,14 @@
     "furniture",
     "object",
     "seat",
-    "stool"
+    "stool",
+    "thing"
    ],
    "a tall yellow sunflower": [
     "flower",
     "plant",
-    "sunflower"
+    "sunflower",
+    "thing"
    ],
    "a thick blue book": [
     "book"
@@ -4688,12 +5004,14 @@
     "device",
     "object",
     "thermometer",
+    "thing",
     "tool"
    ],
    "a thin sandy sole": [
     "animal",
     "fish",
-    "sole"
+    "sole",
+    "thing"
    ],
    "a thin soaring spire": [
     "building",
@@ -4709,11 +5027,13 @@
     "clamp",
     "handtool",
     "object",
+    "thing",
     "tool"
    ],
    "a tilted teal uranus": [
     "planet",
     "space",
+    "thing",
     "uranus"
    ],
    "a tinted curved visor": [
@@ -4724,7 +5044,8 @@
    "a tiny dark deimos": [
     "deimos",
     "moon",
-    "space"
+    "space",
+    "thing"
    ],
    "a tiny fluted ramekin": [
     "dishware",
@@ -4733,12 +5054,14 @@
    ],
    "a tiny gray snail": [
     "animal",
-    "snail"
+    "snail",
+    "thing"
    ],
    "a tiny hawaiian ukulele": [
     "instrument",
     "object",
     "stringinstrument",
+    "thing",
     "ukulele"
    ],
    "a tiny pink dollhouse": [
@@ -4749,7 +5072,8 @@
    "a tiny pink shrimp": [
     "animal",
     "crustacean",
-    "shrimp"
+    "shrimp",
+    "thing"
    ],
    "a tiny round hut": [
     "building",
@@ -4759,7 +5083,8 @@
    "a tiny sleeping infant": [
     "child",
     "infant",
-    "person"
+    "person",
+    "thing"
    ],
    "a toothed iron gear": [
     "gear",
@@ -4770,7 +5095,8 @@
     "bookcase",
     "furniture",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a turning stone mill": [
     "appliance",
@@ -4780,13 +5106,15 @@
    "a tusked weighty walrus": [
     "animal",
     "mammal",
+    "thing",
     "walrus"
    ],
    "a twangy round banjo": [
     "banjo",
     "instrument",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "a twisted parched pasta": [
     "dish",
@@ -4794,7 +5122,8 @@
    ],
    "a uniformed alert pilot": [
     "person",
-    "pilot"
+    "pilot",
+    "thing"
    ],
    "a unyielding pallid bone": [
     "bone",
@@ -4803,12 +5132,14 @@
    "a vast copper vat": [
     "container",
     "object",
+    "thing",
     "vat",
     "vessel"
    ],
    "a vast empty warehouse": [
     "building",
     "place",
+    "thing",
     "warehouse"
    ],
    "a veined white marble": [
@@ -4832,7 +5163,8 @@
    "a warm gentle aunt": [
     "aunt",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a warm leather glove": [
     "accessory",
@@ -4843,12 +5175,14 @@
     "instrument",
     "object",
     "stringinstrument",
+    "thing",
     "viola"
    ],
    "a warm smiling mother": [
     "mother",
     "person",
-    "relative"
+    "relative",
+    "thing"
    ],
    "a warm wool coat": [
     "clothing",
@@ -4863,16 +5197,19 @@
    "a warty russet toad": [
     "amphibian",
     "animal",
+    "thing",
     "toad"
    ],
    "a waving nearby neighbor": [
     "neighbor",
-    "person"
+    "person",
+    "thing"
    ],
    "a waving purple anemone": [
     "anemone",
     "animal",
-    "cnidarian"
+    "cnidarian",
+    "thing"
    ],
    "a waxed downhill ski": [
     "equipment",
@@ -4886,11 +5223,13 @@
    ],
    "a weathered patient fisher": [
     "fisher",
-    "person"
+    "person",
+    "thing"
    ],
    "a weathered strong farmer": [
     "farmer",
     "person",
+    "thing",
     "worker"
    ],
    "a webbed climbing harness": [
@@ -4900,6 +5239,7 @@
    ],
    "a weeping green willow": [
     "plant",
+    "thing",
     "tree",
     "willow"
    ],
@@ -4916,6 +5256,7 @@
    "a white billowing sailboat": [
     "object",
     "sailboat",
+    "thing",
     "vehicle",
     "watercraft"
    ],
@@ -4930,6 +5271,7 @@
    "a white delivery van": [
     "landcar",
     "object",
+    "thing",
     "van",
     "vehicle"
    ],
@@ -4941,7 +5283,8 @@
    "a white farm duck": [
     "animal",
     "bird",
-    "duck"
+    "duck",
+    "thing"
    ],
    "a white frilly blouse": [
     "blouse",
@@ -4951,16 +5294,19 @@
    "a white gliding swan": [
     "animal",
     "bird",
-    "swan"
+    "swan",
+    "thing"
    ],
    "a white round daisy": [
     "daisy",
     "flower",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a white slender birch": [
     "birch",
     "plant",
+    "thing",
     "tree"
    ],
    "a white spinning windmill": [
@@ -4976,7 +5322,8 @@
    "a wide ashen hippo": [
     "animal",
     "hippo",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a wide chopping machete": [
     "blade",
@@ -4992,13 +5339,15 @@
     "handtool",
     "object",
     "shovel",
+    "thing",
     "tool"
    ],
    "a wide oak dresser": [
     "dresser",
     "furniture",
     "object",
-    "storage"
+    "storage",
+    "thing"
    ],
    "a wide soft mattress": [
     "furniture",
@@ -5014,6 +5363,7 @@
    "a wide wooden tub": [
     "container",
     "object",
+    "thing",
     "tub",
     "vessel"
    ],
@@ -5051,18 +5401,21 @@
    "a woolly brown goat": [
     "animal",
     "goat",
-    "mammal"
+    "mammal",
+    "thing"
    ],
    "a woolly white sheep": [
     "animal",
     "mammal",
-    "sheep"
+    "sheep",
+    "thing"
    ],
    "a worn leather armchair": [
     "armchair",
     "furniture",
     "object",
-    "seat"
+    "seat",
+    "thing"
    ],
    "a woven leather sling": [
     "ranged",
@@ -5081,13 +5434,15 @@
     "container",
     "cube",
     "object",
-    "shape"
+    "shape",
+    "thing"
    ],
    "a woven willow basket": [
     "bag",
     "basket",
     "container",
-    "object"
+    "object",
+    "thing"
    ],
    "a yellow banana": [
     "banana",
@@ -5100,12 +5455,14 @@
    "a yellow curved banana": [
     "banana",
     "fruit",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a yellow handled screwdriver": [
     "handtool",
     "object",
     "screwdriver",
+    "thing",
     "tool"
    ],
    "a yellow long bus": [
@@ -5117,32 +5474,38 @@
    "a yellow soft pear": [
     "fruit",
     "pear",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a yellow sour lemon": [
     "fruit",
     "lemon",
-    "plant"
+    "plant",
+    "thing"
    ],
    "a yellow tall tulip": [
     "flower",
     "plant",
+    "thing",
     "tulip"
    ],
    "an ancient columned temple": [
     "building",
     "place",
-    "temple"
+    "temple",
+    "thing"
    ],
    "an old carved lute": [
     "instrument",
     "lute",
     "object",
-    "stringinstrument"
+    "stringinstrument",
+    "thing"
    ],
    "an old electric trolley": [
     "object",
     "rail",
+    "thing",
     "trolley",
     "vehicle"
    ],
@@ -5154,11 +5517,13 @@
    "an old white church": [
     "building",
     "church",
-    "place"
+    "place",
+    "thing"
    ],
    "an old wooden wagon": [
     "landcar",
     "object",
+    "thing",
     "vehicle",
     "wagon"
    ],
@@ -5170,18 +5535,21 @@
     "object",
     "powertool",
     "sander",
+    "thing",
     "tool"
    ],
    "an orange winged butterfly": [
     "animal",
     "butterfly",
-    "insect"
+    "insect",
+    "thing"
    ],
    "an ornate antique harpsichord": [
     "harpsichord",
     "instrument",
     "keyboard",
-    "object"
+    "object",
+    "thing"
    ]
   },
   "tr": {
@@ -5484,6 +5852,16 @@
    "a eight-legged patient spider": [
     "\u00f6r\u00fcmcek"
    ],
+   "a faded staircase": [
+    "de\u011ferlidir",
+    "k\u0131rm\u0131z\u0131d\u0131r",
+    "serttir",
+    "so\u011fuktur",
+    "s\u0131cakt\u0131r",
+    "tatl\u0131d\u0131r",
+    "tuzludur",
+    "yumu\u015fakt\u0131r"
+   ],
    "a fast black motorcycle": [
     "motosiklet"
    ],
@@ -5516,11 +5894,6 @@
    ],
    "a flat rubber raft": [
     "sal"
-   ],
-   "a flickering turret": [
-    "serttir",
-    "s\u0131cakt\u0131r",
-    "yumu\u015fakt\u0131r"
    ],
    "a floating blue balloon": [
     "balon"
@@ -5675,12 +6048,6 @@
    ],
    "a heavy steel hammer": [
     "\u00e7eki\u00e7"
-   ],
-   "a hollow beacon": [
-    "de\u011ferlidir",
-    "k\u0131rm\u0131z\u0131d\u0131r",
-    "serttir",
-    "so\u011fuktur"
    ],
    "a hooked swift falcon": [
     "\u015fahin"
@@ -5970,11 +6337,6 @@
    ],
    "a purple tall lily": [
     "zambak"
-   ],
-   "a quiet canal": [
-    "s\u0131cakt\u0131r",
-    "tatl\u0131d\u0131r",
-    "tuzludur"
    ],
    "a quiet watchful hunter": [
     "avc\u0131"
