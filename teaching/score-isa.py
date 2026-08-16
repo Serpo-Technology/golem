@@ -377,8 +377,15 @@ def main():
     ap.add_argument("--scenes", default="", help="comma separated, default every scene")
     args = ap.parse_args()
 
-    scenes = ([s for s in args.scenes.split(",") if s] or
-              sorted(f[:-4] for f in os.listdir(TEACHING) if f.endswith(".zsh")))
+    # The taught corpus is what curriculum-order.txt lists, not whatever .zsh files happen
+    # to sit in the directory. A scene kept beside the corpus without being taught (an
+    # alternative lesson, a comparison arm) would otherwise put its own captions into the
+    # ground truth on the next --rebuild, and every brain that never grew it would be scored
+    # as having forgotten them.
+    order = os.path.join(TEACHING, "curriculum-order.txt")
+    default = ([l.strip() for l in open(order) if l.strip()] if os.path.exists(order) else
+               sorted(f[:-4] for f in os.listdir(TEACHING) if f.endswith(".zsh")))
+    scenes = [s for s in args.scenes.split(",") if s] or default
     truth = load_truth(scenes, args.rebuild)
     anc = ancestors(truth)
     print(f"truth: {sum(len(c) for c in truth['spoken'].values())} captions, {len(truth['kinds'])} words with kinds "
