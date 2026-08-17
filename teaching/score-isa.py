@@ -168,10 +168,12 @@ def ancestors(truth):
             for n in ns:
                 reach |= closure(n, kinds) if lang == "en" else {n}
             if lang == "en":
-                direct = set(ns)
-                for n in ns:
-                    direct |= set(kinds.get(n, ()))
-                reach -= (ABSTRACT_TOPS - direct)
+                # For a PERCEPT the test is ostensive: an abstract top belongs to this thing
+                # only if the corpus said that word over it. None of them ever is, so they
+                # leave percept truth entirely, while make-probes.py keeps its looser
+                # direct-parent rule because it judges WORDS, where "a shape is a quality"
+                # is a fair question and "a coffer is a quality" is not.
+                reach -= (ABSTRACT_TOPS - set(ns))
             acc[caption] = reach
         out[lang] = acc
     return out
