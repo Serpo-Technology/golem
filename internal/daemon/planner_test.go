@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"golem/internal/memory"
 	"golem/internal/senses"
 	"golem/wire"
 )
@@ -445,5 +447,52 @@ func TestCaseFirstRune(t *testing.T) {
 	// The first-person "I" stays capitalized mid-sentence.
 	if got := lowerFirst("I chased the cat"); got != "I chased the cat" {
 		t.Fatalf("lowerFirst should preserve the pronoun I: %q", got)
+	}
+}
+
+// TestDefinitionSpeaksNearestKind locks the kind a definition leads with. The abstraction
+// pass writes memberships at a fixed bar, so on a grown brain a concept sits under several
+// categories at that same weight and picking the heaviest picks arbitrarily among them. The
+// narrow one is what a definition wants, and it is the level people name things at.
+func TestDefinitionSpeaksNearestKind(t *testing.T) {
+	d, s := testDaemon(t)
+	now := time.Now()
+	concept := func(content, tpl string) *memory.Fragment {
+		c := &memory.Fragment{Kind: memory.KindConcept, Channel: "concept", Content: content,
+			Template: tpl, Category: "noun", Limbic: d.chem.Snapshot(), Time: now}
+		if _, err := s.Encode(c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	member := concept("a calm careful doctor", "a calm careful doctor")
+	wide := concept("animal", "abs:en:animal")
+	near := concept("worker", "abs:en:worker")
+	// Both hold the member at the same weight, which is the shape a grown brain has, and
+	// the wide one holds many more besides.
+	for _, cat := range []*memory.Fragment{wide, near} {
+		if err := s.SetLinkRel(cat.ID, member.ID, memory.RelGrounds, absPwcFloor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 8; i++ {
+		other := concept(fmt.Sprintf("a passing creature %d", i), fmt.Sprintf("a passing creature %d", i))
+		if err := s.SetLinkRel(wide.ID, other.ID, memory.RelGrounds, absPwcFloor); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d.cfg.DefinitionSpeaksNearestKindEnabled = true
+	got := d.groundedKindIn(member.ID, "en")
+	if got == nil || got.Template != "abs:en:worker" {
+		t.Fatalf("a definition should lead with the narrow kind, got %v", got)
+	}
+	// A Turkish category must not be spoken back in an English definition, which is how
+	// "a carrot is a carrot" was rendered.
+	trCat := concept("havuç", "abs:tr:havuç")
+	if err := s.SetLinkRel(trCat.ID, member.ID, memory.RelGrounds, 0.9); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.groundedKindIn(member.ID, "en"); got == nil || got.Template != "abs:en:worker" {
+		t.Fatalf("an English definition should stay in English, got %v", got)
 	}
 }

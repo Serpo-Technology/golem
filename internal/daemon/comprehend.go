@@ -1136,7 +1136,7 @@ func (d *Daemon) describeConcept(frame grammar.Frame, focus *memory.Fragment) st
 	// definition: a description of the fox opens "Fox is an animal", and only
 	// a concept the hierarchy holds nothing for stays a thing.
 	if !action {
-		if cat := d.groundedKindOf(focus.ID); cat != nil {
+		if cat := d.groundedKindIn(focus.ID, frame.Lang); cat != nil {
 			catName := d.conceptName(cat.ID, cat.Content, frame.Lang)
 			if frame.Lang == "tr" {
 				kindWord = "bir " + catName

@@ -1,69 +1,70 @@
 {
-  "surprise_threshold": 0.3,
-  "z_gate": 2.5,
-  "calibration_warmup": 30,
-  "predictor_window": 256,
-  "predictor_windows": {
-    "syslog": 8192
-  },
-  "lateral_inhibition": 0.6,
-  "encode_burst": 6,
-  "encode_refill_sec": 2,
-  "encode_bursts": {
-    "web": 800
-  },
-  "sleep_pressure_gate": 0.8,
-  "input_silence_sec": 1,
-  "calm_before_sleep_sec": 1.5,
-  "sleep_interval_sec": 600,
-  "nightly_decay": 0.1,
-  "prune_floor": 0.1,
-  "channels": {
-    "synthetic": false,
-    "vitals": true,
-    "syslog": false,
-    "watch_dirs": [],
-    "tail_files": [],
-    "watch_urls": [],
-    "screen": false,
-    "voice": true,
-    "voice_name": ""
-  },
-  "web_poll_sec": 900,
-  "untrusted_channels": [
-    "web"
-  ],
-  "subliminal_enabled": true,
-  "subconscious_channels": [
-    "vitals"
-  ],
-  "graduation_approvals": 3,
-  "conflict_margin": 0.15,
-  "auto_cue_cooldown_sec": 60,
-  "execute_enabled": true,
-  "execute_allowlist": [
-    "echo",
-    "ls",
-    "cat",
-    "pwd",
-    "date",
-    "wc",
-    "head",
-    "tail",
-    "sort",
-    "uniq",
-    "grep"
-  ],
-  "execute_timeout_sec": 30,
-  "execute_parallel": 4,
-  "runtime_enabled": true,
-  "source_path": "",
-  "main_package": "./cmd/golem",
-  "listen_tcp": "0.0.0.0:7777",
-  "kind_ladder_enabled": true,
-  "ostensive_core_enabled": true,
-  "ostensive_naming_enabled": true,
-  "resolve_to_own_concept_enabled": true,
-  "retire_declined_rungs_enabled": false,
-  "settle_tongue_first_enabled": true
+ "surprise_threshold": 0.3,
+ "z_gate": 2.5,
+ "calibration_warmup": 30,
+ "predictor_window": 256,
+ "predictor_windows": {
+  "syslog": 8192
+ },
+ "lateral_inhibition": 0.6,
+ "encode_burst": 6,
+ "encode_refill_sec": 2,
+ "encode_bursts": {
+  "web": 800
+ },
+ "sleep_pressure_gate": 0.8,
+ "input_silence_sec": 1,
+ "calm_before_sleep_sec": 1.5,
+ "sleep_interval_sec": 600,
+ "nightly_decay": 0.1,
+ "prune_floor": 0.1,
+ "channels": {
+  "synthetic": false,
+  "vitals": true,
+  "syslog": false,
+  "watch_dirs": [],
+  "tail_files": [],
+  "watch_urls": [],
+  "screen": false,
+  "voice": true,
+  "voice_name": ""
+ },
+ "web_poll_sec": 900,
+ "untrusted_channels": [
+  "web"
+ ],
+ "subliminal_enabled": true,
+ "subconscious_channels": [
+  "vitals"
+ ],
+ "graduation_approvals": 3,
+ "conflict_margin": 0.15,
+ "auto_cue_cooldown_sec": 60,
+ "execute_enabled": true,
+ "execute_allowlist": [
+  "echo",
+  "ls",
+  "cat",
+  "pwd",
+  "date",
+  "wc",
+  "head",
+  "tail",
+  "sort",
+  "uniq",
+  "grep"
+ ],
+ "execute_timeout_sec": 30,
+ "execute_parallel": 4,
+ "runtime_enabled": true,
+ "source_path": "",
+ "main_package": "./cmd/golem",
+ "listen_tcp": "0.0.0.0:7777",
+ "kind_ladder_enabled": true,
+ "ostensive_core_enabled": true,
+ "ostensive_naming_enabled": true,
+ "resolve_to_own_concept_enabled": true,
+ "retire_declined_rungs_enabled": false,
+ "settle_tongue_first_enabled": true,
+ "definition_speaks_nearest_kind_enabled": true
 }

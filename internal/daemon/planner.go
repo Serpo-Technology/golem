@@ -1410,7 +1410,7 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		// concept the hierarchy holds nothing for stays "a thing".
 		var groundedCat *memory.Fragment
 		if !action {
-			if groundedCat = d.groundedKindOf(c.ID); groundedCat != nil {
+			if groundedCat = d.groundedKindIn(c.ID, frame.Lang); groundedCat != nil {
 				catName := d.conceptName(groundedCat.ID, groundedCat.Content, frame.Lang)
 				if frame.Lang == "tr" {
 					kindWord = "bir " + catName
@@ -1514,11 +1514,13 @@ func (d *Daemon) planAnswer(frame grammar.Frame, raw string) string {
 		Negate: true, Patient: grammar.Term{Phrase: "that"}}, chem)
 }
 
-// groundedKindOf is the category a concept most firmly grounds under, nil
+// groundedKindIn is the category a concept most firmly grounds under, nil
 // when it belongs to none: the kind its definition leads with. Only genuine
 // abstractions count, so a percept or a moment on the same edge kind never
 // stands in as a definition's category.
-func (d *Daemon) groundedKindOf(id uint64) *memory.Fragment {
+// It is narrowed to the tongue the definition is being spoken in; with the flag off it is
+// the old behaviour exactly, whatever lang is given.
+func (d *Daemon) groundedKindIn(id uint64, lang string) *memory.Fragment {
 	edges, err := d.store.LinksToRel([]uint64{id}, memory.RelGrounds)
 	if err != nil || len(edges) == 0 {
 		return nil
@@ -1535,16 +1537,89 @@ func (d *Daemon) groundedKindOf(id uint64) *memory.Fragment {
 	if err != nil {
 		return nil
 	}
-	var best *memory.Fragment
+	cands := make([]*memory.Fragment, 0, len(frags))
 	for _, f := range frags {
 		if !d.isCategory(f) || d.isSystemConcept(f.ID) {
 			continue
 		}
-		if best == nil || weight[f.ID] > weight[best.ID] {
-			best = f
+		cands = append(cands, f)
+	}
+	if !d.cfg.DefinitionSpeaksNearestKindEnabled {
+		var best *memory.Fragment
+		for _, f := range cands {
+			if best == nil || weight[f.ID] > weight[best.ID] {
+				best = f
+			}
+		}
+		return best
+	}
+	// A rung under the bar is one the abstraction pass declined to refresh, and an is-a
+	// question will not climb it, so a definition must not speak it either.
+	kept := cands[:0]
+	for _, f := range cands {
+		if weight[f.ID] >= absPwcFloor {
+			kept = append(kept, f)
+		}
+	}
+	if len(kept) == 0 {
+		kept = cands
+	}
+	// The asked tongue first. Falling back keeps a tongue with no categories of its own,
+	// Latin among them, speaking the ones the corpus actually built.
+	if lang != "" {
+		if inTongue := fragmentsInTongue(kept, lang); len(inTongue) > 0 {
+			kept = inTongue
+		} else if inEnglish := fragmentsInTongue(kept, "en"); len(inEnglish) > 0 {
+			kept = inEnglish
+		}
+	}
+	var own string
+	if self, err := d.store.FragmentsByIDs([]uint64{id}); err == nil && len(self) == 1 {
+		own = d.conceptName(id, self[0].Content, lang)
+	}
+	var best *memory.Fragment
+	bestWidth := -1
+	for _, f := range kept {
+		// A concept is not its own kind. The carrot grounds under the Turkish carrot, which
+		// speaks back in English as the word asked about, and "a carrot is a carrot" defines
+		// nothing.
+		if own != "" && d.conceptName(f.ID, f.Content, lang) == own {
+			continue
+		}
+		width := d.categoryWidth(f.ID)
+		if best == nil || width < bestWidth || (width == bestWidth && weight[f.ID] > weight[best.ID]) {
+			best, bestWidth = f, width
 		}
 	}
 	return best
+}
+
+// fragmentsInTongue keeps the abstractions belonging to one tongue, read off the abs:<lang>:
+// template the abstraction pass mints them under.
+func fragmentsInTongue(fs []*memory.Fragment, lang string) []*memory.Fragment {
+	out := make([]*memory.Fragment, 0, len(fs))
+	for _, f := range fs {
+		if strings.HasPrefix(f.Template, "abs:"+lang+":") {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// categoryWidth is how many things a category grounds, which is how a definition tells a
+// near kind from a far one when every membership sits on the same bar.
+func (d *Daemon) categoryWidth(id uint64) int {
+	edges, err := d.store.LinksFromRel([]uint64{id}, memory.RelGrounds)
+	if err != nil {
+		return 1 << 30
+	}
+	n := 0
+	for _, e := range edges {
+		if e.To != id {
+			n++
+		}
+	}
+	return n
 }
 
 // definitionFacts is the salient appendix a definition closes on: up to two of

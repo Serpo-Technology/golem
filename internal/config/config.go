@@ -203,6 +203,20 @@ type Config struct {
 	// morphology produced is untouched, so a Turkish accusative still keys on its noun.
 	// Off by default.
 	VerbStemNamesRelationEnabled bool `json:"verb_stem_names_relation_enabled"`
+	// DefinitionSpeaksNearestKindEnabled picks the kind a definition leads with by how
+	// narrow it is rather than by how heavy its edge is. The abstraction pass writes a
+	// membership at a fixed bar, so on a grown brain nearly every one of them sits on that
+	// bar to the digit: a doctor grounds under worker, person, animal and thing at exactly
+	// 0.1 apiece, and choosing the heaviest is choosing arbitrarily among four. It answered
+	// "a doctor is an animal", which is true and useless, and the wider the corpus taught
+	// the top of the ladder the more often the widest word won. Narrowness is the signal
+	// the weights do not carry, and the narrowest category a concept belongs to is the one
+	// a definition wants, which is the basic level people name things at.
+	// Also confined to the asked tongue, since the heaviest category grounding a carrot was
+	// the Turkish one and it rendered back in English as "a carrot is a carrot"; and held to
+	// the same membership bar an is-a answer climbs, so a definition cannot speak a rung the
+	// brain would decline to affirm. Off by default.
+	DefinitionSpeaksNearestKindEnabled bool `json:"definition_speaks_nearest_kind_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

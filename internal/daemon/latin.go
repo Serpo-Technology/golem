@@ -176,7 +176,7 @@ func (d *Daemon) planLatinDefinition(frame grammar.Frame, raw string) (string, b
 		return d.withInvite("la", "Nescio."), true
 	}
 	d.noteFocus(c)
-	if cat := d.groundedKindOf(c.ID); cat != nil {
+	if cat := d.groundedKindIn(c.ID, "la"); cat != nil {
 		return upperFirst(d.latinGloss(c)) + " est " + d.latinGloss(cat) + ".", true
 	}
 	return d.withInvite("la", "Nescio."), true
