@@ -57,5 +57,6 @@
   "settle_tongue_first_enabled": false,
   "definition_speaks_nearest_kind_enabled": false,
   "own_name_outranks_its_kind_enabled": false,
+  "bound_word_is_not_rehomed_enabled": false,
   "verb_stem_names_relation_enabled": false
 }

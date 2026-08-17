@@ -712,6 +712,26 @@ func (d *Daemon) growAbstractions() (born int) {
 		if target != 0 && d.namesOwnPercept(w, target) {
 			continue
 		}
+		// A word that already names its OWN concept is not an unbound second-tongue word
+		// either. A place name taught only in a fact ("toronto canada") never sees a percept,
+		// so it owns none, and the reuse hands it the one named percept it happens to keep
+		// company with: toronto came to name an elevator at 0.8 and barcelona a pigeon, and
+		// the brain answered "what is a pigeon" with "a toronto" and "is a pigeon a bird"
+		// with "a barcelona is a bird". Its abstraction IS its referent, so it is bound.
+		if target != 0 && d.cfg.BoundWordIsNotRehomedEnabled && c != nil && c.ID != target {
+			if edges, err := d.store.LinksFromRel([]uint64{w.ID}, memory.RelNames); err == nil {
+				bound := false
+				for _, e := range edges {
+					if e.To == c.ID && e.Weight >= namesWriteFloor {
+						bound = true
+						break
+					}
+				}
+				if bound {
+					continue
+				}
+			}
+		}
 		if target != 0 {
 			// The bind must land on something real: a percept, or a concept this
 			// word already names outright (an abstract noun refreshing its own
@@ -992,7 +1012,25 @@ func (d *Daemon) namesOwnPercept(word *memory.Fragment, target uint64) bool {
 		return false
 	}
 	for _, e := range edges {
-		if e.To == target || e.Weight < namesWriteFloor || d.isPerceptless(e.To) {
+		if e.To == target || d.isPerceptless(e.To) {
+			continue
+		}
+		// A thin bond to a thing this word HEADS is still ownership. The weight floor is
+		// there to ignore a bond the word merely drifted into, but a word heading a
+		// percept's caption is that percept's basic-level name however far the bond has
+		// faded, and fading is exactly what happens when a rung taught over the thing
+		// dilutes the word's share of it. Without this, a word whose own bond slipped
+		// under the floor reads as an unbound second-tongue word looking for a referent
+		// and is re-homed at full strength onto whatever named percept it keeps company
+		// with: one nap took "casket" off its own casket and onto a green bottle at 0.8,
+		// and the brain then answered "what is a casket" with "a green bottle".
+		if d.cfg.BoundWordIsNotRehomedEnabled {
+			if d.headsCorePercept(word.Content, []uint64{e.To}) {
+				return true
+			}
+			continue
+		}
+		if e.Weight < namesWriteFloor {
 			continue
 		}
 		if d.headsCorePercept(word.Content, []uint64{e.To}) {

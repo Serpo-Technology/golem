@@ -228,6 +228,17 @@ type Config struct {
 	// the second namer it earned. Other tongues are untouched, a Turkish name for a thing
 	// being no rival to the English one. Off by default.
 	OwnNameOutranksItsKindEnabled bool `json:"own_name_outranks_its_kind_enabled"`
+	// BoundWordIsNotRehomedEnabled treats a thin bond to a thing the word HEADS as
+	// ownership, so the cross-tongue reuse cannot re-home it. That reuse exists to give an
+	// unbound second-tongue word a referent, binding it at full strength to the one named
+	// percept in its company. It decides a word is unbound by asking whether it names a
+	// percept above the write floor, which a word whose own bond has merely faded no longer
+	// does, and a rung taught over a thing dilutes its name's share of it exactly that way.
+	// Measured on the deliverable: ONE nap moved "casket" off its own casket onto a green
+	// bottle at 0.8, and the brain answered "what is a casket" with "a green bottle". A word
+	// heading a percept's caption is that percept's basic-level name however faint the bond,
+	// so it is never a word in search of a referent. Off by default.
+	BoundWordIsNotRehomedEnabled bool `json:"bound_word_is_not_rehomed_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

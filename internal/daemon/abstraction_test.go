@@ -1112,3 +1112,51 @@ func TestOwnNameOutranksItsKind(t *testing.T) {
 		t.Fatal("with the guard off the percept should still be named by something")
 	}
 }
+
+// TestBoundWordIsNotRehomed covers the guard the cross-tongue reuse consults. That reuse
+// exists to give an unbound second-tongue word a referent ("kurt" for the wolf), and it decides
+// a word is unbound by asking namesOwnPercept, which ignored any bond under the write floor. A
+// word whose own bond has merely FADED under that floor, which is what a rung taught over the
+// thing does to it, then read as unbound and was re-homed at full naming strength onto whatever
+// named percept it kept company with: one night took "casket" off its own casket and onto a
+// green bottle at 0.8, and the brain answered "what is a casket" with "a green bottle".
+func TestBoundWordIsNotRehomed(t *testing.T) {
+	d, s := testDaemon(t)
+	base := time.Now().Add(-3 * time.Hour)
+	own := feedShape(t, s, "vision", "a lacquered ebony casket", 4, base)
+	other := feedShape(t, s, "vision", "a green glass bottle", 4, base.Add(time.Minute))
+	if _, err := s.MergeDuplicates(); err != nil {
+		t.Fatal(err)
+	}
+	calm(d)
+	d.growConcepts()
+	ownC, err := s.ConceptByTemplate("a lacquered ebony casket")
+	if err != nil || ownC == nil {
+		t.Fatalf("no concept for the casket: %v", err)
+	}
+	otherC, err := s.ConceptByTemplate("a green glass bottle")
+	if err != nil || otherC == nil {
+		t.Fatalf("no concept for the bottle: %v", err)
+	}
+	ownID, otherID := ownC.ID, otherC.ID
+	_, _ = own, other
+	d.mintWords("casket", "en", 0, []recentMoment{own[0]}, false)
+	wf, err := s.WordNodesByForms([]string{"casket"})
+	if err != nil || len(wf) == 0 {
+		t.Fatalf("no word node for casket: %v", err)
+	}
+	word := wf[0]
+	// The bond to its own thing has faded under the floor, which is the state a rung taught
+	// over that thing leaves it in. It still heads the caption, so it still owns the thing.
+	if err := s.SetLinkRel(word.ID, ownID, memory.RelNames, namesWriteFloor/2); err != nil {
+		t.Fatal(err)
+	}
+	d.cfg.BoundWordIsNotRehomedEnabled = false
+	if d.namesOwnPercept(word, otherID) {
+		t.Fatal("without the guard a faded bond reads as owning nothing, which is the bug")
+	}
+	d.cfg.BoundWordIsNotRehomedEnabled = true
+	if !d.namesOwnPercept(word, otherID) {
+		t.Fatal("a word heading its own percept owns it however faint the bond")
+	}
+}

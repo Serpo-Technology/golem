@@ -67,5 +67,6 @@
  "retire_declined_rungs_enabled": false,
  "settle_tongue_first_enabled": true,
  "definition_speaks_nearest_kind_enabled": true,
- "own_name_outranks_its_kind_enabled": true
+ "own_name_outranks_its_kind_enabled": true,
+ "bound_word_is_not_rehomed_enabled": true
 }
