@@ -52,6 +52,10 @@ TRUTH = os.path.join(TEACHING, "isa-truth.json")
 # engine will. Scoring a saved snapshot against a napped one measures the nap.
 ABS_PWC_FLOOR = 0.10
 
+# Words a member HAS rather than IS. Kept identical to make-probes.py's ABSTRACT set, which
+# guards the question side against the same false transitive positives.
+ABSTRACT_TOPS = {"colour", "quality", "state", "art"}
+
 ARTICLE = re.compile(r"^(?:a|an|the)\s+", re.I)
 ISA = re.compile(r"^(?:(?:an|a|the)\s+)?(.+?)\s+(?:is|are)\s+(?:an|a|the)\s+(.+?)\.?$", re.I)
 OBSERVE = re.compile(r"^observe\s+(?:--force\s+)?vision\s+(.+)$")
@@ -146,7 +150,15 @@ def ancestors(truth):
 
     The kind graph is stated in English tellings, so only the English side climbs it. A
     tongue that merely names its percepts is judged on those namings alone, which is what
-    it was actually taught."""
+    it was actually taught.
+
+    A ball is a sphere, a sphere is a shape and a shape is a quality, but a ball is not a
+    quality: it HAS one. The chain is sound at every step and false end to end, so climbing
+    it puts falsehoods in the ground truth, which is worse than an ordinary scoring error.
+    It rewards a brain for asserting them and it sends anyone reading the miss list off to
+    teach them on purpose. The abstract tops therefore count only where the corpus names
+    them DIRECTLY over the member, which is the same guard make-probes.py applies when it
+    builds the questions. Keep the two sets in step."""
     kinds = truth["kinds"]
     out = {}
     for lang, caps in truth["spoken"].items():
@@ -155,6 +167,11 @@ def ancestors(truth):
             reach = set()
             for n in ns:
                 reach |= closure(n, kinds) if lang == "en" else {n}
+            if lang == "en":
+                direct = set(ns)
+                for n in ns:
+                    direct |= set(kinds.get(n, ()))
+                reach -= (ABSTRACT_TOPS - direct)
             acc[caption] = reach
         out[lang] = acc
     return out
