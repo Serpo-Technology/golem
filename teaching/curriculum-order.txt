@@ -5,6 +5,7 @@ world-breadth
 world-foods
 dishes-and-drinks
 flora
+places-shown
 menagerie
 more-menagerie
 people-kin
