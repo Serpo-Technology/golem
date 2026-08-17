@@ -76,6 +76,11 @@ const (
 	// it. A scene-mate bond falls under the write floor within a couple of nights, while a
 	// bond whose pointing merely aged out of the graph has that long to be shown again.
 	namesUnpointedKeep = 0.5
+	// namesKindKeep is what a kind word keeps when it would otherwise outrank the name of
+	// the very thing it was said over. Just under, rather than far under: the kind really
+	// was said over this percept and the bond is real company, so it stays the strong
+	// second namer it earned and only stops speaking for the thing.
+	namesKindKeep = 0.95
 )
 
 // Abstraction by constellation: a word that never settles on one
@@ -1286,8 +1291,12 @@ func (d *Daemon) growConcepts() (born, named int) {
 	// than drifting to the nouns the verb took. relConcept marks which targets
 	// are the relation itself, the one bond such a word keeps.
 	verbWord := map[uint64]bool{}
+	wordText := map[uint64]string{}
+	wordLang := map[uint64]string{}
 	if wfrags, err := d.store.FragmentsByIDs(wordIDs); err == nil {
 		for _, wf := range wfrags {
+			wordText[wf.ID] = strings.ToLower(wf.Content)
+			wordLang[wf.ID] = wf.Lang
 			if d.namesRelation(wf.Content, wf.Lang) {
 				verbWord[wf.ID] = true
 			}
@@ -1453,6 +1462,36 @@ func (d *Daemon) growConcepts() (born, named int) {
 		if p.Existing == 0 {
 			named++
 			d.event(events.Event{Ev: "name", From: p.Word, To: p.Concept, Rel: memory.RelNames, Weight: w})
+		}
+	}
+	// A thing keeps its own name over the kinds said about it. Saying a category over a
+	// percept is company for that word like any other, so a rung taught over a hundred
+	// things can out-weigh the one word that points at just this one: the desk came to be
+	// named table, and the brain then SPOKE the wrong word for it, answering "is a desk a
+	// table" with "a table is a table". The caption head is the basic-level name (the same
+	// discriminator headsCorePercept uses to refuse a class for it), so within one tongue
+	// nothing outranks it. Other tongues are untouched, since a Turkish name for a thing is
+	// not competing with the English one.
+	if d.cfg.OwnNameOutranksItsKindEnabled {
+		headWeight := map[uint64]float64{}
+		headLang := map[uint64]string{}
+		for _, e := range nameEdges {
+			if h := conceptHead[e.To]; h != "" && wordText[e.From] == h {
+				if e.Weight > headWeight[e.To] {
+					headWeight[e.To] = e.Weight
+					headLang[e.To] = wordLang[e.From]
+				}
+			}
+		}
+		for i, e := range nameEdges {
+			hw, ok := headWeight[e.To]
+			if !ok || wordText[e.From] == conceptHead[e.To] || wordLang[e.From] != headLang[e.To] {
+				continue
+			}
+			if e.Weight >= hw {
+				nameEdges[i].Weight = hw * namesKindKeep
+				d.traceName("kind-under-name", e.From, e.To, nameEdges[i].Weight)
+			}
 		}
 	}
 	// One transaction for the night's naming, not one commit per pair: the store is

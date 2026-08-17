@@ -217,6 +217,17 @@ type Config struct {
 	// the same membership bar an is-a answer climbs, so a definition cannot speak a rung the
 	// brain would decline to affirm. Off by default.
 	DefinitionSpeaksNearestKindEnabled bool `json:"definition_speaks_nearest_kind_enabled"`
+	// OwnNameOutranksItsKindEnabled keeps a thing named by its own word rather than by a
+	// kind said over it. Saying a category over a percept is company for that word like any
+	// other, so a rung taught across a hundred things can out-weigh the one word that points
+	// at just this one. Measured after the rungs went in: 27 percepts lost their own name,
+	// the desk became "table" and the poppy "flower", and the brain then SPOKE the wrong
+	// word, answering "is a desk a table" with "a table is a table". The caption head is the
+	// basic-level name, the same discriminator headsCorePercept uses to refuse a class for
+	// it, so within one tongue nothing outranks it; the kind keeps just under it and stays
+	// the second namer it earned. Other tongues are untouched, a Turkish name for a thing
+	// being no rival to the English one. Off by default.
+	OwnNameOutranksItsKindEnabled bool `json:"own_name_outranks_its_kind_enabled"`
 	// SubconsciousChannels are the trusted channels graded attention applies to, so
 	// ambient host channels stay fully gated until proven not to pollute. An
 	// untrusted channel never learns sub-consciously whatever this lists. A

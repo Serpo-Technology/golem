@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -1039,5 +1040,75 @@ func TestOstensionBindsDilutedBasicNameToPercept(t *testing.T) {
 	}
 	if w := edgeWeightRel(t, s, wordID(t, s, "cat"), catC.ID, memory.RelNames); w != absNameWeight {
 		t.Fatalf("the ostended percept should be named at %.2f, got %.2f", absNameWeight, w)
+	}
+}
+
+// TestOwnNameOutranksItsKind covers the naming a rung lesson costs: saying a category over a
+// percept is company for that word like any other, so a kind taught across many things can
+// out-weigh the one word that points at just this one. The percept then SPEAKS the kind's
+// name, and "is a desk a table" comes back "a table is a table".
+func TestOwnNameOutranksItsKind(t *testing.T) {
+	firmest := func(d *Daemon, s *memory.Store, caption string) string {
+		c, err := s.ConceptByTemplate(caption)
+		if err != nil || c == nil {
+			t.Fatalf("no concept for %q: %v", caption, err)
+		}
+		edges, err := s.LinksToRel([]uint64{c.ID}, memory.RelNames)
+		if err != nil {
+			t.Fatal(err)
+		}
+		best, bestW := "", -1.0
+		for _, e := range edges {
+			fr, err := s.FragmentsByIDs([]uint64{e.From})
+			if err != nil || len(fr) != 1 || fr[0].Lang != "en" {
+				continue
+			}
+			if e.Weight > bestW {
+				best, bestW = strings.ToLower(fr[0].Content), e.Weight
+			}
+		}
+		return best
+	}
+	// One kind said over several things, and each thing's own word said over it alone, which
+	// is the shape a rung lesson teaches.
+	grow := func(t *testing.T, flag bool) string {
+		t.Helper()
+		d, s := testDaemon(t)
+		d.cfg.OwnNameOutranksItsKindEnabled = flag
+		base := time.Now().Add(-3 * time.Hour)
+		shapes := []string{"a cluttered writing desk", "a polished granite counter", "a low round stool"}
+		members := make([][]recentMoment, len(shapes))
+		for i, shape := range shapes {
+			members[i] = feedShape(t, s, "vision", shape, 4, base.Add(time.Duration(i)*time.Minute))
+		}
+		if _, err := s.MergeDuplicates(); err != nil {
+			t.Fatal(err)
+		}
+		calm(d)
+		d.growConcepts()
+		heads := []string{"desk", "counter", "stool"}
+		for i, m := range members {
+			for j := range 3 {
+				d.mintWords(heads[i], "en", 0, []recentMoment{m[j]}, false)
+			}
+		}
+		// The kind is said over every one of them, several times, as a lesson says a rung.
+		for range 4 {
+			for _, m := range members {
+				for j := range 3 {
+					d.mintWords("table", "en", 0, []recentMoment{m[j]}, false)
+				}
+			}
+		}
+		calm(d)
+		d.growConcepts()
+		return firmest(d, s, "a cluttered writing desk")
+	}
+	if got := grow(t, true); got != "desk" {
+		t.Fatalf("with the guard on the thing keeps its own name, got %q", got)
+	}
+	// The guard off is the behaviour that shipped, kept so the flag is a real switch.
+	if got := grow(t, false); got == "" {
+		t.Fatal("with the guard off the percept should still be named by something")
 	}
 }
