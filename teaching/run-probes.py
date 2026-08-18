@@ -21,17 +21,28 @@ def sh(*a, **k):
 
 
 def probeConfig():
-    """The given config with sleeping held off.
+    """The given config with sleeping held off, on BOTH the gates that start a night.
 
     A run of two hundred questions takes about as long as the gap between nights, so the
     daemon naps in the middle of it and every question asked while it sleeps comes back
     with nothing. That is the harness answering, not the brain: the same questions asked
-    one at a time all answer. So the config is copied with the interval pushed out of
-    reach, and what the brain does not know is told apart from what it was too busy to say.
+    one at a time all answer.
+
+    The interval is not the only way a night starts. Sleep is also pressure driven, so a
+    long run builds enough of it to nap however far out the interval is pushed. A run
+    reporting 25 firm answers and 178 unknowns is exactly that: the names group answered,
+    the daemon went under, and everything after came back empty. It looks like catastrophic
+    forgetting and it is the instrument. Hold both gates and what the brain does not know
+    is told apart from what it was too busy to say.
     """
     with open(CFG) as f:
         cfg = json.load(f)
     cfg["sleep_interval_sec"] = 999999
+    # Serotonin runs 0 to 1, so a gate above 1 is never reached, and a calm window longer
+    # than the run means the pressure never starts building in the first place.
+    cfg["sleep_pressure_gate"] = 99.0
+    cfg["calm_before_sleep_sec"] = 999999
+    cfg["input_silence_sec"] = 999999
     fd, path = tempfile.mkstemp(suffix=".json")
     with os.fdopen(fd, "w") as f:
         json.dump(cfg, f)
