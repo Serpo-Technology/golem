@@ -9,5 +9,10 @@
   "author": {
     "name": "Seyit Gokce",
     "email": "contact@seyitgokce.me"
+  },
+  "info": {
+    "companyName": "Serpo Technology Inc.",
+    "productName": "Golem Toolkit",
+    "copyright": "Copyright (C) 2026 Serpo Technology Inc."
   }
 }

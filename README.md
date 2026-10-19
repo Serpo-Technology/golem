@@ -487,4 +487,4 @@ anyone you let talk to a modified GOLEM over a network is entitled to the source
 of the thing they are talking to. A glass box would stop being one if putting it
 behind a port were enough to close it.
 
-Copyright (C) 2026 Seyit Gokce.
+Copyright (C) 2026 Serpo Technology Inc.
