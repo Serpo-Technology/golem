@@ -14,7 +14,7 @@ func TestNormalizeCorpus(t *testing.T) {
 		{"job 8f14e45f-ceea-4671-9b2a-2a7e54f1f0a2 done", "job <uuid> done"},
 		{"2026-06-09T14:03:22Z backup finished", "<ts> backup finished"},
 		{"Jun  9 14:03:22 kernel wake", "<ts> kernel wake"},
-		{"saved /Users/gokce/projects/golem/main.go", "saved <path>"},
+		{"saved /Users/dev/projects/golem/main.go", "saved <path>"},
 		{"sha 3b1f9d2e4c5a6b7d8e9f0a1b2c3d4e5f", "sha <hex>"},
 		{"a   b\tc", "a b c"},
 		{"Ping", "Ping"},
