@@ -80,8 +80,9 @@ representation they compile to, and connect both to what GOLEM knows, never to
 > span finder, the fallback), and lift comprehension of those surfaces onto the graph too.
 > The floor (Go parser, primitives, grounding-by-running) is unchanged throughout.
 
-Implemented in `internal/code` (`code.go`, `induce.go`, `function.go`,
-`source.go`):
+Implemented in `internal/code` (`code.go`, which also holds the `ToFunc`
+declaration writer, plus `induce.go` and `source.go`; the synthesis floor the
+note above describes is `synth.go`, `synthloop.go`, and `synthproperty.go`):
 
 - Arithmetic primitives (add/subtract/multiply/divide), seeded as constructions.
 - Unary user functions, told in language ("the double of a number is the product

@@ -98,7 +98,7 @@ the scenes you name, in one flat pass of two rounds with a nap stride scaled to 
 corpus, so the whole spine reconsolidates without its own tail eroding its head.
 Run it once, at the end of the whole grow, never between the scenes:
 
-    docker exec golem-brain sh -c 'GOLEM=golem bash /root/teaching/rehearse-spine.sh \
+    docker exec golem-brain sh -c 'GOLEM=golem bash /src/teaching/rehearse-spine.sh \
       curriculum world menagerie flora artifacts vehicles ...'
 
 It re-shows percepts, so it also grows the brain by several megabytes.
@@ -160,15 +160,26 @@ read from `curriculum-order.txt` rather than alphabetically.
 Teaches every scene in `curriculum-order.txt` from an empty brain, checkpointing
 after each one, and closes with the spine rehearsal. The config argument decides
 which engine behaviour the brain is grown under and is recorded with it;
-`teaching/ostensive.json` and `always-online.json` both carry all five pointing-driven
-passes, which is what the deliverable brains were grown under. Only
-`ostensive_core_enabled` and `resolve_to_own_concept_enabled` stand on by default, being
-the two that take nothing from a brain grown without them. The naming pass and the kind
-ladder are written out here because they earn their place on a grow from empty and are
-not safe to switch on under a brain that was grown without them. `company-reading.json` is the same standing config with the
-five set false, which is the reading that came before and the control arm any
-comparison against them needs; an omitted key inherits the default rather than
-falling to false, so a control has to say so explicitly.
+`teaching/ostensive.json` and `always-online.json` carry different readings, so pick
+deliberately. Both write out the five the deliverable brains were grown under
+(`ostensive_core_enabled`, `ostensive_naming_enabled`, `resolve_to_own_concept_enabled`,
+`settle_tongue_first_enabled`, `kind_ladder_enabled`). `teaching/ostensive.json` adds the
+three later readings that settle which thing a word refers to
+(`own_name_outranks_its_kind_enabled`, `bound_word_is_not_rehomed_enabled`,
+`definition_speaks_nearest_kind_enabled`), and it is the default the script falls back to.
+`always-online.json` carries the five alone, so a grow under it reproduces the earlier
+reading. `ostensive-verbstem.json` is `ostensive.json` plus
+`verb_stem_names_relation_enabled`, the arm that keeps a verb reduction from minting
+garments onto cloth. `unshown_names_by_own_share_enabled` exists in the engine and no
+standing config sets it.
+
+Only `ostensive_core_enabled` and `resolve_to_own_concept_enabled` stand on by default,
+being the two that take nothing from a brain grown without them. The naming pass and the
+kind ladder are written out because they earn their place on a grow from empty and are not
+safe to switch on under a brain that was grown without them. `company-reading.json` is the
+same standing config with the five set false, which is the reading that came before and the
+control arm any comparison against them needs; an omitted key inherits the default rather
+than falling to false, so a control has to say so explicitly.
 
 ## Against an existing daemon
 
@@ -216,6 +227,9 @@ falling to false, so a control has to say so explicitly.
   open, and the absolute surprise floor lowered so a fresh brain's cold
   predictor still admits the everyday captions. A warmed brain can run the
   default config once it is taught.
+- `ostensive.json`, `ostensive-verbstem.json`, `company-reading.json` the other
+  standing configs, described under Growing one from empty: the readings a grow
+  is run under, and the control arm to measure them against.
 - `more-menagerie.zsh`, `body-parts.zsh`, `dishes-and-drinks.zsh`, `trades.zsh`,
   `stuffs.zsh`, `kitchen-and-play.zsh` show the hundred and nineteen words the
   older scenes named a kind for and never put in front of the eye. A word with no
